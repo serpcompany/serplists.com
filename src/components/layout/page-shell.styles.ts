@@ -68,8 +68,3 @@ export const iconTileVariants = cva(
 export type PageContainerWidth = VariantProps<
   typeof pageContainerVariants
 >['width'];
-export type PageSectionSpacing = VariantProps<
-  typeof pageSectionVariants
->['spacing'];
-export type PageHeroAlign = VariantProps<typeof pageHeroVariants>['align'];
-export type IconTileSize = VariantProps<typeof iconTileVariants>['size'];

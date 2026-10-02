@@ -9,6 +9,7 @@ import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 import { buildInviteRevocation } from "../utils/team-invite-revocation";
 import { activeTeamManagerExists } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -28,34 +29,34 @@ function isInvitePending(invite: {
 }
 
 export async function listTeamInvites({ db, teamId }: { db: Db; teamId: string }): Promise<Response> {
-  const { team_invites, users } = schema;
+  const { teamInvites, users } = schema;
 
   const now = new Date().toISOString();
   const rows = await db
     .select({
-      id: team_invites.id,
-      team_id: team_invites.team_id,
-      email: team_invites.email,
-      role: team_invites.role,
-      invited_by_user_id: team_invites.invited_by_user_id,
-      expires_at: team_invites.expires_at,
-      created_at: team_invites.created_at,
-      updated_at: team_invites.updated_at,
+      id: teamInvites.id,
+      team_id: teamInvites.team_id,
+      email: teamInvites.email,
+      role: teamInvites.role,
+      invited_by_user_id: teamInvites.invited_by_user_id,
+      expires_at: teamInvites.expires_at,
+      created_at: teamInvites.created_at,
+      updated_at: teamInvites.updated_at,
       inviterEmail: users.email,
       inviterName: users.name,
     })
-    .from(team_invites)
-    .leftJoin(users, eq(users.id, team_invites.invited_by_user_id))
+    .from(teamInvites)
+    .leftJoin(users, eq(users.id, teamInvites.invited_by_user_id))
     .where(
       and(
-        eq(team_invites.team_id, teamId),
-        isNull(team_invites.accepted_at),
-        isNull(team_invites.revoked_at),
-        gt(team_invites.expires_at, now),
-        activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
+        eq(teamInvites.team_id, teamId),
+        isNull(teamInvites.accepted_at),
+        isNull(teamInvites.revoked_at),
+        gt(teamInvites.expires_at, now),
+        activeTeamManagerExists(db, teamInvites.team_id, teamInvites.invited_by_user_id),
       ),
     )
-    .orderBy(desc(team_invites.created_at));
+    .orderBy(desc(teamInvites.created_at));
 
   return json(rows);
 }
@@ -64,23 +65,23 @@ export async function createTeamInvite(
   { db, env, request, teamId, userId }: { db: Db; env: Env; request: Request; teamId: string; userId: string },
   body: unknown,
 ): Promise<Response> {
-  const { audit_events, team_invites, team_members, users } = schema;
+  const { auditEvents, teamInvites, teamMembers, users } = schema;
 
   const parsed = inviteTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid invite payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
   }
 
   const inviteEmail = parsed.data.email;
   const now = new Date().toISOString();
   const [existingActiveMember] = await db
-    .select({ id: team_members.id })
-    .from(team_members)
-    .leftJoin(users, eq(users.id, team_members.user_id))
+    .select({ id: teamMembers.id })
+    .from(teamMembers)
+    .leftJoin(users, eq(users.id, teamMembers.user_id))
     .where(
       and(
-        eq(team_members.team_id, teamId),
-        eq(team_members.status, "active"),
+        eq(teamMembers.team_id, teamId),
+        eq(teamMembers.status, "active"),
         sql`lower(${users.email}) = ${inviteEmail}`,
       ),
     )
@@ -93,18 +94,18 @@ export async function createTeamInvite(
 
   const [existingPendingInvite] = await db
     .select({
-      id: team_invites.id,
-      expires_at: team_invites.expires_at,
+      id: teamInvites.id,
+      expires_at: teamInvites.expires_at,
     })
-    .from(team_invites)
+    .from(teamInvites)
     .where(
       and(
-        eq(team_invites.team_id, teamId),
-        eq(team_invites.email, inviteEmail),
-        isNull(team_invites.accepted_at),
-        isNull(team_invites.revoked_at),
-        gt(team_invites.expires_at, now),
-        activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
+        eq(teamInvites.team_id, teamId),
+        eq(teamInvites.email, inviteEmail),
+        isNull(teamInvites.accepted_at),
+        isNull(teamInvites.revoked_at),
+        gt(teamInvites.expires_at, now),
+        activeTeamManagerExists(db, teamInvites.team_id, teamInvites.invited_by_user_id),
       ),
     )
     .limit(1);
@@ -156,8 +157,8 @@ export async function createTeamInvite(
     createdAt: now,
   });
   await db.batch([
-    db.insert(team_invites).values(invite),
-    db.insert(audit_events).values(auditEvent),
+    db.insert(teamInvites).values(invite),
+    db.insert(auditEvents).values(auditEvent),
   ]);
 
   const delivery = buildTeamInviteDelivery({
@@ -182,19 +183,19 @@ export async function revokeTeamInvite(
   { db, request, teamId, userId }: { db: Db; request: Request; teamId: string; userId: string },
   inviteId: string,
 ): Promise<Response> {
-  const { team_invites } = schema;
+  const { teamInvites } = schema;
 
   const now = new Date().toISOString();
   const [invite] = await db
     .select()
-    .from(team_invites)
+    .from(teamInvites)
     .where(
       and(
-        eq(team_invites.id, inviteId),
-        eq(team_invites.team_id, teamId),
-        isNull(team_invites.accepted_at),
-        isNull(team_invites.revoked_at),
-        gt(team_invites.expires_at, now),
+        eq(teamInvites.id, inviteId),
+        eq(teamInvites.team_id, teamId),
+        isNull(teamInvites.accepted_at),
+        isNull(teamInvites.revoked_at),
+        gt(teamInvites.expires_at, now),
       ),
     )
     .limit(1);
@@ -213,9 +214,9 @@ export async function revokeTeamInvite(
   const [revokeResult] = await db.batch([revoke, revokeAudit]);
   if (batchWriteMissed(revokeResult)) {
     const [current] = await db
-      .select({ accepted_at: team_invites.accepted_at })
-      .from(team_invites)
-      .where(and(eq(team_invites.id, inviteId), eq(team_invites.team_id, teamId)))
+      .select({ accepted_at: teamInvites.accepted_at })
+      .from(teamInvites)
+      .where(and(eq(teamInvites.id, inviteId), eq(teamInvites.team_id, teamId)))
       .limit(1);
     return current?.accepted_at
       ? jsonError("Invite was already accepted", 409, { code: "invite_already_accepted" })

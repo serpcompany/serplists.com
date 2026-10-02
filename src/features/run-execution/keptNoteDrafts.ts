@@ -30,7 +30,9 @@ export const keepRunNoteDrafts = (
   storage: KeptNoteDraftStorage | null = defaultStorage(),
 ): boolean => {
   const saved = savedNotesById(run);
-  const entries = Object.entries(drafts).map(([itemId, draft]) => [itemId, { draft, saved: saved.get(itemId) ?? '' }]);
+  const entries = Object.entries(drafts).map(
+    ([itemId, draft]): [string, { draft: string; saved: string }] => [itemId, { draft, saved: saved.get(itemId) ?? '' }],
+  );
   if (entries.length === 0) return true;
   if (!storage) return false;
   try {

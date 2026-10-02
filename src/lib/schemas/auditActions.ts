@@ -19,7 +19,7 @@ export const TEMPLATE_AUDIT_ACTIONS = [
   'template.restored',
 ] as const;
 
-export const ORGANIZATION_AUDIT_ACTIONS = [
+const ORGANIZATION_AUDIT_ACTIONS = [
   'team.created',
   'team.updated',
   'team.owner_transferred',
@@ -46,7 +46,7 @@ export const TEMPLATE_VERSION_ACTIONS = [
 ] as const;
 
 export type RunAuditAction = (typeof RUN_AUDIT_ACTIONS)[number];
-export type TemplateAuditAction = (typeof TEMPLATE_AUDIT_ACTIONS)[number];
+type TemplateAuditAction = (typeof TEMPLATE_AUDIT_ACTIONS)[number];
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 export type TemplateVersionAction = (typeof TEMPLATE_VERSION_ACTIONS)[number];
 

@@ -1,19 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEdgeCache, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildPageJsonLd } from '@/lib/seo/pageMetadata';
 import { loadTemplatePageSeo } from '@/server/pageMeta/templatePage';
-import { createEdgeCache, unreachableD1, serverContext } from '../../../support/nextServerContext';
-import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
 
-let d1: MigratedSqliteD1;
+let d1: SqliteD1;
 
 const insertTemplate = (overrides: Partial<Record<string, unknown>> = {}) => {
   const row = {
@@ -46,7 +43,7 @@ const params = (username: string, templateSlug: string) => ({
 });
 
 beforeEach(() => {
-  d1 = new MigratedSqliteD1();
+  d1 = new SqliteD1();
   d1.run(
     `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
      VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,
@@ -91,7 +88,8 @@ describe('template page metadata', () => {
     const canonical = 'https://serplists.com/profile/alice/reviewed-clipy-checklist/';
     expect(metadata.alternates?.canonical).toBe(canonical);
     expect(metadata.openGraph?.url).toBe(canonical);
-    expect(result.kind === 'found' && buildPageJsonLd(result.seo).url).toBe(canonical);
+    assert(result.kind === 'found', 'the template page was found');
+    expect(buildPageJsonLd(result.seo)).toHaveProperty('url', canonical);
   });
 
   it('names the production site on staging and workers.dev hosts, as the sitemap does', async () => {
@@ -149,7 +147,7 @@ describe('template page metadata for a template that is not there, an address th
     insertTemplate({ is_public: 0 });
     await expectNotFound('alice', 'reviewed-clipy-checklist');
 
-    d1 = new MigratedSqliteD1();
+    d1 = new SqliteD1();
     d1.run(
       `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
        VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,
@@ -181,7 +179,7 @@ describe('template page metadata cache', () => {
 
     expect(again.kind).toBe('found');
     expect(d1.queries.length).toBe(queries);
-    const [[key, stored]] = [...edgeCache.entries];
+    const [key, stored] = firstOf([...edgeCache.entries]);
     expect(key).toBe('https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist');
     expect(stored.headers.get('Cache-Control')).toBe('public, s-maxage=300');
   });

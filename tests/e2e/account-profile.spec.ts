@@ -1,14 +1,14 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
+import { fulfillJson, routeTheApi } from './support/mocked-api';
+
+const updateUserBody = z.object({ image: z.unknown(), name: z.unknown(), username: z.unknown() }).passthrough();
 
 const AVATAR_URL = 'https://avatars.e2e.test/new-avatar.png';
 const TRANSPARENT_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64',
 );
-
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
 
 async function mockProfileApi(page: Page) {
   const user = {
@@ -25,11 +25,7 @@ async function mockProfileApi(page: Page) {
     route.fulfill({ body: TRANSPARENT_PIXEL_PNG, contentType: 'image/png' }),
   );
 
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    const method = request.method();
-
+  await routeTheApi(page, async ({ route, request, path, method }) => {
     if (path === '/api/auth/get-session' && method === 'GET') {
       await fulfillJson(route, {
         session: {
@@ -46,9 +42,9 @@ async function mockProfileApi(page: Page) {
     }
 
     if (path === '/api/auth/update-user' && method === 'POST') {
-      const body = request.postDataJSON() as Record<string, unknown>;
+      const body = updateUserBody.parse(request.postDataJSON());
       updateRequests.push(body);
-      if ('image' in body) user.image = (body.image as string | null) ?? null;
+      if ('image' in body) user.image = typeof body.image === 'string' ? body.image : null;
       if (typeof body.name === 'string') user.name = body.name;
       if (typeof body.username === 'string') user.username = body.username.toLowerCase();
       await fulfillJson(route, { status: true });

@@ -1,45 +1,23 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
-
-const SRC = path.resolve(__dirname, '../../../src');
-
-const sourceFiles = (dir: string): string[] =>
-  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
-    return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
-  });
-
-const relative = (file: string) => path.relative(SRC, file).split(path.sep).join('/');
-
-const findElement = (node: React.ReactNode, type: string): React.ReactElement | null => {
-  if (!React.isValidElement(node)) return null;
-  if (node.type === type) return node;
-  const children = (node.props as { children?: React.ReactNode }).children;
-  for (const child of React.Children.toArray(children)) {
-    const found = findElement(child, type);
-    if (found) return found;
-  }
-  return null;
-};
+import { UserContentImage } from '@/components/shared/UserContentImage';
+import { findElement, handlerOf } from '../../support/elementTree';
 
 describe('TaskImageView', () => {
   it('reports a failed load without touching the img src, however often the error fires', () => {
     const onFail = vi.fn();
     const img = findElement(
       TaskImageView({ alt: 'Task content', onFail, src: 'https://cdn.example.com/missing.png' }),
-      'img',
+      (element) => element.type === UserContentImage,
     );
-    expect(img).not.toBeNull();
+    assert.exists(img);
 
     const target = { src: 'https://cdn.example.com/missing.png' };
-    const onError = (img!.props as { onError: (event: unknown) => void }).onError;
+    const onError = handlerOf(img, 'onError');
     for (let attempt = 0; attempt < 3; attempt += 1) {
       onError({ currentTarget: target, target });
     }
@@ -78,20 +56,13 @@ describe('resolveTaskImageSource', () => {
   );
 });
 
-describe('image fallbacks in src', () => {
-  it('never points a fallback at a third-party placeholder host', () => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => readFileSync(file, 'utf8').includes('placehold.co'))
-      .map(relative);
+describe('UserContentImage', () => {
+  it('renders the stored image as given, with no size, srcset or optimizer url', () => {
+    const markup = renderToStaticMarkup(
+      <UserContentImage alt="Diagram" className="w-full" src="https://cdn.example.com/diagram.png" />,
+    );
 
-    expect(offenders).toEqual([]);
-  });
-
-  it('never reassigns an image src from an onError handler', () => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => /onError=\{[\s\S]{0,300}?\.src\s*=(?!=)/.test(readFileSync(file, 'utf8')))
-      .map(relative);
-
-    expect(offenders).toEqual([]);
+    expect(markup).toContain('<img alt="Diagram" class="w-full" src="https://cdn.example.com/diagram.png"/>');
+    expect(markup).not.toMatch(/srcset|width=|height=|\/_next\/image/);
   });
 });

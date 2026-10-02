@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { capturedGroup } from '../support/elements';
 import { APP_URL } from './support/stack';
 
 const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
@@ -12,9 +13,11 @@ async function fetchHeadWithoutRedirect(request: APIRequestContext, path: string
   const head = html.slice(0, html.indexOf('</head>'));
   const meta = (key: string) =>
     [...head.matchAll(/<meta\s[^>]*>/g)]
-      .map(([tag]) => Object.fromEntries([...tag.matchAll(/([\w:-]+)="([^"]*)"/g)].map((pair) => [pair[1], pair[2]])))
-      .filter((attributes) => attributes.name === key || attributes.property === key)
-      .map((attributes) => attributes.content);
+      .map(([tag]) =>
+        Object.fromEntries([...tag.matchAll(/([\w:-]+)="([^"]*)"/g)].map((pair): [string, string] => [capturedGroup(pair, 1), capturedGroup(pair, 2)])),
+      )
+      .filter((attributes) => attributes['name'] === key || attributes['property'] === key)
+      .map((attributes) => attributes['content']);
   return {
     title: /<title>([^<]*)<\/title>/.exec(head)?.[1],
     meta,
@@ -68,9 +71,9 @@ test('the category sitemap still answers next to the category pages, page includ
   const response = await request.get(`${APP_URL}/categories/sitemap.xml`, { maxRedirects: 0 });
 
   expect(response.status()).toBe(308);
-  expect(response.headers().location).toBe('https://serplists.com/sitemaps/categories/1.xml');
+  expect(response.headers()['location']).toBe('https://serplists.com/sitemaps/categories/1.xml');
 
   const second = await request.get(`${APP_URL}/categories/sitemap.xml?page=2`, { maxRedirects: 0 });
   expect(second.status()).toBe(308);
-  expect(second.headers().location).toBe('https://serplists.com/sitemaps/categories/2.xml');
+  expect(second.headers()['location']).toBe('https://serplists.com/sitemaps/categories/2.xml');
 });

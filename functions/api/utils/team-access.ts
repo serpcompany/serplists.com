@@ -6,7 +6,7 @@ import type { Env } from "../types";
 export const teamRoles = ["owner", "admin", "editor", "runner", "viewer"] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
-export type TeamMembership = typeof schema.team_members.$inferSelect;
+export type TeamMembership = typeof schema.teamMembers.$inferSelect;
 
 const roleRank: Record<TeamRole, number> = {
   owner: 50,
@@ -16,7 +16,7 @@ const roleRank: Record<TeamRole, number> = {
   viewer: 10,
 };
 
-export function isTeamRole(value: unknown): value is TeamRole {
+function isTeamRole(value: unknown): value is TeamRole {
   return typeof value === "string" && (teamRoles as readonly string[]).includes(value);
 }
 
@@ -24,7 +24,7 @@ export function normalizeTeamRole(value: unknown, fallback: TeamRole = "viewer")
   return isTeamRole(value) ? value : fallback;
 }
 
-export function hasTeamRole(role: TeamRole, minimumRole: TeamRole): boolean {
+function hasTeamRole(role: TeamRole, minimumRole: TeamRole): boolean {
   return roleRank[role] >= roleRank[minimumRole];
 }
 
@@ -44,33 +44,39 @@ export function canManageTeam(role: TeamRole): boolean {
   return hasTeamRole(role, "admin");
 }
 
+export async function findActiveTeam(db: ReturnType<typeof createDb>, teamId: string) {
+  const { teams } = schema;
+  const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
+  return team;
+}
+
 export async function getActiveTeamMembership(
   env: Env,
   teamId: string,
   userId: string,
 ): Promise<TeamMembership | null> {
   const db = createDb(env);
-  const { team_members, teams } = schema;
+  const { teamMembers, teams } = schema;
 
   const [membership] = await db
     .select({
-      id: team_members.id,
-      team_id: team_members.team_id,
-      user_id: team_members.user_id,
-      role: team_members.role,
-      status: team_members.status,
-      invited_by_user_id: team_members.invited_by_user_id,
-      joined_at: team_members.joined_at,
-      created_at: team_members.created_at,
-      updated_at: team_members.updated_at,
+      id: teamMembers.id,
+      team_id: teamMembers.team_id,
+      user_id: teamMembers.user_id,
+      role: teamMembers.role,
+      status: teamMembers.status,
+      invited_by_user_id: teamMembers.invited_by_user_id,
+      joined_at: teamMembers.joined_at,
+      created_at: teamMembers.created_at,
+      updated_at: teamMembers.updated_at,
     })
-    .from(team_members)
-    .leftJoin(teams, eq(teams.id, team_members.team_id))
+    .from(teamMembers)
+    .leftJoin(teams, eq(teams.id, teamMembers.team_id))
     .where(
       and(
-        eq(team_members.team_id, teamId),
-        eq(team_members.user_id, userId),
-        eq(team_members.status, "active"),
+        eq(teamMembers.team_id, teamId),
+        eq(teamMembers.user_id, userId),
+        eq(teamMembers.status, "active"),
         isNotNull(teams.id),
         isNull(teams.archived_at),
       ),
@@ -80,29 +86,13 @@ export async function getActiveTeamMembership(
   return membership ?? null;
 }
 
-export async function userHasTeamRole(
-  env: Env,
-  teamId: string,
-  userId: string,
-  minimumRole: TeamRole,
-): Promise<{ allowed: boolean; membership: TeamMembership | null; role: TeamRole | null }> {
-  const membership = await getActiveTeamMembership(env, teamId, userId);
-  const role = membership ? normalizeTeamRole(membership.role) : null;
-
-  return {
-    allowed: role ? hasTeamRole(role, minimumRole) : false,
-    membership,
-    role,
-  };
-}
-
 export function activeTeamMemberExists(
   db: ReturnType<typeof createDb>,
   teamId: SQLiteColumn | string,
   userId: SQLiteColumn | string,
   roles?: readonly TeamRole[],
 ) {
-  const member = alias(schema.team_members, roles ? "active_manager" : "active_member");
+  const member = alias(schema.teamMembers, roles ? "active_manager" : "active_member");
   return exists(
     db.select({ id: member.id }).from(member).where(
       and(

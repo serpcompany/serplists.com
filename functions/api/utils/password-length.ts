@@ -1,4 +1,5 @@
 import { APIError, createAuthMiddleware } from "better-auth/api";
+import { z } from "zod";
 import {
   PASSWORD_TOO_LONG_MESSAGE,
   passwordExceedsMaxBytes,
@@ -14,18 +15,22 @@ export const NEW_PASSWORD_BODY_FIELDS: Readonly<Record<string, string>> = {
 const newPasswordFieldFor = (path: string): string | undefined =>
   Object.hasOwn(NEW_PASSWORD_BODY_FIELDS, path) ? NEW_PASSWORD_BODY_FIELDS[path] : undefined;
 
-export function findMissingNewPassword(path: string, body: unknown): APIError | null {
+const requestBodySchema = z.record(z.unknown());
+
+const bodyField = (body: unknown, field: string): unknown => requestBodySchema.safeParse(body).data?.[field];
+
+function findMissingNewPassword(path: string, body: unknown): APIError | null {
   const field = newPasswordFieldFor(path);
   if (!field) return null;
-  const password = typeof body === "object" && body !== null ? (body as Record<string, unknown>)[field] : undefined;
+  const password = bodyField(body, field);
   if (typeof password === "string") return null;
   return new APIError("BAD_REQUEST", { message: "Invalid password", code: "INVALID_PASSWORD" });
 }
 
-export function findOverlongNewPassword(path: string, body: unknown): APIError | null {
+function findOverlongNewPassword(path: string, body: unknown): APIError | null {
   const field = newPasswordFieldFor(path);
-  if (!field || typeof body !== "object" || body === null) return null;
-  const password = (body as Record<string, unknown>)[field];
+  if (!field) return null;
+  const password = bodyField(body, field);
   if (typeof password !== "string" || !passwordExceedsMaxBytes(password)) return null;
   return new APIError("BAD_REQUEST", { message: PASSWORD_TOO_LONG_MESSAGE, code: "PASSWORD_TOO_LONG" });
 }

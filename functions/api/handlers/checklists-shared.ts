@@ -2,17 +2,19 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { Env } from '../types';
 import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
+import { readJsonPayload } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
 import {
   auditedRunUpdate,
-  batchUpdateMissed,
   getRunSubject,
   serializeSharedChecklistRun,
   sharedChecklistRunSelect,
+  type RunUpdates,
 } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
-import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
+import { reopenLimitResponse } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
 import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
@@ -24,46 +26,37 @@ export async function handleSharedChecklist(
   userId: string | null,
 ): Promise<Response> {
   const db = createDb(env);
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const activeShare = and(
-    eq(checklist_runs.share_token, shareToken),
-    eq(checklist_runs.is_public, true),
-    isNull(checklist_runs.deleted_at),
+    eq(checklistRuns.share_token, shareToken),
+    eq(checklistRuns.is_public, true),
+    isNull(checklistRuns.deleted_at),
   );
 
   if (request.method === 'GET') {
-    const [checklist] = await db.select(sharedChecklistRunSelect()).from(checklist_runs).where(activeShare).limit(1);
+    const [checklist] = await db.select(sharedChecklistRunSelect()).from(checklistRuns).where(activeShare).limit(1);
 
     if (!checklist) {
       return jsonError('Shared run not found', 404);
     }
 
-    return json(serializeSharedChecklistRun(checklist as unknown as Record<string, unknown>));
+    return json(serializeSharedChecklistRun(checklist));
   }
 
   if (request.method !== 'PUT') {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  const [existingSharedRun] = await db.select().from(checklist_runs).where(activeShare).limit(1);
+  const [existingSharedRun] = await db.select().from(checklistRuns).where(activeShare).limit(1);
 
   if (!existingSharedRun || !existingSharedRun.id) {
     return jsonError('Shared run not found', 404);
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError('Invalid JSON payload', 400);
-  }
+  const read = await readJsonPayload(request, sharedRunUpdateSchema, 'Invalid checklist payload');
+  if ('response' in read) return read.response;
 
-  const parsed = sharedRunUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-  }
-
-  const { sections, status, expected_revision } = parsed.data;
+  const { sections, status, expected_revision } = read.payload;
   if (sections === undefined && status === undefined) {
     return jsonError('No fields to update', 400);
   }
@@ -76,22 +69,18 @@ export async function handleSharedChecklist(
     });
   }
 
-  if (isReopening(existingSharedRun.status, status)) {
-    const owner = { userId: existingSharedRun.user_id, teamId: existingSharedRun.team_id ?? null };
-    const limitHit = await findActiveRunLimitHit(env, owner, userId);
-    if (limitHit) return activeRunLimitResponse(owner, limitHit, 'reopen');
-  }
+  const reopenRefusal = await reopenLimitResponse(env, existingSharedRun, status, userId);
+  if (reopenRefusal) return reopenRefusal;
 
   const storedSections = readStoredRunSections(existingSharedRun.items);
   if (!storedSections) {
     return jsonError('Shared run content could not be read', 500);
   }
 
-  const runRecord = existingSharedRun as unknown as Record<string, unknown>;
-  const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
+  const actorUserId = userId && (await canViewRun(env, existingSharedRun, userId)) ? userId : null;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {};
+  const updates: RunUpdates = {};
   let nextSections = storedSections;
   if (sections !== undefined) {
     const merged = mergeSharedRunState(storedSections, sections);
@@ -131,11 +120,11 @@ export async function handleSharedChecklist(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId,
-    subject: getRunSubject(runRecord, typeof existingSharedRun.user_id === 'string' ? existingSharedRun.user_id : 'unknown'),
+    subject: getRunSubject(existingSharedRun, existingSharedRun.user_id),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',
-    before: runRecord,
-    after: { ...runRecord, ...updates },
+    before: existingSharedRun,
+    after: { ...existingSharedRun, ...updates },
     diff: updates,
     metadata: { source: 'public_share' },
     request,
@@ -144,12 +133,12 @@ export async function handleSharedChecklist(
   const batchResults = await db.batch(auditedRunUpdate(
     db,
     existingSharedRun.id,
-    and(eq(checklist_runs.revision, currentRevision), activeShare),
+    and(eq(checklistRuns.revision, currentRevision), activeShare),
     updates,
     auditEvent,
   ));
 
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
       code: 'edit_conflict',
     });

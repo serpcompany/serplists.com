@@ -1,5 +1,3 @@
-import type { Env } from "../types";
-
 const MIN_SECRET_LENGTH = 32;
 
 function normalizeSecret(value: string | undefined): string | null {
@@ -8,7 +6,9 @@ function normalizeSecret(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function resolveAuthSecret(env: Pick<Env, "BETTER_AUTH_SECRET" | "JWT_SECRET">): string {
+type AuthSecretSettings = { BETTER_AUTH_SECRET?: string | undefined; JWT_SECRET?: string | undefined };
+
+export function resolveAuthSecret(env: AuthSecretSettings): string {
   const betterAuthSecret = normalizeSecret(env.BETTER_AUTH_SECRET);
   if (betterAuthSecret && betterAuthSecret.length >= MIN_SECRET_LENGTH) {
     return betterAuthSecret;

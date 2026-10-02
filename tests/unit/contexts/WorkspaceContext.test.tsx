@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
 import type { TeamSummary } from '@/lib/api';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
@@ -59,11 +60,16 @@ describe('WorkspaceProvider teams cache', () => {
     apiMocks.getTeams.mockReset();
   });
 
-  it('refreshTeams fetches again instead of joining a teams request that predates the write', async () => {
+  const aWorkspaceWithAStaleTeamsRequest = () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const workspace = workspaceFromOneRender(queryClient);
     const staleTeams = startTeamsRequestThatReadTheServerBeforeTheWrite(queryClient);
     apiMocks.getTeams.mockResolvedValue([joinedTeam]);
+    return { queryClient, workspace, staleTeams };
+  };
+
+  it('refreshTeams fetches again instead of joining a teams request that predates the write', async () => {
+    const { queryClient, workspace, staleTeams } = aWorkspaceWithAStaleTeamsRequest();
 
     workspace.rememberTeam(joinedTeam);
     const refreshed = workspace.refreshTeams();
@@ -97,10 +103,7 @@ describe('WorkspaceProvider teams cache', () => {
   });
 
   it('accepting an invite without team details waits for a teams list read after the accept', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const workspace = workspaceFromOneRender(queryClient);
-    const staleTeams = startTeamsRequestThatReadTheServerBeforeTheWrite(queryClient);
-    apiMocks.getTeams.mockResolvedValue([joinedTeam]);
+    const { queryClient, workspace, staleTeams } = aWorkspaceWithAStaleTeamsRequest();
 
     const accepted = acceptTeamInviteForWorkspace('invite-token', {
       acceptTeamInvite: async () => ({ memberId: 'member-1', role: 'editor', teamId: 'team-1' }),

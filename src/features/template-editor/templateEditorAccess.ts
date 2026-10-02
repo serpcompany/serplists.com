@@ -12,7 +12,7 @@ type AccessContext = {
   billingEnabled: boolean;
 };
 
-export const TEMPLATE_LIMIT_MESSAGE =
+const TEMPLATE_LIMIT_MESSAGE =
   "Template limit reached. Upgrade to create more templates.";
 export const ORGANIZATION_TEMPLATE_PLAN_MESSAGE =
   "This Organization needs a paid plan to create more templates.";
@@ -62,7 +62,7 @@ export const resolveTemplateSaveFailureNotice = (
 
 export const countContextTemplates = (
   templates: ChecklistTemplate[],
-  owner: { userId: string; teamId?: string | null },
+  owner: { userId: string; teamId?: string | null | undefined },
 ): number =>
   templates.filter((template) =>
     owner.teamId
@@ -71,8 +71,8 @@ export const countContextTemplates = (
   ).length;
 
 export const isTemplateLimitReached = (params: {
-  maxTemplates?: number | null;
-  ownedCount?: number;
+  maxTemplates?: number | null | undefined;
+  ownedCount?: number | undefined;
 }): boolean =>
   typeof params.maxTemplates === "number" &&
   typeof params.ownedCount === "number" &&
@@ -80,7 +80,7 @@ export const isTemplateLimitReached = (params: {
 
 export const shouldLoadTemplateCountForLimit = (params: {
   isCreate: boolean;
-  maxTemplates?: number | null;
+  maxTemplates?: number | null | undefined;
 }): boolean => params.isCreate && typeof params.maxTemplates === "number";
 
 export const resolveTemplateLimitNotice = (
@@ -92,7 +92,7 @@ export const resolveTemplateLimitNotice = (
 export const findOtherContextDraft = <T extends { teamId: string | null }>(
   drafts: T[],
   params: {
-    activeTeamId?: string;
+    activeTeamId?: string | undefined;
     workspaceReady: boolean;
     canCreateIn: (teamId: string | null) => boolean;
   },

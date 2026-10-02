@@ -1,15 +1,15 @@
-import { EventEmitter } from 'node:events';
+import { ChildProcess } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, describe, expect, it } from 'vitest';
-import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH, mirrorOutputToLog } from '../../../scripts/lib/log-mirror.mjs';
+import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH, mirrorOutputToLog } from '../../../scripts/lib/log-mirror';
 
 const workDir = mkdtempSync(path.join(tmpdir(), 'log-mirror-'));
 afterAll(() => rmSync(workDir, { recursive: true, force: true }));
 
-const fakeServer = () => Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough() });
+const fakeServer = () => Object.assign(new ChildProcess(), { stdout: new PassThrough(), stderr: new PassThrough() });
 
 const capture = () => {
   const stream = new PassThrough();
@@ -30,7 +30,7 @@ async function runServer(logPath: string, write: (server: ReturnType<typeof fake
   write(server);
   await nextTick();
   server.emit('exit', 0);
-  await new Promise((resolve) => logFile.on('finish', resolve));
+  await new Promise<void>((resolve) => logFile.on('finish', resolve));
   return { stdout: stdout.text(), stderr: stderr.text(), log: readFileSync(logPath, 'utf8') };
 }
 

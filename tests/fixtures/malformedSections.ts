@@ -1,4 +1,16 @@
-const withContent = (content: unknown) => [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', contents: [content] }] }];
+export const sectionsWithContents = (...contents: unknown[]) => [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', contents }] }];
+
+const withContent = (content: unknown) => sectionsWithContents(content);
+
+export const MALFORMED_CONTENTS_A_TEMPLATE_STORED = [
+  { type: 'subItems', value: '', subItems: 'x' },
+  { type: 'text', value: {} },
+];
+
+export const THE_SAME_CONTENTS_MADE_SAFE = [
+  { type: 'subItems', value: '', subItems: [] },
+  { type: 'text', value: '' },
+];
 
 export const malformedSectionsStoredBeforeValidation: Array<[string, unknown[]]> = [
   ['a string subItems', withContent({ type: 'subItems', value: '', subItems: 'x' })],

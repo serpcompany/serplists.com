@@ -12,7 +12,8 @@ import {
 } from './runExecutionMappers';
 import { applyNoteDrafts, draftedNotesChanged, hasNoteDraftFor, type NoteDrafts } from './noteDrafts';
 import {
-  COMPLETED_RUN_FROZEN_MESSAGE,
+  runOpenedByItsOwner,
+  runStillOpen,
   toErrorResult,
   type RunExecutionActionResult,
 } from './runExecutionResult';
@@ -35,7 +36,7 @@ type ToggleRunSubItemParams = RunExecutionMutationParams & {
   contentIndex: number;
   isCompleted: boolean;
   itemId: string;
-  subItemId?: string;
+  subItemId?: string | undefined;
   subItemIndex: number;
 };
 
@@ -80,15 +81,12 @@ export const toggleRunItem = async (
   params: ToggleRunItemParams,
   dependencies: RunExecutionDependencies,
 ): Promise<RunExecutionActionResult> => {
-  if (!params.run) {
-    return { kind: 'not_found' };
-  }
-  if (params.run.status === 'completed') {
-    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
-  }
+  const target = runStillOpen(params.run);
+  if ('refusal' in target) return target.refusal;
+  const { run } = target;
 
   const nextRun = withClonedRun(
-    applyNoteDrafts(params.run, params.noteDrafts ?? {}, [params.itemId]),
+    applyNoteDrafts(run, params.noteDrafts ?? {}, [params.itemId]),
   );
 
   for (const section of nextRun.sections) {
@@ -99,8 +97,8 @@ export const toggleRunItem = async (
 
       const { isCompleted } = params;
       if (itemHasCompletion(item, isCompleted)) {
-        const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, params.run, params.itemId);
-        return saveToggledRun(notesChanged ? nextRun : params.run, notesChanged, params.shareToken, dependencies);
+        const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, run, params.itemId);
+        return saveToggledRun(notesChanged ? nextRun : run, notesChanged, params.shareToken, dependencies);
       }
       item.isCompleted = isCompleted;
       item.contents = item.contents?.map((content) => {
@@ -125,14 +123,11 @@ export const toggleRunSubItem = async (
   params: ToggleRunSubItemParams,
   dependencies: RunExecutionDependencies,
 ): Promise<RunExecutionActionResult> => {
-  if (!params.run) {
-    return { kind: 'not_found' };
-  }
-  if (params.run.status === 'completed') {
-    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
-  }
+  const target = runStillOpen(params.run);
+  if ('refusal' in target) return target.refusal;
+  const { run } = target;
 
-  const nextRun = withClonedRun(params.run);
+  const nextRun = withClonedRun(run);
 
   for (const section of nextRun.sections) {
     for (const item of section.items) {
@@ -146,7 +141,7 @@ export const toggleRunSubItem = async (
       }
 
       if ((subItem.isCompleted === true) === params.isCompleted) {
-        return saveToggledRun(params.run, false, params.shareToken, dependencies);
+        return saveToggledRun(run, false, params.shareToken, dependencies);
       }
       subItem.isCompleted = params.isCompleted;
       item.isCompleted = areItemSubItemsCompleted(item);
@@ -192,19 +187,15 @@ export const saveRunExecutionTitle = async (
   params: SaveRunTitleParams,
   dependencies: RunExecutionDependencies,
 ): Promise<RunExecutionActionResult> => {
-  if (!params.run) {
-    return { kind: 'not_found' };
-  }
-
-  if (params.shareToken) {
-    return { kind: 'shared_disabled' };
-  }
+  const target = runOpenedByItsOwner(params);
+  if ('refusal' in target) return target.refusal;
+  const { run } = target;
 
   const title = params.title.trim();
   const titleError = getRunTitleError(title);
   if (titleError) return { kind: 'error', message: titleError };
-  if (!isRunTitleChange(title, params.run.title)) {
-    return { kind: 'ok', run: params.run };
+  if (!isRunTitleChange(title, run.title)) {
+    return { kind: 'ok', run };
   }
 
   try {
@@ -212,7 +203,7 @@ export const saveRunExecutionTitle = async (
       {
         includeTitle: true,
         run: {
-          ...params.run,
+          ...run,
           title,
         },
       },
@@ -262,7 +253,7 @@ export const completeRunExecution = async (
 export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
   dependencies: RunExecutionDependencies;
   noteDrafts: () => NoteDrafts;
-  shareToken?: string;
+  shareToken?: string | undefined;
 }) => ({
   complete: {
     bind: (current: ChecklistRun): RunSave => ({

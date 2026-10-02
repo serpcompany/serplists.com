@@ -4,6 +4,8 @@ import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { capturedGroup, valueAt } from '../../support/elements';
+
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
 
@@ -22,7 +24,7 @@ type Rule = { tool: string; pattern: string | null };
 const parseRule = (rule: string): Rule => {
   const match = /^([\w-]+)(?:\((.*)\))?$/.exec(rule);
   if (!match) throw new Error(`Unexpected permission rule: ${rule}`);
-  return { tool: match[1], pattern: match[2] ?? null };
+  return { tool: capturedGroup(match, 1), pattern: match[2] ?? null };
 };
 
 const denyRules = permissions.deny.map(parseRule);
@@ -147,7 +149,7 @@ const allowedToolsIn = (file: string) =>
     .flatMap((job) => job.steps ?? [])
     .filter((step) => step.uses?.startsWith('anthropics/claude-code-action'))
     .flatMap((step) => {
-      const list = /--allowedTools\s+"([^"]*)"/.exec(String(step.with?.claude_args ?? ''))?.[1] ?? '';
+      const list = /--allowedTools\s+"([^"]*)"/.exec(String(step.with?.['claude_args'] ?? ''))?.[1] ?? '';
       return list.split(',').map((tool) => tool.trim()).filter(Boolean);
     });
 
@@ -190,11 +192,11 @@ describe('.mcp.json', () => {
   });
 
   it('gives Chrome a temporary profile, and verify-web the same server for machines without a display', () => {
-    const chrome = mcpServers['chrome-devtools'];
+    const chrome = valueAt(mcpServers, 'chrome-devtools');
     expect(chrome.args).toContain('--isolated');
     const skill = readText('.claude/skills/verify-web/SKILL.md');
-    const override = /claude mcp add chrome-devtools --scope local -- ([^`\n]+)/.exec(skill)?.[1].trim().split(/\s+/);
-    expect(override?.[0]).toBe(chrome.command);
-    expect(override?.slice(1).sort()).toEqual([...chrome.args, '--headless'].sort());
+    const override = capturedGroup(/claude mcp add chrome-devtools --scope local -- ([^`\n]+)/.exec(skill), 1).trim().split(/\s+/);
+    expect(override[0]).toBe(chrome.command);
+    expect(override.slice(1).sort()).toEqual([...chrome.args, '--headless'].sort());
   });
 });

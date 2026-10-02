@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { log } from "./logger";
+import { insertStripeCustomer } from "./stripe-customers";
 import { StripeApiError, expandableStripeIdSchema, stripeGet } from "./stripe";
 
 type Db = ReturnType<typeof createDb>;
@@ -33,18 +34,18 @@ export type PersonalSubscriptionSummary = {
 export type StoredOpenSubscription = { id: string | null; customerId: string; status: string };
 
 export async function listOpenStoredSubscriptions(db: Db, userId: string): Promise<StoredOpenSubscription[]> {
-  const { stripe_subscriptions } = schema;
+  const { stripeSubscriptions } = schema;
   return db
     .select({
-      id: stripe_subscriptions.stripe_subscription_id,
-      customerId: stripe_subscriptions.stripe_customer_id,
-      status: stripe_subscriptions.status,
+      id: stripeSubscriptions.stripe_subscription_id,
+      customerId: stripeSubscriptions.stripe_customer_id,
+      status: stripeSubscriptions.status,
     })
-    .from(stripe_subscriptions)
+    .from(stripeSubscriptions)
     .where(
       and(
-        eq(stripe_subscriptions.user_id, userId),
-        notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
+        eq(stripeSubscriptions.user_id, userId),
+        notInArray(stripeSubscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
       ),
     )
     .limit(10);
@@ -52,12 +53,12 @@ export async function listOpenStoredSubscriptions(db: Db, userId: string): Promi
 
 export async function getPersonalSubscriptionSummary(env: Env, userId: string): Promise<PersonalSubscriptionSummary> {
   const db = createDb(env);
-  const { stripe_customers } = schema;
+  const { stripeCustomers } = schema;
   const [customers, openSubscriptions] = await Promise.all([
     db
-      .select({ stripeCustomerId: stripe_customers.stripe_customer_id })
-      .from(stripe_customers)
-      .where(eq(stripe_customers.user_id, userId))
+      .select({ stripeCustomerId: stripeCustomers.stripe_customer_id })
+      .from(stripeCustomers)
+      .where(eq(stripeCustomers.user_id, userId))
       .limit(1),
     listOpenStoredSubscriptions(db, userId),
   ]);
@@ -73,15 +74,15 @@ export async function getPersonalSubscriptionSummary(env: Env, userId: string): 
 }
 
 export async function openStoredStatusOnPrices(db: Db, userId: string, priceIds: string[]): Promise<string | null> {
-  const { stripe_subscriptions } = schema;
+  const { stripeSubscriptions } = schema;
   const rows = await db
-    .select({ status: stripe_subscriptions.status })
-    .from(stripe_subscriptions)
+    .select({ status: stripeSubscriptions.status })
+    .from(stripeSubscriptions)
     .where(
       and(
-        eq(stripe_subscriptions.user_id, userId),
-        inArray(stripe_subscriptions.price_id, priceIds),
-        notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
+        eq(stripeSubscriptions.user_id, userId),
+        inArray(stripeSubscriptions.price_id, priceIds),
+        notInArray(stripeSubscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
       ),
     )
     .limit(10);
@@ -111,8 +112,8 @@ const stripeSubscriptionSchema = z
     canceled_at: z.number().nullish(),
     trial_end: z.number().nullish(),
     current_period_end: z.number().nullish(),
-    metadata: z.record(z.unknown()).nullish(),
-    items: z.object({ data: z.array(subscriptionItemSchema).min(1) }).passthrough(),
+    metadata: z.object({ userId: z.unknown() }).passthrough().nullish(),
+    items: z.object({ data: z.array(subscriptionItemSchema).nonempty() }).passthrough(),
   })
   .passthrough();
 
@@ -252,22 +253,14 @@ export async function loadCurrentSubscription(
 }
 
 export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
-  const { stripe_customers } = schema;
-  return db
-    .insert(stripe_customers)
-    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
-    .onConflictDoUpdate({
-      target: stripe_customers.user_id,
-      set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
-    });
+  return insertStripeCustomer(db, userId, stripeCustomerId, nowIso).onConflictDoUpdate({
+    target: schema.stripeCustomers.user_id,
+    set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
+  });
 }
 
 export function linkStripeCustomerIfUnmapped(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
-  const { stripe_customers } = schema;
-  return db
-    .insert(stripe_customers)
-    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
-    .onConflictDoNothing();
+  return insertStripeCustomer(db, userId, stripeCustomerId, nowIso).onConflictDoNothing();
 }
 
 export function upsertStripeSubscription(
@@ -276,7 +269,7 @@ export function upsertStripeSubscription(
   subscription: SubscriptionSnapshot,
   nowIso: string,
 ) {
-  const { stripe_subscriptions } = schema;
+  const { stripeSubscriptions } = schema;
   const state = {
     user_id: userId,
     stripe_customer_id: subscription.customerId,
@@ -289,14 +282,14 @@ export function upsertStripeSubscription(
     updated_at: nowIso,
   };
 
-  const transitionStripeCanMake = sql`${stripe_subscriptions.status} NOT IN ('canceled', 'incomplete_expired')
-    AND (excluded.status <> 'incomplete' OR ${stripe_subscriptions.status} = 'incomplete')`;
+  const transitionStripeCanMake = sql`${stripeSubscriptions.status} NOT IN ('canceled', 'incomplete_expired')
+    AND (excluded.status <> 'incomplete' OR ${stripeSubscriptions.status} = 'incomplete')`;
 
   return db
-    .insert(stripe_subscriptions)
+    .insert(stripeSubscriptions)
     .values({ stripe_subscription_id: subscription.id, ...state, created_at: nowIso })
     .onConflictDoUpdate({
-      target: stripe_subscriptions.stripe_subscription_id,
+      target: stripeSubscriptions.stripe_subscription_id,
       set: state,
       setWhere: transitionStripeCanMake,
     });

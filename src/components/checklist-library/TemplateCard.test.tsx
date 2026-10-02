@@ -1,12 +1,9 @@
+import { navigation } from '../../../tests/support/mockedNextNavigation';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../../tests/support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../tests/support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../tests/support/nextNavigation')).nextLinkMock);
 
 const template = {
   id: 'website-launch',

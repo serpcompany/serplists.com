@@ -5,9 +5,9 @@ import { disableRequestKeepAlive } from "./tests/e2e/support/request-connections
 disableRequestKeepAlive();
 
 const reuseExistingServer =
-  process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER != null
-    ? process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
-    : !process.env.CI;
+  process.env["PLAYWRIGHT_REUSE_EXISTING_SERVER"] != null
+    ? process.env["PLAYWRIGHT_REUSE_EXISTING_SERVER"] === "1"
+    : !process.env["CI"];
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -23,7 +23,7 @@ export default defineConfig({
   },
   webServer: {
     name: "app",
-    command: "node tests/e2e/preview-server.mjs",
+    command: "node --import tsx tests/e2e/preview-server.ts",
     url: `${APP_URL}/api/health`,
     reuseExistingServer,
     timeout: 180000,

@@ -6,7 +6,7 @@ export const STAGING_ORIGIN = 'https://serp-checklists-preview.serpcompany.worke
 
 export const SMOKE_TEST_HEADER = 'x-serplists-smoke-test';
 
-type SiteEnvSource = Readonly<Record<string, string | undefined>>;
+type SiteEnvSource = { readonly SITE_ENV?: string | undefined; readonly [name: string]: string | undefined };
 
 export const isProductionSite = (env: SiteEnvSource = process.env): boolean =>
   env.SITE_ENV === 'production';

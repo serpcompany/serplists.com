@@ -1,4 +1,5 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { ACME_ORG_OWNED, FREE_BILLING_STATUS, fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 const organizationRun = {
   id: 'run-org',
@@ -13,29 +14,11 @@ const organizationRun = {
   started_at: '2026-07-02T00:00:00.000Z',
 };
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
-
 async function mockApi(page: Page, state: { teamsFail: boolean }) {
   const scopedListRequests: string[] = [];
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, url, path }) => {
     if (path === '/api/auth/get-session') {
-      await fulfillJson(route, {
-        session: {
-          id: 'session-1',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          expiresAt: '2026-07-08T00:00:00.000Z',
-          token: 'session-token',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-          userId: 'user-owner',
-        },
-        user: { id: 'user-owner', email: 'owner@example.com', emailVerified: true, name: 'Owner User', username: 'owner' },
-      });
+      await fulfillJson(route, OWNER_SESSION);
       return;
     }
     if (path === '/api/teams' && request.method() === 'GET') {
@@ -43,9 +26,7 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
         await fulfillJson(route, { error: 'Internal error' }, 500);
         return;
       }
-      await fulfillJson(route, [
-        { id: 'team-1', memberId: 'member-1', membershipStatus: 'active', name: 'Acme Org', role: 'owner', slug: 'acme' },
-      ]);
+      await fulfillJson(route, ACME_ORG_OWNED);
       return;
     }
     if (path === '/api/templates' && request.method() === 'GET') {
@@ -54,7 +35,7 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
       return;
     }
     if (path === '/api/billing/status') {
-      await fulfillJson(route, { billingEnabled: true, plan: 'free' });
+      await fulfillJson(route, FREE_BILLING_STATUS);
       return;
     }
     if (path === '/api/checklists/run-org') {
@@ -68,6 +49,13 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
     await fulfillJson(route, []);
   });
   return scopedListRequests;
+}
+
+async function retryWithTheTeamsListBack(page: Page, state: { teamsFail: boolean }) {
+  state.teamsFail = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
 }
 
 test("a failed teams request shows an error instead of switching to Personal or loading Personal's Templates", async ({ page }) => {
@@ -121,17 +109,14 @@ test('in Personal, a failed teams request is shown on an Organization run and in
   await expect(page.getByRole('menuitem', { name: 'Retry loading Organizations' })).toBeVisible();
   await page.keyboard.press('Escape');
 
-  state.teamsFail = false;
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
-
-  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  await retryWithTheTeamsListBack(page, state);
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeEnabled();
   await switcher.click();
   await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
 });
 
-const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
 
 async function openPublicTemplateWithFailedTeams(page: Page, state: { teamsFail: boolean }) {
   await mockApi(page, state);
@@ -148,10 +133,7 @@ test('the public template page offers Retry when the teams request fails', async
   const state = { teamsFail: true };
   await openPublicTemplateWithFailedTeams(page, state);
 
-  state.teamsFail = false;
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
-
-  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  await retryWithTheTeamsListBack(page, state);
   await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeEnabled();
   expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('team-1');
 });

@@ -62,9 +62,9 @@ jobs:
       - name: Verify the new deployment responds
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-        run: node scripts/verify-deployment.mjs
+        run: node --import tsx scripts/verify-deployment.ts
 
       - name: Check the deployment against the site standards
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-        run: node scripts/check-site-standards.mjs "$DEPLOY_URL" staging
+        run: node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" staging

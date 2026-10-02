@@ -25,7 +25,7 @@ export type CreateTemplate = (
 ) => Promise<ChecklistTemplate>;
 
 export type CreateRun = (params: {
-  runName?: string;
+  runName?: string | undefined;
   template?: ChecklistTemplate;
   templateId: string;
 }) => Promise<ChecklistRun | null>;
@@ -40,7 +40,7 @@ export type TemplateDetailBillingState = {
 export const startTemplateRun = async (params: {
   createRun: CreateRun;
   isAuthenticated: boolean;
-  runName?: string;
+  runName?: string | undefined;
   template: ChecklistTemplate | null;
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
@@ -74,9 +74,9 @@ export const saveTemplateToAccount = async (params: {
   createTemplate: CreateTemplate;
   invalidateTemplates?: () => Promise<void> | void;
   isAuthenticated: boolean;
-  teamId?: string;
+  teamId?: string | undefined;
   template: ChecklistTemplate | null;
-  userId?: string;
+  userId?: string | undefined;
   workspaceStatus?: WorkspaceStatus;
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
@@ -131,7 +131,7 @@ export const saveTemplateToAccount = async (params: {
 };
 
 export const duplicateOwnedTemplate = async (params: {
-  activeTeamId?: string;
+  activeTeamId?: string | undefined;
   createTemplate: CreateTemplate;
   template: ChecklistTemplate;
 }): Promise<TemplateDetailActionResult> => {

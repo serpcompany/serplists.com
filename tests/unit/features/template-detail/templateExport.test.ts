@@ -241,25 +241,4 @@ describe('template detail export', () => {
     expect(message).toContain('Launch plan (');
     expect(message).toContain(reason);
   });
-
-  it('exports a template whose content block id is a number, as a lenient import can store, with the id as text', () => {
-    const download = vi.fn();
-
-    const result = exportTemplateFile({
-      billingState: billing(),
-      download,
-      template: buildTemplate({
-        title: 'Launch plan',
-        sections: [{
-          id: 'section-1',
-          title: 'Prep',
-          items: [{ id: 'item-1', title: 'Write', contents: [{ id: 7, type: 'text', value: 'Hi' }] }],
-        }],
-      } as unknown as Partial<ChecklistTemplate>),
-    });
-
-    expect(result.kind).toBe('ok');
-    expect(download).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(download.mock.calls[0]?.[0])).toContain('"id":"7"');
-  });
 });

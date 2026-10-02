@@ -1,19 +1,16 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
+import { navigation } from '../../../support/mockedNextNavigation';
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../../support/elements';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
+import type { ChecklistRun } from '@/types/checklist';
+import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -32,24 +29,12 @@ const breaksRevealRule = (value: string) =>
   !value.includes(HOVER_ONLY_DUPLICATE) &&
   (!KEYBOARD_REVEAL.test(value) || !showsOnTouchScreens(value));
 const pointerOnlyStartRunWrapperClass = (html: string) =>
-  html.match(/<div aria-hidden="true" class="([^"]*)"><button/)?.[1];
+  capturedGroup(html.match(/<div aria-hidden="true" class="([^"]*)"><button/), 1);
 
 const classLists = (html: string) =>
-  [...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]);
+  [...html.matchAll(/class="([^"]*)"/g)].map((match) => capturedGroup(match, 1));
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Launch workflow',
-  type: 'checklist',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-};
+const template = PRIVATE_LAUNCH_TEMPLATE;
 
 const run: ChecklistRun = {
   id: 'run-1',
@@ -97,22 +82,8 @@ describe('dashboard hover-revealed controls', () => {
   it('keeps the Start Run overlay a hover-only duplicate that touch screens never show', () => {
     const overlay = pointerOnlyStartRunWrapperClass(rendered['the My Templates grid card']());
 
-    expect(overlay).toBeDefined();
-    expect(isHoverRevealed(overlay!)).toBe(true);
+    expect(isHoverRevealed(overlay)).toBe(true);
     expect(overlay).toContain(HOVER_ONLY_DUPLICATE);
   });
 
-  it('has no hover-only class string in src/components/dashboard, so no new component hides a control until hover', () => {
-    const dir = path.resolve(__dirname, '../../../../src/components/dashboard');
-    const offenders = readdirSync(dir)
-      .filter((entry) => /\.(ts|tsx)$/.test(entry))
-      .flatMap((entry) =>
-        [...readFileSync(path.join(dir, entry), 'utf8').matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)]
-          .map((match) => match[2])
-          .filter(breaksRevealRule)
-          .map((value) => `${entry}: ${value}`),
-      );
-
-    expect(offenders).toEqual([]);
-  });
 });

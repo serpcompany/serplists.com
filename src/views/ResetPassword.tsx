@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { AuthPageShell } from "@/components/auth/AuthPageShell";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { LabeledInput, StatusNotice } from "@/components/auth/AuthFields";
+import { AuthPageShell, BackToSignInFooter } from "@/components/auth/AuthPageShell";
+import { BusyButton } from "@/components/shared/BusyButton";
+import { FieldGroup } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { readResetPasswordLink } from "@/lib/auth/resetPasswordLink";
 import { submitPasswordReset } from "@/lib/auth/passwordReset";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
+import { moveOnAfterAnAccountChange } from "@/lib/navigation/moveOnAfterAnAccountChange";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildForgotPasswordPath, buildLoginPath } from "@/lib/routes";
 
@@ -72,7 +72,7 @@ const ResetPassword = () => {
         toast.error(result.message);
       } else {
         toast.success("Password updated. Please sign in again.");
-        router.replace(buildLoginPath());
+        moveOnAfterAnAccountChange(() => router.replace(buildLoginPath()));
       }
     } finally {
       setIsSubmitting(false);
@@ -86,10 +86,7 @@ const ResetPassword = () => {
         description="That reset link is no longer valid."
         footer={<Link href={buildForgotPasswordPath()}>Request a new link</Link>}
       >
-        <Alert role="status">
-          <TriangleAlert />
-          <AlertTitle>Please request a new reset email to continue.</AlertTitle>
-        </Alert>
+        <StatusNotice icon={<TriangleAlert />}>Please request a new reset email to continue.</StatusNotice>
       </AuthPageShell>
     );
   }
@@ -98,45 +95,31 @@ const ResetPassword = () => {
     <AuthPageShell
       title="Set a new password"
       description="Choose a new password for your account."
-      footer={
-        <>
-          Remembered it? <Link href={buildLoginPath()}>Back to sign in</Link>
-        </>
-      }
+      footer={<BackToSignInFooter />}
     >
       <form onSubmit={handleSubmit}>
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="password">New password</FieldLabel>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </Field>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 data-icon="inline-start" className="animate-spin" /> Updating password...
-              </>
-            ) : (
-              "Update password"
-            )}
-          </Button>
+          <LabeledInput
+            id="password"
+            label="New password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          <LabeledInput
+            id="confirmPassword"
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          <BusyButton type="submit" busy={isSubmitting} busyLabel="Updating password...">
+            Update password
+          </BusyButton>
         </FieldGroup>
       </form>
     </AuthPageShell>

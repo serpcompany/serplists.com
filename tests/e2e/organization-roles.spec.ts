@@ -1,4 +1,5 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { fulfillJson, routeTheApi, sessionOf } from './support/mocked-api';
 
 type Role = 'viewer' | 'runner' | 'editor';
 
@@ -38,34 +39,15 @@ const organizationRun = {
 const archivedTemplate = { ...organizationTemplate, id: 'tpl-archived', title: 'Archived Playbook', deleted_at: '2026-07-03T00:00:00.000Z' };
 const archivedRun = { ...organizationRun, id: 'run-archived', title: 'Archived Run', deleted_at: '2026-07-03T00:00:00.000Z' };
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
-
 async function mockOrganizationApi(page: Page, role: Role) {
   const rejectedWrites: string[] = [];
   await page.addInitScript(() => {
     window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1');
   });
 
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-    const method = request.method();
-
+  await routeTheApi(page, async ({ route, url, path, method }) => {
     if (path === '/api/auth/get-session' && method === 'GET') {
-      await fulfillJson(route, {
-        session: {
-          id: 'session-1',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          expiresAt: '2026-07-08T00:00:00.000Z',
-          token: 'session-token',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-          userId: 'user-member',
-        },
-        user: { id: 'user-member', email: 'member@example.com', emailVerified: true, name: 'Member User', username: 'member' },
-      });
+      await fulfillJson(route, sessionOf({ id: 'user-member', email: 'member@example.com', name: 'Member User', username: 'member' }));
       return;
     }
     if (path.startsWith('/api/auth/')) {
@@ -105,6 +87,12 @@ async function mockOrganizationApi(page: Page, role: Role) {
   });
 
   return { rejectedWrites };
+}
+
+async function expectNoTemplateFormAndNoWrites(page: Page, api: { rejectedWrites: string[] }) {
+  await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  expect(api.rejectedWrites).toEqual([]);
 }
 
 test('an Organization viewer sees no actions the API would reject', async ({ page }) => {
@@ -171,9 +159,7 @@ test('an Organization viewer opening an edit link gets a read-only notice, not t
     'href',
     '/dashboard/templates/tpl-org/',
   );
-  await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-  expect(api.rejectedWrites).toEqual([]);
+  await expectNoTemplateFormAndNoWrites(page, api);
 });
 
 test('an Organization runner opening New Template gets a read-only notice', async ({ page }) => {
@@ -182,9 +168,7 @@ test('an Organization runner opening New Template gets a read-only notice', asyn
   await page.goto('/dashboard/templates/new/');
 
   await expect(page.getByText("You can't create templates here")).toBeVisible();
-  await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-  expect(api.rejectedWrites).toEqual([]);
+  await expectNoTemplateFormAndNoWrites(page, api);
 });
 
 test('an Organization editor can restore archived Templates but not runs', async ({ page }) => {

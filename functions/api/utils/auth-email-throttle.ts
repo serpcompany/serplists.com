@@ -5,9 +5,9 @@ import { describeErrorForLog, log } from './logger';
 
 export type AuthEmailKind = 'password-reset' | 'email-verification';
 
-export const AUTH_EMAIL_MIN_INTERVAL_MS = 60 * 1000;
-export const AUTH_EMAIL_WINDOW_MS = 60 * 60 * 1000;
-export const AUTH_EMAIL_MAX_PER_WINDOW = 5;
+const AUTH_EMAIL_MIN_INTERVAL_MS = 60 * 1000;
+const AUTH_EMAIL_WINDOW_MS = 60 * 60 * 1000;
+const AUTH_EMAIL_MAX_PER_WINDOW = 5;
 
 function throttleId(kind: AuthEmailKind, userId: string): string {
   return `auth-email-throttle:${kind}:${userId}`;

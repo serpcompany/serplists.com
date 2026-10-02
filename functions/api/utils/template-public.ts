@@ -1,4 +1,6 @@
-export const PUBLIC_TEMPLATE_FIELDS = [
+import type { schema } from '../db';
+
+const PUBLIC_TEMPLATE_FIELDS = [
   'id',
   'user_id',
   'owner_type',
@@ -31,6 +33,9 @@ export function toPublicTemplate(template: Record<string, unknown>): Partial<Rec
   return publicTemplate;
 }
 
-export function isOwnPersonalTemplateRow(template: Record<string, unknown>, userId: string | null): boolean {
+export function isOwnPersonalTemplateRow(
+  template: Pick<typeof schema.templates.$inferSelect, 'owner_type' | 'team_id' | 'user_id'>,
+  userId: string | null,
+): boolean {
   return Boolean(userId) && template.owner_type === 'user' && template.user_id === userId && !template.team_id;
 }

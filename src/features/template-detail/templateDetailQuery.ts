@@ -1,14 +1,10 @@
 import { queryOptions } from '@tanstack/react-query';
 
+import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { loadTemplateDetailData } from './loadTemplateDetail';
 import type { TemplateDetailApiClient } from './templateDetailApi';
-
-export const getTemplateDetailQueryKey = (
-  identifier: string | undefined,
-  userId: string | undefined,
-) => ['templates', 'detail', identifier ?? 'none', userId ?? 'guest'] as const;
 
 export const buildTemplateDetailQueryOptions = (params: {
   apiClient?: TemplateDetailApiClient;
@@ -16,7 +12,7 @@ export const buildTemplateDetailQueryOptions = (params: {
   userId: string | undefined;
 }) =>
   queryOptions({
-    queryKey: getTemplateDetailQueryKey(params.identifier, params.userId),
+    queryKey: queryKeys.templateDetail(params.identifier, params.userId),
     queryFn: async (): Promise<ChecklistTemplate | null> => {
       const result = await loadTemplateDetailData(
         { identifier: params.identifier, mode: 'private' },

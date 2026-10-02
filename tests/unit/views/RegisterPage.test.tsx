@@ -1,13 +1,10 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Register from '@/views/Register';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ register: vi.fn() }),

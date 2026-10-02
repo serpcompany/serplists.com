@@ -13,13 +13,14 @@ The persistence layer uses Cloudflare D1 for transactional data, the API in the 
 - `functions/api/utils/audit.ts` - Audit event value builder.
 - `db/schema/` - Drizzle schema used by runtime queries.
 - `db/schema.sql` - maintained reference snapshot for local inspection.
-- `db/types/` - Drizzle model types.
 - `db/migrations/*.sql` - D1 schema history.
 - `db/seeds/` - local and official seed data.
 - `db/maintenance/` - one-off maintenance SQL that is not schema history.
 - `src/lib/api.ts` - Client API wrapper.
-- `src/contexts/WorkspaceContext.tsx` - Personal/Organization context state; filename is legacy.
-- `src/contexts/TemplatesContext.tsx` - Templates and runs with React Query.
+- `src/contexts/WorkspaceProvider.tsx` - Personal/Organization context state, read with
+  `useWorkspace` (`src/contexts/WorkspaceContext.tsx`; the filename is legacy).
+- `src/contexts/TemplatesProvider.tsx` - Templates and runs with React Query, read with
+  `useTemplates` and `useTemplateLists` (`src/contexts/TemplatesContext.tsx`).
 - `src/lib/utils/templateBackup.ts` - Import/export helpers.
 - `src/lib/repoTemplateCatalog.ts` - Repo-backed portable template catalog.
 - `src/data/public-template-packs/*.json` - Repo-backed public template packs.
@@ -34,6 +35,10 @@ generated into [generated/db-schema.md](../generated/db-schema.md).
 
 `functions/api/db.ts` wraps the binding: `createDb(env)` returns
 `drizzle(env.DB, { schema })` from `drizzle-orm/d1`, using `db/schema/index.ts`.
+Code reaches a table through its camelCase export (`schema.checklistRuns`, or
+`const { teamMembers } = schema`), whose columns keep their SQL names
+(`teamMembers.team_id`); the SQL and the [generated reference](../generated/db-schema.md)
+use the snake_case table names ([database operations](database-operations.md#schema-ownership)).
 API responses stay snake_case to match the current frontend mapping, and JSON
 columns are stored as text and parsed in handlers.
 
@@ -45,12 +50,12 @@ partial write. `insertRowWhere` (`functions/api/utils/guarded-insert.ts`) writes
 `db.insert(table).values(values)` would write, each missing value filled the way Drizzle
 fills it, but only while the condition holds. Plan limits put their count there, and a
 companion row (a version, an audit event) is guarded on the new row existing
-(`rowExistsSql`). `insertAuditEventWhere` and `insertAuditEventWhen` guard an audit row on
+(`rowExistsSql`). An audit row is an `insertRowWhere` into `audit_events` too, guarded on
 the condition of the write it records, batched before it, or on that write's effect,
 batched after it (such as `updated_at` equal to this request's time), so a write that
 did not happen records nothing. A guarded statement whose condition is false writes
-nothing and the batch still commits; its result reports `meta.changes === 0`
-(`batchWriteMissed`, `batchUpdateMissed`).
+nothing and the batch still commits; its result reports `meta.changes === 0`, which
+`batchWriteMissed` (`functions/api/utils/guarded-writes.ts`) reads.
 
 Drizzle names every column of a table in an `INSERT`, filling missing values with
 defaults or `NULL`, so leaving a value out does not help when the database lacks the
@@ -85,6 +90,10 @@ retried insert drops the column from the statement itself (`withoutColumns`).
 - `checklist_runs.items`: sectioned run content with completion state.
 - `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
 - Audit rows record only writes that happened. Run and template writes guard their `UPDATE` (revision or version, owner scope, archive state), and a guarded `UPDATE` that loses a race matches no row without failing the batch. So each write inserts its audit row first, as `INSERT ... SELECT ... WHERE EXISTS` on the same condition (`auditedRunUpdate` in `functions/api/utils/checklist-runs.ts`; the template handlers do the same, and a template's version row and reconciled runs also require that audit row). A write that loses returns `409 edit_conflict`, or the not-found / not-archived answer a later request would get, and leaves no history.
+- Every action in `AUDIT_ACTIONS` (`src/lib/schemas/auditActions.ts`), the list the history views
+  label, is one a route writes: `tests/unit/functions/api/audit-actions-written.test.ts` drives every
+  audit-writing route and MCP tool on the migrated tables, and fails on a registered action nothing
+  writes or a written action the list leaves out.
 - `template_versions.snapshot_json`: full template snapshot.
 - History lists return each audit event's `metadata_json`, which names the Run Key
   behind an Agent's edit. A versioned template write records its audit event in the
@@ -113,8 +122,8 @@ Client requests go through `src/lib/api.ts`, which uses:
 
 - `/api` on the page's own origin, in development and in deployed environments, unless
   `NEXT_PUBLIC_API_URL` names another API. `src/lib/apiBaseUrl.ts` resolves the base for
-  both `api.ts` and the Better Auth client, and ignores a loopback `NEXT_PUBLIC_API_URL`
-  unless the page is served from a loopback host.
+  both `api.ts` and the Better Auth client, and ignores a local `NEXT_PUBLIC_API_URL`
+  unless the page is served from a local development host (`isLocalDevelopmentHostname`).
 - Better Auth cookies for session state.
 
 Main server handlers:
@@ -233,8 +242,13 @@ stored sections, matched by the ids the share page uses (the stored ids, or posi
 such as `1` and `1-1` where an id is missing). A stored entry the payload leaves out
 keeps its state, and an unknown id is ignored. A Sub-task matches by its id when that id
 is unique within the task, and otherwise by its position in the same list, only when the
-guest's entry carries the same id or none. The share page sends back stored values it
-does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
+guest's entry carries the same id or none. A Sub-task id that is not text, such as a legacy
+run's numeric `7`, counts as none on both sides, since the share page leaves it out.
+Positions count only what the share page shows:
+it leaves out legacy entries (a `null` content block or Sub-task, a content block of an
+unknown type, a blank text Sub-task), so the merge skips those too and a Sub-task after
+them pairs with its own guest entry (`functions/api/utils/shared-run-merge.ts`). The share
+page sends back stored values it does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
 than failing whole. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.

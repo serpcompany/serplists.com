@@ -1,24 +1,11 @@
+import '../../../support/templateEditorModelWithNoTemplates';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { useTemplateEditorModel } from '@/features/template-editor/useTemplateEditorModel';
 
-vi.mock('@/contexts/TemplatesContext', () => {
-  const useTemplates = () => ({
-    getTemplate: vi.fn(() => undefined),
-  });
-  return { useTemplates, useTemplateLists: useTemplates };
-});
-
-vi.mock('@/hooks/useTemplateSave', () => ({
-  useTemplateSave: () => ({
-    isSaving: false,
-    saveTemplate: vi.fn(),
-  }),
-}));
-
-function ModelHarness({ id }: { id?: string }): JSX.Element {
+function ModelHarness({ id }: { id?: string }): React.JSX.Element {
   const model = useTemplateEditorModel({ id });
 
   return (

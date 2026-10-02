@@ -11,20 +11,8 @@ import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 import { createPageVisitTracker } from "@/lib/navigation/pageVisit";
 
+import { memoryStorage as createStorage } from "../../../fixtures/memoryStorage";
 import { deferred } from "../../../support/deferred";
-
-const createStorage = (): TemplateDraftStorage => {
-  const items = new Map<string, string>();
-  return {
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
 
 const draftValues = buildTemplateEditorFormValues({
   title: "Launch checklist",

@@ -13,8 +13,8 @@ const SHARED_FROM_SRC = [
 ];
 
 const APP_ROUTES = "^src/app/";
+const APP_ENTRY_POINTS = [APP_ROUTES, "^next\\.config\\.ts$"];
 const SERVER_SIDE = "^src/(app|server)/";
-const IMPORTED_ONLY_BY_NEXT_CONFIG = ["^src/lib/http/securityHeaders\\.ts$"];
 
 module.exports = {
   forbidden: [
@@ -71,7 +71,7 @@ module.exports = {
         "src/components/ui/ holds design-system primitives. They must not depend on app state, features, pages, " +
         "or the API client. Compose them in a feature component instead.",
       from: { path: "^src/components/ui/" },
-      to: { path: "^src/(contexts|features|views|hooks/use(?!-mobile))|^src/lib/api(\\.ts$|/)" },
+      to: { path: "^src/(contexts|features|views|hooks)/|^src/lib/api(\\.ts$|/)" },
     },
     {
       name: "api-utils-do-not-import-handlers",
@@ -109,21 +109,13 @@ module.exports = {
       name: "app-code-is-reachable",
       severity: "error",
       comment:
-        "This module is not reachable from any route file in src/app, so it is dead code that agents may copy or " +
-        "'fix' by mistake. Delete it, or import it where it is needed. (Unused shadcn primitives in " +
-        "src/components/ui/ are exempt.)",
-      from: { path: APP_ROUTES },
+        "This module is not reachable from any route file in src/app or from next.config.ts, so it is dead code " +
+        "that agents may copy or 'fix' by mistake. Delete it, import it where it is needed, or move code only a " +
+        "script uses to scripts/lib.",
+      from: { path: APP_ENTRY_POINTS },
       to: {
         path: "^src/",
-        pathNot: [
-          "\\.d\\.ts$",
-          "\\.test\\.tsx?$",
-          APP_ROUTES,
-          "^src/components/ui/",
-          "^src/hooks/use-mobile\\.tsx$",
-          ...IMPORTED_ONLY_BY_NEXT_CONFIG,
-          ...SHARED_FROM_SRC,
-        ],
+        pathNot: ["\\.d\\.ts$", "\\.test\\.tsx?$", APP_ROUTES],
         reachable: false,
       },
     },
@@ -133,7 +125,7 @@ module.exports = {
       comment:
         "This module is not reachable from any route file in src/app (the API's route handler, the sitemaps, " +
         "page metadata), so it is dead code. Delete it or import it where needed.",
-      from: { path: APP_ROUTES },
+      from: { path: APP_ENTRY_POINTS },
       to: { path: "^functions/", pathNot: ["\\.json$", "\\.d\\.ts$"], reachable: false },
     },
     {
@@ -146,7 +138,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: "node_modules" },
-    exclude: { path: "(^|/)(node_modules|dist|coverage|\\.wrangler)/|\\.generated\\.json$" },
+    exclude: { path: "^(dist|coverage|\\.wrangler)/|\\.generated\\.json$" },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {

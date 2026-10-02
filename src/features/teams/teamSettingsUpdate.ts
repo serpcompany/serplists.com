@@ -2,7 +2,7 @@ export type TeamSettingsUpdate = { name?: string; slug?: string };
 
 export function getTeamSettingsUpdate(
   draft: { name: string; slug: string },
-  saved: { name: string; slug?: string | null },
+  saved: { name: string; slug?: string | null | undefined },
 ): TeamSettingsUpdate | null {
   const name = draft.name.trim();
   const slug = draft.slug.trim();

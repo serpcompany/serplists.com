@@ -1,46 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
+import { dbMocks, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
-
-const mockEnv = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const privateTeamBTemplate = {
   id: 'template-b',
@@ -57,26 +20,12 @@ const routesThatStartARunFromATemplate = [
 ] as const;
 
 const post = (url: string, body: unknown) =>
-  handleChecklists(new Request(url, { method: 'POST', body: JSON.stringify(body) }), mockEnv as never);
+  handleChecklists(new Request(url, { method: 'POST', body: JSON.stringify(body) }), mockEnv);
 
 describe('runs from a private template of another Organization, whose content never lands in the requested one', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([]);
-
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const team = { plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } };
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(team);
-    vi.mocked(getEntitlementsForContext).mockResolvedValue(team);
+    resetToASignedOutVisitorOnTheFreePlan();
+    signInWithPlans('user-123', TEAM_PLAN);
   });
 
   it.each(routesThatStartARunFromATemplate)('%s tells a member of the owning Organization where the template belongs', async (_name, url, body) => {
@@ -85,7 +34,7 @@ describe('runs from a private template of another Organization, whose content ne
       .mockResolvedValueOnce([{ id: 'member-1', team_id: 'team-b', user_id: 'user-123', role: 'runner', status: 'active' }]);
 
     const response = await post(url, body);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('organization_mismatch');
@@ -112,6 +61,6 @@ describe('runs from a private template of another Organization, whose content ne
     const response = await post('http://localhost/api/checklists', { template_id: 'template-b', teamId: 'team-b' });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.insertChain.values.mock.calls[0][0].team_id).toBe('team-b');
+    expect(firstOf(dbMocks.insertChain.values.mock.calls)[0].team_id).toBe('team-b');
   });
 });

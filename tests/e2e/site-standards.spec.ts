@@ -1,13 +1,14 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { SMOKE_TEST_HEADER } from '../../scripts/check-site-standards.mjs';
+import { SMOKE_TEST_HEADER } from '../../scripts/check-site-standards';
+import { capturedGroup } from '../support/elements';
 import { APP_URL } from './support/stack';
 
 const get = (request: APIRequestContext, path: string, headers: Record<string, string> = {}) =>
   request.get(`${APP_URL}${path}`, { headers, maxRedirects: 0 });
 
 const redirectTargetOf = (response: { headers(): Record<string, string> }, base = APP_URL) =>
-  new URL(response.headers().location ?? '', base).href;
+  new URL(response.headers()['location'] ?? '', base).href;
 
 const PAGES = [
   '/',
@@ -65,7 +66,9 @@ test.describe('URL form', () => {
     const links = new Set<string>();
     for (const page of ['/', '/templates/', '/categories/', '/features/', '/pricing/', '/about/', '/contact/', '/login/']) {
       const html = await (await get(request, page)).text();
-      for (const [, href] of html.matchAll(/<a\b[^>]*\bhref="(\/(?!\/)[^"#]*)/g)) links.add(href.replaceAll('&amp;', '&'));
+      for (const link of html.matchAll(/<a\b[^>]*\bhref="(\/(?!\/)[^"#]*)/g)) {
+        links.add(capturedGroup(link, 1).replaceAll('&amp;', '&'));
+      }
     }
     expect(links.size).toBeGreaterThan(10);
     for (const link of links) {

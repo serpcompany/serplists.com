@@ -1,19 +1,11 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChecklistLibrary from '@/views/ChecklistLibrary';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
 
 const template: ChecklistTemplate = {
   id: 'template-1',

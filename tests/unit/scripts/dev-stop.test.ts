@@ -3,8 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
+import { parseJsonText } from '../../support/storedJson';
 
-const devStop = path.join(process.cwd(), 'scripts', 'dev-stop.mjs');
+const devStop = buildScriptInvocation(path.join(process.cwd(), 'scripts', 'dev-stop.ts'));
 const workDir = mkdtempSync(path.join(tmpdir(), 'dev-stop-'));
 const children: ChildProcess[] = [];
 
@@ -20,10 +23,11 @@ function startIdleProcessReportingWhatTheLauncherRecords(fileName: string): Prom
     'process.stdout.write(JSON.stringify({ pid: process.pid, startedAt: Math.round(Date.now() - process.uptime() * 1000) }) + "\\n");\n' +
       'setInterval(() => {}, 1000);\n',
   );
-  const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const { command, args } = buildScriptInvocation(script);
+  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'] });
   children.push(child);
   return new Promise((resolve, reject) => {
-    child.stdout?.once('data', (chunk) => resolve(JSON.parse(String(chunk))));
+    child.stdout?.once('data', (chunk) => resolve(parseJsonText(String(chunk), z.object({ pid: z.number(), startedAt: z.number() }))));
     child.once('error', reject);
   });
 }
@@ -50,7 +54,7 @@ function runDevStopInACheckoutHoldingOnly(session: Record<string, unknown>) {
   const sessionPath = path.join(cwd, 'tmp', 'dev-session.json');
   mkdirSync(path.dirname(sessionPath));
   writeFileSync(sessionPath, JSON.stringify(session));
-  const result = spawnSync(process.execPath, [devStop], { cwd, encoding: 'utf8' });
+  const result = spawnSync(devStop.command, devStop.args, { cwd, encoding: 'utf8' });
   return { status: result.status, output: `${result.stdout}${result.stderr}`, sessionLeft: existsSync(sessionPath) };
 }
 
@@ -77,7 +81,7 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   });
 
   it('stops the dev launcher the session recorded', async () => {
-    const launcher = await startIdleProcessReportingWhatTheLauncherRecords('dev-auto.mjs');
+    const launcher = await startIdleProcessReportingWhatTheLauncherRecords('dev-auto.ts');
 
     const result = runDevStopInACheckoutHoldingOnly({ port: 3001, pid: launcher.pid, startedAt: launcher.startedAt });
 

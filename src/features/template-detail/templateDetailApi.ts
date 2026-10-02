@@ -89,9 +89,7 @@ export const hydrateTemplateOwner = async (
   }
 
   try {
-    const profile = (await apiClient.getProfileById(
-      template.userId,
-    )) as Record<string, unknown>;
+    const profile = await apiClient.getProfileById(template.userId);
     return resolveTemplateOwnerProfile(template, profile).template;
   } catch {
     return template;
@@ -100,7 +98,7 @@ export const hydrateTemplateOwner = async (
 
 export const resolveShareOwnerTemplate = async (
   template: ChecklistTemplate,
-  owner: { userId?: string; username?: string },
+  owner: { userId?: string | undefined; username?: string | undefined },
   apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
 ): Promise<ChecklistTemplate> => {
   const username = owner.username?.trim();
@@ -110,7 +108,7 @@ export const resolveShareOwnerTemplate = async (
 
   if (owner.userId && template.userId && template.userId !== owner.userId) {
     try {
-      const profile = (await apiClient.getProfileById(template.userId)) as Record<string, unknown>;
+      const profile = await apiClient.getProfileById(template.userId);
       return resolveTemplateOwnerProfile(template, profile).template;
     } catch {
       return template;

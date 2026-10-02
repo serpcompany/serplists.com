@@ -8,12 +8,12 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
 interface RunNotesEditorProps {
-  draft?: string;
+  draft?: string | undefined;
   label: string;
   onDraftChange: (notes: string) => void;
   onSave: (notes: string) => Promise<boolean>;
   readOnly?: boolean;
-  savedValue?: string;
+  savedValue?: string | undefined;
 }
 
 export function RunNotesEditor({

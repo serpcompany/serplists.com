@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, elementAt, firstOf, present, subTaskAt, taskIn } from '../../../support/elements';
 import {
   MAX_SHARED_RUN_NOTES_LENGTH,
   mergeSharedRunState,
   sharedRunUpdateSchema,
 } from '@functions/api/utils/shared-run-merge';
+import { withoutKeys } from '../../../support/guestState';
+import { storedSections } from '../../../support/storedJson';
+import { normalizeSections } from '@/lib/utils/checklistSections';
 
 type Json = Record<string, unknown>;
 
@@ -35,7 +39,7 @@ const stored: Json[] = [
 ];
 
 function copy<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return structuredClone(value);
 }
 
 function guest(sections: unknown) {
@@ -43,21 +47,13 @@ function guest(sections: unknown) {
   return parsed.sections ?? [];
 }
 
-function merge(sections: unknown, storedSections: unknown[] = stored) {
-  const result = mergeSharedRunState(copy(storedSections), guest(sections));
+function merge(sections: unknown, storedRunSections: unknown[] = stored) {
+  const result = mergeSharedRunState(copy(storedRunSections), guest(sections));
   if ('error' in result) throw new Error(result.error);
-  return result.sections as Json[];
+  return storedSections.parse(result.sections);
 }
 
-function stripGuestState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripGuestState);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !['isCompleted', 'completed', 'notes'].includes(key))
-      .map(([key, entry]) => [key, stripGuestState(entry)]),
-  );
-}
+const stripGuestState = (value: unknown) => withoutKeys(value, ['isCompleted', 'completed', 'notes']);
 
 describe('mergeSharedRunState', () => {
   it.each([
@@ -76,14 +72,14 @@ describe('mergeSharedRunState', () => {
 
   it('keeps stored completion for tasks the payload leaves out', () => {
     const merged = merge([{ id: 's1', items: [{ id: 'i1', isCompleted: true }] }]);
-    const items = merged[0].items as Json[];
-    expect(items[0].isCompleted).toBe(true);
-    expect(items[1].completed).toBe(true);
+    const { items } = firstOf(merged);
+    expect(firstOf(items).isCompleted).toBe(true);
+    expect(elementAt(items, 1).completed).toBe(true);
   });
 
   it('normalizes a legacy completed flag to isCompleted', () => {
     const merged = merge([{ id: 's1', items: [{ id: 'i2', isCompleted: false }] }]);
-    const item = (merged[0].items as Json[])[1];
+    const item = elementAt(firstOf(merged).items, 1);
     expect(item.isCompleted).toBe(false);
     expect(item).not.toHaveProperty('completed');
   });
@@ -100,11 +96,55 @@ describe('mergeSharedRunState', () => {
         ],
       }],
     }]);
-    const item = (merged[0].items as Json[])[0];
-    expect((item.subItems as Json[])[0].isCompleted).toBe(true);
-    const contents = item.contents as Json[];
-    expect(contents[0].value).toBe('Instructions');
-    expect((contents[1].subItems as Json[]).map((subItem) => subItem.isCompleted)).toEqual([false, true]);
+    const item = firstOf(firstOf(merged).items);
+    expect(subTaskAt(item, 0).isCompleted).toBe(true);
+    expect(contentAt(item, 0).value).toBe('Instructions');
+    expect(present(contentAt(item, 1).subItems, 'the sub-tasks').map((subItem) => subItem.isCompleted)).toEqual([false, true]);
+  });
+
+  it('pairs Sub-tasks without ids with the ones the share page shows, past legacy entries it leaves out', () => {
+    const legacyTask = (third: boolean) => ({
+      id: 'i1',
+      title: 'Task',
+      subItems: [null, 'Direct text', { title: 'Direct A', isCompleted: false }, { title: 'Direct B', isCompleted: true }],
+      contents: [
+        null,
+        { type: 'retired', value: 'Unknown block' },
+        { type: 'subItems', value: '', subItems: [{ title: 'First', isCompleted: false }] },
+        {
+          type: 'subItems',
+          value: '',
+          subItems: [null, '  ', 'Legacy text', { title: 'Second', isCompleted: true }, { title: 'Third', isCompleted: third }],
+        },
+      ],
+    });
+    const storedWithLegacyEntries = [{ id: 's1', title: 'Section', items: [legacyTask(false)] }];
+    const shown = normalizeSections(structuredClone(storedWithLegacyEntries));
+    subTaskAt(contentAt(taskIn(shown, 0, 0), 1), 2).isCompleted = true;
+
+    expect(mergeSharedRunState(copy(storedWithLegacyEntries), guest(shown)))
+      .toEqual({ sections: [{ id: 's1', title: 'Section', items: [{ ...legacyTask(true), isCompleted: false }] }] });
+  });
+
+  it('pairs a Sub-task stored with a legacy numeric id by position, as the share page shows it without one, and keeps the stored id', () => {
+    const legacyTask = (secondDone: boolean) => ({
+      id: 'i1',
+      title: 'Task',
+      isCompleted: false,
+      contents: [{
+        type: 'subItems',
+        value: '',
+        subItems: [{ id: 7, title: 'First', isCompleted: false }, { id: 8, title: 'Second', isCompleted: secondDone }],
+      }],
+    });
+    const storedLegacyRun = [{ id: 's1', title: 'Section', items: [legacyTask(false)] }];
+    const shown = normalizeSections(structuredClone(storedLegacyRun));
+    const ticked = subTaskAt(contentAt(taskIn(shown, 0, 0), 0), 1);
+    expect(ticked).not.toHaveProperty('id');
+    ticked.isCompleted = true;
+
+    expect(mergeSharedRunState(copy(storedLegacyRun), guest(shown)))
+      .toEqual({ sections: [{ id: 's1', title: 'Section', items: [legacyTask(true)] }] });
   });
 
   it('falls back to position for duplicate sub-item ids', () => {
@@ -116,7 +156,7 @@ describe('mergeSharedRunState', () => {
       [{ id: 's1', items: [{ id: 'i1', subItems: [{ id: 'dup', isCompleted: false }, { id: 'dup', isCompleted: true }] }] }],
       storedDuplicates,
     );
-    expect(((merged[0].items as Json[])[0].subItems as Json[]).map((subItem) => subItem.isCompleted))
+    expect(present(firstOf(firstOf(merged).items).subItems, 'the sub-tasks').map((subItem) => subItem.isCompleted))
       .toEqual([false, true]);
   });
 
@@ -133,7 +173,7 @@ describe('mergeSharedRunState', () => {
 
   it('saves notes and rejects changed notes over the cap', () => {
     const merged = merge([{ id: 's1', items: [{ id: 'i1', notes: 'Done by guest' }] }]);
-    expect((merged[0].items as Json[])[0].notes).toBe('Done by guest');
+    expect(firstOf(firstOf(merged).items).notes).toBe('Done by guest');
 
     const result = mergeSharedRunState(copy(stored), guest([
       { id: 's1', items: [{ id: 'i1', notes: 'x'.repeat(MAX_SHARED_RUN_NOTES_LENGTH + 1) }] },
@@ -145,7 +185,7 @@ describe('mergeSharedRunState', () => {
     const longNotes = 'y'.repeat(MAX_SHARED_RUN_NOTES_LENGTH + 10);
     const storedWithNotes = [{ id: 's1', items: [{ id: 'i1', title: 'T', notes: longNotes }] }];
     const merged = merge([{ id: 's1', items: [{ id: 'i1', notes: longNotes, isCompleted: true }] }], storedWithNotes);
-    expect((merged[0].items as Json[])[0]).toEqual({ id: 'i1', title: 'T', notes: longNotes, isCompleted: true });
+    expect(firstOf(firstOf(merged).items)).toEqual({ id: 'i1', title: 'T', notes: longNotes, isCompleted: true });
   });
 });
 

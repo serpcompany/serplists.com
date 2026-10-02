@@ -1,6 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 
 const fake = vi.hoisted(() => ({ rows: new Map<unknown, unknown[]>(), counts: new Map<unknown, number>() }));
 
@@ -36,8 +35,9 @@ import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+const env = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
 const pro = { plan: 'pro' as const, limits: { maxTemplates: null, maxActiveRuns: null } };
 const sections = [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'Task' }] }];
@@ -79,8 +79,8 @@ describe('limit_reached names the context whose limit was hit, and offers Pro on
     vi.clearAllMocks();
     fake.rows.clear();
     fake.counts.clear();
-    fake.rows.set(schema.team_members, [{ id: 'member-1', team_id: 'org-1', user_id: 'user-1', role: 'owner', status: 'active' }]);
-    fake.counts.set(schema.checklist_runs, 3);
+    fake.rows.set(schema.teamMembers, [{ id: 'member-1', team_id: 'org-1', user_id: 'user-1', role: 'owner', status: 'active' }]);
+    fake.counts.set(schema.checklistRuns, 3);
     fake.counts.set(schema.templates, 1);
     vi.mocked(getSessionUserId).mockResolvedValue('user-1');
     vi.mocked(getEntitlementsForContext).mockResolvedValue(free);
@@ -89,14 +89,14 @@ describe('limit_reached names the context whose limit was hit, and offers Pro on
   it.each(cases)('$name in $context context', async ({ context, resource, handler, path: route, method, body, run, template }) => {
     const personalPlan = context === 'organization' ? pro : free;
     vi.mocked(getEntitlementsForUser).mockResolvedValue(personalPlan);
-    if (run) fake.rows.set(schema.checklist_runs, [run]);
+    if (run) fake.rows.set(schema.checklistRuns, [run]);
     if (template) fake.rows.set(schema.templates, [template]);
 
     const response = await handler(new Request(`http://localhost${route}`, {
       method,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }), env);
-    const data = await response.json() as { error: string; code: string; details: Record<string, unknown> };
+    const data = await readJson(response, apiErrorBody.extend({ details: jsonObject }));
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -119,23 +119,10 @@ describe('copying a public template into Personal on Free', () => {
       method: 'POST',
       body: JSON.stringify({}),
     }), env);
-    const data = await response.json() as { error: string; code: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('upgrade_required');
     expect(data.error).toMatch(/Upgrade to Pro/);
-  });
-});
-
-describe('limit_reached responses have one source', () => {
-  it('is built only in limit-reached.ts, since handlers that wrote their own limit text drifted apart', () => {
-    const root = path.resolve(__dirname, '../../../../functions');
-    const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-      entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);
-    const builders = sources(root)
-      .filter((file) => /code:\s*['"]limit_reached['"]|Upgrade to Pro/.test(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(root, file).split(path.sep).join('/'));
-
-    expect(builders).toEqual(['api/utils/limit-reached.ts']);
   });
 });

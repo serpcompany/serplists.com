@@ -2,7 +2,7 @@ import React from 'react';
 
 import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Link } from '@/components/navigation/Link';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 interface CategoryNavigationProps {

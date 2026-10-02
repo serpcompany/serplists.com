@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { index, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { users } from "./users";
 
-export const personal_run_keys = sqliteTable(
+export const personalRunKeys = sqliteTable(
   "personal_run_keys",
   {
     id: text("id").notNull(),

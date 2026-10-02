@@ -20,6 +20,7 @@ import type {
   ChecklistSection,
 } from '@/types/checklist';
 import { MarkdownBlock } from '@/components/shared/MarkdownBlock';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 
 interface PublicTemplateContentProps {
@@ -61,7 +62,7 @@ export function PublicTemplateContent({
       case 'image':
         return content.value ? (
           <div className="mt-3 overflow-hidden rounded-md border">
-            <img
+            <UserContentImage
               src={safeUrl(content.value)}
               alt={itemTitle}
               className="max-h-96 w-full object-contain"

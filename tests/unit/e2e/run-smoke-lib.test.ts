@@ -12,7 +12,7 @@ import {
   needsOpenPort,
   resolveSmokeEnv,
   SMOKE_PERSIST_PATH,
-} from '../../e2e/run-smoke-lib.mjs';
+} from '../../e2e/run-smoke-lib';
 
 const repoRoot = path.resolve('/repo');
 const openPort = 4180;
@@ -35,22 +35,22 @@ describe('resolveSmokeEnv', () => {
     const { env, seedPath } = resolve(processEnv);
 
     expect(seedPath).toBe(SMOKE_PERSIST_PATH);
-    expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBe(seedPath);
+    expect(env['PLAYWRIGHT_WRANGLER_PERSIST_TO']).toBe(seedPath);
     expect(buildPreviewArgs(env)).toEqual(expect.arrayContaining(['--persist-to', seedPath]));
   });
 
   it('uses the free port it picked for the pages and the API alike', () => {
     const { env } = resolve({});
 
-    expect(env.PLAYWRIGHT_BASE_URL).toBe('http://localhost:4180');
-    expect(env.PLAYWRIGHT_API_URL).toBe('http://localhost:4180/api');
+    expect(env['PLAYWRIGHT_BASE_URL']).toBe('http://localhost:4180');
+    expect(env['PLAYWRIGHT_API_URL']).toBe('http://localhost:4180/api');
   });
 
   it('keeps a preset port and puts the API on the same origin', () => {
     const { env } = resolve({ PLAYWRIGHT_PORT: '5173' });
 
-    expect(env.PLAYWRIGHT_BASE_URL).toBe('http://localhost:5173');
-    expect(env.PLAYWRIGHT_API_URL).toBe('http://localhost:5173/api');
+    expect(env['PLAYWRIGHT_BASE_URL']).toBe('http://localhost:5173');
+    expect(env['PLAYWRIGHT_API_URL']).toBe('http://localhost:5173/api');
   });
 
   it('seeds and serves a preset persist path inside .wrangler', () => {
@@ -58,14 +58,14 @@ describe('resolveSmokeEnv', () => {
     const { env, seedPath } = resolve({ PLAYWRIGHT_PORT: '5173', PLAYWRIGHT_WRANGLER_PERSIST_TO: custom });
 
     expect(seedPath).toBe(custom);
-    expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBe(custom);
+    expect(env['PLAYWRIGHT_WRANGLER_PERSIST_TO']).toBe(custom);
   });
 
   it('neither seeds nor changes the persist path when reusing a running server', () => {
     const { env, seedPath } = resolve({ PLAYWRIGHT_REUSE_EXISTING_SERVER: '1' });
 
     expect(seedPath).toBeNull();
-    expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBeUndefined();
+    expect(env['PLAYWRIGHT_WRANGLER_PERSIST_TO']).toBeUndefined();
   });
 
   it('does not seed a local D1 for a remote app', () => {
@@ -180,7 +180,7 @@ describe('playwright.config.ts', () => {
     const servers = Array.isArray(config.webServer) ? config.webServer : [config.webServer];
 
     expect(servers).toHaveLength(1);
-    expect(servers[0]?.command).toBe('node tests/e2e/preview-server.mjs');
+    expect(servers[0]?.command).toBe('node --import tsx tests/e2e/preview-server.ts');
     expect(servers[0]?.url).toBe('http://localhost:4180/api/health');
     expect(config.use?.baseURL).toBe('http://localhost:4180');
   }, 60_000);

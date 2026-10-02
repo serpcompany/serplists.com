@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { contentAt, firstOf, present } from '../../../support/elements';
+import { z } from 'zod';
+import { readJson, readSuccessfulJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { StoredRow } from '../../../support/d1Doubles';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -28,12 +33,14 @@ import {
 import { persistTemplateSave, type SaveTemplateInput } from '@/hooks/useTemplateSave';
 import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import type { TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
-import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
+import { templateUpdateResultSchema } from '@/lib/templateUpdateResult';
+import { jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
-type Row = Record<string, unknown>;
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
-const mockEnv = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' };
+const updateBody = z.object({ error: z.unknown() }).passthrough();
 
 const subTasks = (ids: [unknown, unknown], ticked: boolean) => [
   { type: 'subItems', value: '', subItems: [
@@ -60,7 +67,7 @@ const cases: Array<[string, [[unknown, unknown], [unknown, unknown]]]> = [
 ];
 
 function createStore(subItemIds: [[unknown, unknown], [unknown, unknown]]) {
-  const template: Row = {
+  const template: StoredRow = {
     id: 'template-1',
     user_id: 'user-123',
     owner_type: 'user',
@@ -79,7 +86,7 @@ function createStore(subItemIds: [[unknown, unknown], [unknown, unknown]]) {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: null,
   };
-  const run: Row = {
+  const run: StoredRow = {
     id: 'run-1',
     user_id: 'user-123',
     team_id: null,
@@ -103,13 +110,15 @@ type Store = ReturnType<typeof createStore>;
 function serveFromAndWriteBatchesTo(store: Store) {
   dbMocks.selectChain.limit.mockImplementation(async () => [store.template]);
   dbMocks.selectChain.orderBy.mockImplementation(async () => [store.run]);
-  dbMocks.db.update.mockImplementation((table: unknown) => ({
-    set: (values: Row) => ({ where: () => ({ table, values }) }),
+  dbMocks.db.update.mockImplementation((table?: unknown) => ({
+    ...dbMocks.updateChain,
+    set: vi.fn((values: StoredRow) => ({ where: () => ({ table, values }) })),
   }));
-  dbMocks.db.batch.mockImplementation(async (statements: Array<{ table?: unknown; values?: Row }>) => {
+  dbMocks.db.batch.mockImplementation(async (statements) => {
     for (const statement of statements) {
+      if (typeof statement !== 'object' || statement === null || !('table' in statement) || !('values' in statement)) continue;
       if (statement.table === schema.templates) Object.assign(store.template, statement.values);
-      if (statement.table === schema.checklist_runs) Object.assign(store.run, statement.values);
+      if (statement.table === schema.checklistRuns) Object.assign(store.run, statement.values);
     }
     return statements.map(() => ({ meta: { changes: 1 } }));
   });
@@ -117,9 +126,8 @@ function serveFromAndWriteBatchesTo(store: Store) {
 
 const apiClient = {
   getTemplateById: async (id: string) => {
-    const response = await handleTemplates(new Request(`http://localhost/api/templates/${id}`), mockEnv as never);
-    expect(response.status).toBe(200);
-    return response.json();
+    const response = await handleTemplates(new Request(`http://localhost/api/templates/${id}`), mockEnv);
+    return readSuccessfulJson(response, apiTemplateSchema);
   },
 };
 
@@ -131,16 +139,16 @@ const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistT
     const response = await handleTemplates(new Request(`http://localhost/api/templates/${payload.id}`, {
       method: 'PUT',
       body: JSON.stringify(buildTemplateUpdateRequest(payload)),
-    }), mockEnv as never);
-    const body = (await response.json()) as Record<string, unknown>;
+    }), mockEnv);
+    const body = await readJson(response, updateBody);
     responses.push(body);
     if (!response.ok) throw new Error(String(body.error));
-    return parseTemplateUpdateResponse(body);
+    return templateUpdateResultSchema.parse(body);
   },
   applyDefaults: applyTemplateSaveDefaults,
 }, input);
 
-async function saveAndRebaseAsTheEditorDoes(state: { loaded: TemplateEditorLoadResult; version?: number }, values: TemplateEditorFormValues) {
+async function saveAndRebaseAsTheEditorDoes(state: { loaded: TemplateEditorLoadResult; version?: number | undefined }, values: TemplateEditorFormValues) {
   const result = await saveTemplateEditorData({
     id: 'template-1',
     expectedVersion: state.version,
@@ -164,23 +172,25 @@ const withTaskTitle = (values: TemplateEditorFormValues, itemIndex: number, titl
   }),
 });
 
-const storedIds = (items: unknown): string[] => (JSON.parse(String(items)) as Row[]).flatMap((section) => [
+const storedIds = (items: unknown): string[] => storedSectionsIn(items).flatMap((section) => [
   String(section.id),
-  ...(section.items as Row[]).flatMap((item) => [
+  ...section.items.flatMap((item) => [
     String(item.id),
-    ...((item.contents as Row[] | undefined) ?? []).flatMap((content) => (content.subItems as Row[]).map((subItem) => String(subItem.id))),
+    ...(item.contents ?? []).flatMap((content) => present(content.subItems, 'the sub-tasks').map((subItem) => String(subItem.id))),
   ]),
 ]);
 
+function signInWithNoResponsesYet() {
+  vi.clearAllMocks();
+  responses.length = 0;
+  chainSelectsUpdatesAndDeletes(dbMocks);
+  dbMocks.insertChain.values.mockResolvedValue(undefined);
+  dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
+  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+}
+
 describe('saving a Template stored without ids the API accepts, which the editor resends so a second save never renumbers it', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    responses.length = 0;
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  });
+  beforeEach(signInWithNoResponsesYet);
 
   it.each(cases)('keeps the ids and run progress over two saves in one editor session (%s)', async (_name, subItemIds) => {
     const store = createStore(subItemIds);
@@ -191,25 +201,27 @@ describe('saving a Template stored without ids the API accepts, which the editor
     const afterFirst = await saveAndRebaseAsTheEditorDoes(opened, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
     const idsAfterFirst = storedIds(store.template.items);
     expect(responses[0]).toMatchObject({ structureChanged: true, content_version: 4 });
-    expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
+    expect(jsonRecordsIn(store.run.retired_items)).toEqual([]);
 
     await saveAndRebaseAsTheEditorDoes(afterFirst, withTaskTitle(afterFirst.loaded.initialValues, 2, 'Write and send the report'));
 
     expect(responses[1]).toMatchObject({ structureChanged: true, content_version: 5, reconciledRuns: 1 });
     const idsTheSecondSaveFoundAgain = storedIds(store.template.items);
     expect(idsTheSecondSaveFoundAgain).toEqual(idsAfterFirst);
-    expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
-    const [section] = JSON.parse(String(store.run.items)) as Row[];
-    const [crawl, review, report] = section.items as Row[];
+    expect(jsonRecordsIn(store.run.retired_items)).toEqual([]);
+    const section = firstOf(storedSectionsIn(store.run.items));
+    const tasks = section.items;
+    const [, review, report] = tasks;
+    const crawl = firstOf(tasks);
     expect(crawl).toMatchObject({ isCompleted: true, notes: 'Crawled with the new rules' });
-    expect(((crawl.contents as Row[])[0].subItems as Row[]).map((subItem) => subItem.isCompleted)).toEqual([true, true]);
+    expect(present(contentAt(crawl, 0).subItems, 'the sub-tasks').map((subItem) => subItem.isCompleted)).toEqual([true, true]);
     expect(review).toMatchObject({ title: 'Review on-page SEO issues', isCompleted: false });
     expect(report).toMatchObject({ title: 'Write and send the report', isCompleted: true });
     expect(store.run.progress).toBe(Math.round((4 / 7) * 100));
   });
 
   it('stores nothing when the second save changes nothing', async () => {
-    const store = createStore(cases[0][1]);
+    const store = createStore(firstOf(cases)[1]);
     serveFromAndWriteBatchesTo(store);
     const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
 
@@ -222,16 +234,16 @@ describe('saving a Template stored without ids the API accepts, which the editor
   });
 
   it('gives a copy of a public Template stored without ids the ids its editor and runs use', async () => {
-    const { template } = createStore(cases[0][1]);
+    const { template } = createStore(firstOf(cases)[1]);
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...template, user_id: 'other-user', is_public: true }]).mockResolvedValueOnce([]);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
       body: JSON.stringify({ visibility: 'private' }),
-    }), mockEnv as never);
+    }), mockEnv);
 
     expect(response.status).toBe(200);
-    const copy = dbMocks.insertChain.values.mock.calls.map(([values]) => values as Row).find((values) => 'owner_type' in values);
+    const copy = dbMocks.insertChain.values.mock.calls.map(([values]) => values).find((values) => 'owner_type' in values);
     expect(storedIds(copy?.items)).toEqual([
       'legacy-section-1',
       'legacy-item-1-1', 'legacy-subitem-1-1-1', 'legacy-subitem-1-1-2',
@@ -265,18 +277,11 @@ const sectionsWithContentBlocksWithoutIds = (run = false) => [
 ];
 
 describe('saving a Template whose content blocks have no ids', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    responses.length = 0;
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  });
+  beforeEach(signInWithNoResponsesYet);
 
   it('keeps content_version and the run when a save changes only the description', async () => {
-    const { template, run } = createStore(cases[0][1]);
-    const store = {
+    const { template, run } = createStore(firstOf(cases)[1]);
+    const store: Store = {
       template: { ...template, items: JSON.stringify(sectionsWithContentBlocksWithoutIds()) },
       run: { ...run, items: JSON.stringify(sectionsWithContentBlocksWithoutIds(true)) },
     };

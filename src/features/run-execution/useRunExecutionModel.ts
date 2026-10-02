@@ -19,7 +19,7 @@ import type { RunExecutionDependencies, UpdateRun } from './runPersistence';
 import { bindRunSaves } from './runExecutionActions';
 import { loadRunExecutionData, resolveMode, type RunExecutionLoadOptions } from './runExecutionLoad';
 
-export type { RunExecutionActionResult, RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
+export type { RunExecutionActionResult } from './runExecutionResult';
 
 export type RunExecutionHistoryState = {
   data: ChecklistRunHistoryResponse | null;
@@ -83,7 +83,6 @@ export const useRunExecutionModel = (
 
       const result = await loadRunExecutionData(
         {
-          getCachedRun: latestOptions.current.getCachedRun,
           runId: options.runId,
           shareToken: options.shareToken,
         },

@@ -1,7 +1,8 @@
 import { FileText, List, Pencil, Play, Trash2 } from 'lucide-react';
 
 import { IconTile } from '@/components/layout/IconTile';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Item,
   ItemActions,
@@ -13,6 +14,7 @@ import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
 } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -20,8 +22,8 @@ import { Link } from '@/components/navigation/Link';
 
 type TemplateListItemProps = {
   canEdit?: boolean;
-  onDelete?: (id: string) => void;
-  onStartRun?: (id: string) => void;
+  onDelete?: ((id: string) => void) | undefined;
+  onStartRun?: ((id: string) => void) | undefined;
   template: ChecklistTemplate;
 };
 
@@ -32,10 +34,7 @@ export function TemplateListItem({
   template,
 }: TemplateListItemProps) {
   const sectionCount = template.sections.length;
-  const taskCount = template.sections.reduce(
-    (count, section) => count + section.items.length,
-    0,
-  );
+  const taskCount = countTemplateItems(template);
   const TypeIcon = template.type === 'recipe' ? List : FileText;
   const hasActions = Boolean(onStartRun || canEdit || onDelete);
 

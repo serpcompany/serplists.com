@@ -3,24 +3,15 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 import { categorySlug } from '@/lib/categorySlug';
 import { canonicalPath } from '@/lib/http/urlStandard';
-import { CANONICAL_ORIGIN } from '@/lib/seo/siteOrigin';
 
 export { resolvePublicTemplateOwnerSlug };
 
 export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
-export type ConsoleSection = 'home' | 'templates' | 'runs' | 'archive' | 'account';
 
-export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
-export const LEGACY_ACCOUNT_PATH = '/account';
-export const LEGACY_CONSOLE_HOME_PATH = '/console';
-export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
-export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
-export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
-
-export const SITE_ORIGIN = CANONICAL_ORIGIN;
-
-export const buildSiteUrl = (path: string): string => new URL(path, SITE_ORIGIN).toString();
+const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
+const LEGACY_ACCOUNT_PATH = '/account';
+const LEGACY_CONSOLE_HOME_PATH = '/console';
 
 const comparablePath = (pathname: string): string => canonicalPath(pathname.trim().toLowerCase());
 
@@ -53,19 +44,6 @@ export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean =>
 
 export const buildCategorySlug = (categoryName: string): string =>
   categorySlug(categoryName);
-
-export const findCategoryNameBySlug = (
-  categories: string[],
-  slug: string,
-): string | null => {
-  const normalizedSlug = buildCategorySlug(slug);
-  if (!normalizedSlug) return null;
-  return (
-    categories.find(
-      (category) => buildCategorySlug(category) === normalizedSlug,
-    ) ?? null
-  );
-};
 
 const buildLegacyCategorySlug = (categoryName: string): string =>
   categoryName
@@ -245,43 +223,4 @@ export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
   }
 
   return 'marketing';
-};
-
-export const resolveConsoleSection = (
-  pathname: string,
-): ConsoleSection | null => {
-  const path = comparablePath(pathname);
-
-  if (
-    path === comparablePath(LEGACY_ACCOUNT_PATH) ||
-    path === buildConsoleSettingsPath() ||
-    path === comparablePath(LEGACY_CONSOLE_PROFILE_PATH)
-  ) {
-    return 'account';
-  }
-
-  if (path === DASHBOARD_PATH || path === comparablePath(LEGACY_CONSOLE_HOME_PATH)) {
-    return 'home';
-  }
-
-  if (
-    path === buildConsoleTemplateImportPath() ||
-    path.startsWith(buildConsoleTemplatesPath()) ||
-    path.startsWith(comparablePath(LEGACY_CONSOLE_TEMPLATES_PATH))
-  ) {
-    return 'templates';
-  }
-
-  if (path === buildConsoleArchivePath()) {
-    return 'archive';
-  }
-
-  if (
-    path.startsWith(buildConsoleRunsPath()) ||
-    path.startsWith(comparablePath(LEGACY_CONSOLE_RUNS_PATH))
-  ) {
-    return 'runs';
-  }
-
-  return null;
 };

@@ -1,56 +1,35 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf, present } from '../../../support/elements';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+import type { StoredRow } from '../../../support/d1Doubles';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
-
-type Statement =
-  | { kind: 'update'; table: unknown; values: Record<string, unknown>; where: SQL }
-  | { kind: 'insert'; table: unknown; values: Record<string, unknown> }
-  | { kind: 'insert-select'; table: unknown; query: SQL };
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const db = {
-    select: vi.fn((_fields?: unknown) => selectChain),
-    insert: vi.fn((table: unknown) => ({
-      values: (values: Record<string, unknown>) => ({ kind: 'insert', table, values }),
-      select: (query: unknown) => ({ kind: 'insert-select', table, query }),
-    })),
-    update: vi.fn((table: unknown) => ({
-      set: (values: Record<string, unknown>) => ({ where: (where: unknown) => ({ kind: 'update', table, values, where }) }),
-    })),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
+import { sqlExpression } from '../../../support/drizzleSql';
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { updateTemplateForUser } from '@functions/api/handlers/template-update';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+type Statement =
+  | { kind: 'update'; table: unknown; values: StoredRow | undefined; where: SQL }
+  | { kind: 'insert'; table: unknown; values: StoredRow }
+  | { kind: 'insert-select'; table: unknown; query: SQL };
+
+const builtStatements: Statement[] = [];
+
+function queryOf(statement: Statement | undefined): SQL {
+  if (statement?.kind !== 'insert-select') throw new Error(`Expected an INSERT ... SELECT, but got ${statement?.kind ?? 'nothing'}.`);
+  return statement.query;
+}
+
+function whereOf(statement: Statement | undefined): SQL {
+  if (statement?.kind !== 'update') throw new Error(`Expected an UPDATE, but got ${statement?.kind ?? 'nothing'}.`);
+  return statement.where;
+}
+
 const dialect = new SQLiteSyncDialect();
 const render = (value: SQL) => dialect.sqlToQuery(value).sql;
 const items = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }]);
@@ -96,41 +75,53 @@ function template(overrides: Record<string, unknown> = {}) {
 async function send(handler: typeof handleChecklists, path: string, method: string, body?: unknown) {
   const response = await handler(new Request(`http://localhost/api/${path}`, {
     method,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  }), env);
-  return { status: response.status, body: await response.json() as Record<string, unknown> };
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }), mockEnv);
+  return { status: response.status, body: await readJson(response, apiErrorBody) };
+}
+
+function recordTheStatementsEachWriteBuilds() {
+  builtStatements.length = 0;
+  const built = (statement: Statement) => {
+    builtStatements.push(statement);
+    return statement;
+  };
+  dbMocks.insertChain.values.mockImplementation((values) =>
+    built({ kind: 'insert', table: dbMocks.db.insert.mock.lastCall?.[0], values }));
+  dbMocks.insertChain.select.mockImplementation((query) =>
+    built({ kind: 'insert-select', table: dbMocks.db.insert.mock.lastCall?.[0], query: sqlExpression(query) }));
+  dbMocks.updateChain.where.mockImplementation((where) =>
+    built({
+      kind: 'update',
+      table: dbMocks.db.update.mock.lastCall?.[0],
+      values: dbMocks.updateChain.set.mock.lastCall?.[0],
+      where: sqlExpression(where),
+    }));
 }
 
 function batchStatements(): Statement[] {
   expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
-  return dbMocks.db.batch.mock.calls[0][0] as Statement[];
+  return firstOf(dbMocks.db.batch.mock.calls)[0].map((passed) =>
+    present(builtStatements.find((statement) => statement === passed), 'a statement the test recorded being built'));
 }
 
 function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: string[]) {
   const statements = batchStatements();
-  expect(statements.some((statement) => statement.kind === 'insert' && statement.table === schema.audit_events)).toBe(false);
-  const auditIndex = statements.findIndex((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
+  expect(statements.some((statement) => statement.kind === 'insert' && statement.table === schema.auditEvents)).toBe(false);
+  const auditIndex = statements.findIndex((statement) => statement.kind === 'insert-select' && statement.table === schema.auditEvents);
   const updateIndex = statements.findIndex((statement) => statement.kind === 'update' && statement.table === table);
   expect(auditIndex).toBeGreaterThanOrEqual(0);
   expect(updateIndex).toBeGreaterThan(auditIndex);
-  const guard = render((statements[auditIndex] as { query: SQL }).query);
+  const guard = render(queryOf(statements[auditIndex]));
   for (const fragment of guardFragments) expect(guard).toContain(fragment);
   return statements;
 }
 
 describe('audit rows are written only when the guarded write lands', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.orderBy.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
+    resetToASignedInUser('user-123', PRO_PLAN);
+    recordTheStatementsEachWriteBuilds();
     dbMocks.db.batch.mockResolvedValue(missed());
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
   });
 
   it('run PUT: a lost revision race returns 409', async () => {
@@ -140,7 +131,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('share-link PUT: a lost revision race returns 409', async () => {
@@ -151,7 +142,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/shared/token-1', 'PUT', { status: 'completed', expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
   });
 
   it('revalidate: a lost revision race returns 409', async () => {
@@ -162,7 +153,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1/revalidate', 'POST', { expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"deleted_at" is null']);
   });
 
   it('run archive: a concurrent archive does not report a second success', async () => {
@@ -171,7 +162,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1', 'DELETE');
 
     expect(result.status).toBe(404);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('run restore: a concurrent restore does not report a second success, answering the not_archived the archive page refreshes on', async () => {
@@ -181,7 +172,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(400);
     expect(result.body.code).toBe('not_archived');
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 
   it('run share: a run archived meanwhile is not shared or audited', async () => {
@@ -190,7 +181,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run/run-1/share', 'POST', {});
 
     expect(result.status).toBe(404);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('template PUT: a lost version race returns 409 and guards the version row and run updates', async () => {
@@ -205,11 +196,11 @@ describe('audit rows are written only when the guarded write lands', () => {
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
-    const versionInsert = statements.find((statement) => statement.table === schema.template_versions);
+    const versionInsert = statements.find((statement) => statement.table === schema.templateVersions);
     expect(versionInsert?.kind).toBe('insert-select');
-    expect(render((versionInsert as { query: SQL }).query)).toContain('"audit_events"');
-    const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklist_runs);
-    expect(render((runUpdate as { where: SQL }).where)).toContain('"audit_events"');
+    expect(render(queryOf(versionInsert))).toContain('"audit_events"');
+    const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklistRuns);
+    expect(render(whereOf(runUpdate))).toContain('"audit_events"');
   });
 
   it('Run Key template edit: a template published meanwhile is not edited or audited', async () => {
@@ -217,7 +208,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     const response = await updateTemplateForUser(
       new Request('http://localhost/api/mcp', { method: 'POST' }),
-      env,
+      mockEnv,
       'user-123',
       'template-1',
       { expected_version: 3, title: 'Renamed by an agent' },
@@ -225,7 +216,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     );
 
     expect(response.status).toBe(409);
-    expect((await response.json() as Record<string, unknown>).code).toBe('edit_conflict');
+    expect((await readJson(response, apiErrorBody)).code).toBe('edit_conflict');
     expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
   });
 
@@ -235,8 +226,8 @@ describe('audit rows are written only when the guarded write lands', () => {
     await send(handleTemplates, 'templates/template-1', 'PUT', { expected_version: 3, title: 'Renamed' });
 
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
-    const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
-    expect(render((auditInsert as { query: SQL }).query)).not.toContain('"is_public"');
+    const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.auditEvents);
+    expect(render(queryOf(auditInsert))).not.toContain('"is_public"');
   });
 
   it('template archive: a concurrent archive does not report a second success', async () => {

@@ -5,18 +5,23 @@ import {
   shouldSendAuthEmail,
   type AuthEmailKind,
 } from '@functions/api/utils/auth-email-throttle';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { answeringPwnedPasswordRangesAsNotFound } from '../../../fixtures/pwnedPasswords';
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth } from '../../../support/betterAuth';
+import { apiEnv, D1DatabaseThatThrows } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
+import { z } from 'zod';
 
 const START = Date.parse('2026-01-01T00:00:00Z');
 const SECOND = 1000;
 
+const sentEmail = z.object({ to: z.string(), subject: z.string() }).passthrough();
+
 type SentEmail = { to: string; subject: string };
 
 describe('auth email throttle, through the real Better Auth configuration on the migrated tables', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  let env: any;
+  let database: SqliteD1;
+  let env: Env;
   let sent: SentEmail[];
 
   function authRequest(path: string, body: unknown) {
@@ -53,19 +58,19 @@ describe('auth email throttle, through the real Better Auth configuration on the
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     at(0);
-    database = createMigratedD1();
-    env = {
-      DB: database.d1,
+    database = new SqliteD1();
+    env = apiEnv({
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
       RESEND_API_KEY: 're_test_123',
-    };
+    });
     sent = [];
     vi.stubGlobal(
       'fetch',
       answeringPwnedPasswordRangesAsNotFound(async (_url: string, init?: RequestInit) => {
-        const payload = JSON.parse(String(init?.body));
-        sent.push({ to: payload.to, subject: payload.subject });
+        const { to, subject } = sentEmail.parse(JSON.parse(String(init?.body)));
+        sent.push({ to, subject });
         return new Response('{}', { status: 200 });
       }),
     );
@@ -162,10 +167,10 @@ describe('auth email throttle, through the real Better Auth configuration on the
 });
 
 describe('claimAuthEmailSend', () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
   });
 
   afterEach(() => {
@@ -174,7 +179,7 @@ describe('claimAuthEmailSend', () => {
   });
 
   const claim = (userId: string, now: number, kind: AuthEmailKind = 'password-reset') =>
-    claimAuthEmailSend(createDb({ DB: database.d1 } as any), { kind, userId, now });
+    claimAuthEmailSend(createDb(apiEnv({ DB: database.binding })), { kind, userId, now });
 
   it('lets exactly one of two concurrent requests claim a send', async () => {
     const results = await Promise.all([claim('user-1', START), claim('user-1', START)]);
@@ -208,8 +213,10 @@ describe('claimAuthEmailSend', () => {
 
   it('sends anyway when D1 cannot record the send', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const failing = { prepare: () => { throw new Error('D1_ERROR: database unavailable'); } };
+    const failing = new D1DatabaseThatThrows(() => {
+      throw new Error('D1_ERROR: database unavailable');
+    });
 
-    await expect(shouldSendAuthEmail({ DB: failing } as any, 'password-reset', 'user-1')).resolves.toBe(true);
+    await expect(shouldSendAuthEmail(apiEnv({ DB: failing }), 'password-reset', 'user-1')).resolves.toBe(true);
   });
 });

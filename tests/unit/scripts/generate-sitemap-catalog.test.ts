@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { execTool } from '../../../scripts/lib/run-tool.mjs';
+import { execScript } from '../../../scripts/lib/run-tool';
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
+import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const generator = path.join(process.cwd(), 'scripts', 'generate-sitemap-catalog.ts');
 const repo = mkdtempSync(path.join(tmpdir(), 'sitemap-catalog-'));
@@ -24,10 +27,16 @@ const filesTheGeneratorReadsGitDatesFrom = [
   ...SITEMAP_IMPLEMENTATION_SOURCES,
 ];
 
-type Catalog = {
-  templates: Array<{ slug: string; lastmod: string }>;
-  inventory: { templatesLastmod: string; categoriesLastmod: string; implementationLastmod: string };
-};
+const catalogSchema = z
+  .object({
+    templates: z.array(z.object({ slug: z.string(), lastmod: z.string() }).passthrough()),
+    inventory: z
+      .object({ templatesLastmod: z.string(), categoriesLastmod: z.string(), implementationLastmod: z.string() })
+      .passthrough(),
+  })
+  .passthrough();
+
+type Catalog = z.output<typeof catalogSchema>;
 
 function write(relativePath: string, content: string) {
   mkdirSync(path.dirname(path.join(repo, relativePath)), { recursive: true });
@@ -38,7 +47,7 @@ function git(args: string[], date?: string) {
   execFileSync('git', ['-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', ...args], {
     cwd: repo,
     stdio: 'pipe',
-    env: date ? { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : process.env,
+    env: throwawayRepositoryEnvironment(date ? { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : {}),
   });
 }
 
@@ -56,8 +65,8 @@ function writePack(templates: unknown[], file = packPath) {
 }
 
 function generate(): Catalog {
-  execTool('tsx', [generator], { cwd: repo, stdio: 'pipe', env: { ...process.env, CI: '' } });
-  return JSON.parse(readFileSync(path.join(repo, catalogPath), 'utf8')) as Catalog;
+  execScript(generator, [], { cwd: repo, stdio: 'pipe', env: throwawayRepositoryEnvironment({ CI: '' }) });
+  return parseJsonText(readFileSync(path.join(repo, catalogPath), 'utf8'), catalogSchema);
 }
 
 const lastmodOf = (catalog: Catalog, slug: string) => catalog.templates.find((entry) => entry.slug === slug)?.lastmod;

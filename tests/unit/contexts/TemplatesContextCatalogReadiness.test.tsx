@@ -23,7 +23,8 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   }),
 }));
 
-import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 
 const communityTemplate: ChecklistTemplate = {
   id: 'community-1',

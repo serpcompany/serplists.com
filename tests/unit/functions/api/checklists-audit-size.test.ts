@@ -1,46 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
-
+import { z } from 'zod';
+import { firstOf } from '../../../support/elements';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { apiRequest } from '../../../support/apiRequest';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn } from '../../../support/storedJson';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const ROW_BUDGET_BYTES = 300 * 1024;
 const encoder = new TextEncoder();
 
@@ -77,46 +44,30 @@ function largeRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function send(path: string, method: string, body: unknown) {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
-    method,
-    body: JSON.stringify(body),
-  }), env);
-  return response;
-}
+const send = (path: string, method: string, body: unknown) =>
+  handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
 
 function expectCompactAudit(toggledId: string) {
-  const audit = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, unknown>;
+  const audit = firstOf(dbMocks.insertChain.values.mock.calls)[0];
   const total = Object.values(audit).reduce<number>(
     (sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8),
     0,
   );
   expect(total).toBeLessThan(ROW_BUDGET_BYTES);
   for (const column of ['before_json', 'after_json'] as const) {
-    const snapshot = JSON.parse(audit[column] as string);
+    const snapshot = jsonRecordIn(audit[column]);
     expect(snapshot).not.toHaveProperty('items');
     expect(snapshot).not.toHaveProperty('retired_items');
     expect(snapshot).not.toHaveProperty('share_token');
   }
-  const diff = JSON.parse(audit.diff_json as string);
-  expect(diff.items).toEqual(expect.objectContaining({ completed: [toggledId] }));
+  const diff = jsonRecordIn(audit.diff_json);
+  expect(diff['items']).toEqual(objectContaining({ completed: [toggledId] }));
 }
 
 describe('run audit rows stay small, since an oversized one would fail every save of the run it shares a D1 batch with', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    resetToASignedInUser('user-123', PRO_PLAN);
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
   });
 
   it('for a checkbox save on a large private run', async () => {
@@ -154,9 +105,12 @@ describe('run audit rows stay small, since an oversized one would fail every sav
     const response = await send('run-1/revalidate', 'POST', { expected_revision: 2 });
 
     expect(response.status).toBe(200);
-    const audit = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, string>;
+    const audit = z
+      .object({ before_json: z.string(), after_json: z.string(), diff_json: z.string() })
+      .passthrough()
+      .parse(firstOf(dbMocks.insertChain.values.mock.calls)[0]);
     expect(encoder.encode(audit.before_json + audit.after_json + audit.diff_json).byteLength).toBeLessThan(ROW_BUDGET_BYTES);
-    expect(JSON.parse(audit.diff_json).retired_items).toEqual({ count: 0 });
+    expect(jsonRecordIn(audit.diff_json)['retired_items']).toEqual({ count: 0 });
   });
 
   it('and history responses never return the full copies that older rows still hold', async () => {
@@ -172,10 +126,10 @@ describe('run audit rows stay small, since an oversized one would fail every sav
 
     const response = await send('run-1/history', 'GET', undefined);
     const text = await response.text();
-    const data = JSON.parse(text) as { events: Array<Record<string, unknown>> };
+    const data = z.object({ events: z.array(z.record(z.unknown())) }).passthrough().parse(JSON.parse(text));
 
     expect(response.status).toBe(200);
-    expect(data.events[0]).not.toHaveProperty('diff');
+    expect(firstOf(data.events)).not.toHaveProperty('diff');
     expect(text).not.toContain('old-token');
     expect(text).not.toContain('section-1');
   });

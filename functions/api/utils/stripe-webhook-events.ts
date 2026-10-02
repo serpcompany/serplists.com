@@ -23,34 +23,34 @@ function eventRow(record: StripeEventRecord, error: string | null) {
 }
 
 export async function isStripeEventHandled(db: Db, eventId: string): Promise<boolean> {
-  const { stripe_webhook_events } = schema;
+  const { stripeWebhookEvents } = schema;
   const [row] = await db
-    .select({ error: stripe_webhook_events.error })
-    .from(stripe_webhook_events)
-    .where(eq(stripe_webhook_events.id, eventId))
+    .select({ error: stripeWebhookEvents.error })
+    .from(stripeWebhookEvents)
+    .where(eq(stripeWebhookEvents.id, eventId))
     .limit(1);
   return row !== undefined && row.error === null;
 }
 
 export function markStripeEventHandled(db: Db, record: StripeEventRecord) {
-  const { stripe_webhook_events } = schema;
+  const { stripeWebhookEvents } = schema;
   return db
-    .insert(stripe_webhook_events)
+    .insert(stripeWebhookEvents)
     .values(eventRow(record, null))
     .onConflictDoUpdate({
-      target: stripe_webhook_events.id,
+      target: stripeWebhookEvents.id,
       set: { error: null, processed_at: record.processedAt },
     });
 }
 
 export async function recordStripeEventFailure(db: Db, record: StripeEventRecord, message: string) {
-  const { stripe_webhook_events } = schema;
+  const { stripeWebhookEvents } = schema;
   await db
-    .insert(stripe_webhook_events)
+    .insert(stripeWebhookEvents)
     .values(eventRow(record, message))
     .onConflictDoUpdate({
-      target: stripe_webhook_events.id,
+      target: stripeWebhookEvents.id,
       set: { error: message },
-      setWhere: isNotNull(stripe_webhook_events.error),
+      setWhere: isNotNull(stripeWebhookEvents.error),
     });
 }

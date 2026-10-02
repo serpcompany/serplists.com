@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import type { JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
@@ -9,9 +10,13 @@ import {
   type RunOwnerContext,
 } from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
+import type { RunUpdates } from "../utils/checklist-runs";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchChanges } from "../utils/guarded-writes";
 import { log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { normalizeSectionsPayload } from "../utils/payloads";
+import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
@@ -29,12 +34,10 @@ import {
 import { getOwnedTemplate } from "./agentMcpTemplates";
 import {
   getRunArgs,
-  isRecord,
   parseToolArguments,
   startRunArgs,
   ToolError,
   updateRunArgs,
-  type JsonRecord,
 } from "./agentMcpTools";
 
 export async function startRun(
@@ -100,21 +103,21 @@ async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promis
   return limit;
 }
 
-async function getOwnedRun(env: Env, userId: string, runId: string): Promise<JsonRecord> {
+async function getOwnedRun(env: Env, userId: string, runId: string) {
   const [run] = await createDb(env)
     .select()
-    .from(schema.checklist_runs)
+    .from(schema.checklistRuns)
     .where(and(
-      eq(schema.checklist_runs.id, runId),
-      eq(schema.checklist_runs.user_id, userId),
-      isNull(schema.checklist_runs.team_id),
-      isNull(schema.checklist_runs.deleted_at),
+      eq(schema.checklistRuns.id, runId),
+      eq(schema.checklistRuns.user_id, userId),
+      isNull(schema.checklistRuns.team_id),
+      isNull(schema.checklistRuns.deleted_at),
     ))
     .limit(1);
   if (!run || run.user_id !== userId || run.team_id !== null || run.deleted_at !== null) {
     throw new ToolError("Run not found", "run_not_found");
   }
-  return run as unknown as JsonRecord;
+  return run;
 }
 
 export async function getRun(
@@ -127,50 +130,16 @@ export async function getRun(
   return readRun(runView(run), read);
 }
 
-function batchChanges(result: unknown): number | null {
-  if (!isRecord(result) || !isRecord(result.meta)) return null;
-  return typeof result.meta.changes === "number" ? result.meta.changes : null;
-}
-
 function runRevisionExistsSql(runId: string, userId: string, revision: number) {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   return sql`exists (
-    select 1 from ${checklist_runs}
-    where ${checklist_runs.id} = ${runId}
-      and ${checklist_runs.user_id} = ${userId}
-      and ${checklist_runs.team_id} is null
-      and ${checklist_runs.revision} = ${revision}
-      and ${checklist_runs.deleted_at} is null
+    select 1 from ${checklistRuns}
+    where ${checklistRuns.id} = ${runId}
+      and ${checklistRuns.user_id} = ${userId}
+      and ${checklistRuns.team_id} is null
+      and ${checklistRuns.revision} = ${revision}
+      and ${checklistRuns.deleted_at} is null
   )`;
-}
-
-function insertAuditWhenRunRevisionMatches(
-  db: ReturnType<typeof createDb>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
-  runId: string,
-  userId: string,
-  revision: number,
-) {
-  const { audit_events } = schema;
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${runRevisionExistsSql(runId, userId, revision)}
-  `);
 }
 
 export async function updateRun(
@@ -199,7 +168,7 @@ export async function updateRun(
   }
 
   const now = new Date().toISOString();
-  const updates: JsonRecord = { revision: currentRevision + 1, updated_at: now };
+  const updates: RunUpdates = { revision: currentRevision + 1, updated_at: now };
   if (args.operation === "set_run_status") {
     updates.status = args.status;
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
@@ -237,22 +206,21 @@ export async function updateRun(
   });
   const db = createDb(env);
   const batchResults = await db.batch([
-    insertAuditWhenRunRevisionMatches(
+    insertRowWhere(
       db,
+      schema.auditEvents,
       auditEvent,
-      args.runId,
-      identity.userId,
-      currentRevision,
+      runRevisionExistsSql(args.runId, identity.userId, currentRevision),
     ),
-    db.update(schema.checklist_runs)
+    db.update(schema.checklistRuns)
       .set(updates)
       .where(and(
-        eq(schema.checklist_runs.id, args.runId),
-        eq(schema.checklist_runs.user_id, identity.userId),
-        isNull(schema.checklist_runs.team_id),
-        eq(schema.checklist_runs.revision, currentRevision),
-        isNull(schema.checklist_runs.deleted_at),
-        sql`exists (select 1 from ${schema.audit_events} where ${schema.audit_events.id} = ${auditEvent.id})`,
+        eq(schema.checklistRuns.id, args.runId),
+        eq(schema.checklistRuns.user_id, identity.userId),
+        isNull(schema.checklistRuns.team_id),
+        eq(schema.checklistRuns.revision, currentRevision),
+        isNull(schema.checklistRuns.deleted_at),
+        sql`exists (select 1 from ${schema.auditEvents} where ${schema.auditEvents.id} = ${auditEvent.id})`,
       )),
   ]);
   const auditChanges = batchChanges(batchResults[0]);

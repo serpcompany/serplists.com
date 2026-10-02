@@ -13,8 +13,9 @@ import {
 import { SearchField } from '@/components/layout/SearchField';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
-import { buttonVariants } from '@/components/ui/button';
+import { RUN_SHARE_LINK_DESCRIPTION } from '@/components/shared/runShareLinkDescription';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Item, ItemContent, ItemGroup } from '@/components/ui/item';
 import {
@@ -49,9 +50,9 @@ interface RunsDashboardViewProps {
   getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
-  onRunShared?: (runId: string) => void;
-  onShareFailed?: (error: unknown) => Promise<void>;
-  onStopSharingRun?: (runId: string) => Promise<void>;
+  onRunShared?: ((runId: string) => void) | undefined;
+  onShareFailed?: ((error: unknown) => Promise<void>) | undefined;
+  onStopSharingRun?: ((runId: string) => Promise<void>) | undefined;
   loading?: boolean;
   loadError?: unknown;
   onRetryLoad?: () => void;
@@ -142,7 +143,9 @@ export function RunsDashboardView({
           <Select
             items={STATUS_FILTER_LABELS}
             value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+            onValueChange={(value) => {
+              if (value) setStatusFilter(value);
+            }}
           >
             <SelectTrigger className="w-full" id={`${fieldId}-status`}>
               <SelectValue />

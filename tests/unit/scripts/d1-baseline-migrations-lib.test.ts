@@ -2,12 +2,16 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { valueAt } from '../../support/elements';
 
 import {
   parseBaselineArgs,
   readD1Databases,
   resolveBaselineTarget,
-} from '../../../scripts/d1-baseline-migrations-lib.mjs';
+} from '../../../scripts/d1-baseline-migrations-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const repoRoot = process.cwd();
 const d1 = readD1Databases(readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8'));
@@ -96,11 +100,30 @@ describe('resolveBaselineTarget against wrangler.toml', () => {
   });
 });
 
+describe('readD1Databases', () => {
+  it('reads the D1 entries as TOML, however wrangler.toml quotes its strings or writes its tables', () => {
+    const toml = [
+      "d1_databases = [{ binding = 'DB', database_name = 'prod', database_id = 'p-1', preview_database_id = 's-1' }]",
+      "env.preview.d1_databases = [{ binding = 'DB', database_name = 'staging', database_id = 's-1' }]",
+      '[env.production]',
+      'd1_databases = [{ binding = "DB", database_name = """prod""", database_id = "p-1" }]',
+    ].join('\n');
+
+    expect(readD1Databases(toml)).toEqual({
+      topLevel: [{ binding: 'DB', database_name: 'prod', database_id: 'p-1', preview_database_id: 's-1' }],
+      preview: [{ binding: 'DB', database_name: 'staging', database_id: 's-1' }],
+      production: [{ binding: 'DB', database_name: 'prod', database_id: 'p-1' }],
+    });
+  });
+
+  it('reads no entries from a file with no D1 databases', () => {
+    expect(readD1Databases('name = "serp-checklists"')).toEqual({ topLevel: [], preview: [], production: [] });
+  });
+});
+
 describe('package.json baseline scripts', () => {
-  const scripts = (JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
-    scripts: Record<string, string>;
-  }).scripts;
-  const argvOf = (name: string) => scripts[name].split(/\s+/).slice(2);
+  const { scripts } = parseJsonText(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'), z.object({ scripts: z.record(z.string()) }).passthrough());
+  const argvOf = (name: string) => valueAt(scripts, name).split(/\s+/).slice(2);
 
   it('points the staging baseline at the staging database', () => {
     expect(resolve(argvOf('db:migrations:baseline:staging'))).toMatchObject({
@@ -122,9 +145,10 @@ describe('package.json baseline scripts', () => {
 describe('d1-baseline-migrations CLI dry runs, which never call wrangler without --execute', () => {
   function dryRun(args: string[], env: Record<string, string> = {}) {
     const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
-    delete childEnv.CLOUDFLARE_ENV;
-    if (!env.D1_DATABASE_NAME) delete childEnv.D1_DATABASE_NAME;
-    return spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'd1-baseline-migrations.mjs'), ...args], {
+    delete childEnv['CLOUDFLARE_ENV'];
+    if (!env['D1_DATABASE_NAME']) delete childEnv['D1_DATABASE_NAME'];
+    const { command, args: commandArgs } = buildScriptInvocation(path.join(repoRoot, 'scripts', 'd1-baseline-migrations.ts'), args);
+    return spawnSync(command, commandArgs, {
       cwd: repoRoot,
       encoding: 'utf8',
       env: childEnv,

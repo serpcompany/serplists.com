@@ -9,7 +9,8 @@ import {
   findComments,
   GENERATED_FILES,
   NO_COMMENTS_MESSAGE,
-} from '../../../scripts/check-no-comments-lib.mjs';
+} from '../../../scripts/check-no-comments-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
 const repoRoot = process.cwd();
 const commentLines = (file: string, source: string[]) =>
@@ -38,14 +39,21 @@ describe('checkedLanguage', () => {
     ).toEqual(['dotenv', 'dotenv', 'dotenv', 'gitignore', 'gitignore', 'gitattributes', 'npmrc']);
   });
 
-  it('leaves TypeScript and JavaScript to the ESLint rule, even named like a dotenv file, and Markdown alone', () => {
-    expect(['src/a.ts', 'src/b.tsx', 'scripts/c.mjs', 'd.cjs', 'src/.env.ts', 'README.md'].map(checkedLanguage)).toEqual([
+  it('leaves TypeScript and JavaScript to the ESLint rule, even named like a dotenv file', () => {
+    expect(['src/a.ts', 'src/b.tsx', 'scripts/c.mjs', 'd.cjs', 'src/.env.ts'].map(checkedLanguage)).toEqual([
       null,
       null,
       null,
       null,
       null,
-      null,
+    ]);
+  });
+
+  it('checks Markdown for HTML comments', () => {
+    expect(['README.md', 'docs/RELIABILITY.md', '.github/pull_request_template.md'].map(checkedLanguage)).toEqual([
+      'markdown',
+      'markdown',
+      'markdown',
     ]);
   });
 
@@ -222,6 +230,24 @@ describe('XML', () => {
   });
 });
 
+describe('Markdown', () => {
+  it('reports HTML comments, not comment markers in code spans or fenced code', () => {
+    const fence = '`'.repeat(3);
+    expect(
+      commentLines('docs/example.md', [
+        '# Title',
+        '<!-- hidden note -->',
+        'Write `<!-- this -->` to hide text.',
+        `${fence}html`,
+        '<!-- inside a fence -->',
+        fence,
+        'Text <!-- trailing',
+        'over two lines -->',
+      ]),
+    ).toEqual(['2 Markdown', '7 Markdown']);
+  });
+});
+
 describe('dotenv files', () => {
   it('reports comment lines and a # after a value, which dotenv drops from an unquoted value', () => {
     expect(
@@ -320,13 +346,14 @@ describe('patches', () => {
         '+++ b/README.md',
         '@@ -1 +1 @@',
         '-old',
-        '+<!-- markdown is not code -->',
+        '+<!-- an HTML comment in Markdown -->',
       ]),
     ).toEqual([
       '9 JavaScript added by a patch',
       '15 JavaScript added by a patch',
       '23 JavaScript added by a patch',
       '31 TypeScript added by a patch',
+      '37 Markdown added by a patch',
     ]);
   });
 });
@@ -334,11 +361,10 @@ describe('patches', () => {
 describe('check-no-comments command', () => {
   const workDir = mkdtempSync(path.join(tmpdir(), 'check-no-comments-'));
   afterAll(() => rmSync(workDir, { recursive: true, force: true }));
-  const run = (...files: string[]) =>
-    spawnSync(process.execPath, [path.join(repoRoot, 'scripts/check-no-comments.mjs'), ...files], {
-      cwd: workDir,
-      encoding: 'utf8',
-    });
+  const run = (...files: string[]) => {
+    const { command, args } = buildScriptInvocation(path.join(repoRoot, 'scripts/check-no-comments.ts'), files);
+    return spawnSync(command, args, { cwd: workDir, encoding: 'utf8' });
+  };
 
   writeFileSync(path.join(workDir, 'clean.toml'), 'name = "serp # checklists"\n');
   writeFileSync(path.join(workDir, 'commented.toml'), '# why\nname = "serp"\n');

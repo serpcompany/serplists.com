@@ -20,7 +20,7 @@ import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
 import { rejectInvalidNewPassword } from "./utils/password-length";
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
 
 function isSignUpRequest(request: Request | undefined): boolean {
   return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
@@ -88,7 +88,7 @@ export function createBetterAuth(env: Env, request: Request) {
       },
       requireEmailVerification: authEmailPolicy.emailVerificationRequired,
       minPasswordLength: MIN_PASSWORD_LENGTH,
-      maxPasswordLength: MAX_PASSWORD_LENGTH,
+      maxPasswordLength: MAX_PASSWORD_BYTES,
       password: {
         hash: async (password) => bcrypt.hash(password, 10),
         verify: async ({ hash, password }) => bcrypt.compare(password, hash),

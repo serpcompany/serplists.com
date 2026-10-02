@@ -9,9 +9,9 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from './item';
 import { Textarea } from './textarea';
 import { cn } from '@/lib/utils';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
-import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
-import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
+import { formatUploadLimit, UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 import { UPLOAD_BUCKET_BY_TYPE, uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
@@ -29,8 +29,8 @@ const TYPE_ICON: Record<FileUploadType, typeof File> = {
 
 export type FileUploadChange = {
   value: string;
-  fileName?: string;
-  fileSize?: number;
+  fileName?: string | undefined;
+  fileSize?: number | undefined;
 };
 
 export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
@@ -41,7 +41,7 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
   }
 
   return (
-    <img
+    <UserContentImage
       src={src}
       alt="Preview"
       className="mx-auto max-h-32 rounded-md"
@@ -53,11 +53,11 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
 interface FileUploadProps {
   type: FileUploadType;
   value: string;
-  fileName?: string;
+  fileName?: string | undefined;
   signedIn?: boolean;
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
-  onUploadStart?: (upload: Promise<UploadResult>) => void;
+  onUploadStart?: ((upload: Promise<UploadResult>) => void) | undefined;
   className?: string;
 }
 
@@ -179,7 +179,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               )}
             </Button>
             <FieldDescription className="text-xs">
-              Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
+              Max file size: {formatUploadLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
             </FieldDescription>
           </div>
         )}

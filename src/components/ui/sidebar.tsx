@@ -1,13 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { mergeProps } from "@base-ui/react/merge-props"
-import { useRender } from "@base-ui/react/use-render"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
   SheetContent,
@@ -15,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useSidebar } from "@/components/ui/sidebar-provider"
+import { useSidebar } from "@/components/ui/use-sidebar"
 import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_WIDTH_MOBILE = "18rem"
@@ -59,11 +55,7 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
+          style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE }}
           side={side}
         >
           <SheetHeader className="sr-only">
@@ -184,20 +176,6 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
   )
 }
 
-function SidebarInput({
-  className,
-  ...props
-}: React.ComponentProps<typeof Input>) {
-  return (
-    <Input
-      data-slot="sidebar-input"
-      data-sidebar="input"
-      className={cn("h-8 w-full bg-background shadow-none", className)}
-      {...props}
-    />
-  )
-}
-
 function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -215,20 +193,6 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-footer"
       data-sidebar="footer"
       className={cn("flex flex-col gap-2 p-2", className)}
-      {...props}
-    />
-  )
-}
-
-function SidebarSeparator({
-  className,
-  ...props
-}: React.ComponentProps<typeof Separator>) {
-  return (
-    <Separator
-      data-slot="sidebar-separator"
-      data-sidebar="separator"
-      className={cn("mx-2 w-auto bg-sidebar-border", className)}
       {...props}
     />
   )
@@ -259,54 +223,6 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function SidebarGroupLabel({
-  className,
-  render,
-  ...props
-}: useRender.ComponentProps<"div"> & React.ComponentProps<"div">) {
-  return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">(
-      {
-        className: cn(
-          "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-          className
-        ),
-      },
-      props
-    ),
-    render,
-    state: {
-      slot: "sidebar-group-label",
-      sidebar: "group-label",
-    },
-  })
-}
-
-function SidebarGroupAction({
-  className,
-  render,
-  ...props
-}: useRender.ComponentProps<"button"> & React.ComponentProps<"button">) {
-  return useRender({
-    defaultTagName: "button",
-    props: mergeProps<"button">(
-      {
-        className: cn(
-          "absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
-          className
-        ),
-      },
-      props
-    ),
-    render,
-    state: {
-      slot: "sidebar-group-action",
-      sidebar: "group-action",
-    },
-  })
-}
-
 function SidebarGroupContent({
   className,
   ...props
@@ -326,25 +242,15 @@ export {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
   SidebarInset,
   SidebarRail,
-  SidebarSeparator,
   SidebarTrigger,
 }
-export { SidebarProvider, useSidebar } from "@/components/ui/sidebar-provider"
+export { SidebarProvider } from "@/components/ui/sidebar-provider"
 export {
   SidebarMenu,
-  SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@/components/ui/sidebar-menu"

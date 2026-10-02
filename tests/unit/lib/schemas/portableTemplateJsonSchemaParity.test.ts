@@ -1,14 +1,11 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
+import { firstOf, taskIn } from '../../../support/elements';
 
 import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackSchema,
 } from '@/lib/schemas/checklistSchema';
-import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import {
   exportPortableTemplatesToJSON,
@@ -16,9 +13,23 @@ import {
   prepareTemplatesForImport,
 } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
+import foundationalChecklists from '@/data/public-template-packs/foundational-checklists.json';
+
+import { portableTemplatePackJsonSchema } from '../../../support/portableTemplateChecks';
+import fullExample from '../../../../docs/product-specs/portable-templates/examples/full/template.json';
+import minimalExample from '../../../../docs/product-specs/portable-templates/examples/minimal/template.json';
+import { z } from 'zod';
+import { storedSections } from '../../../support/storedJson';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
-const validateWithJsonSchema = ajv.compile(buildPortableTemplatePackJsonSchema());
+const validateWithJsonSchema = ajv.compile(portableTemplatePackJsonSchema());
+
+const packAsTheFileHoldsIt = z
+  .object({
+    manifest: z.object({ skippedTemplates: z.unknown().optional() }).passthrough(),
+    templates: z.array(z.object({ sections: storedSections }).passthrough()),
+  })
+  .passthrough();
 
 const verdicts = (data: unknown) => ({
   jsonSchema: validateWithJsonSchema(data) as boolean,
@@ -81,16 +92,8 @@ describe('the published portable template JSON Schema accepts exactly what the i
   });
 
   it('agrees on the repo examples and public packs', () => {
-    const root = process.cwd();
-    const singleTemplates = ['minimal', 'full'].map((name) =>
-      JSON.parse(readFileSync(path.join(root, `docs/product-specs/portable-templates/examples/${name}/template.json`), 'utf8')),
-    );
-    const publicPack = JSON.parse(
-      readFileSync(path.join(root, 'src/data/public-template-packs/foundational-checklists.json'), 'utf8'),
-    );
-
-    expect(verdicts(pack(singleTemplates))).toEqual({ jsonSchema: true, importer: true });
-    expect(verdicts(publicPack)).toEqual({ jsonSchema: true, importer: true });
+    expect(verdicts(pack([minimalExample, fullExample]))).toEqual({ jsonSchema: true, importer: true });
+    expect(verdicts(foundationalChecklists)).toEqual({ jsonSchema: true, importer: true });
   });
 });
 
@@ -124,24 +127,24 @@ describe('portable export', () => {
   });
 
   it('validates against the JSON Schema and imports again', () => {
-    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()])));
+    const exported: unknown = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()])));
 
     expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
   });
 
   it('validates after an import added completion state to every task', () => {
     const imported = prepareTemplatesForImport([storedTemplateWithRunStateAsTheAppHoldsIt()], 'u1');
-    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(imported)));
+    const exported: unknown = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(imported)));
 
     expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
   });
 
   it('leaves out run state and other keys that are not part of the portable format', () => {
     const exported = exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()]);
-    const serialized = JSON.stringify(exported.templates[0].sections);
+    const serialized = JSON.stringify(firstOf(exported.templates).sections);
 
     expect(serialized).not.toMatch(/"(isCompleted|completed|notes)"/);
-    expect(exported.templates[0].sections).toEqual([
+    expect(firstOf(exported.templates).sections).toEqual([
       {
         id: 's1',
         title: 'Prep',
@@ -168,10 +171,11 @@ describe('portable export of content blocks a lenient JSON import stored, keepin
     return prepareTemplatesForImport(templates, 'u1');
   };
   const exportedContents = (contents: unknown[]) => {
-    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(importedTemplate(contents))));
-    expect(exported.manifest.skippedTemplates).toBeUndefined();
+    const exported: unknown = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(importedTemplate(contents))));
+    const pack = packAsTheFileHoldsIt.parse(exported);
+    expect(pack.manifest.skippedTemplates).toBeUndefined();
     expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
-    return exported.templates[0].sections[0].items[0].contents;
+    return taskIn(firstOf(pack.templates).sections, 0, 0).contents;
   };
 
   it('exports a numeric id as a string and leaves out null file details', () => {

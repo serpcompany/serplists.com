@@ -1,4 +1,4 @@
-import { isLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
+import { isCanonicalLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
 import type { Env } from "../types";
 
 export function isPersonalRunMcpPath(path: string): boolean {
@@ -8,5 +8,5 @@ export function isPersonalRunMcpPath(path: string): boolean {
 export function isPersonalRunMcpEnabled(env: Env, url: URL): boolean {
   if (env.PERSONAL_RUN_MCP_ENABLED === "true") return true;
   if (env.PERSONAL_RUN_MCP_ENABLED === "false") return false;
-  return isLoopbackHostname(url.hostname);
+  return isCanonicalLoopbackHostname(url.hostname);
 }

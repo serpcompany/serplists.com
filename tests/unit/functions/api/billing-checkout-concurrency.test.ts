@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import {
+  billingSchemaSql,
   emptyStripeList,
   postToBilling,
   seedBillingUser,
   stripeBillingEnv,
   stripeErrorResponse,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const USER_ID = "user-1";
 
@@ -18,7 +17,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let runWhileStripeCreatesTheCustomer: (() => void) | null;
 let pathWhereTheFirstCallWaitsForTheSecond: "/v1/customers" | "/v1/checkout/sessions" | null;
 
-type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey?: string };
+type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey: string | undefined };
 
 function createStripeWithItsIdempotencyRules() {
   const keys = new Map<string, { body: string; response?: string }>();
@@ -31,8 +30,7 @@ function createStripeWithItsIdempotencyRules() {
 
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    const headers = (init?.headers ?? {}) as Record<string, string>;
-    const idempotencyKey = headers["Idempotency-Key"];
+    const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key") ?? undefined;
     const body = String(init?.body ?? "");
     const method = init?.method ?? "GET";
     calls.push({ method, url: url.pathname, form: new URLSearchParams(body), idempotencyKey });
@@ -88,7 +86,7 @@ function storedCustomers(): string[] {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   runWhileStripeCreatesTheCustomer = null;

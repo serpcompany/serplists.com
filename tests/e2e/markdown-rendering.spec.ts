@@ -34,9 +34,15 @@ test('markdown preview shows list markers, heading sizes, link styling and singl
   const preview = await openEditorPreview(page);
 
   const styles = await preview.evaluate((root) => {
-    const style = (selector: string) => getComputedStyle(root.querySelector(selector)!);
-    const paragraph = root.querySelector('p')!;
+    const elementOf = (found: Element | null | undefined, what: string) => {
+      if (!found) throw new Error(`The preview shows no ${what}`);
+      return found;
+    };
+    const style = (selector: string) => getComputedStyle(elementOf(root.querySelector(selector), selector));
+    const paragraph = elementOf(root.querySelector('p'), 'p');
     const items = root.querySelectorAll('ul > li');
+    const firstItem = elementOf(items[0], 'first list item');
+    const secondItem = elementOf(items[1], 'second list item');
     return {
       ulMarker: style('ul').listStyleType,
       ulPadding: parseFloat(style('ul').paddingInlineStart),
@@ -44,8 +50,8 @@ test('markdown preview shows list markers, heading sizes, link styling and singl
       headingSize: parseFloat(style('h1').fontSize),
       paragraphSize: parseFloat(getComputedStyle(paragraph).fontSize),
       linkDecoration: style('a').textDecorationLine,
-      gapBetweenItems: items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().bottom,
-      lineHeight: parseFloat(getComputedStyle(items[0]).lineHeight),
+      gapBetweenItems: secondItem.getBoundingClientRect().top - firstItem.getBoundingClientRect().bottom,
+      lineHeight: parseFloat(getComputedStyle(firstItem).lineHeight),
     };
   });
 
@@ -68,8 +74,10 @@ test('markdown text stays readable in dark mode', async ({ page }) => {
 
   const colors = await preview.evaluate((root) => {
     document.documentElement.classList.add('dark');
+    const paragraph = root.querySelector('p');
+    if (!paragraph) throw new Error('The preview shows no paragraph');
     return {
-      text: getComputedStyle(root.querySelector('p')!).color,
+      text: getComputedStyle(paragraph).color,
       background: getComputedStyle(document.body).backgroundColor,
       foreground: getComputedStyle(document.body).color,
     };

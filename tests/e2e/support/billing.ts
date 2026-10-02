@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { z } from 'zod';
 
 const RUN_LIMIT_MESSAGE = 'Active run limit reached. Upgrade to Pro to create more checklist runs.';
+export const TEMPLATE_LIMIT_MESSAGE = 'Template limit reached. Upgrade to create more templates.';
 
 const billingStatusSchema = z.record(z.unknown());
 
@@ -25,4 +26,23 @@ export async function answerRunStartsAtActiveRunLimit(page: Page) {
       status: 403,
     });
   });
+}
+
+export async function countCheckoutsSentTo(page: Page, url: string) {
+  const checkout = { requests: 0 };
+  await page.route('**/api/billing/checkout', async (route) => {
+    checkout.requests += 1;
+    await route.fulfill({ body: JSON.stringify({ url }), contentType: 'application/json', status: 200 });
+  });
+  return checkout;
+}
+
+export async function reportTheProPlan(page: Page) {
+  await page.route('**/api/billing/status**', (route) =>
+    route.fulfill({
+      body: JSON.stringify({ billingEnabled: true, plan: 'pro' }),
+      contentType: 'application/json',
+      status: 200,
+    }),
+  );
 }

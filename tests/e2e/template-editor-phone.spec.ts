@@ -69,6 +69,7 @@ test('at 390px a touch screen reorders content blocks with their Move buttons', 
   await expect(page.getByRole('button', { name: 'Move Embed block down' })).toBeFocused();
   const embedField = await page.getByLabel('Embed Code or URL').boundingBox();
   const textField = await page.getByLabel('Text Content').boundingBox();
-  expect(embedField!.y).toBeLessThan(textField!.y);
+  if (!embedField || !textField) throw new Error('The Embed and Text fields are not both shown');
+  expect(embedField.y).toBeLessThan(textField.y);
   await expectNoSidewaysScroll(page);
 });

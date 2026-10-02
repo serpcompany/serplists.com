@@ -1,4 +1,5 @@
 import { isApiError } from "@/lib/api-errors";
+import type { BillingStatus } from "@/lib/schemas/accountResponses";
 
 export type BillingPlan = "free" | "pro" | "team";
 
@@ -16,7 +17,7 @@ export type BillingPlanStatus = BillingPlan | "loading" | "unknown";
 export const PLAN_UNKNOWN_MESSAGE = "Couldn't check your plan. Try again.";
 
 export const getBillingPlanStatus = (query: {
-  data?: { plan: BillingPlan } | null;
+  data?: { plan: BillingPlan } | null | undefined;
   isError: boolean;
 }): BillingPlanStatus => {
   if (query.data) return query.data.plan;
@@ -30,10 +31,10 @@ export const getBillingPlanLabel = (plan?: BillingPlan | null): "Free" | "Pro" |
   return null;
 };
 
-export const isPaidBillingPlan = (plan: BillingPlan): boolean => plan === "pro" || plan === "team";
+const isPaidBillingPlan = (plan: BillingPlan): boolean => plan === "pro" || plan === "team";
 
 export type BillingStatusData = {
-  billingEnabled?: boolean;
+  billingEnabled?: boolean | undefined;
   plan: BillingPlan;
 };
 
@@ -44,7 +45,7 @@ export type BillingStatusState =
   | { status: "known"; billingEnabled: boolean; isPaid: boolean; plan: BillingPlan };
 
 export const resolveBillingStatus = (query: {
-  data?: BillingStatusData;
+  data?: BillingStatusData | undefined;
   fetchStatus: "fetching" | "paused" | "idle";
   isError: boolean;
 }): BillingStatusState => {
@@ -74,14 +75,7 @@ export const shouldRetryBillingStatus = (failureCount: number, error: unknown): 
   return !(isApiError(error) && error.status >= 400 && error.status < 500);
 };
 
-export type BillingStatus = {
-  plan: BillingPlan;
-  limits?: { maxTemplates: number | null; maxActiveRuns: number | null };
-  billingEnabled?: boolean;
-  subscriptionStatus?: string | null;
-  canManageBilling?: boolean;
-  managedBySupport?: boolean;
-};
+export type { BillingStatus };
 
 export const PLAN_MANAGED_BY_SUPPORT_MESSAGE = "Your plan is managed by support. Contact support to change it.";
 

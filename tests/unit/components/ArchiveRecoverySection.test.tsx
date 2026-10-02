@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../support/elements';
 
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
 import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
@@ -13,7 +14,7 @@ import { createTestQueryClient } from '../../fixtures/queryClient';
 const workspace = vi.hoisted(() => ({
   activeTeamId: undefined as string | undefined,
   loading: false,
-  role: undefined as string | undefined,
+  role: undefined as OrganizationRole | undefined,
   scope: 'personal',
 }));
 
@@ -27,7 +28,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
     activeTeamId: workspace.activeTeamId,
     getPermissions: (teamId?: string) =>
-      getResourcePermissions(teamId, () => workspace.role as OrganizationRole | undefined),
+      getResourcePermissions(teamId, () => workspace.role),
     isWorkspaceLoading: workspace.loading,
     workspaceScopeId: workspace.scope,
   }),
@@ -40,14 +41,7 @@ afterEach(() => {
   workspace.scope = 'personal';
 });
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    getArchivedTemplates: vi.fn().mockResolvedValue([]),
-    getArchivedChecklists: vi.fn().mockResolvedValue([]),
-    restoreChecklist: vi.fn(),
-    restoreTemplate: vi.fn(),
-  },
-}));
+vi.mock('@/lib/api', async () => (await import('../../support/emptyArchiveApi')).emptyArchiveApi());
 
 vi.mock('sonner', () => ({
   toast: {
@@ -108,12 +102,12 @@ describe('ArchiveRecoverySection restore by role', () => {
         <ArchiveRecoverySection />
       </QueryClientProvider>,
     );
-    const [templatesList, runsList] = html.split('Archived runs</h2>');
+    const templatesAndRuns = html.split('Archived runs</h2>');
     const restoreButtons = (list: string) => (list.match(/>Restore<\/button>/g) ?? []).length;
     return {
       html,
-      runs: restoreButtons(runsList),
-      templates: restoreButtons(templatesList),
+      runs: restoreButtons(elementAt(templatesAndRuns, 1)),
+      templates: restoreButtons(firstOf(templatesAndRuns)),
     };
   };
 
@@ -123,7 +117,7 @@ describe('ArchiveRecoverySection restore by role', () => {
     expect(shown.runs).toBe(1);
   });
 
-  it.each([
+  it.each<[OrganizationRole | undefined, number, number]>([
     ['owner', 1, 1],
     ['admin', 1, 1],
     ['editor', 1, 0],

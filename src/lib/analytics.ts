@@ -1,6 +1,6 @@
 interface AnalyticsEvent {
   event: string;
-  properties?: Record<string, unknown>;
+  properties?: Record<string, unknown> | undefined;
   timestamp: number;
   url: string;
   userAgent: string;
@@ -124,7 +124,8 @@ const trackUncaughtErrors = () => {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
+    const reason: unknown = event.reason;
+    analytics.trackError(new Error(reason === undefined ? undefined : String(reason)), 'unhandled_promise_rejection');
   });
 };
 

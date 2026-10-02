@@ -43,9 +43,9 @@ export const describeUnlistedCategory = (categoryName: string): string =>
 
 export interface TemplatePageSource {
   title: string;
-  description?: string | null;
-  seoTitle?: string | null;
-  seoDescription?: string | null;
+  description?: string | null | undefined;
+  seoTitle?: string | null | undefined;
+  seoDescription?: string | null | undefined;
 }
 
 export const resolveTemplatePageText = (

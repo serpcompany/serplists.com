@@ -1,9 +1,50 @@
 import { z } from "zod";
-import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
+import {
+  isRecord,
+  taskRecordsIn,
+  type JsonRecord,
+  type SectionRecord,
+  type TaskRecord,
+} from "../../../src/lib/schemas/jsonRecords";
+import { ToolError, type SectionAndTaskIds } from "./agentMcpTools";
+
+export interface ToolResult extends JsonRecord {
+  template?: unknown;
+  run?: unknown;
+  section?: unknown;
+  task?: unknown;
+  part?: unknown;
+  nextCursor?: unknown;
+  sectionsOmitted?: unknown;
+  taskOmitted?: unknown;
+  retiredItems?: unknown;
+  retiredCount?: unknown;
+  firstRetired?: unknown;
+}
+
+interface TitledRecord extends JsonRecord {
+  title?: unknown;
+}
+
+interface ResultPart extends JsonRecord {
+  of?: unknown;
+}
+
+interface ResultSection extends TitledRecord {
+  taskCount?: unknown;
+  firstTask?: unknown;
+  items?: unknown;
+}
+
+const isTitledRecord: (value: unknown) => value is TitledRecord = isRecord;
+const isResultPart: (value: unknown) => value is ResultPart = isRecord;
+const isResultSection: (value: unknown) => value is ResultSection = isRecord;
+
+export const titleOf = (value: unknown): unknown => (isTitledRecord(value) ? value.title : undefined);
 
 export const MAX_RESULT_BYTES = 32 * 1024;
 
-export function utf8ByteLength(text: string): number {
+function utf8ByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
@@ -37,24 +78,29 @@ export function bounded(page: JsonRecord): JsonRecord {
   throw resultTooLarge();
 }
 
-export const tasksOf = (section: JsonRecord): JsonRecord[] =>
-  (Array.isArray(section.items) ? section.items.filter(isRecord) : []);
+export const tasksOf = (section: SectionRecord): TaskRecord[] => taskRecordsIn(section.items);
 
-export function findSection(sections: JsonRecord[], sectionId: string, idArgumentName = "sectionId"): number {
+export function findSection(sections: SectionRecord[], sectionId: string, idArgumentName = "sectionId"): number {
   const index = sections.findIndex((section) => section.id === sectionId);
   if (index < 0) throw new ToolError(`Section not found (${idArgumentName})`, "section_not_found");
   return index;
 }
 
+export function sectionAt<Section extends SectionRecord>(sections: Section[], index: number): Section {
+  const section = sections[index];
+  if (!section) throw new ToolError("Section not found", "section_not_found");
+  return section;
+}
+
 export function findTask(
-  sections: JsonRecord[],
+  sections: SectionRecord[],
   taskId: string,
   sectionId?: string,
   idArgumentName = "taskId",
 ): { sectionIndex: number; taskIndex: number } {
   const candidates = sectionId === undefined ? sections.map((_, index) => index) : [findSection(sections, sectionId)];
   for (const sectionIndex of candidates) {
-    const taskIndex = tasksOf(sections[sectionIndex]).findIndex((task) => task.id === taskId);
+    const taskIndex = tasksOf(sectionAt(sections, sectionIndex)).findIndex((task) => task.id === taskId);
     if (taskIndex >= 0) return { sectionIndex, taskIndex };
   }
   throw new ToolError(
@@ -77,18 +123,19 @@ export function encodeCursor(cursor: JsonRecord): string {
 export const invalidCursor = (message: string) =>
   new ToolError(`cursor: ${message}`, "invalid_arguments", { issues: [{ path: "cursor", message }] });
 
-function parseCursor<Schema extends z.ZodTypeAny>(value: string, schema: Schema): z.infer<Schema> | undefined {
+function parseCursor<Cursor>(value: string, schema: z.ZodType<Cursor, z.ZodTypeDef, unknown>): Cursor | undefined {
   try {
     const bytes = Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
     const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
-    const parsed = schema.safeParse(JSON.parse(text));
+    const cursor: unknown = JSON.parse(text);
+    const parsed = schema.safeParse(cursor);
     return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }
 }
 
-export function decodeCursor<Schema extends z.ZodTypeAny>(value: string, schema: Schema, tool: string): z.infer<Schema> {
+export function decodeCursor<Cursor>(value: string, schema: z.ZodType<Cursor, z.ZodTypeDef, unknown>, tool: string): Cursor {
   const cursor = parseCursor(value, schema);
   if (cursor === undefined) throw invalidCursor(`Not a cursor ${tool} returned`);
   return cursor;
@@ -161,8 +208,8 @@ export function pack(units: Unit[], start: Position, room: number): Packed {
   if (start.offset === 0) {
     let used = 0;
     let count = 0;
-    while (start.unit + count < units.length && used + units[start.unit + count].bytes + SEPARATOR_BYTES <= room) {
-      used += units[start.unit + count].bytes + SEPARATOR_BYTES;
+    for (let next = units[start.unit]; next && used + next.bytes + SEPARATOR_BYTES <= room; next = units[start.unit + count]) {
+      used += next.bytes + SEPARATOR_BYTES;
       count += 1;
     }
     if (count > 0) {
@@ -199,7 +246,7 @@ function jsonArrayBytes(itemBytes: number[]): number {
   return itemBytes.reduce((total, size) => total + size, 0) + commas + brackets;
 }
 
-export function outlinePage(paged: Paged, header: JsonRecord, sections: JsonRecord[], start: Position, extra: JsonRecord = {}): JsonRecord {
+export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionRecord[], start: Position, extra: JsonRecord = {}): JsonRecord {
   const sizes = sections.map(byteSize);
   const fields = {
     ...header,
@@ -227,11 +274,11 @@ export function outlinePage(paged: Paged, header: JsonRecord, sections: JsonReco
   });
 }
 
-export function sectionPage(paged: Paged, sections: JsonRecord[], sectionIndex: number, start: Position): JsonRecord {
+function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, start: Position): JsonRecord {
   const fieldsUnit = 0;
   const firstTaskUnit = 1;
-  const section = sections[sectionIndex];
-  const { items: _items, ...fields } = section;
+  const section = sectionAt(sections, sectionIndex);
+  const { items, ...fields } = section;
   const tasks = tasksOf(section);
   const values: JsonRecord[] = [fields, ...tasks];
   const frame = { [paged.key]: paged.ref, section: { ...frameId("id", section.id), taskCount: tasks.length, firstTask: tasks.length, items: [] } };
@@ -250,8 +297,8 @@ export function sectionPage(paged: Paged, sections: JsonRecord[], sectionIndex: 
   });
 }
 
-export function taskPage(paged: Paged, sections: JsonRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
-  const section = sections[sectionIndex];
+function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
+  const section = sectionAt(sections, sectionIndex);
   const task = tasksOf(section)[taskIndex];
   const frame = { [paged.key]: paged.ref, ...frameId("sectionId", section.id) };
   const packed = pack([unitOf(task)], start, roomForUnits(frame));
@@ -262,14 +309,15 @@ export function taskPage(paged: Paged, sections: JsonRecord[], sectionIndex: num
   });
 }
 
-export function readSectionOrTask(paged: Paged, sections: JsonRecord[], args: { sectionId?: string; taskId?: string }): JsonRecord {
-  if (args.taskId !== undefined) {
-    const { sectionIndex, taskIndex } = findTask(sections, args.taskId, args.sectionId);
-    const section = sections[sectionIndex];
+export function readSectionOrTask(paged: Paged, sections: SectionRecord[], { sectionId, taskId }: SectionAndTaskIds): JsonRecord | null {
+  if (taskId !== undefined) {
+    const { sectionIndex, taskIndex } = findTask(sections, taskId, sectionId);
+    const section = sectionAt(sections, sectionIndex);
     const whole = { [paged.key]: paged.ref, sectionId: section.id, task: tasksOf(section)[taskIndex] };
     return fits(whole) ? whole : taskPage(paged, sections, sectionIndex, taskIndex, START);
   }
-  const sectionIndex = findSection(sections, args.sectionId as string);
+  if (sectionId === undefined) return null;
+  const sectionIndex = findSection(sections, sectionId);
   const whole = { [paged.key]: paged.ref, section: sections[sectionIndex] };
   return fits(whole) ? whole : sectionPage(paged, sections, sectionIndex, START);
 }
@@ -277,13 +325,15 @@ export function readSectionOrTask(paged: Paged, sections: JsonRecord[], args: { 
 export function continuePage(
   paged: Paged,
   header: JsonRecord,
-  sections: JsonRecord[],
+  sections: SectionRecord[],
   cursor: ReadCursor,
-  args: { sectionId?: string; taskId?: string },
+  args: SectionAndTaskIds,
   outlineExtra: JsonRecord = {},
 ): JsonRecord {
-  const section = cursor.m === "outline" || cursor.s === undefined ? undefined : sections[cursor.s];
-  const task = section && cursor.m === "task" && cursor.k !== undefined ? tasksOf(section)[cursor.k] : undefined;
+  const sectionIndex = cursor.m === "outline" ? undefined : cursor.s;
+  const section = sectionIndex === undefined ? undefined : sections[sectionIndex];
+  const taskIndex = section && cursor.m === "task" ? cursor.k : undefined;
+  const task = section && taskIndex !== undefined ? tasksOf(section)[taskIndex] : undefined;
   if (cursor.m === "retired" || (cursor.m !== "outline" && !section) || (cursor.m === "task" && !task)) {
     throw invalidCursor("It points past the end");
   }
@@ -291,24 +341,24 @@ export function continuePage(
     throw invalidCursor(`It continues another read; pass it with ${paged.key}Id alone`);
   }
   const start = { unit: cursor.u, offset: cursor.o };
-  if (cursor.m === "outline") return outlinePage(paged, header, sections, start, outlineExtra);
-  if (cursor.m === "section") return sectionPage(paged, sections, cursor.s as number, start);
-  return taskPage(paged, sections, cursor.s as number, cursor.k as number, start);
+  if (sectionIndex === undefined) return outlinePage(paged, header, sections, start, outlineExtra);
+  if (taskIndex === undefined) return sectionPage(paged, sections, sectionIndex, start);
+  return taskPage(paged, sections, sectionIndex, taskIndex, start);
 }
 
-export function describePage(result: JsonRecord, tool: string, noun: "Template" | "Run"): string | null {
+export function describePage(result: ToolResult, tool: string, noun: "Template" | "Run"): string | null {
   const more = typeof result.nextCursor === "string" ? ` More follows: call ${tool} with cursor set to nextCursor.` : "";
-  if (isRecord(result.part)) {
+  if (isResultPart(result.part)) {
     const of = String(result.part.of);
     return `Loaded part of ${/^[aeiou]/.test(of) ? "an" : "a"} ${of} too large for one result; join its parts' text in order.${more}`;
   }
   if (result.sectionsOmitted === true) {
-    const fields = isRecord(result[noun.toLowerCase()]) ? result[noun.toLowerCase()] as JsonRecord : {};
-    const name = typeof fields.title === "string" ? `${noun} "${boundedText(fields.title)}"` : `This ${noun.toLowerCase()}`;
+    const title = titleOf(result[noun.toLowerCase()]);
+    const name = typeof title === "string" ? `${noun} "${boundedText(title)}"` : `This ${noun.toLowerCase()}`;
     return `${name} is too large to return at once, so this is its outline; read a section with sectionId.${more}`;
   }
-  if (isRecord(result.task)) return `Loaded task "${boundedText(result.task.title)}".`;
-  if (isRecord(result.section)) {
+  if (isTitledRecord(result.task)) return `Loaded task "${boundedText(result.task.title)}".`;
+  if (isResultSection(result.section)) {
     const { section } = result;
     if (typeof section.taskCount !== "number" || typeof section.firstTask !== "number") {
       return `Loaded section "${boundedText(section.title)}".`;

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadUserProfile } from '@/features/profile/loadUserProfile';
-import { createApiError } from '@/lib/api-errors';
+import { ApiError, createApiError, UNREADABLE_RESPONSE_CODE, UNREADABLE_RESPONSE_MESSAGE } from '@/lib/api-errors';
 import { REPO_TEMPLATE_OWNER_SLUG, repoTemplates } from '@/lib/repoTemplateCatalog';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const profileRow = {
   avatar_url: null,
@@ -40,6 +41,17 @@ describe('loadUserProfile', () => {
     if (result.kind !== 'ok') return;
     expect(result.profile.username).toBe('alice');
     expect(result.templates.map((template) => template.title)).toEqual(['Camping Checklist']);
+  });
+
+  it('keeps the type, owner and visibility of each public Template the API sends, as the Template lists do', async () => {
+    const recipeRow = { ...templateRow, id: 'template-2', slug: 'pancakes', title: 'Pancakes', type: 'recipe', owner_type: 'user' };
+    const apiClient = buildApiClient({ getPublicTemplatesForUser: vi.fn().mockResolvedValue([recipeRow]) });
+
+    const result = await loadUserProfile('alice', { apiClient });
+
+    expect(result.kind === 'ok' ? result.templates : []).toEqual([
+      objectContaining({ id: 'template-2', type: 'recipe', ownerType: 'user', isPublic: true }),
+    ]);
   });
 
   it('reads the D1 created_at as UTC and hands the page an ISO timestamp', async () => {
@@ -88,7 +100,9 @@ describe('loadUserProfile', () => {
 
   it('reports a profile response of the wrong shape as a failed load', async () => {
     const apiClient = buildApiClient({
-      getProfileByUsername: vi.fn().mockResolvedValue({ error: 'unexpected' }),
+      getProfileByUsername: vi.fn().mockRejectedValue(
+        new ApiError({ status: 200, message: UNREADABLE_RESPONSE_MESSAGE, code: UNREADABLE_RESPONSE_CODE }),
+      ),
     });
 
     const result = await loadUserProfile('alice', { apiClient });

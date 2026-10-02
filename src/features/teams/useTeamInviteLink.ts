@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
@@ -41,11 +41,15 @@ export function useTeamInviteLink(token: string | undefined, viewerId: string | 
     queryClient.invalidateQueries({ queryKey: queryKindPrefix('incomingTeamInvites') });
   const stopReadingPreview = (_result: unknown, respondedAs: string | null) =>
     queryClient.cancelQueries({ queryKey: teamInvitePreviewQueryKey(token, respondedAs) });
+  const inviteToken = (): string => {
+    if (!token) throw new Error('This invite link has no token.');
+    return token;
+  };
 
   const acceptMutation = useMutation({
     mutationFn: (_respondedAs: string | null) =>
       respondWithTimeout(
-        acceptTeamInviteForWorkspace(token as string, { refreshTeams, rememberTeam }),
+        acceptTeamInviteForWorkspace(inviteToken(), { refreshTeams, rememberTeam }),
       ),
     onSuccess: stopReadingPreview,
     onSettled: refreshIncomingInvites,
@@ -53,7 +57,7 @@ export function useTeamInviteLink(token: string | undefined, viewerId: string | 
 
   const declineMutation = useMutation({
     mutationFn: (_respondedAs: string | null) =>
-      respondWithTimeout(api.declineTeamInvite(token as string)),
+      respondWithTimeout(api.declineTeamInvite(inviteToken())),
     onSuccess: stopReadingPreview,
     onSettled: refreshIncomingInvites,
   });
@@ -64,7 +68,7 @@ export function useTeamInviteLink(token: string | undefined, viewerId: string | 
 
   const previewQuery = useQuery({
     queryKey: teamInvitePreviewQueryKey(token, viewerId),
-    queryFn: () => api.getTeamInvitePreview(token as string),
+    queryFn: token ? () => api.getTeamInvitePreview(token) : skipToken,
     enabled: Boolean(token) && Boolean(viewerId) && !hasAnswered,
     retry: false,
     staleTime: 0,

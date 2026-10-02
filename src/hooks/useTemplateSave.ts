@@ -9,8 +9,8 @@ import { ValidationError } from "@/hooks/useTemplateValidation";
 export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
-  version?: number;
-  slug?: string;
+  version?: number | undefined;
+  slug?: string | undefined;
   saved?: { title: string; sections: ChecklistSection[] };
   failure?: AccessFailure;
   editConflict?: boolean;
@@ -26,7 +26,7 @@ type SaveTemplateDependencies = {
 };
 
 export type SaveTemplateInput = {
-  id?: string;
+  id?: string | undefined;
   title: string;
   description: string;
   sections: ChecklistSection[];
@@ -36,9 +36,9 @@ export type SaveTemplateInput = {
   templateType: "checklist" | "recipe";
   categories: string[];
   tags: string[];
-  isPublic?: boolean;
-  expectedVersion?: number;
-  storedSlug?: string;
+  isPublic?: boolean | undefined;
+  expectedVersion?: number | undefined;
+  storedSlug?: string | undefined;
 };
 
 const MISSING_VERSION_MESSAGE =

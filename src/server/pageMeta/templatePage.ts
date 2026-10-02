@@ -4,35 +4,28 @@ import { cache } from 'react';
 
 import { loadPublicTemplate } from '@functions/seo/public-template-lookup';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
-import { resolveTemplatePageText, TEMPLATE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
+import {
+  resolveTemplatePageText,
+  TEMPLATE_NOT_FOUND_PAGE_TEXT,
+  type TemplatePageSource,
+} from '@/lib/publicPageMeta';
 import {
   findPublicTemplateByIdentifier,
   repoTemplates,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/repoTemplateCatalog';
 import { buildCanonicalPublicTemplatePath, buildPublicTemplatePath } from '@/lib/routes';
-import type { PageSeo } from '@/lib/seo/pageMetadata';
 
 import { getRequestOrigin, getWorkerEnv } from '../cloudflare';
+import type { PageSeoLookup } from './pageSeoLookup';
 
-export type TemplatePageSeo =
-  | { kind: 'found'; seo: PageSeo }
-  | { kind: 'not_found'; seo: PageSeo }
-  | { kind: 'unavailable' };
-
-interface TemplatePageSource {
-  id: string;
-  slug?: string | null;
-  title: string;
-  description?: string | null;
-  seoTitle?: string | null;
-  seoDescription?: string | null;
+type FoundTemplatePage = TemplatePageSource & {
   createdAt?: string | null;
   categories?: string[];
   canonicalPath: string | null;
-}
+};
 
-const toFoundSeo = (template: TemplatePageSource): TemplatePageSeo => {
+const toFoundSeo = (template: FoundTemplatePage): PageSeoLookup => {
   const text = resolveTemplatePageText(template);
   return {
     kind: 'found',
@@ -48,10 +41,10 @@ const toFoundSeo = (template: TemplatePageSource): TemplatePageSeo => {
 };
 
 export const loadTemplatePageSeo = cache(
-  async (username: string, identifier: string): Promise<TemplatePageSeo> => {
+  async (username: string, identifier: string): Promise<PageSeoLookup> => {
     const owner = username.trim().toLowerCase();
     const id = identifier.trim();
-    const notFound: TemplatePageSeo = {
+    const notFound: PageSeoLookup = {
       kind: 'not_found',
       seo: { ...TEMPLATE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
     };

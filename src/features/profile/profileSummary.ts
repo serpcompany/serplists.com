@@ -1,3 +1,4 @@
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import type { ProfileSurfaceRecord, UserProfileRecord } from './loadUserProfile';
@@ -8,9 +9,6 @@ export type UserStats = {
   totalItems: number;
   totalTemplates: number;
 };
-
-export const countTemplateItems = (template: ChecklistTemplate) =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
 
 export const getProfileDisplayName = (profile: UserProfileRecord): string =>
   profile.full_name?.trim() || `@${profile.username}`;

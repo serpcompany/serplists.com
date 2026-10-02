@@ -79,7 +79,7 @@ describe('adding public templates to an export', () => {
   });
 
   it('appends the public templates to the owned pack with one manifest for both', () => {
-    const ownedPack = JSON.parse(JSON.stringify(buildPortableTemplatePack([{
+    const ownedPack: unknown = JSON.parse(JSON.stringify(buildPortableTemplatePack([{
       id: 'owned',
       title: 'Owned',
       description: '',
@@ -118,7 +118,7 @@ describe('adding public templates to an export', () => {
       id: 'broken', title: 'Broken', description: '', type: 'checklist', seoTitle: '', seoDescription: '',
       sections: [], categories: [], tags: [], isPublic: true, slug: 'broken',
     };
-    const ownedPack = JSON.parse(JSON.stringify(buildPortableTemplatePack([broken], undefined)));
+    const ownedPack: unknown = JSON.parse(JSON.stringify(buildPortableTemplatePack([broken], undefined)));
 
     const pack = addPublicTemplatesToPack(ownedPack, [template('community'), template('broken-copy', { title: 'Broken', sections: [] })]);
 
@@ -129,7 +129,7 @@ describe('adding public templates to an export', () => {
   });
 
   it('returns the owned pack unchanged when there is nothing to add, and rejects a response that is not a pack', () => {
-    const ownedPack = JSON.parse(JSON.stringify(buildPortableTemplatePack([], undefined)));
+    const ownedPack: unknown = JSON.parse(JSON.stringify(buildPortableTemplatePack([], undefined)));
 
     expect(addPublicTemplatesToPack(ownedPack, [])).toEqual(ownedPack);
     expect(() => addPublicTemplatesToPack({ templates: 'nope' }, [template('community')])).toThrow();

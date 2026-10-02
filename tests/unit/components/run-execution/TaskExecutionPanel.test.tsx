@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
@@ -8,12 +8,12 @@ import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 import type { PrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import type { ChecklistItem } from '@/types/checklist';
 
-import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { findAllElements, findElementOf, handlerOf, isElement } from '../../../support/elementTree';
 
 const textOf = (node: unknown): string => {
   if (typeof node === 'string') return node;
   if (Array.isArray(node)) return node.map(textOf).join('');
-  return React.isValidElement(node) ? textOf((node as AnyElement).props.children) : '';
+  return isElement(node) ? textOf(node.props.children) : '';
 };
 
 const KEYBOARD_ACTIVATION = 0;
@@ -21,7 +21,6 @@ const SINGLE_CLICK = 1;
 const SECOND_CLICK_OF_A_DOUBLE_CLICK = 2;
 const THIRD_CLICK = 3;
 
-type ClickHandler = (event: { detail: number }) => void;
 
 const renderPanel = (
   task: ChecklistItem,
@@ -44,6 +43,7 @@ const renderPanel = (
     onToggleTask,
     primaryAction,
     section: { id: 'section-1', title: 'Checklist', items: [task] },
+    sectionIndex: 0,
     task,
     taskIndex: 0,
     totalTasks: 1,
@@ -51,15 +51,16 @@ const renderPanel = (
   });
   const click = (label: string, detail = SINGLE_CLICK) => {
     const [button] = findAllElements(tree, (element) => typeof element.props.onClick === 'function' && textOf(element) === label);
-    (button?.props.onClick as ClickHandler)({ detail });
+    handlerOf(button, 'onClick')({ detail });
   };
   const taskCheckbox = (detail = SINGLE_CLICK) => {
     const [button] = findAllElements(tree, (element) => element.type === 'button');
-    (button?.props.onClick as ClickHandler)({ detail });
+    handlerOf(button, 'onClick')({ detail });
   };
   const subTaskHandler = () => {
-    const [renderer] = findAllElements(tree, (element) => typeof element.props.onSubItemToggle === 'function');
-    return renderer?.props.onSubItemToggle as (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+    const renderer = findElementOf(tree, ContentRenderer);
+    assert.exists(renderer?.props.onSubItemToggle, 'the sub-task toggle');
+    return renderer.props.onSubItemToggle;
   };
   return { click, onNavigateNext, onToggleSubItem, onToggleTask, subTaskHandler, taskCheckbox, tree };
 };
@@ -135,7 +136,7 @@ describe('TaskExecutionPanel on a completed run', () => {
   it('locks the task and sub-task checkboxes, and keeps notes editable', () => {
     const { tree } = renderPanel(openTask, { kind: 'run_completed' }, { runCompleted: true });
     const [taskCheckbox] = findAllElements(tree, (element) => element.type === 'button');
-    const [renderer] = findAllElements(tree, (element) => typeof element.props.onSubItemToggle === 'function');
+    const renderer = findElementOf(tree, ContentRenderer);
     const [notes] = findAllElements(tree, (element) => element.props.label === 'Task notes');
 
     expect(taskCheckbox?.props.disabled).toBe(true);
@@ -195,7 +196,7 @@ describe('TaskExecutionPanel reveals each task it moves to, since it stays mount
     const reveals = findAllElements(tree, (element) => element.type === TaskHeaderReveal);
 
     expect(reveals).toHaveLength(1);
-    expect(reveals[0]?.props.taskId).toBe('task-7');
+    expect(findElementOf(tree, TaskHeaderReveal)?.props.taskId).toBe('task-7');
     expect(findAllElements(reveals[0], (element) => element.type === 'h2')).toHaveLength(1);
     expect(findAllElements(reveals[0], (element) => element.props.role === 'checkbox')).toHaveLength(1);
   });
@@ -225,8 +226,9 @@ describe("TaskExecutionPanel gives every task its own content blocks, so a video
   it("gives the task content a key that no sibling, such as the task's notes, shares, so the previous task's blocks never stay beside the new ones", () => {
     const [parent] = findAllElements(renderTask('task-7'), (element) =>
       Array.isArray(element.props.children) && element.props.children.some(isRenderer));
-    const keys = (parent?.props.children as unknown[])
-      .filter((child): child is AnyElement => React.isValidElement(child))
+    const keys = [parent?.props.children]
+      .flat()
+      .filter(isElement)
       .flatMap((child) => (child.key === null ? [] : [child.key]));
 
     expect(keys.length).toBeGreaterThan(1);
@@ -235,8 +237,11 @@ describe("TaskExecutionPanel gives every task its own content blocks, so a video
 });
 
 describe('TaskExecutionPanel keeps its footer pinned to the bottom of the window', () => {
-  const panelClasses = () =>
-    String((renderPanel(openTask, { kind: 'complete_task' }).tree as AnyElement).props.className).split(' ');
+  const panelClasses = () => {
+    const { tree } = renderPanel(openTask, { kind: 'complete_task' });
+    assert(isElement(tree), 'the panel is an element');
+    return String(tree.props.className).split(' ');
+  };
 
   it("is at least the window's height under the 3.5rem top bar, so the footer starts at the bottom of the window even on a short task", () => {
     expect(panelClasses()).toContain('min-h-[calc(100dvh-3.5rem)]');

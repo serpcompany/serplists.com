@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, elementAt, firstOf, taskIn } from '../../../support/elements';
 
 import {
   calculateSectionsProgress,
@@ -10,7 +11,14 @@ import {
 } from '@/lib/utils/checklistSections';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
-import { malformedSectionsStoredBeforeValidation } from '../../../fixtures/malformedSections';
+import { normalizePortableSections } from '@/lib/schemas/portableTemplateNormalize';
+import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import {
+  MALFORMED_CONTENTS_A_TEMPLATE_STORED,
+  malformedSectionsStoredBeforeValidation,
+  sectionsWithContents,
+  THE_SAME_CONTENTS_MADE_SAFE,
+} from '../../../fixtures/malformedSections';
 
 describe('section and sub-task display titles', () => {
   it('names a section by its 1-based position', () => {
@@ -29,19 +37,15 @@ describe('section and sub-task display titles', () => {
     expect(getSubItemDisplayTitle({ title: 'Check title' }, 0)).toBe('Check title');
   });
 
-  it('falls back for a missing or non-text title, which content stored before writes were checked can hold', () => {
-    expect(getSectionDisplayTitle({} as { title: string }, 0)).toBe('Section 1');
-    expect(getSubItemDisplayTitle({ title: 42 } as unknown as { title: string }, 0)).toBe('Sub-task 1');
-  });
 });
 
 describe('normalizeSections with entries that are not objects', () => {
   const numericKeys = (value: object) => Object.keys(value).filter((key) => /^\d+$/.test(key));
 
   it('turns text tasks into titled tasks and skips entries that are not tasks, instead of spreading their characters into keys', () => {
-    const [section] = normalizeSections([
+    const section = firstOf(normalizeSections([
       { id: 's1', title: 'Shop', items: ['Milk', '  ', null, 5, ['x'], true, ' Eggs ', { id: 'i-3', title: 'Bread' }] },
-    ]);
+    ]));
 
     expect(section.items.map((item) => item.title)).toEqual(['Milk', 'Eggs', 'Bread']);
     for (const item of section.items) {
@@ -49,11 +53,11 @@ describe('normalizeSections with entries that are not objects', () => {
       expect(item.isCompleted).toBe(false);
       expect(typeof item.id).toBe('string');
     }
-    expect(section.items[2].id).toBe('i-3');
+    expect(elementAt(section.items, 2).id).toBe('i-3');
   });
 
   it('turns text sub-tasks into titled sub-tasks and skips other entries', () => {
-    const [section] = normalizeSections([
+    const section = firstOf(normalizeSections([
       {
         id: 's1',
         title: 'Shop',
@@ -69,11 +73,11 @@ describe('normalizeSections with entries that are not objects', () => {
           },
         ],
       },
-    ]);
+    ]));
 
-    const contents = section.items[0].contents ?? [];
+    const contents = firstOf(section.items).contents ?? [];
     expect(contents).toHaveLength(1);
-    const subItems = contents[0].subItems ?? [];
+    const subItems = firstOf(contents).subItems ?? [];
     expect(subItems.map((subItem) => subItem.title)).toEqual(['ab', 'Cheese']);
     expect(subItems.map((subItem) => subItem.isCompleted)).toEqual([false, true]);
     for (const subItem of subItems) expect(numericKeys(subItem)).toEqual([]);
@@ -106,24 +110,72 @@ describe('normalizeSections on stored content', () => {
   });
 
   it('turns a malformed Sub-task list into an empty one and a non-text value into empty text', () => {
-    const [section] = normalizeSections([{
-      id: 's1',
-      title: 'Launch',
-      items: [{ id: 'i1', title: 'Task', contents: [
-        { type: 'subItems', value: '', subItems: 'x' },
-        { type: 'text', value: {} },
-      ] }],
-    }]);
+    const section = firstOf(normalizeSections(sectionsWithContents(...MALFORMED_CONTENTS_A_TEMPLATE_STORED)));
 
-    expect(section.items[0].contents).toEqual([
-      { type: 'subItems', value: '', subItems: [] },
-      { type: 'text', value: '' },
-    ]);
+    expect(firstOf(section.items).contents).toEqual(THE_SAME_CONTENTS_MADE_SAFE);
     expect(calculateSectionsProgress([section])).toBe(0);
   });
 
+  it('reads a stored numeric content id as text, as the editor and the portable export do, and leaves out any other id that is not text', () => {
+    const stored: unknown = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{
+        id: 'i1',
+        title: 'Task',
+        isCompleted: false,
+        contents: [
+          { id: 7, type: 'text', value: 'Numeric id' },
+          { id: true, type: 'text', value: 'Flag id' },
+          { id: 'c3', type: 'text', value: 'Text id' },
+        ],
+      }],
+    }];
+    const contents = taskIn(normalizeSections(stored), 0, 0).contents;
+
+    expect(contents).toEqual([
+      { id: '7', type: 'text', value: 'Numeric id' },
+      { type: 'text', value: 'Flag id' },
+      { id: 'c3', type: 'text', value: 'Text id' },
+    ]);
+    expect(normalizePortableSections(normalizeSections(stored))).toEqual(normalizePortableSections(stored));
+    const keptEditorContentIds = (sections: unknown) => buildTemplateEditorFormValues({ sections }).sections
+      .flatMap((section) => section.items.flatMap((item) => (item.contents ?? []).map((content) => content.id)))
+      .filter((id) => !id.startsWith('content_'));
+    expect(keptEditorContentIds(normalizeSections(stored))).toEqual(['7', 'c3']);
+    expect(keptEditorContentIds(stored)).toEqual(['7', 'c3']);
+  });
+
+  it('leaves out a stored Sub-task id that is not text, a legacy numeric one included, which template reads, reconciliation and the shared-run merge count as missing', () => {
+    const stored: unknown = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{
+        id: 'i1',
+        title: 'Task',
+        isCompleted: false,
+        contents: [{
+          id: 'c1',
+          type: 'subItems',
+          value: '',
+          subItems: [
+            { id: 7, title: 'Numeric id', isCompleted: true },
+            { id: { legacy: true }, title: 'Object id' },
+            { id: 's3', title: 'Text id' },
+          ],
+        }],
+      }],
+    }];
+
+    expect(contentAt(taskIn(normalizeSections(stored), 0, 0), 0).subItems).toEqual([
+      { title: 'Numeric id', isCompleted: true },
+      { title: 'Object id', isCompleted: false },
+      { id: 's3', title: 'Text id', isCompleted: false },
+    ]);
+  });
+
   it('keeps valid content and legacy completion as before', () => {
-    const [section] = normalizeSections([{
+    const section = firstOf(normalizeSections([{
       id: 's1',
       title: 'Launch',
       items: [{
@@ -133,7 +185,7 @@ describe('normalizeSections on stored content', () => {
         notes: 'Keep',
         contents: [{ id: 'c', type: 'subItems', value: '', subItems: [{ id: 'a', title: 'A', completed: true }] }],
       }],
-    }]);
+    }]));
 
     expect(section.items[0]).toEqual({
       id: 'i1',

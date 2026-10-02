@@ -1,26 +1,21 @@
-import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import yaml from 'js-yaml';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-const stepSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().optional(),
-  uses: z.string().optional(),
-  run: z.string().optional(),
-  env: z.record(z.string()).optional(),
-  with: z.record(z.unknown()).optional(),
-});
-const workflowSchema = z.object({ jobs: z.record(z.object({ steps: z.array(stepSchema).optional() })) });
+import {
+  aWorkDirRemovedAfterAll,
+  expectTheGuardToFailWithNoLogOrAnErrorResult,
+  readWorkflowFile,
+  runNodeScript,
+  withAFakeGitHubApi,
+  workflowStepSchema,
+  writeTheGuardAndItsLog,
+} from '../../support/workflowGuards';
 
-const steps = Object.values(
-  workflowSchema.parse(yaml.load(readFileSync('.github/workflows/maintenance.yml', 'utf8'))).jobs,
-).flatMap((job) => job.steps ?? []);
+const workflowSchema = z.object({ jobs: z.record(z.object({ steps: z.array(workflowStepSchema).optional() })) });
+
+const steps = Object.values(workflowSchema.parse(readWorkflowFile('.github/workflows/maintenance.yml')).jobs).flatMap(
+  (job) => job.steps ?? [],
+);
 const gardenIndex = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
 const gardenStep = steps[gardenIndex];
 const guardIndex = steps.findIndex(
@@ -35,54 +30,32 @@ const STARTED_AT = '2026-10-05T14:00:00Z';
 const minutesAfterStart = (minutes: number) => new Date(Date.parse(STARTED_AT) + minutes * 60_000).toISOString();
 type OpenPr = { number: number; ref: string; createdAt: string };
 
-const workDir = mkdtempSync(path.join(tmpdir(), 'doc-gardening-guard-'));
-afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+const workDir = aWorkDirRemovedAfterAll('doc-gardening-guard-');
 
-const runGuard = async (executionLog: unknown, openPrs: OpenPr[] = [], status = 200) => {
-  const server = createServer((request, response) => {
-    const url = new URL(request.url ?? '/', 'http://localhost');
-    const listsPrs = url.pathname === `/repos/${REPO}/pulls` && url.searchParams.get('base') === 'staging';
-    response.writeHead(listsPrs ? status : 404, { 'content-type': 'application/json' });
-    response.end(
-      JSON.stringify(
-        listsPrs && status === 200
-          ? openPrs.map((pr) => ({ number: pr.number, head: { ref: pr.ref }, created_at: pr.createdAt }))
-          : { message: 'Not allowed' },
-      ),
-    );
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  try {
-    const scriptPath = path.join(workDir, 'guard.cjs');
-    writeFileSync(scriptPath, guard?.run ?? '');
-    let executionFile = '';
-    if (executionLog !== undefined) {
-      executionFile = path.join(workDir, 'execution.json');
-      writeFileSync(executionFile, JSON.stringify(executionLog));
-    }
-    const child = spawn(process.execPath, [scriptPath], {
-      env: {
-        ...process.env,
+const runGuard = (executionLog: unknown, openPrs: OpenPr[] = [], status = 200) =>
+  withAFakeGitHubApi(
+    (url, response) => {
+      const listsPrs = url.pathname === `/repos/${REPO}/pulls` && url.searchParams.get('base') === 'staging';
+      response.writeHead(listsPrs ? status : 404, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify(
+          listsPrs && status === 200
+            ? openPrs.map((pr) => ({ number: pr.number, head: { ref: pr.ref }, created_at: pr.createdAt }))
+            : { message: 'Not allowed' },
+        ),
+      );
+    },
+    (apiUrl) => {
+      const { scriptPath, executionFile } = writeTheGuardAndItsLog(workDir, guard?.run ?? '', executionLog);
+      return runNodeScript(scriptPath, {
         EXECUTION_FILE: executionFile,
         GARDENING_STARTED_AT: STARTED_AT,
-        GITHUB_API_URL: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        GITHUB_API_URL: apiUrl,
         GITHUB_REPOSITORY: REPO,
         GITHUB_TOKEN: 'test-token',
-      },
-    });
-    let output = '';
-    const collect = (chunk: Buffer) => {
-      output += chunk.toString();
-    };
-    child.stdout.on('data', collect);
-    child.stderr.on('data', collect);
-    return await new Promise<{ status: number | null; output: string }>((resolve) => {
-      child.on('close', (code) => resolve({ status: code, output }));
-    });
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-};
+      });
+    },
+  );
 
 const resultEntry = (overrides: Record<string, unknown> = {}) => ({
   type: 'result',
@@ -103,21 +76,21 @@ const deniedCommit = {
 describe('weekly doc gardening workflow', () => {
   it('keeps subagents in the foreground and leaves the repository MCP servers out', () => {
     expect(gardenStep?.id).toBe('garden');
-    expect(gardenStep?.env?.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
-    expect(String(gardenStep?.with?.claude_args)).toContain('--strict-mcp-config');
+    expect(gardenStep?.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
+    expect(String(gardenStep?.with?.['claude_args'])).toContain('--strict-mcp-config');
   });
 
   it('adds no attribution to the commits and PRs it makes', () => {
     const settings = z
       .object({ attribution: z.object({ commit: z.literal(false), pr: z.literal(false) }) })
-      .safeParse(JSON.parse(String(gardenStep?.with?.settings ?? '{}')));
+      .safeParse(JSON.parse(String(gardenStep?.with?.['settings'] ?? '{}')));
     expect(settings.success).toBe(true);
   });
 
   it('runs a guard after Claude that reads its log and the open PRs', () => {
     expect(guard?.run).toBeTruthy();
     expect(guardIndex).toBeGreaterThan(gardenIndex);
-    expect(guard?.env?.GITHUB_TOKEN).toBe('${{ github.token }}');
+    expect(guard?.env?.['GITHUB_TOKEN']).toBe('${{ github.token }}');
     const startIndex = steps.findIndex((step) => step.run?.includes('GARDENING_STARTED_AT='));
     expect(startIndex).toBeGreaterThan(-1);
     expect(startIndex).toBeLessThan(gardenIndex);
@@ -163,9 +136,7 @@ describe('weekly doc gardening workflow', () => {
   });
 
   it('fails when the run left no log, no result, or ended in an error', async () => {
-    expect((await runGuard(undefined)).status).not.toBe(0);
-    expect((await runGuard([{ type: 'system', subtype: 'init' }])).status).not.toBe(0);
-    expect((await runGuard([resultEntry({ is_error: true, subtype: 'error_max_turns' })])).status).not.toBe(0);
+    await expectTheGuardToFailWithNoLogOrAnErrorResult(runGuard, resultEntry);
   });
 
   it('fails when Claude ended with subagents still running', async () => {

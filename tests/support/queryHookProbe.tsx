@@ -1,8 +1,7 @@
-import React, { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { createFakeContainer } from '../fixtures/fakeDom';
+import { renderSettled } from './renderInTheDom';
 
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -13,21 +12,18 @@ export async function mountQueryHook<T>(useHook: () => T) {
     rendered = { value: useHook() };
     return null;
   }
-  const root = createRoot(createFakeContainer() as unknown as Element);
-  await act(async () => {
-    root.render(
-      <QueryClientProvider client={queryClient}>
-        <Probe />
-      </QueryClientProvider>,
-    );
-  });
+  const { unmount } = await renderSettled(
+    <QueryClientProvider client={queryClient}>
+      <Probe />
+    </QueryClientProvider>,
+  );
   return {
     current: () => {
       if (!rendered) throw new Error('The hook did not render');
       return rendered.value;
     },
     unmount: () => {
-      act(() => root.unmount());
+      unmount();
       queryClient.clear();
     },
   };

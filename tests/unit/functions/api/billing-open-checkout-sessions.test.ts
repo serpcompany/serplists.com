@@ -1,19 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { capturedGroup, firstOf } from "../../../support/elements";
+import { sessionMocks } from "../../../support/mockedSession";
+import "../../../support/checkoutWithoutARateLimit";
 import {
+  billingSchemaSql,
   postToBilling,
   seedBillingUser,
   storeSubscriptionRow,
   stripeBillingEnv,
   stripeSubscription,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
-  checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
-}));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const USER_ID = "user-1";
 const CUSTOMER_ID = "cus_1";
@@ -33,11 +30,11 @@ type StripeSession = {
 };
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 let sessions: StripeSession[];
 let idempotentResponses: Map<string, string>;
 let nextSessionId: number;
-let subscriptionsStripeLists: unknown[];
+let subscriptionsStripeLists: ReturnType<typeof stripeSubscription>[];
 let sessionListOverride: (() => Response) | null;
 let whileStripeExpiresTheSession: ((session: StripeSession) => void) | null;
 
@@ -51,7 +48,7 @@ function metadataFrom(form: URLSearchParams): Record<string, string> {
   const metadata: Record<string, string> = {};
   for (const [key, value] of form) {
     const match = /^metadata\[(.+)\]$/.exec(key);
-    if (match) metadata[match[1]] = value;
+    if (match) metadata[capturedGroup(match, 1)] = value;
   }
   return metadata;
 }
@@ -77,7 +74,7 @@ function addSession(overrides: Partial<StripeSession> = {}): StripeSession {
 
 function cancelTheIncompleteSubscriptionItOpened(session: StripeSession) {
   subscriptionsStripeLists = subscriptionsStripeLists.filter(
-    (subscription) => (subscription as { id: string }).id !== session.subscription,
+    (subscription) => subscription.id !== session.subscription,
   );
 }
 
@@ -85,7 +82,7 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   const url = new URL(String(input));
   const method = init?.method ?? "GET";
   const form = new URLSearchParams(String(init?.body ?? ""));
-  const idempotencyKey = (init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"];
+  const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key");
 
   if (method === "GET" && url.pathname === "/v1/subscriptions") {
     return jsonResponse({ object: "list", data: subscriptionsStripeLists, has_more: false });
@@ -127,7 +124,7 @@ const checkout = () => postToBilling(stripeBillingEnv(d1), "checkout");
 function stripeCalls(): string[] {
   return fetchMock.mock.calls.map(([input, init]) => {
     const url = new URL(String(input));
-    return `${(init as RequestInit | undefined)?.method ?? "GET"} ${url.pathname}`;
+    return `${init?.method ?? "GET"} ${url.pathname}`;
   });
 }
 
@@ -155,7 +152,7 @@ function advanceMinutes(minutes: number) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-09-28T10:00:00.000Z"));
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID, CUSTOMER_ID);
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   sessions = [];
@@ -192,9 +189,9 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   it("asks Stripe only for this customer's open sessions", async () => {
     await checkout();
 
-    const [listCall] = fetchMock.mock.calls
+    const listCall = firstOf(fetchMock.mock.calls
       .map(([input]) => new URL(String(input)))
-      .filter((url) => url.pathname === "/v1/checkout/sessions");
+      .filter((url) => url.pathname === "/v1/checkout/sessions"));
     expect(listCall.searchParams.get("customer")).toBe(CUSTOMER_ID);
     expect(listCall.searchParams.get("status")).toBe("open");
   });
@@ -216,7 +213,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 
   it("replaces a matching session that expires within the hour", async () => {
     await checkout();
-    const [nearlyDone] = sessions;
+    const nearlyDone = firstOf(sessions);
     advanceMinutes(24 * 60 - 30);
 
     const result = await checkout();
@@ -230,7 +227,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   it("keeps the newest matching session and expires every other one", async () => {
     await checkout();
     advanceMinutes(10);
-    const [firstSession] = sessions;
+    const firstSession = firstOf(sessions);
     const newerSessionLeftFromBeforeThisCheck = addSession({ metadata: { ...firstSession.metadata } });
     advanceMinutes(10);
 
@@ -309,7 +306,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 describe("POST /api/billing/checkout after a first payment did not go through, which only a retry in its session can pay", () => {
   it("sends the buyer back to the session that holds the incomplete subscription", async () => {
     const first = await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     advanceMinutes(10);
     fetchMock.mockClear();
 
@@ -324,7 +321,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("does the same before the webhook has stored the subscription", async () => {
     const first = await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1", { stored: false });
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1", { stored: false });
     advanceMinutes(10);
 
     const retry = await checkout();
@@ -335,7 +332,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("replaces a session about to expire once expiring it has canceled its subscription", async () => {
     await checkout();
-    const [declined] = sessions;
+    const declined = firstOf(sessions);
     declinePaymentLeavingItsSubscriptionIncomplete(declined, "sub_1");
     advanceMinutes(24 * 60 - 30);
 
@@ -360,7 +357,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("does not reuse the session when another subscription is paid", async () => {
     await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_paid", "active"));
 
     const result = await checkout();
@@ -371,7 +368,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("keeps sending a failed renewal to the Customer Portal even with a session open", async () => {
     await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_old", "past_due"));
 
     const result = await checkout();

@@ -8,7 +8,8 @@ export function rateLimitKeyForIp(ip: string): string {
   const groups = parseIpv6Groups(host);
   if (!groups) return raw;
   if (isIpv4Mapped(groups)) {
-    return [groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff].join('.');
+    const [, , , , , , high = 0, low = 0] = groups;
+    return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
   }
   return `${groups
     .slice(0, 4)
@@ -17,16 +18,17 @@ export function rateLimitKeyForIp(ip: string): string {
 }
 
 function stripPortAndZone(value: string): string {
-  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(value);
-  const host = bracketed ? bracketed[1] : (/^(\d+\.\d+\.\d+\.\d+):\d+$/.exec(value)?.[1] ?? value);
+  const host = /^\[([^\]]+)\](?::\d+)?$/.exec(value)?.[1] ?? /^(\d+\.\d+\.\d+\.\d+):\d+$/.exec(value)?.[1] ?? value;
   const zone = host.indexOf('%');
   return zone > 0 && host.includes(':') ? host.slice(0, zone) : host;
 }
 
-function parseIpv4(value: string): number[] | null {
+type Ipv4Octets = [number, number, number, number];
+
+function parseIpv4(value: string): Ipv4Octets | null {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(value);
   if (!match) return null;
-  const octets = match.slice(1).map(Number);
+  const octets: Ipv4Octets = [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])];
   return octets.every((octet) => octet <= 255) ? octets : null;
 }
 
@@ -51,9 +53,10 @@ function parseIpv6Groups(value: string): number[] | null {
 
   const halves = text.split('::');
   if (halves.length > 2) return null;
+  const [headText = '', restText] = halves;
   const split = (part: string) => (part === '' ? [] : part.split(':'));
-  const head = split(halves[0]);
-  const rest = halves.length === 2 ? split(halves[1]) : [];
+  const head = split(headText);
+  const rest = restText === undefined ? [] : split(restText);
   if (![...head, ...rest].every((group) => HEX_GROUP.test(group))) return null;
 
   const explicit = head.length + rest.length;

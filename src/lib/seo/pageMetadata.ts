@@ -8,9 +8,9 @@ export interface PageSeo {
   title: string;
   description?: string;
   keywords?: readonly string[];
-  path?: string;
+  path?: string | undefined;
   type?: 'website' | 'article';
-  publishedTime?: string;
+  publishedTime?: string | undefined;
   robots?: string;
 }
 
@@ -75,4 +75,9 @@ export function buildPageJsonLd(seo: PageSeo): Record<string, unknown> {
         }
       : {}),
   };
+}
+
+export async function metadataForSeo(seo: Promise<PageSeo | null>, withoutSeo: Metadata = {}): Promise<Metadata> {
+  const resolved = await seo;
+  return resolved ? buildPageMetadata(resolved) : withoutSeo;
 }

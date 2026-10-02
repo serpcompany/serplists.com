@@ -1,42 +1,14 @@
+import { navigation, renderPageAt } from '../../support/mockedNextNavigation';
+import { mockUseRunExecutionModel } from '../../support/checklistRunPage';
 import React from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
-
-import { navigation, renderPageAt } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const mockUseRunExecutionModel = vi.fn();
-vi.mock('@/features/run-execution/useRunExecutionModel', () => ({
-  useRunExecutionModel: (...args: unknown[]) => mockUseRunExecutionModel(...args),
-}));
+import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 
 vi.mock('@/hooks/usePageVisit', async () => (await import('../../support/pageVisitMock')).pageVisitOfAUserStillOnThePage);
-
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com' } }),
-}));
-
-vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplates: () => ({ getRun: vi.fn(), updateRun: vi.fn() }),
-}));
-
-vi.mock('@/contexts/WorkspaceContext', async () => {
-  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
-  return {
-    useWorkspace: () => ({
-      getPermissions: (teamId?: string) => getResourcePermissions(teamId, () => undefined),
-      isRoleUnavailable: () => false,
-      retryWorkspace: vi.fn(),
-    }),
-  };
-});
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const completeDialog = vi.hoisted(() => ({ props: null as null | { onComplete: () => void } }));
 vi.mock('@/components/run-execution/RunCompleteDialog', () => ({
@@ -67,7 +39,7 @@ const run = (status: ChecklistRun['status']): ChecklistRun => ({
   templateVersion: 1,
 });
 
-const renderRun = (options: { completeRun: () => Promise<unknown>; shared?: boolean; status?: ChecklistRun['status'] }) => {
+const renderRun = (options: { completeRun: () => Promise<RunExecutionActionResult>; shared?: boolean; status?: ChecklistRun['status'] }) => {
   mockUseRunExecutionModel.mockReturnValue({
     counts: { progress: 100, subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 2, tasksTotal: 2 },
     completeRun: options.completeRun,
@@ -106,7 +78,7 @@ beforeEach(() => {
 
 describe('Completing a Run', () => {
   it('says "Run completed" and takes the owner or a member to My Runs', async () => {
-    const completeRun = vi.fn().mockResolvedValue({ kind: 'ok', run: run('completed') });
+    const completeRun = vi.fn<() => Promise<RunExecutionActionResult>>().mockResolvedValue({ kind: 'ok', run: run('completed') });
     renderRun({ completeRun });
 
     completeDialog.props?.onComplete();
@@ -117,7 +89,7 @@ describe('Completing a Run', () => {
   });
 
   it('keeps a guest on the shared run', async () => {
-    const completeRun = vi.fn().mockResolvedValue({ kind: 'ok', run: run('completed') });
+    const completeRun = vi.fn<() => Promise<RunExecutionActionResult>>().mockResolvedValue({ kind: 'ok', run: run('completed') });
     renderRun({ completeRun, shared: true });
 
     completeDialog.props?.onComplete();
@@ -128,7 +100,7 @@ describe('Completing a Run', () => {
   });
 
   it('keeps the Run and says why when the completion fails', async () => {
-    const completeRun = vi.fn().mockResolvedValue({ kind: 'error', message: 'Finish every task before completing the run.' });
+    const completeRun = vi.fn<() => Promise<RunExecutionActionResult>>().mockResolvedValue({ kind: 'error', message: 'Finish every task before completing the run.' });
     renderRun({ completeRun });
 
     completeDialog.props?.onComplete();
@@ -141,7 +113,7 @@ describe('Completing a Run', () => {
 
 describe('The shared run page', () => {
   it('says what anyone with the link can do, never that the Run is read-only', () => {
-    const html = renderRun({ completeRun: vi.fn(), shared: true });
+    const html = renderRun({ completeRun: vi.fn<() => Promise<RunExecutionActionResult>>(), shared: true });
 
     expect(html).toContain('Anyone with this link can tick tasks, add notes and complete this Run.');
     expect(html).not.toMatch(/read-only/i);

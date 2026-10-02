@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPublicTemplatesPath,
   isPublicTemplatesDiscoveryPath,
-  resolveConsoleSection,
   resolveRouteShell,
 } from '@/lib/routes';
 
@@ -17,9 +16,6 @@ describe('route helpers', () => {
   it('treats canonical private run routes as console surfaces', () => {
     expect(resolveRouteShell('/dashboard/runs/84fd6800-2309-496f-a0c8-be1c8c01d9bc/')).toBe(
       'console',
-    );
-    expect(resolveConsoleSection('/dashboard/runs/84fd6800-2309-496f-a0c8-be1c8c01d9bc/')).toBe(
-      'runs',
     );
     expect(resolveRouteShell('/share/abc123')).toBe('public');
   });

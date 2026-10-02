@@ -1,23 +1,26 @@
-type StateUpdate<T> = T | ((previous: T) => T);
-type MountedEffect = { dependencies?: readonly unknown[]; cleanup?: () => void };
+import { z } from 'zod';
+
+type MountedEffect = { dependencies: readonly unknown[] | undefined; cleanup: (() => void) | undefined };
 
 const slots = { values: [] as unknown[], next: 0, rendering: false, setWhileRendering: false };
 const mountedEffects = new Map<number, MountedEffect>();
+const initializer = z.function();
+const stateUpdater = z.function().args(z.unknown());
 
-export function useStateKeptBetweenRenders<T>(initial: T | (() => T)) {
+export function useStateKeptBetweenRenders(initial: unknown) {
   const slot = slots.next;
   slots.next += 1;
   if (!(slot in slots.values)) {
-    slots.values[slot] = typeof initial === 'function' ? (initial as () => T)() : initial;
+    slots.values[slot] = typeof initial === 'function' ? initializer.parse(initial)() : initial;
   }
-  const setState = (next: StateUpdate<T>) => {
-    slots.values[slot] = typeof next === 'function' ? (next as (previous: T) => T)(slots.values[slot] as T) : next;
+  const setState = (next: unknown) => {
+    slots.values[slot] = typeof next === 'function' ? stateUpdater.parse(next)(slots.values[slot]) : next;
     if (slots.rendering) slots.setWhileRendering = true;
   };
-  return [slots.values[slot] as T, setState] as const;
+  return [slots.values[slot], setState] as const;
 }
 
-export function useRefKeptBetweenRenders<T>(initial: T) {
+export function useRefKeptBetweenRenders(initial: unknown) {
   const [ref] = useStateKeptBetweenRenders(() => ({ current: initial }));
   return ref;
 }

@@ -29,11 +29,12 @@ type LeaveAnswer = { stays: true } | { stays: false; confirmedGuards: LeaveGuard
 
 const askActiveGuards = (confirmDialog: (message: string) => boolean): LeaveAnswer => {
   const active = Array.from(guards).filter((guard) => guard.shouldConfirm());
-  if (active.length === 0) {
+  const [firstActive] = active;
+  if (!firstActive) {
     return { stays: false, confirmedGuards: active };
   }
 
-  if (!confirmDialog(active[0].message)) {
+  if (!confirmDialog(firstActive.message)) {
     return { stays: true };
   }
 

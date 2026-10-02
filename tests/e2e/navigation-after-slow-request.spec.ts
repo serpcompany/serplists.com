@@ -1,20 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
+import { countCheckoutsSentTo } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
+import { deleteTemplate } from './support/template-editor';
 
 const LATE_NAVIGATION_WINDOW_MS = 500;
 
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
-}
-
-async function deleteTemplate(page: Page, templateId: string) {
-  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
-}
-
 async function createTemplateViaApi(page: Page, title: string): Promise<string> {
-  const template = await apiJson<{ id: string }>(page, '/templates', {
+  const template = await apiJson(page, '/templates', savedTemplateSchema, {
     method: 'POST',
     body: {
       is_public: false,
@@ -44,7 +41,7 @@ async function holdRunCreationUntilReleased(page: Page) {
 
     await held;
     const response = await route.fetch();
-    const body = (await response.json()) as { id?: string };
+    const body = z.object({ id: z.string().optional() }).passthrough().parse(await response.json());
     created.runId = body.id ?? null;
     await route.fulfill({ response });
   });
@@ -58,9 +55,7 @@ test('stays on the page the user went Back to when a public Start Run finishes',
 
   await page.goto('/templates/');
   await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
-  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  const dialog = await startARunFromTheFirstStartRun(page);
   await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/templates\/$/);
@@ -80,9 +75,7 @@ test('stays on the page the user went Back to when a template Start Run finishes
 
   await page.goto('/dashboard/templates/');
   await page.goto(`/dashboard/templates/${templateId}/`);
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
-  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  const dialog = await startARunFromTheFirstStartRun(page);
   await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
@@ -101,11 +94,10 @@ test('opens the new run when the user waits on the template page', async ({ page
   const templateId = await createTemplateViaApi(page, `QA run stays ${Date.now()}`);
 
   await page.goto(`/dashboard/templates/${templateId}/`);
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
+  await startARunFromTheFirstStartRun(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
 
-  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
+  await deleteRun(page, runIdInTheUrl(page));
   await deleteTemplate(page, templateId);
 });
 
@@ -132,22 +124,12 @@ test('does not start checkout from the page the user went Back to when a My Temp
     });
     answered = true;
   });
-  let checkoutRequests = 0;
-  await page.route('**/api/billing/checkout', async (route) => {
-    checkoutRequests += 1;
-    await route.fulfill({
-      body: JSON.stringify({ url: '/pricing/?checkout=stubbed' }),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
+  const checkout = await countCheckoutsSentTo(page, '/pricing/?checkout=stubbed');
 
   await page.goto('/dashboard/runs/');
   await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
-  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  const dialog = await startARunFromTheFirstStartRun(page);
   await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
@@ -156,5 +138,5 @@ test('does not start checkout from the page the user went Back to when a My Temp
   await expect.poll(() => answered).toBe(true);
   await allowTimeForALateNavigation(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  expect(checkoutRequests).toBe(0);
+  expect(checkout.requests).toBe(0);
 });

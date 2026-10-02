@@ -34,8 +34,3 @@ export function capTemplateSlug(slug: string, max: number = TEMPLATE_FIELD_LIMIT
 export function slugifyTemplateSlug(input: string): string {
   return capTemplateSlug(generateSlug(input));
 }
-
-export function appendTemplateSlugSuffix(base: string, suffix: string): string {
-  const cappedBase = capTemplateSlug(base, TEMPLATE_FIELD_LIMITS.slug - suffix.length - 1);
-  return cappedBase ? `${cappedBase}-${suffix}` : suffix;
-}

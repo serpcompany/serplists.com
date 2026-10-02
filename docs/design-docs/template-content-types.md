@@ -38,7 +38,8 @@ such as `/api/uploads/...` is loaded (`safeImageUrl` in `src/lib/utils/safeUrl.t
 Anything else, or an image that fails to load, shows a local "Image unavailable" box.
 The error handler only records the failure: it never sets `src`, and there is no
 remote placeholder, so a broken image makes one request and stops.
-`tests/unit/components/TaskImage.test.tsx` checks this.
+`tests/unit/components/TaskImage.test.tsx` checks this, and ESLint refuses an `onError`
+that sets an image's `src` and a placeholder image host anywhere in `src/`.
 
 An image uploaded into an Image block is shrunk in the browser first, without changing
 what it shows (`optimizeImage` in `src/lib/imageOptimization.ts`; a File block keeps the
@@ -67,7 +68,8 @@ which would drop focus and the caret as someone types past `https://`.
 Text blocks are Markdown, rendered by `MarkdownBlock`; item and template descriptions
 are plain text. Both are shown exactly as saved, so a backslash followed by `n` (in
 code or a Windows path) stays as typed. Seeds and bundled packs store real line breaks;
-`tests/unit/db/officialTemplatesSeed.test.ts` checks the official seed.
+`tests/unit/db/seeds/official-templates.test.ts` checks the official seed and
+`tests/unit/lib/publicTemplatePacks.test.ts` the bundled packs.
 
 The one exception is legacy data: the official seed once stored text blocks as a single
 line with a literal backslash-n for each line break. `expandLegacyEscapedNewlines`

@@ -15,7 +15,7 @@ export type TeamInviteDelivery =
     };
 
 type BuildTeamInviteDeliveryOptions = {
-  frontendUrl?: string;
+  frontendUrl?: string | undefined;
   request: Request;
   token: string;
 };

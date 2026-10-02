@@ -1,19 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+import { apiEnv, withoutVars, type OptionalEnvVar } from "../../../support/apiEnv";
+import type { Env } from "@functions/api/types";
 
 const USER_ID = "user-1";
 
 let d1: SqliteD1;
 
-function env(overrides: Record<string, unknown> = {}) {
-  return {
+function env(overrides: Partial<Env> = {}): Env {
+  return apiEnv({
     DB: d1.binding,
     STRIPE_SECRET_KEY: "sk_test_entitlements",
     STRIPE_PRO_PRICE_ID: PRO_PRICE_ID,
     ...overrides,
-  } as never;
+  });
 }
 
 function insertOverride(plan: string, expiresAt: number | null = null) {
@@ -27,7 +29,7 @@ function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) 
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
 });
 
@@ -64,7 +66,10 @@ describe("getEntitlementsForUser from Stripe subscriptions, granting Pro only fo
 
 describe("getEntitlementsForUser after the Pro price changes", () => {
   const afterPriceChange = (legacyPriceIds?: string) =>
-    env({ STRIPE_PRO_PRICE_ID: "price_new", STRIPE_PRO_LEGACY_PRICE_IDS: legacyPriceIds });
+    env({
+      STRIPE_PRO_PRICE_ID: "price_new",
+      ...(legacyPriceIds === undefined ? {} : { STRIPE_PRO_LEGACY_PRICE_IDS: legacyPriceIds }),
+    });
 
   it("keeps Pro for a subscriber still on a listed legacy price", async () => {
     insertSubscription("sub_1", "active", "price_old");
@@ -124,14 +129,14 @@ describe("getEntitlementsForUser with a manual override", () => {
 });
 
 describe("getEntitlementsForUser for a seeded persona email, which anyone can register on a deployment", () => {
-  it.each([
-    ["admin@test.com", {}],
-    ["JANE@TEST.COM", {}],
-    ["jane@test.com", { STRIPE_SECRET_KEY: undefined, STRIPE_PRO_PRICE_ID: undefined }],
-  ])("does not grant Pro to %s without an override or subscription", async (email, envOverrides) => {
+  it.each<[string, OptionalEnvVar[]]>([
+    ["admin@test.com", []],
+    ["JANE@TEST.COM", []],
+    ["jane@test.com", ["STRIPE_SECRET_KEY", "STRIPE_PRO_PRICE_ID"]],
+  ])("does not grant Pro to %s without an override or subscription", async (email, varsLeftOut) => {
     d1.sqlite.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, USER_ID);
 
-    const entitlements = await getEntitlementsForUser(env(envOverrides), USER_ID);
+    const entitlements = await getEntitlementsForUser(withoutVars(env(), varsLeftOut), USER_ID);
 
     expect(entitlements.plan).toBe("free");
     expect(entitlements.source).toBe("free");

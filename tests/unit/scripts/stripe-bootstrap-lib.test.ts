@@ -6,7 +6,8 @@ import {
   describePrice,
   ensurePrice,
   PRO_MONTHLY_CENTS,
-} from "../../../scripts/stripe/_bootstrap-lib.mjs";
+} from "../../../scripts/stripe/_bootstrap-lib";
+import { objectContaining } from "../../support/asymmetricMatchers";
 
 const MONTHLY = {
   productId: "prod_pro",
@@ -67,10 +68,10 @@ describe("ensurePrice", () => {
 
     await ensurePrice({ request, ...MONTHLY });
 
-    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(request).toHaveBeenLastCalledWith(objectContaining({
       method: "POST",
       path: "/v1/prices",
-      form: expect.objectContaining({
+      form: objectContaining({
         product: "prod_pro",
         currency: "usd",
         unit_amount: "900",

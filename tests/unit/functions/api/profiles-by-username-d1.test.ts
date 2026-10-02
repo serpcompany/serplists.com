@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
+import { capturedGroup } from '../../../support/elements';
 import { handleProfileByUsername } from '@functions/api/handlers/auth';
 import { buildProfilePreviewPath } from '@/lib/routes';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { apiEnv } from '../../../support/apiEnv';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 describe('GET /api/profiles/by-username casing, on the migrated tables with their real collation and index', () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  let executed: Array<{ query: string; params: unknown[] }>;
+  let database: SqliteD1;
 
   function addUser(id: string, username: string) {
     database.sqlite
@@ -16,27 +17,11 @@ describe('GET /api/profiles/by-username casing, on the migrated tables with thei
   async function lookUp(username: string) {
     const url = new URL('http://localhost/api/profiles/by-username');
     url.searchParams.set('username', username);
-    const env = {
-      DB: {
-        ...database.d1,
-        prepare: (query: string) => {
-          const prepared = database.d1.prepare(query);
-          return {
-            ...prepared,
-            bind: (...params: unknown[]) => {
-              executed.push({ query, params });
-              return prepared.bind(...params);
-            },
-          };
-        },
-      },
-    } as any;
-    return handleProfileByUsername(new Request(url), env);
+    return handleProfileByUsername(new Request(url), apiEnv({ DB: database.binding }));
   }
 
   beforeEach(() => {
-    database = createMigratedD1();
-    executed = [];
+    database = new SqliteD1();
     addUser('john', 'johndoe');
   });
 
@@ -74,7 +59,8 @@ describe('GET /api/profiles/by-username casing, on the migrated tables with thei
     addUser('newer', 'janedoe');
 
     const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
-    const previewUsername = decodeURIComponent(/^\/profile\/([^/]+)\/$/.exec(previewPath!)![1]!);
+    assert.exists(previewPath);
+    const previewUsername = decodeURIComponent(capturedGroup(/^\/profile\/([^/]+)\/$/.exec(previewPath), 1));
 
     expect(await (await lookUp(previewUsername)).json()).toMatchObject({ id: 'legacy' });
   });
@@ -90,12 +76,9 @@ describe('GET /api/profiles/by-username casing, on the migrated tables with thei
   it('looks the username up through idx_users_username, not a table scan', async () => {
     await lookUp('JohnDoe');
 
-    const lookup = executed.find(({ query }) => query.includes('"username"'));
-    expect(lookup).toBeDefined();
-    const plan = database.sqlite
-      .prepare(`EXPLAIN QUERY PLAN ${lookup!.query}`)
-      .all(...(lookup!.params as string[]))
-      .map((row) => String((row as { detail: string }).detail));
+    const lookup = database.queries.find(({ sql }) => sql.includes('"username"'));
+    assert.exists(lookup);
+    const plan = database.queryPlan(lookup);
     expect(plan.join('\n')).toMatch(/USING (COVERING )?INDEX idx_users_username/);
     expect(plan.join('\n')).not.toMatch(/SCAN users/);
   });

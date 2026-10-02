@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
+import { onlyElement } from "../../support/elements";
+import { z } from "zod";
 import * as drizzleSchema from "../../../db/schema/index";
 import {
   REQUIRED_D1_COLUMN_CONSTRAINTS,
@@ -20,23 +22,23 @@ import {
   mapPragmaResults,
   mapTriggerResults,
   splitSchemaQueryResults,
-} from "../../../scripts/check-production-d1-schema-lib.mjs";
+  type ByTable,
+  type RequiredIndex,
+} from "../../../scripts/check-production-d1-schema-lib";
 
-type RequiredIndex = { name: string; unique?: boolean; partial?: boolean };
-type RequiredForeignKey = { from: string; table: string; to: string; onDelete?: string };
-type SqlOnlyTrigger = { name: string; table: string; definition: string };
+const sqlOnlySchema = z.object({
+  triggers: z.array(z.object({ name: z.string(), table: z.string(), definition: z.string() })),
+});
 
 const drizzleTables = Object.values(drizzleSchema as Record<string, unknown>)
   .filter((value): value is SQLiteTable => is(value, SQLiteTable))
   .map((table) => getTableConfig(table));
 
-const sqlOnlyTriggers = (JSON.parse(readFileSync("db/sql-only-schema.json", "utf8")) as {
-  triggers: SqlOnlyTrigger[];
-}).triggers;
+const sqlOnlyTriggers = sqlOnlySchema.parse(JSON.parse(readFileSync("db/sql-only-schema.json", "utf8"))).triggers;
 
 const ADDED_IN_0024 = ["content_version", "template_version", "revision", "retired_items"];
 
-function sortIndexesByTable(record: Record<string, RequiredIndex[]>) {
+function sortIndexesByTable(record: ByTable<readonly RequiredIndex[]>) {
   return Object.fromEntries(
     Object.entries(record)
       .filter(([, indexes]) => indexes.length > 0)
@@ -49,10 +51,10 @@ function sortIndexesByTable(record: Record<string, RequiredIndex[]>) {
   );
 }
 
-describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db/schema/", () => {
+describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.ts matches db/schema/", () => {
   it("requires every table and column in the Drizzle schema", () => {
     const required = Object.fromEntries(
-      Object.entries(REQUIRED_D1_SCHEMA as Record<string, string[]>).map(([table, columns]) => [
+      Object.entries(REQUIRED_D1_SCHEMA).map(([table, columns]) => [
         table,
         [...columns].sort(),
       ]),
@@ -76,17 +78,13 @@ describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db
       ]),
     );
 
-    expect(sortIndexesByTable(REQUIRED_D1_INDEXES as Record<string, RequiredIndex[]>)).toEqual(
+    expect(sortIndexesByTable(REQUIRED_D1_INDEXES)).toEqual(
       sortIndexesByTable(drizzle),
     );
   });
 
   it("only requires column constraints and foreign keys that Drizzle declares", () => {
-    const constraints = REQUIRED_D1_COLUMN_CONSTRAINTS as Record<
-      string,
-      Record<string, { notNull?: boolean; primaryKey?: boolean }>
-    >;
-    for (const [tableName, columns] of Object.entries(constraints)) {
+    for (const [tableName, columns] of Object.entries(REQUIRED_D1_COLUMN_CONSTRAINTS)) {
       const table = drizzleTables.find((candidate) => candidate.name === tableName);
       const tablePrimaryKeyColumns = (table?.primaryKeys ?? []).flatMap((key) => key.columns.map((column) => column.name));
       for (const [columnName, required] of Object.entries(columns)) {
@@ -97,8 +95,7 @@ describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db
       }
     }
 
-    const foreignKeysByTable = REQUIRED_D1_FOREIGN_KEYS as Record<string, RequiredForeignKey[]>;
-    for (const [tableName, foreignKeys] of Object.entries(foreignKeysByTable)) {
+    for (const [tableName, foreignKeys] of Object.entries(REQUIRED_D1_FOREIGN_KEYS)) {
       const table = drizzleTables.find((candidate) => candidate.name === tableName);
       const declared = (table?.foreignKeys ?? []).map((foreignKey) => {
         const reference = foreignKey.reference();
@@ -121,7 +118,7 @@ describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db
 
   it("reports the 0024 columns missing from a database that stopped at 0023", () => {
     const actual = Object.fromEntries(
-      Object.entries(REQUIRED_D1_SCHEMA as Record<string, string[]>).map(([table, columns]) => [
+      Object.entries(REQUIRED_D1_SCHEMA).map(([table, columns]) => [
         table,
         columns.filter((column) => !ADDED_IN_0024.includes(column)),
       ]),
@@ -160,8 +157,8 @@ describe("schema query", () => {
 });
 
 describe("trigger checks", () => {
-  const ownerInsert = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_owner_users_insert")!;
-  const templatesUpdate = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_templates_update")!;
+  const ownerInsert = onlyElement(sqlOnlyTriggers.filter((trigger) => trigger.name === "sitemap_owner_users_insert"));
+  const templatesUpdate = onlyElement(sqlOnlyTriggers.filter((trigger) => trigger.name === "sitemap_templates_update"));
 
   it("accepts a trigger whose SQL differs only in whitespace and quoting", () => {
     const actual = mapTriggerResults({

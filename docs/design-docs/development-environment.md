@@ -27,7 +27,7 @@ same on Windows, macOS, Linux and CI.
 existing file), creates local D1 if the checkout has none (otherwise applies pending
 migrations), seeds whatever seed data is missing, and installs the Playwright browser.
 The seed decision comes from the database, not
-its directory: `tsx scripts/data/local-d1-data.ts seed-status` reports whether the
+its directory: `node --import tsx scripts/data/local-d1-data.ts seed-status` reports whether the
 test data, the official Templates and the official login are there, and setup runs
 only the missing stages, so a seed that failed or was interrupted is finished on the
 next run and data you created is never reset. A database seeded before the test
@@ -46,12 +46,15 @@ through `wrangler dev`. The pages read `NEXT_PUBLIC_*` variables through `src/en
 which Next.js inlines when it builds or serves them: `pnpm run dev:all` hands `.dev.vars`
 to `next dev`, and a build takes them from its shell. Pages call the API on their own
 origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another API. `next build`
-refuses a loopback or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`, which
+refuses a local or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`, which
 `next.config.ts` runs), since every visitor's pages would send their sign-in and API
 requests there, unless `ALLOW_LOCAL_API_URL=1` (a build you only serve locally). At
 runtime `src/lib/apiBaseUrl.ts` ignores one unless the page itself is served from a
-loopback host. After changing `wrangler.toml` or the variable
-names in `.dev.vars`, `pnpm run cf-typegen` regenerates `cloudflare-env.d.ts`.
+local development host (`isLocalDevelopmentHostname`): a name for this machine
+(`localhost`, `*.localhost`, `127.0.0.0/8` or `::1`, `isLoopbackHostname`) or `0.0.0.0`, the
+address of a dev server bound to all interfaces. The build refuses the same hosts. After
+changing `wrangler.toml` or the variable names in `.dev.vars`, `pnpm run cf-typegen`
+regenerates `cloudflare-env.d.ts`.
 
 ## Run
 
@@ -65,7 +68,7 @@ pnpm run preview    # build with OpenNext and serve the Worker in workerd, as de
 `dev:all` runs `next dev` on port `3000`, or the next free port. A port counts as free
 only when nothing accepts a connection on `127.0.0.1` or `::1` and it binds on
 `127.0.0.1`, `::1`, `0.0.0.0` and `::` in turn (`isPortAvailable` in
-`scripts/dev-auto-lib.mjs`): on Windows a bind to one address succeeds while another
+`scripts/dev-auto-lib.ts`): on Windows a bind to one address succeeds while another
 process holds the port on a different one. A connection probe that is refused or gets no
 answer within half a second leaves the answer to the binds, since on some Windows setups a
 refused loopback connection takes a second or more, and an address the machine lacks
@@ -77,7 +80,7 @@ The Worker vars that name the server cannot come from `.dev.vars`, since the por
 picked at start: the launcher passes `FRONTEND_URL` (the server's origin),
 `CORS_ALLOWED_ORIGINS` (the configured origins plus that one) and the auth secret to
 `next dev` in `SERPLISTS_DEV_BINDINGS`, and `next.config.ts` sets them over the bindings
-(`scripts/lib/dev-bindings.mjs`), so the API's own links (Stripe returns, invites) come
+(`scripts/lib/dev-bindings.ts`), so the API's own links (Stripe returns, invites) come
 back to this server. It sets them once `initOpenNextCloudflareForDev()` has set up the
 bindings; Next.js also loads the config in a process that serves no requests and has no
 bindings, where nothing is set.
@@ -89,7 +92,7 @@ Windows).
 
 The session records the launcher's pid with its process start time. A launch or
 `dev:stop` trusts a recorded pid only while that pid still runs
-`scripts/dev-auto.mjs` and started at the recorded time (within five seconds: `ps` reports
+`scripts/dev-auto.ts` and started at the recorded time (within five seconds: `ps` reports
 whole seconds, and Node takes a moment to start), because the OS reuses the pid of a
 launcher that was killed. So a stale session file never makes `dev:all`
 skip starting, and `dev:stop` never kills an unrelated process: it skips (and
@@ -183,6 +186,7 @@ commands and the staging/production model are in
 
 ```bash
 pnpm run verify           # pre-PR gate
+pnpm run typecheck        # tsc for the app, scripts, API and tests
 pnpm run test:run         # unit tests (pnpm run test for watch mode)
 pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
@@ -190,10 +194,15 @@ pnpm run test:e2e:full    # every browser spec on the same stack
 pnpm run test:coverage
 ```
 
+Vitest and Playwright run a test without checking its types, so a passing test can still
+fail `pnpm run typecheck`, which checks every test, browser specs included, through
+`tests/tsconfig.json`. To check only the tests, run
+`pnpm exec tsc -p tests/tsconfig.json --noEmit` (about 30 seconds).
+
 The browser tests run the production build: `test:smoke` and `test:e2e:full` build it
 with OpenNext and `SITE_ENV=production`, wipe, migrate and seed their own D1 in
 `.wrangler/smoke-state`, and serve the build with `opennextjs-cloudflare preview` (workerd)
-on a free port from `4173` (`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`).
+on a free port from `4173` (`tests/e2e/run-smoke.ts`, `tests/e2e/preview-server.ts`).
 `test:e2e:full` passes `--all`, which drops the `@smoke` filter, and the runner hands every
 argument it does not know to Playwright, so `pnpm run test:e2e:full --skip-build
 tests/e2e/<name>.spec.ts` runs one spec file. Leave out pnpm's `--`: pnpm passes it on, and
@@ -209,13 +218,14 @@ run on one Playwright worker: one workerd process renders every page and prefetc
 The preview gets the Worker vars that name its origin (`FRONTEND_URL`,
 `CORS_ALLOWED_ORIGINS`), `SITE_ENV` and the auth secret (the shell's `BETTER_AUTH_SECRET` or
 legacy `JWT_SECRET`, else a fixed test secret) as `--var` arguments, which override `.dev.vars`
-(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`). When Playwright stops the preview at
-the end of a run, `preview-server.mjs` kills its whole process tree: on Windows, workerd would
+(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.ts`). When Playwright stops the preview at
+the end of a run, `preview-server.ts` kills its whole process tree: on Windows, workerd would
 otherwise keep the port.
 
 Browser failures keep a trace, video, and screenshot under `tests/test-results/`
-(`retain-on-failure`: retries are off, so `on-first-retry` would keep nothing), and CI
-uploads that folder as the `playwright-evidence` artifact when a run fails;
+(`retain-on-failure`: retries are off, so `on-first-retry` would keep nothing), and the
+browser tests workflow uploads that folder as the `playwright-evidence` artifact when a run
+fails;
 open a trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure
 also has an `error-context.md` with the page snapshot at the moment it failed. The
 server's output from the latest browser test run, API lines included, is in
@@ -237,7 +247,7 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Area | Scripts |
 | --- | --- |
 | Run | `setup`, `dev`, `dev:all`, `dev:api`, `dev:auto`, `dev:stop`, `build`, `build:worker`, `preview`, `cf-typegen`, `ui:snap` |
-| Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `comments:check`, `deps:check`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report`, `sre:dup` |
+| Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `comments:check`, `deps:check`, `duplicates:check`, `deadcode:check`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report` |
 | Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
 | Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `headers:generate` (the build's `public/_headers`), `templates:generate`, `templates:render-markdown`, `docs:references` |
 | Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
@@ -253,25 +263,55 @@ as they are.
 
 ## Writing scripts
 
+Scripts are TypeScript, and every one runs in Node with tsx's loader:
+`node --import tsx scripts/<name>.ts`, the same in `package.json`, the Lefthook hooks and the
+workflows. Code that starts a script calls `execScript()` or `buildScriptInvocation()` from
+`scripts/lib/run-tool.ts`, which pass the loader by its absolute URL, so the script may run
+in any folder. Why this way:
+- Node's own type stripping needs `--experimental-strip-types` before Node 22.18 (this machine
+  runs 22.16; CI's `22` is newer), and it only strips: every import must name its `.ts` file,
+  so the extensionless imports and the `@/` alias of the app code that the seed, sitemap and
+  profiling scripts load do not resolve.
+- The `tsx` command runs the script in a second Node process that it starts and relays
+  signals to. That takes longer to start, and one process per script keeps Ctrl+C, exit codes
+  and the pid the dev launcher records as they were.
+- Start-up of `secret-scan` on one file, the pre-commit hook's case, on the owner's machine:
+  322 ms as JavaScript, 365 ms with Node's type stripping, 534 ms with `node --import tsx` and
+  622 ms with the `tsx` command. The hook runs it beside ESLint, which takes about 2.5 s, so
+  a commit takes no longer.
+
+tsx looks for `tsconfig.json` from the folder a script runs in, upward, for the `@/` alias; a
+script started from a folder outside the checkout that needs the alias gets
+`TSX_TSCONFIG_PATH`. ESLint loads `eslint.config.ts`, `eslint.type-aware.config.ts` and the
+rules in `scripts/eslint-rules/` through jiti, which ESLint uses for a TypeScript config
+(ESLint 9.24 and later); a run on one file takes about 0.2 s longer than with a JavaScript
+config. So nothing under `scripts/` is JavaScript, and no declaration file sits beside a
+script: `tests/unit/config/typecheck-coverage.test.ts` fails on a `.js`, `.mjs` or `.cjs`
+file there, or a `.d.mts` or `.d.cts`, unless a root config that its tool reads without a
+TypeScript loader imports it. Those are `.dependency-cruiser.cjs` and `postcss.config.js`;
+neither imports anything from `scripts/` today. `scripts/lib/postcss-tokenize.d.ts` declares
+postcss's tokenizer subpath, which ships no types, and its tokens stay `unknown` until a Zod
+schema reads them.
+
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
-`scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dependency's bin script
-(wrangler, next, opennextjs-cloudflare, tsx, playwright, drizzle-kit) with the current Node,
-and `execPnpm` runs pnpm itself through the pnpm that launched the script (`npm_execpath`).
-A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin. Outside
-`pnpm run` there is no pnpm script to reuse, so on Windows `execPnpm` goes through `cmd.exe`
-and refuses any argument that is not a plain token. Never spawn `npx` or `pnpm` by name: on
-Windows they are `.cmd` shims, so a spawn without a shell fails with `ENOENT` (or, since
-Node 18.20.2, `EINVAL` for `npx.cmd`), and passing arguments through a shell lets `cmd.exe`
-reinterpret characters such as `&`, `^` and `%` in values like the auth secret.
-`tests/unit/scripts/tool-spawns.test.ts` fails when a script names `npx` or `pnpm` as a
-command.
+`scripts/lib/run-tool.ts`: `execTool`/`spawnTool` run a dependency's bin script
+(wrangler, next, opennextjs-cloudflare, playwright, drizzle-kit) with the current Node,
+and `execScript` and `buildScriptInvocation` run a script with tsx's loader.
+A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin.
+Never spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
+shell fails with `ENOENT` (or, since Node 18.20.2, `EINVAL` for `npx.cmd`), and passing
+arguments through a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in
+values like the auth secret.
+ESLint refuses `npx` or `pnpm` named as a command in `scripts/`, `tests/e2e/` and
+`tests/integration/` (`serplists/restricted-code` with the conventions in
+`scripts/eslint-rules/code-conventions.ts`), outside `scripts/lib/run-tool.ts`.
 
 `killPidTree` and `killProcessTree` stop a process with everything it started: on Windows
 they end the tree with `taskkill`, since the children (Next.js, workerd) would otherwise
 keep running and hold their ports; elsewhere the process gets the signal, which the dev
 launcher and Wrangler pass on. `opennextjs-cloudflare preview` itself hands its extra
 arguments to `wrangler dev` through a shell without quoting them, so the smoke runner
-(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`) and `d1:profile` pass it only plain
+(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.ts`) and `d1:profile` pass it only plain
 values, with no spaces or shell characters.
 
 A script that opens local D1 with Wrangler's `getPlatformProxy()` passes `envFiles` a file
@@ -285,7 +325,7 @@ reads an empty list as leave to load `.dev.vars`, and a list of missing files lo
 fonts and images as binary, so a Windows clone gets LF even with Git for Windows'
 default `core.autocrlf=true`. Generators always write LF. The `--check` scripts
 (`db:schema:check`, `schema:portable:check`, `sitemap:check`) and `templates:check`
-compare through `scripts/lib/line-endings.mjs`, which ignores CRLF versus LF but
+compare through `scripts/lib/line-endings.ts`, which ignores CRLF versus LF but
 still fails on any other difference, including a missing final newline.
 `tests/unit/scripts/line-endings.test.ts` fails if a binary file is not marked
 binary or a CRLF file reaches the index.

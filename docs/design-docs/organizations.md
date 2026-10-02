@@ -35,7 +35,11 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 Run permissions (`functions/api/utils/run-access.ts`) follow this table for an
 Organization run (reading needs `viewer`, saving `runner`, archiving and restoring
 `admin`), and a Personal run belongs to its owner. An archived run can only be read
-through its history or restored.
+through its history or restored. Runs and Templates decide this with one helper over
+their ownership columns (`ownerGrants` in `functions/api/utils/owner-access.ts`): with a
+`team_id`, an active member whose role grants the action; without one, the `user_id`
+alone. A Template counts its `team_id` only while its `owner_type` is `team`, so a
+Personal Template that still names an Organization stays its owner's.
 
 There must be exactly one active `owner` role per Organization. Role transfers demote the current `owner` to `admin` and promote the selected active member to `owner`.
 
@@ -149,7 +153,7 @@ The API response already uses a `delivery` object so email can be added later wi
 ## UI Flow
 
 - Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
-- The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
+- The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`. Only `WorkspaceContext` writes it: creating an Organization or accepting an incoming invite on `/dashboard/settings/` selects that Organization through `selectWorkspace`, which stores it.
 - Every tab shares that key, so it only seeds a tab: it is read once per signed-in user. After that a tab keeps its own selection and never follows a context another tab stored (`src/contexts/workspaceSelection.ts`).
 - A stored Organization stays selected until a teams list from the server confirms or rules it out. Only a settled, successful list that leaves it out (membership removed, or a stale id) falls back to Personal, and the stored id is left as it is. Settled and loaded come from the query's `fetchStatus` and `data` (`describeTeamsQuery`), since React Query leaves `isLoading` and `isFetching` false both after a failed first load and while a request is paused offline. An Organization the tab just created or joined shows at once from the provider's own state (`rememberTeam`), but it is added to the cached list only when the server already sent one, so accepting an invite after the teams request failed never reads as a list without the stored Organization. `rememberTeam` also cancels a teams request in flight, which read the server before the change and would drop the Organization when it landed; the caller then calls `refreshTeams()`, the only request that confirms the stored Organization when no list was loaded. A remembered Organization lasts until the next list the server sends, and never outlives the signed-in user. Selecting a context records it as the tab's own choice even when it is already selected, so an Organization the tab just created or joined stays selected while the teams query catches up. While the teams request is loading, paused offline, or failed, `workspaceStatus` is `loading` or `error`: the Template and Run lists stay disabled (the public catalog, the same for everyone, still loads), the switcher never reads "Personal", and a create, run, import or copy of a public template that would go to the active context is refused (the template detail page's copy button reads "Loading..." and stays disabled, so it never shows the Personal plan's label). On `error`, console pages show "Couldn't load your Organizations" with Retry and Continue in Personal, and the switcher offers Personal and a retry. The public template page, the one public page that acts in the active context, shows the same notice inline (`WorkspaceErrorNotice`) above the template, and its Save labels never ask for an upgrade while the context is unconfirmed. A Personal context never waits on, or fails with, the teams request. It still says when the request failed with no list (`teamsUnavailable`): the switcher's menu shows "Couldn't load your Organizations" with a retry, Settings shows that error with Retry instead of an empty Organization list, and an Organization's run, or the Start Run of its private Template, opened from another context shows the error with Retry instead of a silent "View only" (`isRoleUnavailable`), without Continue in Personal, which would not change the Organization that owns the run or Template. Its actions stay off until the role is known.
 - Templates and Runs invalidate React Query caches when the context changes ([FRONTEND.md](../FRONTEND.md#data-and-state)). A switch compares the tab's selected id, not the resolved context, so a stored Organization that was never confirmed still counts as the context being left.
@@ -192,7 +196,7 @@ The local seed includes Organization data, memberships, invites, entitlement ove
 Targeted checks:
 
 ```bash
-pnpm run test:run tests/unit/functions/api/teams-handler.test.ts
+pnpm run test:run tests/unit/functions/api/teams-handler
 pnpm run test:run tests/unit/components/TeamSettingsSection.test.tsx
 pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts
 pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts

@@ -14,7 +14,9 @@ pattern it follows, and its proof pass (SERP's UI runbook).
 - **Components:** shadcn/ui vendored in `src/components/ui/`, configured by
   `components.json` (style `base-nova` on Base UI primitives, base color `neutral`, CSS
   variables, `lucide` icons), as in the approved zenbujapanese.com stack.
-  Reference: [shadcn/ui docs](references/shadcn-ui-llms.txt).
+  Reference: [shadcn/ui docs](references/shadcn-ui-llms.txt). A primitive keeps only the
+  parts screens use: `pnpm run deadcode:check` fails on an unused export, so delete the parts
+  a `shadcn add` brings that nothing renders.
 - **Styling:** Tailwind CSS 4 with `tw-animate-css`, `shadcn/tailwind.css` and
   `@tailwindcss/typography`, all loaded by `src/app/globals.css`, which holds the shadcn
   default theme tokens (neutral, light and dark) unchanged: no custom colors, fonts, radii
@@ -71,7 +73,7 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | --- | --- | --- |
 | Shell switch | `src/components/Layout.tsx` | Picks the console shell or the public shell from the path, unless it is given one: the 404 page's `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives the console shell only to a signed-in user on a missing console path, after the session check |
 | `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the `SiteNavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
-| `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (per link a title, which names it, and a muted description, which describes it), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links. It composes shadcn's root itself, since shadcn's takes no `render` for the popup, to render Base UI's menu popup as a `div`: as a `<nav>`, whose links the trigger claims, it was an empty, unlabelled landmark |
+| `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (per link a title, which names it, and a muted description, which describes it), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links. It composes the root itself (shadcn's takes no `render` for the popup, so `navigation-menu.tsx` vendors none), to render Base UI's menu popup as a `div`: as a `<nav>`, whose links the trigger claims, it was an empty, unlabelled landmark |
 | `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` (Templates, Company, Support), each titled by an `h2` |
 | `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and, from `md` up, the `SiteNavigationMenu` aligned right), the page and the site footer |
 | `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. Its rows are 44px tall, full-size targets (32px squares when collapsed). On phones it opens as its own sheet |
@@ -146,7 +148,7 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   `CardTitle` (`card.tsx`) renders a heading, so card titles stay in the page's outline: an
   `h3`, as before the move to base-nova, unless `as` names the level where the card sits. A
   card right under the page's `h1` passes `as="h2"`, and the headings inside it move up with
-  it (`tests/unit/components/ui/card.test.tsx`). `buttonVariants` (`button.tsx`) merges its
+  it (`tests/unit/components/ui/card.test.tsx`). `buttonVariants` (`button-variants.ts`) merges its
   classes with `cn`: unmerged, the base's `border-transparent` beats the outline variant's
   `border-border`, and a link styled as an outline button showed no border in the light
   theme (`tests/unit/components/ui/button.test.ts`). The sonner `Toaster` (`sonner.tsx`)
@@ -156,9 +158,11 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   `EmptyTitle` and `AlertTitle` render a `div`: put a heading inside when the page needs
   one, as the library's empty state does.
 - shadcn's sidebar is split by responsibility to stay under 500 lines:
-  `sidebar-provider.tsx` (the context, its cookie and the keyboard shortcut),
-  `sidebar-menu.tsx` (the menu parts) and `sidebar.tsx` (the rest), which re-exports the
-  other two. Import from `sidebar`.
+  `sidebar-provider.tsx` (the provider, its cookie and the keyboard shortcut),
+  `use-sidebar.ts` (the context and `useSidebar`), `sidebar-menu.tsx` (the menu parts) and
+  `sidebar.tsx` (the rest), which re-exports the provider and the menu parts. Import the
+  components from `sidebar` and `useSidebar` from `use-sidebar`. The provider reads the phone
+  width with `useMediaQuery`, as the views do.
 - The app's own: `FileUpload` (`file-upload.tsx`, with the upload and its toasts in
   `file-upload-flow.ts`), `EmbedField` ([embed blocks](design-docs/template-content-types.md#embed-blocks)),
   `RunNameDialog` (the [Start a Run dialog](design-docs/ui-screen-inventory.md#start-a-run-dialog)),
@@ -241,7 +245,7 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   header's Outline button opens it in a sheet (`TemplateEditorOutline`), and Preview moves
   into the header's More actions on phones.
 - A layout whose structure (not only its styling) changes at a breakpoint reads the width
-  with `useMediaQuery` (`src/hooks/useMediaQuery.ts`), which renders its server value until
+  with `useMediaQuery` (`src/lib/useMediaQuery.ts`), which renders its server value until
   the browser answers, so the page never mounts both layouts; the editor renders the
   outline's Card or its Sheet this way. Plain CSS breakpoints stay the default.
 - Controls used again and again keep their place. The run page's task footer (Previous,

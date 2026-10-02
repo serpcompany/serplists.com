@@ -3,6 +3,16 @@ import { z } from "zod";
 import type { ChecklistTemplate } from "@/types/checklist";
 import { hasCurrentFileInfo, mediaSourceTypeFor } from "@/lib/utils/mediaSource";
 import {
+  isContentRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  type ContentRecord,
+  type SectionRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from "@/lib/schemas/jsonRecords";
+import {
   buildTemplateEditorDetailsFormValues,
   normalizeTemplateEditorDetailsForSave,
   templateEditorDetailsSchema,
@@ -124,11 +134,6 @@ export function createTemplateEditorSection(): TemplateEditorSection {
 
 const TEMPLATE_EDITOR_CONTENT_TYPES = templateEditorContentSchema.shape.type.options;
 
-type StoredRecord = Record<string, unknown>;
-
-const isStoredRecord = (value: unknown): value is StoredRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const toEditorText = (value: unknown): string => {
   if (typeof value === "string") {
     return value;
@@ -155,7 +160,7 @@ const toEditorContentType = (value: unknown): TemplateEditorContentType =>
   TEMPLATE_EDITOR_CONTENT_TYPES.find((type) => type === value) ?? "text";
 
 function normalizeTemplateEditorSubItem(raw: unknown): TemplateEditorSubItem {
-  const subItem = isStoredRecord(raw) ? raw : { title: raw };
+  const subItem: SubTaskRecord = isSubTaskRecord(raw) ? raw : { title: raw };
   return {
     id: toEditorId(subItem.id, "subitem"),
     isCompleted: typeof subItem.isCompleted === "boolean" ? subItem.isCompleted : undefined,
@@ -167,7 +172,7 @@ function normalizeTemplateEditorContent(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorContent {
-  const content = isStoredRecord(raw) ? raw : { value: raw };
+  const content: ContentRecord = isContentRecord(raw) ? raw : { value: raw };
   const type = toEditorContentType(content.type);
   let id = toEditorId(content.id, "content");
   if (usedContentIds.has(id)) {
@@ -205,7 +210,7 @@ function normalizeTemplateEditorItem(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorItem {
-  const item = isStoredRecord(raw) ? raw : { title: raw };
+  const item: TaskRecord = isTaskRecord(raw) ? raw : { title: raw };
   const contents = Array.isArray(item.contents) ? item.contents : [];
   return {
     contents: contents
@@ -222,7 +227,7 @@ function normalizeTemplateEditorSection(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorSection {
-  const section = isStoredRecord(raw) ? raw : {};
+  const section: SectionRecord = isSectionRecord(raw) ? raw : {};
   const items = Array.isArray(section.items) ? section.items : [];
   return {
     id: toEditorId(section.id, "section"),
@@ -256,7 +261,7 @@ export function buildTemplateEditorFormValues(
 
 export function normalizeTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
-  options: { storedSlug?: string } = {},
+  options: { storedSlug?: string | undefined } = {},
 ): TemplateEditorFormValues {
   const normalizedDetails: TemplateEditorDetailsFormValues =
     normalizeTemplateEditorDetailsForSave(values, options);
@@ -267,35 +272,14 @@ export function normalizeTemplateEditorFormForSave(
   };
 }
 
-const describeTemplateEditorIssueLocation = (path: Array<string | number>): string | null => {
-  const [sections, sectionIndex, items, itemIndex, contents, contentIndex] = path;
-  if (sections !== "sections" || typeof sectionIndex !== "number") {
-    return null;
-  }
-
-  const parts = [`Section ${sectionIndex + 1}`];
-  if (items === "items" && typeof itemIndex === "number") {
-    parts.push(`task ${itemIndex + 1}`);
-  }
-  if (contents === "contents" && typeof contentIndex === "number") {
-    parts.push(`content block ${contentIndex + 1}`);
-  }
-  return parts.join(", ");
-};
-
 export function validateTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
 ): Array<{ type: "validation"; message: string }> {
-  const result = templateEditorFormSchema.safeParse(values);
+  const result = templateEditorDetailsSchema.safeParse(values);
   if (result.success) {
     return [];
   }
 
-  const messages = new Set(
-    result.error.issues.map((issue) => {
-      const location = describeTemplateEditorIssueLocation(issue.path);
-      return location ? `${location}: ${issue.message}` : issue.message;
-    }),
-  );
+  const messages = new Set(result.error.issues.map((issue) => issue.message));
   return Array.from(messages, (message) => ({ type: "validation" as const, message }));
 }

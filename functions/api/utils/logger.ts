@@ -56,7 +56,7 @@ export function describeErrorForLog(error: unknown): { errorName: string; errorM
 }
 
 export function log(level: LogLevel, message: string, data?: Record<string, unknown>) {
-  const { level: _fieldNamedLevel, message: _fieldNamedMessage, ...fields } = redact(data);
+  const { level: fieldNamedLevel, message: fieldNamedMessage, ...fields } = redact(data);
   const requestId = currentRequestId();
   const request = requestId === undefined ? {} : { requestId };
   const line = JSON.stringify({ level, message, ...request, ...fields, timestamp: new Date().toISOString() });

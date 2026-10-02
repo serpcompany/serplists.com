@@ -10,9 +10,9 @@ import {
 } from '../../../scripts/lib/sitemapLastmod';
 
 const template = (slug: string, task: string, visibility = 'public') => ({ slug, visibility, categories: ['SEO'], task });
-const snapshot = (date: string, templates: unknown[], categoriesSource = '') => ({
+const snapshot = (date: string, templates: Array<Record<string, unknown>>, categoriesSource = '') => ({
   date,
-  packs: [{ templates: templates as Array<Record<string, unknown>> }],
+  packs: [{ templates }],
   categoriesSource,
 });
 

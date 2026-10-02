@@ -4,6 +4,11 @@ import { users } from "./users";
 
 const epochMilliseconds = sql`(CAST(strftime('%s','now') AS INTEGER) * 1000)`;
 
+const authTimestamps = () => ({
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+});
+
 export const account = sqliteTable(
   "account",
   {
@@ -18,8 +23,7 @@ export const account = sqliteTable(
     refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp_ms" }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    ...authTimestamps(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -33,8 +37,7 @@ export const session = sqliteTable(
     id: text("id"),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     token: text("token").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    ...authTimestamps(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -52,8 +55,7 @@ export const verification = sqliteTable(
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    ...authTimestamps(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

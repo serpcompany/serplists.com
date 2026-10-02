@@ -99,7 +99,7 @@ async function storeUpload(request: Request, env: Env, url: URL): Promise<Respon
   await env.R2_UPLOADS.put(key, file, {
     httpMetadata: {
       contentType,
-      contentDisposition: bucket === 'template-files' ? `attachment; filename="${filename}"` : undefined,
+      ...(bucket === 'template-files' ? { contentDisposition: `attachment; filename="${filename}"` } : {}),
     },
   });
 

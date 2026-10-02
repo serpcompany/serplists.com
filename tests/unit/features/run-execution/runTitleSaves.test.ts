@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { sectionAt } from '../../../support/elements';
 
 import { checklistPayloadSchema } from '@functions/api/utils/payloads';
 import { buildRunUpdatePayload, type RunUpdateOptions } from '@/contexts/runUpdatePayload';
@@ -9,6 +10,8 @@ import {
   toggleRunItem,
 } from '@/features/run-execution/runExecutionActions';
 import type { ChecklistRun } from '@/types/checklist';
+
+import { runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
 
 const titleOverThePutLimit = `Quarterly launch readiness ${'x'.repeat(150)}`;
 
@@ -40,13 +43,7 @@ function setupUpdateRunRecordingItsPutBodies() {
     bodies.push(buildRunUpdatePayload(run, options));
     return { ...run, revision: (run.revision ?? 1) + 1 };
   });
-  const apiClient = {
-    createChecklistRunShare: vi.fn(),
-    getChecklistById: vi.fn(),
-    getSharedChecklist: vi.fn(),
-    updateSharedChecklist: vi.fn(),
-  };
-  return { bodies, dependencies: { apiClient, updateRun } };
+  return { bodies, dependencies: { apiClient: runExecutionApiClient(), updateRun } };
 }
 
 describe('private run saves, which leave out an unchanged title, since a run started from a Template with a long title can hold one over the PUT limit', () => {
@@ -57,7 +54,7 @@ describe('private run saves, which leave out an unchanged title, since a run sta
     await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun() }, dependencies);
     await saveRunItemNotes({ itemId: 'item-1', notes: 'Checked with legal', run: buildRun() }, dependencies);
     const runWithEveryTaskDone = buildRun();
-    runWithEveryTaskDone.sections[0].items.forEach((item) => {
+    sectionAt(runWithEveryTaskDone, 0).items.forEach((item) => {
       item.isCompleted = true;
     });
     await completeRunExecution({ run: runWithEveryTaskDone }, dependencies);

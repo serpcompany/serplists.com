@@ -5,6 +5,7 @@ import {
   mapApiTemplateToChecklistTemplate,
 } from '@/features/template-detail/templateDetailMappers';
 import { toPublicTemplate } from '@functions/api/utils/template-public';
+import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const template = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
@@ -35,13 +36,15 @@ describe('mapApiTemplateToChecklistTemplate', () => {
   it("keeps the last update of a public template response, which the page's Updated date reads, falling back to its creation", () => {
     const row = { id: 'template-1', title: 'Launch', user_id: 'user-1', is_public: 1, created_at: '2026-01-05 12:00:00' };
 
-    expect(mapApiTemplateToChecklistTemplate(toPublicTemplate({ ...row, updated_at: '2026-09-02 12:00:00' }), 'launch').updatedAt)
+    const asTheClientReadsIt = (stored: Record<string, unknown>) => apiTemplateSchema.parse(toPublicTemplate(stored));
+
+    expect(mapApiTemplateToChecklistTemplate(asTheClientReadsIt({ ...row, updated_at: '2026-09-02 12:00:00' }), 'launch').updatedAt)
       .toBe('2026-09-02 12:00:00');
-    expect(mapApiTemplateToChecklistTemplate(toPublicTemplate(row), 'launch').updatedAt).toBe('2026-01-05 12:00:00');
+    expect(mapApiTemplateToChecklistTemplate(asTheClientReadsIt(row), 'launch').updatedAt).toBe('2026-01-05 12:00:00');
   });
 
   it.each([null, '', undefined])('leaves a Personal template without an Organization (team_id %s)', (teamId) => {
-    const mapped = mapApiTemplateToChecklistTemplate({ id: 'template-1', user_id: 'user-1', team_id: teamId }, 'slug');
+    const mapped = mapApiTemplateToChecklistTemplate({ id: 'template-1', title: 'Launch', user_id: 'user-1', team_id: teamId }, 'slug');
 
     expect(mapped.teamId).toBeUndefined();
   });

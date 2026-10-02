@@ -1,24 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson, apiRequest, bodyNotRead } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { navigateInApp } from './support/navigation';
-import { fillSignInForm, type TestUser } from './support/sign-in';
+import { signOutFromTheAccountMenu as signOut, submitTheSignInForm, type TestUser } from './support/sign-in';
+import { runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
 
 async function signIn(page: Page, user: TestUser) {
   await navigateInApp(page, '/login/');
-  await fillSignInForm(page, user);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-async function signOut(page: Page) {
-  await page.getByRole('button', { name: 'Account menu' }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
+  await submitTheSignInForm(page, user);
 }
 
 async function createRun(page: Page, title: string): Promise<string> {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title,
@@ -30,14 +24,13 @@ async function createRun(page: Page, title: string): Promise<string> {
 
 async function startRunFromTemplate(page: Page, templatePath: string): Promise<string> {
   await navigateInApp(page, templatePath);
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
+  await startARunFromTheFirstStartRun(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/, { timeout: 15_000 });
-  return decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
+  return runIdInTheUrl(page);
 }
 
 async function deleteRuns(page: Page, runIds: string[]) {
-  await Promise.all(runIds.map((id) => apiRequest(page, `/checklists/${id}`, { method: 'DELETE' })));
+  await Promise.all(runIds.map((id) => apiRequest(page, `/checklists/${id}`, bodyNotRead, { method: 'DELETE' })));
 }
 
 test('a user who signs in after another on the same tab never sees the other user\'s runs, even after a run start refreshes the lists', async ({ page }) => {

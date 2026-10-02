@@ -2,13 +2,15 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchWriteMissed } from "../utils/guarded-writes";
 import { sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { activeTeamManagerExists, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { buildInviteRevocation, selectPendingInvitesFromInviter } from "../utils/team-invite-revocation";
 
 type Db = ReturnType<typeof createDb>;
+type TeamInviteRow = typeof schema.teamInvites.$inferSelect;
 
 export async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
   const db = createDb(env);
@@ -19,7 +21,7 @@ export async function getCurrentUserEmail(env: Env, userId: string): Promise<str
 }
 
 function emailMatches(userEmail: string | null, inviteEmail: string): boolean {
-  return Boolean(userEmail) && userEmail!.toLowerCase() === inviteEmail.toLowerCase();
+  return userEmail ? userEmail.toLowerCase() === inviteEmail.toLowerCase() : false;
 }
 
 function isExpired(expiresAt: string): boolean {
@@ -36,6 +38,21 @@ function noStore(response: Response): Response {
   return response;
 }
 
+export async function findInviteByToken(
+  db: Db,
+  token: string,
+): Promise<{ invite: TeamInviteRow | undefined } | { response: Response }> {
+  const { teamInvites } = schema;
+
+  const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return { response: jsonError("Unable to verify invite token", 500) };
+  }
+
+  const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.token_hash, tokenHash)).limit(1);
+  return { invite };
+}
+
 export async function previewTeamInvite({
   db,
   env,
@@ -47,7 +64,7 @@ export async function previewTeamInvite({
   token: string;
   userId: string;
 }): Promise<Response> {
-  const { team_invites, team_members, teams, users } = schema;
+  const { teamInvites, teamMembers, teams, users } = schema;
 
   const tokenHash = await sha256Hex(token);
   if (!tokenHash) {
@@ -56,26 +73,26 @@ export async function previewTeamInvite({
 
   const [invite] = await db
     .select({
-      id: team_invites.id,
-      team_id: team_invites.team_id,
-      email: team_invites.email,
-      role: team_invites.role,
-      expires_at: team_invites.expires_at,
-      accepted_at: team_invites.accepted_at,
-      accepted_by_user_id: team_invites.accepted_by_user_id,
-      revoked_at: team_invites.revoked_at,
+      id: teamInvites.id,
+      team_id: teamInvites.team_id,
+      email: teamInvites.email,
+      role: teamInvites.role,
+      expires_at: teamInvites.expires_at,
+      accepted_at: teamInvites.accepted_at,
+      accepted_by_user_id: teamInvites.accepted_by_user_id,
+      revoked_at: teamInvites.revoked_at,
       teamId: teams.id,
       teamName: teams.name,
       teamSlug: teams.slug,
       teamArchivedAt: teams.archived_at,
       inviterName: users.name,
       inviterEmail: users.email,
-      inviterCanManage: activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
+      inviterCanManage: activeTeamManagerExists(db, teamInvites.team_id, teamInvites.invited_by_user_id),
     })
-    .from(team_invites)
-    .leftJoin(teams, eq(teams.id, team_invites.team_id))
-    .leftJoin(users, eq(users.id, team_invites.invited_by_user_id))
-    .where(eq(team_invites.token_hash, tokenHash))
+    .from(teamInvites)
+    .leftJoin(teams, eq(teams.id, teamInvites.team_id))
+    .leftJoin(users, eq(users.id, teamInvites.invited_by_user_id))
+    .where(eq(teamInvites.token_hash, tokenHash))
     .limit(1);
 
   if (!invite || invite.revoked_at || !invite.teamId || !invite.teamName || invite.teamArchivedAt) {
@@ -102,13 +119,13 @@ export async function previewTeamInvite({
     }
 
     const [membership] = await db
-      .select({ id: team_members.id, role: team_members.role })
-      .from(team_members)
+      .select({ id: teamMembers.id, role: teamMembers.role })
+      .from(teamMembers)
       .where(
         and(
-          eq(team_members.team_id, invite.team_id),
-          eq(team_members.user_id, userId),
-          eq(team_members.status, "active"),
+          eq(teamMembers.team_id, invite.team_id),
+          eq(teamMembers.user_id, userId),
+          eq(teamMembers.status, "active"),
         ),
       )
       .limit(1);
@@ -145,14 +162,14 @@ export async function declineTeamInvite({
   token: string;
   userId: string;
 }): Promise<Response> {
-  const { team_invites } = schema;
+  const { teamInvites } = schema;
 
-  const tokenHash = await sha256Hex(token);
-  if (!tokenHash) {
-    return jsonError("Unable to verify invite token", 500);
+  const found = await findInviteByToken(db, token);
+  if ("response" in found) {
+    return found.response;
   }
 
-  const [invite] = await db.select().from(team_invites).where(eq(team_invites.token_hash, tokenHash)).limit(1);
+  const { invite } = found;
   if (!invite?.id || invite.revoked_at || invite.accepted_at) {
     return inviteNotFound();
   }
@@ -178,24 +195,25 @@ export async function declineTeamInvite({
   });
   const results = await db.batch([
     db
-      .update(team_invites)
+      .update(teamInvites)
       .set({ revoked_at: now, updated_at: now })
       .where(
         and(
-          eq(team_invites.id, inviteId),
-          isNull(team_invites.accepted_at),
-          isNull(team_invites.revoked_at),
+          eq(teamInvites.id, inviteId),
+          isNull(teamInvites.accepted_at),
+          isNull(teamInvites.revoked_at),
         ),
       ),
-    insertAuditEventWhere(
+    insertRowWhere(
       db,
+      schema.auditEvents,
       auditEvent,
       sql`exists (
         select 1
-        from ${team_invites}
-        where ${team_invites.id} = ${inviteId}
-          and ${team_invites.revoked_at} = ${now}
-          and ${team_invites.accepted_at} is null
+        from ${teamInvites}
+        where ${teamInvites.id} = ${inviteId}
+          and ${teamInvites.revoked_at} = ${now}
+          and ${teamInvites.accepted_at} is null
       )`,
     ),
   ]);
@@ -222,7 +240,7 @@ export async function leaveTeam({
   teamId: string;
   userId: string;
 }): Promise<Response> {
-  const { team_members } = schema;
+  const { teamMembers } = schema;
 
   if (normalizeTeamRole(membership.role) === "owner") {
     return jsonError("Transfer ownership before leaving this Organization", 400, {
@@ -242,12 +260,12 @@ export async function leaveTeam({
   });
   const leavableMembership = () =>
     and(
-      eq(team_members.id, memberId),
-      eq(team_members.team_id, teamId),
-      eq(team_members.user_id, userId),
-      ne(team_members.role, "owner"),
+      eq(teamMembers.id, memberId),
+      eq(teamMembers.team_id, teamId),
+      eq(teamMembers.user_id, userId),
+      ne(teamMembers.role, "owner"),
     );
-  const stillLeavable = () => sql`exists (select 1 from ${team_members} where ${leavableMembership()})`;
+  const stillLeavable = () => sql`exists (select 1 from ${teamMembers} where ${leavableMembership()})`;
   const inviteRevocations = await Promise.all(
     (await selectPendingInvitesFromInviter(db, teamId, userId, now)).map((invite) =>
       buildInviteRevocation({
@@ -261,9 +279,9 @@ export async function leaveTeam({
       })),
   );
   const results = await db.batch([
-    insertAuditEventWhere(db, auditEvent, stillLeavable()),
+    insertRowWhere(db, schema.auditEvents, auditEvent, stillLeavable()),
     ...inviteRevocations.flat(),
-    db.delete(team_members).where(leavableMembership()),
+    db.delete(teamMembers).where(leavableMembership()),
   ]);
 
   if (batchWriteMissed(results[results.length - 1])) {

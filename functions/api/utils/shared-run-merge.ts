@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import { normalizeSectionsPayload, parseJsonArray } from './payloads';
+import {
+  isChecklistNodeRecord,
+  isContentRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from '../../../src/lib/schemas/jsonRecords';
+import { normalizeSectionsPayload } from './payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
+import { isKnownContent } from '../../../src/lib/schemas/storedSections';
 
 export const MAX_SHARED_RUN_NOTES_LENGTH = 5000;
 
@@ -23,7 +34,6 @@ export const sharedRunUpdateSchema = z.object({
 
 type SharedRunSection = NonNullable<z.infer<typeof sharedRunUpdateSchema>['sections']>[number];
 type SharedRunItem = SharedRunSection['items'][number];
-type JsonRecord = Record<string, unknown>;
 
 const sharedSubItemSchema = z.object({
   id: z.unknown().optional(),
@@ -32,19 +42,24 @@ const sharedSubItemSchema = z.object({
 });
 type SharedSubItem = z.infer<typeof sharedSubItemSchema>;
 
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
-const stringId = (value: unknown): string | null =>
-  isRecord(value) && typeof value.id === 'string' && value.id !== '' ? value.id : null;
+const isShownContentSubTask = (value: unknown): boolean =>
+  isSubTaskRecord(value) || (typeof value === 'string' && value.trim() !== '');
 
-function readCompletion(state: { isCompleted?: boolean; completed?: boolean }): boolean | undefined {
+const pairWithShown = (stored: unknown[], guest: unknown[], isShown: (value: unknown) => boolean): unknown[] => {
+  const unpaired = [...guest];
+  return stored.map((entry) => (isShown(entry) ? unpaired.shift() : undefined));
+};
+
+const stringId = (value: unknown): string | null =>
+  isChecklistNodeRecord(value) && typeof value.id === 'string' && value.id !== '' ? value.id : null;
+
+function readCompletion(state: { isCompleted?: boolean | undefined; completed?: boolean | undefined }): boolean | undefined {
   return state.isCompleted ?? state.completed;
 }
 
-function applyCompletion(target: JsonRecord, completed: boolean | undefined): void {
+function applyCompletion(target: TaskRecord | SubTaskRecord, completed: boolean | undefined): void {
   if (completed === undefined) return;
   target.isCompleted = completed;
   delete target.completed;
@@ -55,11 +70,11 @@ function parseSubItem(value: unknown): SharedSubItem | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-function mergeItemSubItems(stored: JsonRecord, guest: SharedRunItem): { subItems?: unknown[]; contents?: unknown[] } {
+function mergeItemSubItems(stored: TaskRecord, guest: SharedRunItem): { subItems?: unknown[]; contents?: unknown[] } {
   const guestContents = asArray(guest.contents);
   const guestSubItems = [
     ...asArray(guest.subItems),
-    ...guestContents.flatMap((content) => (isRecord(content) ? asArray(content.subItems) : [])),
+    ...guestContents.flatMap((content) => (isContentRecord(content) ? asArray(content.subItems) : [])),
   ];
   const guestById = new Map<string, unknown[]>();
   for (const subItem of guestSubItems) {
@@ -69,44 +84,47 @@ function mergeItemSubItems(stored: JsonRecord, guest: SharedRunItem): { subItems
   const storedIdCounts = new Map<string, number>();
   const storedSubItems = [
     ...asArray(stored.subItems),
-    ...asArray(stored.contents).flatMap((content) => (isRecord(content) ? asArray(content.subItems) : [])),
+    ...asArray(stored.contents).flatMap((content) => (isContentRecord(content) ? asArray(content.subItems) : [])),
   ];
   for (const subItem of storedSubItems) {
     const id = stringId(subItem);
     if (id) storedIdCounts.set(id, (storedIdCounts.get(id) ?? 0) + 1);
   }
 
-  const mergeList = (storedList: unknown[], guestList: unknown[]) => storedList.map((subItem, index) => {
-    if (!isRecord(subItem)) return subItem;
+  const mergeList = (storedList: unknown[], guestPartners: unknown[]) => storedList.map((subItem, index) => {
+    if (!isSubTaskRecord(subItem)) return subItem;
     const id = stringId(subItem);
     const byId = id && storedIdCounts.get(id) === 1 ? guestById.get(id) : undefined;
-    const positional = stringId(guestList[index]) === id ? guestList[index] : undefined;
+    const partner = guestPartners[index];
+    const positional = stringId(partner) === id ? partner : undefined;
     const match = parseSubItem(byId?.length === 1 ? byId[0] : positional);
     if (!match) return subItem;
-    const next = { ...subItem };
+    const next: SubTaskRecord = { ...subItem };
     applyCompletion(next, readCompletion(match));
     return next;
   });
 
   const merged: { subItems?: unknown[]; contents?: unknown[] } = {};
   if (Array.isArray(stored.subItems)) {
-    merged.subItems = mergeList(stored.subItems, asArray(guest.subItems));
+    merged.subItems = mergeList(stored.subItems, pairWithShown(stored.subItems, asArray(guest.subItems), isSubTaskRecord));
   }
   if (Array.isArray(stored.contents)) {
-    merged.contents = stored.contents.map((content, index) => {
-      if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-      const guestContent = guestContents[index];
+    const guestContentPartners = pairWithShown(stored.contents, guestContents, isKnownContent);
+    merged.contents = stored.contents.map((content: unknown, index) => {
+      if (!isContentRecord(content) || !Array.isArray(content.subItems)) return content;
+      const guestContent = guestContentPartners[index];
+      const guestSubItems = isContentRecord(guestContent) ? asArray(guestContent.subItems) : [];
       return {
         ...content,
-        subItems: mergeList(content.subItems, isRecord(guestContent) ? asArray(guestContent.subItems) : []),
+        subItems: mergeList(content.subItems, pairWithShown(content.subItems, guestSubItems, isShownContentSubTask)),
       };
     });
   }
   return merged;
 }
 
-function mergeItem(stored: JsonRecord, guest: SharedRunItem): { item: JsonRecord } | { error: string } {
-  const next: JsonRecord = { ...stored, ...mergeItemSubItems(stored, guest) };
+function mergeItem(stored: TaskRecord, guest: SharedRunItem): { item: TaskRecord } | { error: string } {
+  const next: TaskRecord = { ...stored, ...mergeItemSubItems(stored, guest) };
   applyCompletion(next, readCompletion(guest));
   if (typeof guest.notes === 'string' && guest.notes !== stored.notes) {
     if (guest.notes.length > MAX_SHARED_RUN_NOTES_LENGTH) {
@@ -136,12 +154,12 @@ export function mergeSharedRunState(
 
   let error: string | null = null;
   const sections = normalizeSectionsPayload(storedSections).sections.map((section, sectionIndex) => {
-    if (!isRecord(section) || !Array.isArray(section.items)) return section;
+    if (!isSectionRecord(section) || !Array.isArray(section.items)) return section;
     const sectionId = typeof section.id === 'string' ? section.id : String(sectionIndex + 1);
     return {
       ...section,
-      items: section.items.map((item, itemIndex) => {
-        if (!isRecord(item)) return item;
+      items: section.items.map((item: unknown, itemIndex) => {
+        if (!isTaskRecord(item)) return item;
         const itemId = typeof item.id === 'string' ? item.id : `${sectionIndex + 1}-${itemIndex + 1}`;
         const guestItem = guestItems.get(`${sectionId}\u0000${itemId}`)?.shift();
         if (!guestItem) return item;

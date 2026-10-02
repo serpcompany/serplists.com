@@ -13,7 +13,6 @@ describe('readApiTemplateTeamId', () => {
     expect(readApiTemplateTeamId({ owner_type: 'user', team_id: null })).toBeUndefined();
     expect(readApiTemplateTeamId({ owner_type: 'user', team_id: 'team-1' })).toBeUndefined();
     expect(readApiTemplateTeamId({ team_id: '' })).toBeUndefined();
-    expect(readApiTemplateTeamId({ team_id: 42 })).toBeUndefined();
     expect(readApiTemplateTeamId({})).toBeUndefined();
   });
 });

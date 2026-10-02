@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checklistPayloadSchema,
+  getRequestedTeamId,
   templatePayloadSchema,
   templateUpdatePayloadSchema,
 } from '@functions/api/utils/payloads';
@@ -97,5 +98,19 @@ describe('payload schemas', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('getRequestedTeamId, the Organization a template or run create names', () => {
+  const url = (query = '') => new URL(`https://serplists.com/api/templates${query}`);
+
+  it('takes the body teamId first, then team_id, then the teamId query parameter', () => {
+    expect(getRequestedTeamId({ teamId: 'body', team_id: 'snake' }, url('?teamId=query'))).toBe('body');
+    expect(getRequestedTeamId({ team_id: 'snake' }, url('?teamId=query'))).toBe('snake');
+    expect(getRequestedTeamId({}, url('?teamId=query'))).toBe('query');
+  });
+
+  it('names no Organization, so Personal, when none of them is given', () => {
+    expect(getRequestedTeamId({}, url())).toBeNull();
   });
 });

@@ -37,7 +37,7 @@ import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type TemplateEditorAccessOptions = {
   isCreate: boolean;
-  templateId?: string;
+  templateId?: string | undefined;
   getValues: () => TemplateEditorFormValues;
   getVersion?: () => number | undefined;
   allowLeave: () => void;
@@ -51,9 +51,9 @@ const findKeptDraftToOffer = ({
   activeTeamId,
 }: {
   isCreate: boolean;
-  templateId?: string;
-  userId?: string;
-  activeTeamId?: string;
+  templateId: string | undefined;
+  userId: string | undefined;
+  activeTeamId: string | undefined;
 }): { draft: StoredTemplateDraft | null; offeredDraftKey: string | null } => {
   if (userId && isCreate) {
     const owner = { userId, teamId: activeTeamId };

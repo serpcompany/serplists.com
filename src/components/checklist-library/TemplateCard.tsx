@@ -1,21 +1,20 @@
 import React from 'react';
 import { Eye, FileText, List, Play } from 'lucide-react';
 
-import { MediaCard } from '@/components/layout/MediaCard';
+import { MediaCard, MediaCardCategories, MediaCardHoverAction } from '@/components/layout/MediaCard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,
 } from '@/lib/routes';
 import { uniqueCategoryNames } from '@/lib/categorySlug';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { cn } from '@/lib/utils';
 import { formatCount, pluralize } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { generateSlug } from '@/utils/urlHelpers';
 import {
-  getTemplateItemCount,
   getTemplateOwnerLabel,
   getTemplateSectionCount,
 } from '@/components/checklist-library/discovery-utils';
@@ -34,7 +33,7 @@ interface TemplateCardProps {
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical', template, titleAs }) => {
   const sectionCount = getTemplateSectionCount(template);
-  const itemCount = getTemplateItemCount(template);
+  const itemCount = countTemplateItems(template);
   const ownerLabel = getTemplateOwnerLabel(template);
   const ownerHandle = template.ownerProfile?.username;
   const categories = uniqueCategoryNames(template.categories ?? []);
@@ -57,31 +56,18 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
     <MediaCard
       clampDescription
       description={template.description || undefined}
-      eyebrow={
-        categories.length > 0 ? (
-          <span className="flex flex-wrap gap-1">
-            {categories.slice(0, 2).map((category) => (
-              <Badge key={category} variant="secondary">
-                {category}
-              </Badge>
-            ))}
-          </span>
-        ) : undefined
-      }
+      eyebrow={categories.length > 0 ? <MediaCardCategories categories={categories} /> : undefined}
       href={templatePath}
       icon={<TypeIcon />}
       orientation={layout}
       mediaOverlay={
         templatePath ? (
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden"
-          >
+          <MediaCardHoverAction>
             <Link tabIndex={-1} href={templatePath} className={buttonVariants()}>
               <Eye data-icon="inline-start" />
               View Template
             </Link>
-          </div>
+          </MediaCardHoverAction>
         ) : undefined
       }
       title={template.title}

@@ -4,6 +4,7 @@ import {
   planAccountUpdate,
   saveProfileChanges,
 } from "@/views/accountProfileUpdates";
+import { stringMatching } from "../../support/asymmetricMatchers";
 
 describe("buildAccountUpdatePayload", () => {
   it("includes username when it changed", () => {
@@ -71,7 +72,7 @@ describe("planAccountUpdate", () => {
       { name: "Bob", username: "bob", image: "" },
     );
 
-    expect(plan).toEqual({ ok: false, error: expect.stringMatching(/username/i) });
+    expect(plan).toEqual({ ok: false, error: stringMatching(/username/i) });
   });
 
   it("does not save a name change alone when the username was also cleared", () => {

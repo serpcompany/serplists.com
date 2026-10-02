@@ -11,13 +11,13 @@ export const TEMPLATE_PUBLIC_URL_FALLBACK_ORIGIN = CANONICAL_ORIGIN;
 
 type TemplatePreviewSlugInput = {
   seoUrl: string;
-  storedSlug?: string;
+  storedSlug?: string | undefined;
   title: string;
 };
 
 export type TemplateSeoPreviewInput = TemplatePreviewSlugInput & {
   ownerSlug: string | null;
-  origin?: string;
+  origin?: string | undefined;
 };
 
 export type TemplateSeoPreview =
@@ -31,8 +31,8 @@ export type TemplateSeoPreview =
 
 export const resolveTemplateEditorOwnerSlug = (params: {
   isNew: boolean;
-  loadedOwnerSlug?: string | null;
-  viewerUsername?: string | null;
+  loadedOwnerSlug?: string | null | undefined;
+  viewerUsername?: string | null | undefined;
 }): string | null =>
   params.isNew ? params.viewerUsername?.trim() || null : params.loadedOwnerSlug ?? null;
 

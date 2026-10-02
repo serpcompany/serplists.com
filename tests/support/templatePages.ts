@@ -1,15 +1,40 @@
+import type { McpRecord } from './mcpResponses';
+import { jsonObject, jsonObjects } from './readJson';
+
 type JsonRecord = Record<string, unknown>;
 
-export type PagedRead = (args: JsonRecord) => Promise<JsonRecord> | JsonRecord;
+export interface PagedResult extends McpRecord {
+  firstRetired?: unknown;
+}
+
+interface TextPart extends JsonRecord {
+  of?: unknown;
+  from?: unknown;
+  to?: unknown;
+  length?: unknown;
+  text?: unknown;
+}
+
+interface PagedSection extends JsonRecord {
+  taskCount?: unknown;
+}
+
+export interface OutlineEntry extends JsonRecord {
+  id?: unknown;
+}
+
+export type PagedRead = (args: JsonRecord) => Promise<PagedResult> | PagedResult;
 export type TemplateRead = PagedRead;
 
 export const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const isTextPart: (value: unknown) => value is TextPart = isRecord;
+
 export function jsonTextPartsJoiner() {
   let text = '';
   let expectedFrom = 0;
-  return (part: JsonRecord): unknown => {
+  return (part: TextPart): unknown => {
     if (part.from !== expectedFrom) throw new Error(`part starts at ${String(part.from)}, expected ${expectedFrom}`);
     text += String(part.text);
     expectedFrom = Number(part.to);
@@ -23,7 +48,7 @@ export function jsonTextPartsJoiner() {
 
 export async function readSectionInFull(call: PagedRead, sectionId: unknown): Promise<JsonRecord> {
   let page = await call({ sectionId });
-  const first = page.section as JsonRecord | undefined;
+  const first: PagedSection | undefined = jsonObject.optional().parse(page.section);
   if (first && typeof first.taskCount !== 'number') return first;
 
   const addPart = jsonTextPartsJoiner();
@@ -31,17 +56,17 @@ export async function readSectionInFull(call: PagedRead, sectionId: unknown): Pr
   let fieldsOnTheFirstPage: JsonRecord | undefined;
   const tasks: JsonRecord[] = [];
   for (;;) {
-    if (isRecord(page.part)) {
+    if (isTextPart(page.part)) {
       const completedUnit = addPart(page.part);
       if (isRecord(completedUnit)) {
         if (page.part.of === 'section') fieldsSentInParts = completedUnit;
         else tasks.push(completedUnit);
       }
     } else {
-      const { taskCount: _taskCount, firstTask, items, ...rest } = page.section as JsonRecord;
+      const { taskCount, firstTask, items, ...rest } = jsonObject.parse(page.section);
       fieldsOnTheFirstPage ??= rest;
       if (firstTask !== tasks.length) throw new Error(`page starts at task ${String(firstTask)}, expected ${tasks.length}`);
-      tasks.push(...(items as JsonRecord[]));
+      tasks.push(...jsonObjects.parse(items));
     }
     if (typeof page.nextCursor !== 'string') break;
     page = await call({ cursor: page.nextCursor });
@@ -51,24 +76,24 @@ export async function readSectionInFull(call: PagedRead, sectionId: unknown): Pr
 
 export async function readOutlineFromItsFirstPage(
   call: PagedRead,
-  firstPage: JsonRecord,
+  firstPage: PagedResult,
   fieldsKey: 'template' | 'run',
-): Promise<{ fields: JsonRecord; outline: JsonRecord[] }> {
+): Promise<{ fields: JsonRecord; outline: OutlineEntry[] }> {
   const addPart = jsonTextPartsJoiner();
   let fieldsSentInParts: JsonRecord | undefined;
   let fieldsOnTheFirstPage: JsonRecord | undefined;
-  const outline: JsonRecord[] = [];
+  const outline: OutlineEntry[] = [];
   let page = firstPage;
   for (;;) {
-    if (isRecord(page.part)) {
+    if (isTextPart(page.part)) {
       const completedUnit = addPart(page.part);
       if (isRecord(completedUnit)) {
         if (page.part.of === fieldsKey) fieldsSentInParts = completedUnit;
         else outline.push(completedUnit);
       }
     } else {
-      fieldsOnTheFirstPage ??= page[fieldsKey] as JsonRecord;
-      outline.push(...(page.outline as JsonRecord[]));
+      fieldsOnTheFirstPage ??= jsonObject.optional().parse(page[fieldsKey]);
+      outline.push(...jsonObjects.parse(page.outline));
     }
     if (typeof page.nextCursor !== 'string') break;
     page = await call({ cursor: page.nextCursor });
@@ -76,7 +101,7 @@ export async function readOutlineFromItsFirstPage(
   return { fields: fieldsSentInParts ?? fieldsOnTheFirstPage ?? {}, outline };
 }
 
-export function callRecordingResults(read: PagedRead, argumentsOfEveryCall: JsonRecord, results: JsonRecord[]): PagedRead {
+export function callRecordingResults(read: PagedRead, argumentsOfEveryCall: JsonRecord, results: PagedResult[]): PagedRead {
   return async (args: JsonRecord) => {
     const result = await read({ ...argumentsOfEveryCall, ...args });
     results.push(result);
@@ -87,16 +112,16 @@ export function callRecordingResults(read: PagedRead, argumentsOfEveryCall: Json
 export async function readTemplateInFull(
   read: TemplateRead,
   templateId: string,
-): Promise<{ template: JsonRecord; results: JsonRecord[] }> {
-  const results: JsonRecord[] = [];
+): Promise<{ template: McpRecord; results: PagedResult[] }> {
+  const results: PagedResult[] = [];
   const call = callRecordingResults(read, { templateId }, results);
 
   const page = await call({});
-  if (page.sectionsOmitted !== true) return { template: page.template as JsonRecord, results };
+  if (page.sectionsOmitted !== true) return { template: jsonObject.parse(page.template), results };
 
   const { fields, outline } = await readOutlineFromItsFirstPage(call, page, 'template');
   const sections: JsonRecord[] = [];
   for (const entry of outline) sections.push(await readSectionInFull(call, entry.id));
-  const { sectionCount: _sectionCount, taskCount: _taskCount, bytes: _bytes, ...header } = fields;
+  const { sectionCount, taskCount, bytes, ...header } = fields;
   return { template: { ...header, sections }, results };
 }

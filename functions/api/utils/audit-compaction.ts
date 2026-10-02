@@ -1,16 +1,26 @@
+import {
+  isContentRecord,
+  isRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  type JsonRecord,
+} from '../../../src/lib/schemas/jsonRecords';
 import { sha256Hex } from './crypto';
-import { normalizeSectionsPayload, parseJsonArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 
-type JsonRecord = Record<string, unknown>;
+interface AuditedRowFields extends JsonRecord {
+  items?: unknown;
+  retired_items?: unknown;
+  share_token?: unknown;
+}
 
 const MAX_AUDIT_COLUMN_BYTES = 64 * 1024;
 export const MAX_AUDIT_USER_AGENT_LENGTH = 512;
 const MAX_LISTED_IDS = 50;
 const REDACTED = '[redacted]';
 const RUN_STATE_FIELDS = new Set(['isCompleted', 'completed', 'notes']);
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
@@ -20,7 +30,7 @@ function utf8Bytes(value: string): number {
 
 export function compactAuditSnapshot<T>(value: T): T | JsonRecord {
   if (!isRecord(value)) return value;
-  const { items: _items, retired_items: _retired, share_token: _shareToken, ...rest } = value;
+  const { items, retired_items, share_token, ...rest } = value;
   return rest;
 }
 
@@ -38,16 +48,16 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
   const sections = normalizeSectionsPayload(parsed).sections;
   const tasks = new Map<string, TaskState>();
   sections.forEach((section, sectionIndex) => {
-    asArray(isRecord(section) ? section.items : undefined).forEach((item, itemIndex) => {
-      if (!isRecord(item)) return;
+    asArray(isSectionRecord(section) ? section.items : undefined).forEach((item, itemIndex) => {
+      if (!isTaskRecord(item)) return;
       const baseKey = typeof item.id === 'string' && item.id ? item.id : `${sectionIndex + 1}-${itemIndex + 1}`;
       let key = baseKey;
       for (let copy = 2; tasks.has(key); copy += 1) key = `${baseKey}#${copy}`;
 
       const subItems = new Map<string, boolean>();
-      const subItemLists = [asArray(item.subItems), ...asArray(item.contents).map((content) => asArray(isRecord(content) ? content.subItems : undefined))];
+      const subItemLists = [asArray(item.subItems), ...asArray(item.contents).map((content) => asArray(isContentRecord(content) ? content.subItems : undefined))];
       subItemLists.flat().forEach((subItem, subIndex) => {
-        if (!isRecord(subItem)) return;
+        if (!isSubTaskRecord(subItem)) return;
         const subKey = typeof subItem.id === 'string' && subItem.id ? subItem.id : String(subIndex + 1);
         subItems.set(subKey, subItem.isCompleted === true || subItem.completed === true);
       });
@@ -56,21 +66,27 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
         completed: item.isCompleted === true || item.completed === true,
         notes: item.notes,
         subItems,
-        shapeWithoutRunState: JSON.stringify(item, (name, entry) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
+        shapeWithoutRunState: JSON.stringify(item, (name: string, entry: unknown) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
       });
     });
   });
   return { sections: sections.length, tasks };
 }
 
-function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecord {
+const TASK_CHANGE_KINDS = ['completed', 'reopened', 'notesChanged', 'edited', 'added', 'removed'] as const;
+
+type TaskChangeKind = (typeof TASK_CHANGE_KINDS)[number];
+
+type TaskChangeSummary = { sections: number; items: number; omittedIds?: number } & Partial<Record<TaskChangeKind, string[]>>;
+
+function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): TaskChangeSummary | { omitted: true } {
   const next = readTasks(nextRaw);
   if (!next) return { omitted: true };
-  const summary: JsonRecord = { sections: next.sections, items: next.tasks.size };
+  const summary: TaskChangeSummary = { sections: next.sections, items: next.tasks.size };
   const previous = previousRaw === undefined ? null : readTasks(previousRaw);
   if (!previous) return summary;
 
-  const lists: Record<string, string[]> = {
+  const lists: Record<TaskChangeKind, string[]> = {
     completed: [], reopened: [], notesChanged: [], edited: [], added: [], removed: [],
   };
   for (const task of next.tasks.values()) {
@@ -92,7 +108,8 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecor
   }
 
   let omitted = 0;
-  for (const [name, ids] of Object.entries(lists)) {
+  for (const name of TASK_CHANGE_KINDS) {
+    const ids = lists[name];
     if (ids.length === 0) continue;
     summary[name] = ids.slice(0, MAX_LISTED_IDS);
     omitted += Math.max(0, ids.length - MAX_LISTED_IDS);
@@ -101,11 +118,13 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecor
   return summary;
 }
 
+const isAuditedRow: (value: unknown) => value is AuditedRowFields = isRecord;
+
 export function compactAuditDiff<T>(diff: T, before: unknown): T | JsonRecord {
   if (!isRecord(diff)) return diff;
-  const next: JsonRecord = { ...diff };
+  const next: AuditedRowFields = { ...diff };
   if ('items' in next) {
-    next.items = summarizeTaskChanges(isRecord(before) ? before.items : undefined, next.items);
+    next.items = summarizeTaskChanges(isAuditedRow(before) ? before.items : undefined, next.items);
   }
   if ('retired_items' in next) {
     const retired = parseJsonArray(next.retired_items);

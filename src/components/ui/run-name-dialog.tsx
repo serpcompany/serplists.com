@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { buildDefaultRunName, resolveRunName, RUN_TITLE_MAX_LENGTH } from "@/lib/runs/runName";
 import { createJustOpenedGuard, isRepeatClick } from "@/lib/utils/repeatClick";
 
-export const RUN_NAME_FIELD_ID = "run-name";
+const RUN_NAME_FIELD_ID = "run-name";
 
 interface RunNameDialogProps {
   open: boolean;

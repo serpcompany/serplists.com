@@ -83,9 +83,11 @@ describe('ignoreRepeatClicksBriefly', () => {
         if (type === 'click' && capture === true) listeners.add(listener);
       }),
       click: (detail: number) => {
-        const event = { detail, preventDefault: vi.fn(), stopPropagation: vi.fn() };
-        for (const listener of listeners) listener(event as unknown as Event);
-        return event;
+        const event = new CustomEvent('click', { detail, cancelable: true });
+        const preventDefault = vi.spyOn(event, 'preventDefault');
+        const stopPropagation = vi.spyOn(event, 'stopPropagation');
+        for (const listener of listeners) listener(event);
+        return { preventDefault, stopPropagation };
       },
       delay: () => delay,
       elapse: () => timer?.(),

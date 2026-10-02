@@ -16,7 +16,7 @@ import {
   portableChecklistTemplateSchema,
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
-import { normalizeEol } from "./line-endings.mjs";
+import { normalizeEol } from "./line-endings";
 
 export type TemplateLintIssue = {
   filePath: string;
@@ -53,11 +53,11 @@ const buildTemplateSourceDetails = (
 };
 
 const parseTemplateJson = (source: string) => {
-  const parsed = JSON.parse(source);
+  const parsed: unknown = JSON.parse(source);
   return normalizePortableTemplate(portableChecklistTemplateSchema.parse(parsed));
 };
 
-export const parseSingleTemplateSource = (source: string, extension: SupportedTemplateSourceExtension): TemplateSourceDetails => {
+const parseSingleTemplateSource = (source: string, extension: SupportedTemplateSourceExtension): TemplateSourceDetails => {
   if (isMarkdownTemplateExtension(extension)) {
     return buildTemplateSourceDetails(extension, parseTemplateMarkdown(source));
   }
@@ -142,15 +142,15 @@ const validateTemplateRules = (template: PortableChecklistTemplate, filePath: st
   return issues;
 };
 
+const unsupportedFileType = (filePath: string): TemplateLintIssue[] => [{
+  filePath,
+  code: "unsupported-file-type",
+  message: "Unsupported template source file type",
+}];
+
 export const lintSingleTemplateSource = async (filePath: string): Promise<TemplateLintIssue[]> => {
   const extension = detectTemplateSourceExtension(path.basename(filePath));
-  if (!extension) {
-    return [{
-      filePath,
-      code: "unsupported-file-type",
-      message: "Unsupported template source file type",
-    }];
-  }
+  if (!extension) return unsupportedFileType(filePath);
 
   try {
     const source = await readSourceWithLfEndings(filePath);
@@ -239,17 +239,19 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
 export const lintYamlTemplateBundle = async (
   yamlPath: string,
   paths: {
-    jsonPath?: string;
-    readmePath?: string;
-    previewHtmlPath?: string;
-    markdownPath?: string;
+    jsonPath?: string | undefined;
+    readmePath?: string | undefined;
+    previewHtmlPath?: string | undefined;
+    markdownPath?: string | undefined;
   }
 ): Promise<TemplateLintIssue[]> => {
+  const yamlExtension = detectTemplateSourceExtension(path.basename(yamlPath));
+  if (!yamlExtension) return unsupportedFileType(yamlPath);
   const issues: TemplateLintIssue[] = [];
 
   try {
     const yamlSource = await readSourceWithLfEndings(yamlPath);
-    const yamlDetails = parseSingleTemplateSource(yamlSource, path.extname(yamlPath).toLowerCase() as SupportedTemplateSourceExtension);
+    const yamlDetails = parseSingleTemplateSource(yamlSource, yamlExtension);
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
     issues.push(...checkMarkdownRoundTrip(yamlDetails, paths.markdownPath ?? yamlPath));

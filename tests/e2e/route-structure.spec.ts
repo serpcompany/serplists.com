@@ -1,7 +1,9 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
+import { createdRunSchema, runShareCreatedSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
+import { fulfillJson, routeTheApi } from './support/mocked-api';
 
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
@@ -31,19 +33,8 @@ async function expectRobots(page: Page, expected: string | RegExp) {
   }
 }
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    body: JSON.stringify(body),
-    contentType: 'application/json',
-    status,
-  });
-}
-
 async function mockAuthenticatedRouteApi(page: Page) {
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === '/api/auth/get-session' && request.method() === 'GET') {
       await fulfillJson(route, {
         session: {
@@ -70,12 +61,7 @@ async function mockAuthenticatedRouteApi(page: Page) {
       return;
     }
 
-    if (path === '/api/templates' && request.method() === 'GET') {
-      await fulfillJson(route, []);
-      return;
-    }
-
-    if (path === '/api/checklists' && request.method() === 'GET') {
+    if ((path === '/api/templates' || path === '/api/checklists') && request.method() === 'GET') {
       await fulfillJson(route, []);
       return;
     }
@@ -177,7 +163,7 @@ test.describe('route structure', () => {
     for (const path of ['/run/run-1?from=email', '/run/run-1/?from=email']) {
       const response = await request.get(path, { maxRedirects: 0 });
       expect(response.status(), path).toBe(308);
-      const location = new URL(response.headers().location ?? '', API_BASE_URL);
+      const location = new URL(response.headers()['location'] ?? '', API_BASE_URL);
       expect(`${location.pathname}${location.search}`, path).toBe('/dashboard/runs/run-1/?from=email');
     }
   });
@@ -303,7 +289,7 @@ test.describe('route structure', () => {
 
     await loginAsAdmin(page);
 
-    const createdRun = await apiJson<{ id?: string }>(page, '/checklists', {
+    const createdRun = await apiJson(page, '/checklists', createdRunSchema, {
       method: 'POST',
       body: {
         title: 'Share Route Verification',
@@ -314,9 +300,10 @@ test.describe('route structure', () => {
     if (!createdRun.id) {
       throw new Error('Run id missing from API response');
     }
-    const { shareToken } = await apiJson<{ shareToken?: string }>(
+    const { shareToken } = await apiJson(
       page,
       `/checklists/run/${createdRun.id}/share`,
+      runShareCreatedSchema,
       { method: 'POST', body: {} },
     );
     if (!shareToken) {

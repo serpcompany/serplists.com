@@ -1,18 +1,23 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
 import { createTestQueryClient } from '../../fixtures/queryClient';
+import type { TemplatesProviderWorkspace } from '../../support/templatesProviderHarness';
+import type { api } from '@/lib/api';
 
-const mockGetTemplates = vi.fn();
+type GetTemplates = (typeof api)['getTemplates'];
+
+const mockGetTemplates = vi.fn<GetTemplates>();
 const workspaceState = { isWorkspaceLoading: false };
 
 vi.mock('@/lib/api', () => ({
-  api: { getTemplates: (...args: unknown[]) => mockGetTemplates(...args) },
+  api: { getTemplates: (...args: Parameters<GetTemplates>) => mockGetTemplates(...args) },
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -20,10 +25,11 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
+  useWorkspace: (): TemplatesProviderWorkspace => ({
     activeTeamId: undefined,
     isWorkspaceLoading: workspaceState.isWorkspaceLoading,
     workspaceScopeId: 'personal',
+    workspaceStatus: workspaceState.isWorkspaceLoading ? 'loading' : 'ready',
   }),
 }));
 
@@ -91,9 +97,9 @@ describe('useTemplateLists catalog state', () => {
     mockGetTemplates.mockRejectedValue(new Error('Network down'));
     renderCatalogOnlyDiscoveryPage(client);
     const query = client.getQueryCache().find({ queryKey: CATALOG_KEY });
-    expect(query).toBeDefined();
+    assert.exists(query);
 
-    await expect(query!.fetch()).rejects.toThrow('Network down');
+    await expect(query.fetch()).rejects.toThrow('Network down');
 
     const lists = renderCatalogOnlyDiscoveryPage(client);
     expect(lists.catalogPending).toBe(false);

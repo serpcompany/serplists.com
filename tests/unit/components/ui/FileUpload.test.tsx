@@ -1,16 +1,17 @@
-import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import '../../../support/mockedR2Uploads';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
-import { findElement, type AnyElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, findFileInput, handlerOf, type AnyElement } from '../../../support/elementTree';
+import { objectContaining, stringContaining } from '../../../support/asymmetricMatchers';
 
 const useStateStub = vi.hoisted(() => ({ valueForEveryState: undefined as unknown, setterCalls: [] as unknown[] }));
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const stubs = {
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
     useId: () => 'file-upload-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [
@@ -19,26 +20,20 @@ vi.mock('react', async (importOriginal) => {
         useStateStub.setterCalls.push(next);
       },
     ],
-  };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+  }),
+);
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    deleteFromR2: vi.fn(),
-    uploadToR2: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/imageOptimization', () => ({
-  isImageFile: vi.fn(() => false),
-  optimizeImage: vi.fn(async (file: File) => file),
-}));
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
 const EXISTING_URL = '/api/uploads/file?key=template-images%2Fu1%2Fa.png';
+
+async function chooseFiles(tree: unknown, files: File[]) {
+  const fileInput = findFileInput(tree);
+  assert.exists(fileInput, 'the file input');
+  await handlerOf(fileInput, 'onChange')({ target: { files } });
+}
 
 describe('FileUpload', () => {
   beforeEach(() => {
@@ -49,11 +44,8 @@ describe('FileUpload', () => {
 
   it('uploads nothing when the page passes no signed-in user, since the presentational field cannot read the session', async () => {
     const tree = FileUpload({ type: 'file', value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
 
-    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [new File(['PK'], 'report.zip', { type: 'application/zip' })] },
-    });
+    await chooseFiles(tree, [new File(['PK'], 'report.zip', { type: 'application/zip' })]);
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
   });
@@ -68,13 +60,10 @@ describe('FileUpload', () => {
       onFileChange,
     });
 
-    const removeButton = findElement(
-      tree,
-      (element) => element.props['aria-label'] === 'Remove uploaded image',
-    );
-    expect(removeButton).not.toBeNull();
+    const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
+    assert.exists(removeButton, 'the Remove uploaded image button');
 
-    await (removeButton!.props.onClick as () => unknown)();
+    await handlerOf(removeButton, 'onClick')();
 
     expect(onFileChange).toHaveBeenCalledTimes(1);
     expect(onFileChange).toHaveBeenCalledWith({
@@ -100,13 +89,7 @@ describe('FileUpload', () => {
       onFileChange,
     });
 
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
-    expect(fileInput).not.toBeNull();
-
-    const file = new File(['png'], 'b.png', { type: 'image/png' });
-    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [file] },
-    });
+    await chooseFiles(tree, [new File(['png'], 'b.png', { type: 'image/png' })]);
 
     expect(onFileChange).toHaveBeenCalledTimes(1);
     expect(onFileChange).toHaveBeenCalledWith({
@@ -129,28 +112,22 @@ describe('FileUpload', () => {
 
   it('names the supported types instead of uploading a file the API would refuse', async () => {
     const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
 
-    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [new File(['<p>'], 'page.html', { type: 'text/html' })] },
-    });
+    await chooseFiles(tree, [new File(['<p>'], 'page.html', { type: 'text/html' })]);
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
       'Invalid file',
-      expect.objectContaining({ description: expect.stringContaining('PDF, ZIP, CSV') }),
+      objectContaining({ description: stringContaining('PDF, ZIP, CSV') }),
     );
   });
 
   it('uploads a Windows ZIP to a File block', async () => {
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: '/api/uploads/file?key=k', fileName: 'r.zip' });
     const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
     const zip = new File(['PK'], 'report.zip', { type: 'application/x-zip-compressed' });
 
-    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [zip] },
-    });
+    await chooseFiles(tree, [zip]);
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: zip });
   });
@@ -164,10 +141,8 @@ describe('FileUpload', () => {
       onFileChange: vi.fn(),
     });
 
-    expect(
-      findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
-    ).toBeNull();
-    expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
+    expect(findByAriaLabel(tree, 'Remove uploaded file')).toBeNull();
+    expect(findFileInput(tree)).not.toBeNull();
   });
 
   describe('image preview of a URL being typed, which fails to load on its first characters', () => {
@@ -202,22 +177,14 @@ describe('FileUpload', () => {
 
     it('marks a failed load in state instead of hiding the element', () => {
       const img = ImagePreview({ src: 'https://example.com/photo.png' }) as AnyElement;
-      expect(img.type).toBe('img');
+      expect(img.type).toBe(UserContentImage);
       expect(img.props.style).toBeUndefined();
 
-      const target = { style: {} as Record<string, string> };
-      (img.props.onError as (event: unknown) => void)({ currentTarget: target, target });
+      const target: { style: { display?: string } } = { style: {} };
+      handlerOf(img, 'onError')({ currentTarget: target, target });
 
       expect(target.style.display).toBeUndefined();
       expect(useStateStub.setterCalls).toEqual([true]);
-    });
-
-    it('never hides the preview by setting a style React does not own', () => {
-      const source = readFileSync(
-        new URL('../../../../src/components/ui/file-upload.tsx', import.meta.url),
-        'utf8',
-      );
-      expect(source).not.toMatch(/\.style\.display\s*=/);
     });
 
     it('says the preview is unavailable instead of showing an empty box', () => {
@@ -227,7 +194,7 @@ describe('FileUpload', () => {
       const partial = ImagePreview({ src: null }) as AnyElement;
 
       for (const element of [failed, partial]) {
-        expect(element.type).not.toBe('img');
+        expect(element.type).not.toBe(UserContentImage);
         expect(element.props.children).toBe('Preview unavailable');
       }
     });

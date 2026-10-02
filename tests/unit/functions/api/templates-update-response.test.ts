@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
+import { dbMocks } from '../../../support/mockedDrizzleD1';
+import { jsonObject, readJson } from '../../../support/readJson';
+import { resetChainsToEmptyResults } from '../../../support/drizzleChainMocks';
+import { apiEnv, TEST_AUTH_SECRET } from '../../../support/apiEnv';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -14,10 +11,7 @@ vi.mock('@functions/api/utils/session', () => ({
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const mockEnv = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET });
 
 const existingTemplate = {
   id: 'template-1',
@@ -36,21 +30,15 @@ const existingTemplate = {
 const put = async (body: Record<string, unknown>) => {
   const response = await handleTemplates(
     new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }),
-    mockEnv as never,
+    mockEnv,
   );
-  return { status: response.status, data: (await response.json()) as Record<string, unknown> };
+  return { status: response.status, data: await readJson(response, jsonObject) };
 };
 
 describe('PUT /api/templates/:id response, which names the version and slug it stored so the editor\'s next save needs no list reload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    dbMocks.db.batch.mockResolvedValue([]);
+    resetChainsToEmptyResults(dbMocks);
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
   });
 

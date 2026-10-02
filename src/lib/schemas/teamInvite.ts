@@ -11,8 +11,6 @@ export const teamInvitePreviewSchema = z.object({
   inviterEmail: z.string().nullable().optional(),
 });
 
-export type TeamInvitePreview = z.infer<typeof teamInvitePreviewSchema>;
-
 const assignableTeamRoleSchema = z.enum(["admin", "editor", "runner", "viewer"]);
 
 const teamInviteDeliverySchema = z.discriminatedUnion("mode", [
@@ -42,7 +40,6 @@ export const createdTeamInviteSchema = z.object({
 });
 
 export type CreatedTeamInvite = z.infer<typeof createdTeamInviteSchema>;
-export type TeamInviteDelivery = z.infer<typeof teamInviteDeliverySchema>;
 
 export const teamInviteExistsDetailsSchema = z.object({
   inviteId: z.string().min(1),

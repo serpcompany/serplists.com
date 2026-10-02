@@ -1,6 +1,8 @@
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -12,10 +14,6 @@ import {
   selfAndAncestors,
   textOf,
 } from '../focusVisibility';
-import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const template: ChecklistTemplate = {
   id: 'website-launch',
@@ -44,13 +42,13 @@ describe('TemplateCard (discovery) keyboard focus, with its View Template overla
 
   it('keeps the hover View Template link for pointers but out of the keyboard and screen reader order', () => {
     const root = parseMarkup(renderCard());
-    const [overlayLink] = findAll(
+    const overlayLink = firstOf(findAll(
       root,
       (node) => node.tag === 'a' && textOf(node).includes('View Template'),
-    );
+    ));
 
-    expect(overlayLink?.attrs.href).toBe(TEMPLATE_PATH);
-    expect(overlayLink?.attrs.tabindex).toBe('-1');
+    expect(overlayLink.attrs['href']).toBe(TEMPLATE_PATH);
+    expect(overlayLink.attrs['tabindex']).toBe('-1');
     expect(selfAndAncestors(overlayLink).some((node) => node.attrs['aria-hidden'] === 'true')).toBe(
       true,
     );
@@ -59,7 +57,7 @@ describe('TemplateCard (discovery) keyboard focus, with its View Template overla
   it('still reaches the template from the keyboard through the title and Start links', () => {
     const reachable = findAll(
       parseMarkup(renderCard()),
-      (node) => node.tag === 'a' && node.attrs.href === TEMPLATE_PATH && node.attrs.tabindex !== '-1',
+      (node) => node.tag === 'a' && node.attrs['href'] === TEMPLATE_PATH && node.attrs['tabindex'] !== '-1',
     );
 
     expect(reachable.map((link) => textOf(link).trim())).toEqual([

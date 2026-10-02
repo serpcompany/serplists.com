@@ -1,12 +1,9 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { AuthPageShell } from '@/components/auth/AuthPageShell';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 describe('AuthPageShell', () => {
   it('keeps auth compact and frames the next steps like a product workflow', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { hasCurrentFileInfo, imagePreviewSrc, withMediaValue } from '@/lib/utils/mediaSource';
+import type { ChecklistItemContent } from '@/types/checklist';
 
 const UPLOADED_URL = '/api/uploads/file?key=template-files%2Fu1%2Freport.pdf';
 const uploaded = {
@@ -47,8 +48,8 @@ describe('withMediaValue', () => {
   });
 
   it('marks a pasted upload URL as an upload', () => {
-    const pasted = withMediaValue(
-      { id: 'c2', type: 'image' as const, value: '' },
+    const pasted = withMediaValue<ChecklistItemContent>(
+      { id: 'c2', type: 'image', value: '' },
       '/api/uploads/file?key=template-images%2Fu1%2Fa.png',
     );
 
@@ -57,7 +58,7 @@ describe('withMediaValue', () => {
   });
 
   it('marks embed code typed into a video block as a URL source', () => {
-    expect(withMediaValue({ id: 'c3', type: 'video' as const, value: '' }, '<iframe src="x"></iframe>').uploadType)
+    expect(withMediaValue<ChecklistItemContent>({ id: 'c3', type: 'video', value: '' }, '<iframe src="x"></iframe>').uploadType)
       .toBe('url');
   });
 });

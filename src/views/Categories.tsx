@@ -15,7 +15,8 @@ import { SearchField } from '@/components/layout/SearchField';
 import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Link } from '@/components/navigation/Link';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Empty,
   EmptyContent,

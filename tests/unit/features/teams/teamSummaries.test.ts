@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { elementAt } from '../../../support/elements';
 
 import { patchTeamSummary } from '@/features/teams/teamSummaries';
 import type { TeamSummary } from '@/lib/api';
@@ -23,7 +24,7 @@ describe('patchTeamSummary', () => {
       ['team-1', 'owner'],
       ['team-2', 'admin'],
     ]);
-    expect(teams[1].role).toBe('owner');
+    expect(elementAt(teams, 1).role).toBe('owner');
   });
 
   it('returns the same list when the Organization is not in it', () => {

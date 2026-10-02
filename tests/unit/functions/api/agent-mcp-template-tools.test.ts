@@ -1,51 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = { from: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
-  const insertChain = { values: vi.fn(), select: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-  return { db, insertChain, selectChain, updateChain };
-});
-
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-vi.mock("@functions/api/utils/entitlements", () => ({ getEntitlementsForUser: vi.fn() }));
-
-vi.mock("@functions/api/utils/audit", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@functions/api/utils/audit")>();
-  return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
-});
+import { elementAt, firstOf, present, taskIn, valueAt } from "../../../support/elements";
+import { dbMocks, env, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { templateView } from "@functions/api/handlers/agentMcpTemplatePages";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
-import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpRequest, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { mcpErrorResponse, mcpRequest, mcpToolList, mcpToolResult } from "../../../support/agentMcp";
+import { recordIn } from "../../../support/mcpResponses";
+import { storedSectionsIn } from "../../../support/storedJson";
 import { readTemplateInFull } from "../../../support/templatePages";
+import { stringMatching } from "../../../support/asymmetricMatchers";
 
 type JsonRecord = Record<string, unknown>;
-
-const env = { DB: {} } as never;
 
 let requestId = 0;
 async function send(method: string, params?: JsonRecord): Promise<{ raw: string; body: JsonRecord }> {
   requestId += 1;
   const response = await handleAgentMcp(mcpRequest(method, params, requestId), env);
   const raw = await response.text();
-  return { raw, body: JSON.parse(raw) as JsonRecord };
+  return { raw, body: recordIn(JSON.parse(raw)) };
 }
 
 const rpc = (name: string, args: JsonRecord) => send("tools/call", { name, arguments: args });
@@ -86,7 +61,7 @@ const templateRow = (sections: unknown[], overrides: JsonRecord = {}): JsonRecor
   ...overrides,
 });
 
-const resultOf = (body: JsonRecord) => body.result as { structuredContent: JsonRecord; content: Array<{ text: string }>; isError?: boolean };
+const resultOf = (body: { result?: unknown }) => mcpToolResult.parse(body.result);
 
 function everySelectReads(row: JsonRecord) {
   dbMocks.selectChain.limit.mockResolvedValue([row]);
@@ -94,31 +69,19 @@ function everySelectReads(row: JsonRecord) {
 
 describe("personal run MCP template tools over the endpoint, with D1 mocked", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.db.batch.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    resetAgentMcpHandlerMocks();
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue({ kind: "insert" });
-    dbMocks.insertChain.select.mockReturnValue({ kind: "conditional-insert" });
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(runKeyWithEveryPermission);
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } } as never);
   });
 
   it("advertises get_template's paging arguments and update_template's operations", async () => {
-    const tools = ((await send("tools/list")).body.result as { tools: JsonRecord[] }).tools;
-    const schema = (name: string) => tools.find((tool) => tool.name === name)?.inputSchema as JsonRecord;
+    const { tools } = mcpToolList.parse((await send("tools/list")).body).result;
+    const schema = (name: string) => present(tools.find((tool) => tool.name === name), name).inputSchema;
 
-    expect(Object.keys(schema("get_template").properties as JsonRecord)).toEqual(["templateId", "sectionId", "taskId", "cursor"]);
+    expect(Object.keys(schema("get_template").properties)).toEqual(["templateId", "sectionId", "taskId", "cursor"]);
     expect(schema("get_template").required).toEqual(["templateId"]);
     const update = schema("update_template");
-    expect((update.properties as JsonRecord).operation).toMatchObject({
+    expect(valueAt(update.properties, "operation")).toMatchObject({
       enum: ["replace_section", "insert_section", "move_section", "remove_section", "replace_task", "insert_task", "move_task", "remove_task"],
     });
     expect(update.required).toEqual(["templateId", "expectedVersion"]);
@@ -126,9 +89,9 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
   });
 
   it("warns that sections, accepted for a template of any size, replaces the whole checklist, and to edit a template read in pages by part", async () => {
-    const tools = ((await send("tools/list")).body.result as { tools: JsonRecord[] }).tools;
-    const update = tools.find((tool) => tool.name === "update_template") as JsonRecord;
-    const sections = ((update.inputSchema as JsonRecord).properties as JsonRecord).sections as JsonRecord;
+    const { tools } = mcpToolList.parse((await send("tools/list")).body).result;
+    const update = present(tools.find((tool) => tool.name === "update_template"), "update_template");
+    const sections = valueAt(update.inputSchema.properties, "sections");
 
     expect(update.description).toContain(
       "sections, which replaces the whole checklist: any section, task, or subtask it leaves out is removed.",
@@ -150,7 +113,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
       responses.push(raw);
       const result = resultOf(body);
       expect(result.isError).toBeUndefined();
-      const summaryForClientsThatShowText = result.content[0].text.split("\n\n")[0];
+      const summaryForClientsThatShowText = firstOf(result.content).text.split("\n\n")[0];
       expect(summaryForClientsThatShowText).toMatch(/^(Template "Release SOP" is too large|Loaded section "Section \d+"\.)/);
       return result.structuredContent;
     }, "template-1");
@@ -159,7 +122,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     expect(template).toEqual({ ...view.header, sections: view.sections });
     expect(responses).toHaveLength(31);
     for (const raw of responses) {
-      const result = resultOf(JSON.parse(raw) as JsonRecord);
+      const result = resultOf(recordIn(JSON.parse(raw)));
       expect(bytes(JSON.stringify(result.structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     }
     expect(markPersonalRunKeyUsed).toHaveBeenCalledTimes(31);
@@ -176,8 +139,9 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     expect(stale.structuredContent).toMatchObject({ error: "edit_conflict", details: { expectedVersion: 4, currentVersion: 5 } });
 
     const forged = (await rpc("get_template", { templateId: "template-1", cursor: "bm90LWEtY3Vyc29y" })).body;
-    expect((forged.error as JsonRecord).code).toBe(-32602);
-    expect(((forged.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
+    const { error } = mcpErrorResponse.parse(forged);
+    expect(error.code).toBe(-32602);
+    expect(recordIn(error.data).code).toBe("invalid_arguments");
   });
 
   describe("update_template operations", () => {
@@ -197,7 +161,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     }
 
     const savedTemplate = () => dbMocks.updateChain.set.mock.calls
-      .map(([values]) => values as JsonRecord)
+      .map(([values]) => values)
       .find((values) => typeof values.items === "string");
 
     it("saves the whole checklist with one task added, through the editor's code, naming the key and operation in its history", async () => {
@@ -215,10 +179,10 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
 
       expect(result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
-      const saved = JSON.parse(String(savedTemplate()?.items)) as JsonRecord[];
-      const inserted = (saved[0].items as JsonRecord[])[1];
-      expect((saved[0].items as JsonRecord[]).map(({ id }) => id)).toEqual(["t1", inserted.id, "t2"]);
-      expect(inserted).toMatchObject({ id: expect.stringMatching(/^item_/), title: "Freeze merges" });
+      const saved = storedSectionsIn(savedTemplate()?.items);
+      const inserted = elementAt(firstOf(saved).items, 1);
+      expect(firstOf(saved).items.map(({ id }) => id)).toEqual(["t1", inserted.id, "t2"]);
+      expect(inserted).toMatchObject({ id: stringMatching(/^item_/), title: "Freeze merges" });
       expect(saved[1]).toEqual(sections()[1]);
       expect(savedTemplate()).toMatchObject({ version: 5, content_version: 4 });
 
@@ -226,7 +190,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
         .find((values) => values.action === "template.updated");
       expect(audit?.metadata).toEqual({ source: "mcp", operation: "insert_task", personalRunKeyId: "key-1", personalRunKeyName: "Codex" });
       expect(result.structuredContent).toMatchObject({ template: { id: "template-1", version: 5 } });
-      expect(result.content[0].text).toMatch(/^Updated template "Release SOP"\./);
+      expect(firstOf(result.content).text).toMatch(/^Updated template "Release SOP"\./);
     });
 
     it("refuses a stale version, a public template, and an unknown section before writing", async () => {
@@ -264,7 +228,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     it("returns a large template's fields and the changed task, within the bound", async () => {
       const before = templateRow(sectionsTooLargeForOneResult());
       const changed = sectionsTooLargeForOneResult();
-      changed[3].items[2] = { ...changed[3].items[2], title: "Rolled back" };
+      elementAt(changed, 3).items[2] = { ...taskIn(changed, 3, 2), title: "Rolled back" };
       mockWrite(before, templateRow(changed, { version: 5 }));
 
       const { raw, body } = await rpc("update_template", {
@@ -280,9 +244,9 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
         sectionsOmitted: true,
         sectionId: "s3",
         taskId: "t3-2",
-        task: changed[3].items[2],
+        task: taskIn(changed, 3, 2),
       });
-      expect(bytes(JSON.stringify(resultOf(JSON.parse(raw) as JsonRecord).structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+      expect(bytes(JSON.stringify(resultOf(recordIn(JSON.parse(raw))).structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     });
 
     it("treats a null operation as absent, replacing fields as before", async () => {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lintYamlTemplateBundle } from '@/../scripts/lib/templateLint';
+import { objectContaining, stringContaining } from '../../support/asymmetricMatchers';
 
 const { readFileMock, markdownParserBrokenByTheTest } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
@@ -57,9 +58,9 @@ describe('templateLint Markdown round-trip', () => {
     const issues = await lintYamlTemplateBundle('/repo/template.yaml', {});
 
     expect(issues).toEqual([
-      expect.objectContaining({
+      objectContaining({
         code: 'markdown-roundtrip',
-        message: expect.stringContaining('missing a closing fence'),
+        message: stringContaining('missing a closing fence'),
       }),
     ]);
   });

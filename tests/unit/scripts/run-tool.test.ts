@@ -1,74 +1,74 @@
-import { existsSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
-import { buildPnpmInvocation, buildToolInvocation, execTool, killProcessTree } from '../../../scripts/lib/run-tool.mjs';
+import {
+  buildScriptInvocation,
+  buildToolInvocation,
+  execScript,
+  execTool,
+  killProcessTree,
+  type ToolName,
+} from '../../../scripts/lib/run-tool';
+
+const LOCAL_TOOLS: ToolName[] = ['wrangler', 'next', 'opennextjs-cloudflare', 'drizzle-kit', 'playwright'];
+
 
 describe('buildToolInvocation', () => {
   it('runs local tools with the current Node and their bin script, never a shim', () => {
-    for (const tool of ['wrangler', 'next', 'opennextjs-cloudflare', 'tsx', 'drizzle-kit', 'playwright']) {
+    for (const tool of LOCAL_TOOLS) {
       const invocation = buildToolInvocation(tool, ['--version']);
 
       expect(invocation.command).toBe(process.execPath);
-      expect(existsSync(invocation.args[0])).toBe(true);
+      expect(existsSync(firstOf(invocation.args))).toBe(true);
       expect(invocation.args[0]).not.toMatch(/\.(cmd|ps1|sh)$/);
       expect(invocation.args.slice(1)).toEqual(['--version']);
     }
   });
+});
 
-  it('rejects tools it does not know', () => {
-    expect(() => buildToolInvocation('npx', [])).toThrow(/Unknown tool "npx"/);
+describe('buildScriptInvocation', () => {
+  it("runs a script in the current Node with tsx's loader, named by an absolute file URL", () => {
+    const { command, args, options } = buildScriptInvocation('scripts/check-docs.ts', ['--flag']);
+
+    expect(command).toBe(process.execPath);
+    expect(args[0]).toBe('--import');
+    expect(existsSync(fileURLToPath(firstOf(args.slice(1))))).toBe(true);
+    expect(args.slice(2)).toEqual(['scripts/check-docs.ts', '--flag']);
+    expect(options).toEqual({});
   });
 });
 
-describe('buildPnpmInvocation', () => {
-  it('runs the pnpm entry script that started this process when there is one', () => {
-    expect(
-      buildPnpmInvocation(['run', 'build'], {
-        platform: 'win32',
-        env: { npm_execpath: 'C:\\corepack\\pnpm\\9.2.0\\bin\\pnpm.cjs' },
-        execPath: 'C:\\node\\node.exe',
-      }),
-    ).toEqual({
-      command: 'C:\\node\\node.exe',
-      args: ['C:\\corepack\\pnpm\\9.2.0\\bin\\pnpm.cjs', 'run', 'build'],
-      options: {},
-    });
-  });
+describe('execScript', { timeout: 60_000 }, () => {
+  const outsideTheRepository = mkdtempSync(path.join(tmpdir(), 'run-tool-script-'));
+  afterAll(() => rmSync(outsideTheRepository, { recursive: true, force: true }));
 
-  it('goes through cmd.exe on Windows without an entry script', () => {
-    for (const env of [{}, { npm_execpath: 'C:\\npm\\bin\\npm-cli.js' }, { npm_execpath: 'C:\\pnpm\\pnpm.exe' }]) {
-      expect(buildPnpmInvocation(['run', 'build'], { platform: 'win32', env })).toEqual({
-        command: 'cmd.exe',
-        args: ['/d', '/s', '/c', '"pnpm run build"'],
-        options: { windowsVerbatimArguments: true },
-      });
-    }
-  });
+  it('runs a TypeScript script from a folder outside the repository, where no tsx package resolves', () => {
+    const script = path.join(outsideTheRepository, 'typed.ts');
+    writeFileSync(script, 'const answer: number = 42;\nconsole.log(`answer ${answer}`);\n');
 
-  it('refuses arguments cmd.exe would reinterpret', () => {
-    expect(() => buildPnpmInvocation(['run', 'a&b'], { platform: 'win32', env: {} })).toThrow(/Cannot pass "a&b"/);
-  });
-
-  it('runs pnpm directly elsewhere', () => {
-    expect(buildPnpmInvocation(['run', 'build'], { platform: 'linux', env: {} })).toEqual({
-      command: 'pnpm',
-      args: ['run', 'build'],
-      options: {},
-    });
+    expect(execScript(script, [], { cwd: outsideTheRepository, encoding: 'utf8' })).toBe('answer 42\n');
   });
 });
 
 describe('killProcessTree', () => {
   const pidNoProcessHolds = 2 ** 22 + 1;
 
+  const childThat = (ended: { exitCode: number | null; signalCode: NodeJS.Signals | null }) =>
+    Object.assign(new ChildProcess(), { pid: pidNoProcessHolds, ...ended });
+
   it('signals nothing once the child has exited', () => {
-    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: 0, signalCode: null } as never)).toBe(false);
-    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: 'SIGTERM' } as never)).toBe(false);
+    expect(killProcessTree(childThat({ exitCode: 0, signalCode: null }))).toBe(false);
+    expect(killProcessTree(childThat({ exitCode: null, signalCode: 'SIGTERM' }))).toBe(false);
   });
 
   it('reports a failed taskkill on Windows instead of throwing, as when the child exits just before it', () => {
     expect(
-      killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: null } as never, 'SIGTERM', { platform: 'win32' }),
+      killProcessTree(childThat({ exitCode: null, signalCode: null }), 'SIGTERM', { platform: 'win32' }),
     ).toBe(false);
   });
 });

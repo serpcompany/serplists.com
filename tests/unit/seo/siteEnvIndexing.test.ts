@@ -104,14 +104,14 @@ const headersCloudflareServesWithStaticFile = (production: boolean, url: string)
   return applied;
 };
 
-describe('indexing headers on static files (public/_headers)', () => {
-  const FILES = ['https://serplists.com/og-default.png', 'https://serplists.com/_next/static/chunks/app.js', 'https://serplists.com/fonts/geist.woff2'];
+const STATIC_FILE_URLS = ['https://serplists.com/og-default.png', 'https://serplists.com/_next/static/chunks/app.js', 'https://serplists.com/fonts/geist.woff2'];
 
-  it.each(FILES)('keeps %s indexable in a production build', (url) => {
+describe('indexing headers on static files (public/_headers)', () => {
+  it.each(STATIC_FILE_URLS)('keeps %s indexable in a production build', (url) => {
     expect(robotsHeader(headersCloudflareServesWithStaticFile(true, url))).not.toContain('noindex');
   });
 
-  it.each(FILES)('marks %s noindex in any other build', (url) => {
+  it.each(STATIC_FILE_URLS)('marks %s noindex in any other build', (url) => {
     expect(robotsHeader(headersCloudflareServesWithStaticFile(false, url))).toContain('noindex');
   });
 

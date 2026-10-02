@@ -53,12 +53,3 @@ export const publicFooterGroups: readonly PublicFooterGroup[] = [
   { title: 'Company', items: [{ href: buildAboutPath(), label: 'About' }] },
   { title: 'Support', items: [{ href: buildContactPath(), label: 'Contact' }] },
 ];
-
-export const publicSiteLinks: readonly PublicSiteLink[] = Array.from(
-  new Map(
-    [
-      ...publicHeaderItems.flatMap((item) => (item.kind === 'menu' ? item.links : [item.link])),
-      ...publicFooterGroups.flatMap((group) => group.items),
-    ].map((link) => [link.href, link]),
-  ).values(),
-);

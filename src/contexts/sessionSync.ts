@@ -5,7 +5,7 @@ import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
 
 import { applySessionCheck, type SessionCheck, type SessionState, type SessionUser } from './authSession';
 
-export const SESSION_SYNC_CHANNEL = 'serplists-auth';
+const SESSION_SYNC_CHANNEL = 'serplists-auth';
 export const SESSION_SYNC_STORAGE_KEY = 'serplists.sessionChanged';
 export const SESSION_RECHECK_INTERVAL_MS = 60_000;
 export const SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS = 5_000;
@@ -59,7 +59,7 @@ export function applySessionRecheck(check: ConfirmedSessionCheck, current: Sessi
 const endsSessionOf = (previous: SessionState, check: ConfirmedSessionCheck): boolean =>
   previous.user !== null && (check.kind === 'unauthenticated' || check.user.id !== previous.user.id);
 
-export function describeSessionChange(previous: SessionState, check: ConfirmedSessionCheck): string | null {
+function describeSessionChange(previous: SessionState, check: ConfirmedSessionCheck): string | null {
   if (!previous.user) return null;
   if (check.kind === 'unauthenticated') return 'Your session ended. Sign in again.';
   return check.user.id === previous.user.id ? null : `Signed in as ${check.user.email} in another tab.`;
@@ -211,8 +211,6 @@ export function createSessionSync(deps: {
     },
   };
 }
-
-export type SessionSync = ReturnType<typeof createSessionSync>;
 
 export type SessionKeepAliveEnvironment = {
   isVisible: () => boolean;

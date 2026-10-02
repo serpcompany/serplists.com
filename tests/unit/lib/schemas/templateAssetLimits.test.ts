@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 
 import {
   countOversizedTemplateAssets,
-  formatAssetSizeLimit,
   TEMPLATE_IMPORT_MAX_ASSET_BYTES,
 } from "@/lib/schemas/templateAssetLimits";
-import { TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
+import { formatUploadLimit, TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from "@/lib/utils/templateBackup";
 import { validateFile } from "@/lib/utils/fileUpload";
 import type { ChecklistTemplate } from "@/types/checklist";
+import { z } from "zod";
+import { checklistSectionSchema } from "@/lib/schemas/checklistSchema";
 
 const sectionsWithAsset = (fileSize: unknown, type = "file") => [
   {
@@ -58,25 +60,28 @@ describe("template asset limits", () => {
 
     expect(validateFile(tooLarge, "file")).toEqual({
       valid: false,
-      error: `File size must be ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)} or less`,
+      error: `File size must be ${formatUploadLimit(UPLOAD_MAX_BYTES)} or less`,
     });
   });
 
   it("round-trips an exported template with the largest upload", () => {
-    const template = {
+    const template: ChecklistTemplate = {
       id: "template-1",
       title: "Onboarding",
       description: "",
-      sections: sectionsWithAsset(UPLOAD_MAX_BYTES),
+      sections: z.array(checklistSectionSchema).parse(sectionsWithAsset(UPLOAD_MAX_BYTES)),
+      userId: "user-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
       isPublic: false,
       categories: [],
       tags: [],
-    } as unknown as ChecklistTemplate;
+    };
 
-    const pack = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([template])));
+    const pack: unknown = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([template])));
     const parsed = parseTemplatesFromData(pack);
 
     expect(parsed.templates).toHaveLength(1);
-    expect(countOversizedTemplateAssets(parsed.templates[0].sections)).toBe(0);
+    expect(countOversizedTemplateAssets(firstOf(parsed.templates).sections)).toBe(0);
   });
 });

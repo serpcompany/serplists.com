@@ -1,14 +1,10 @@
 import { z } from 'zod';
 
 import { api } from '@/lib/api';
-import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
+import { exportedTemplatePackSchema, type ExportedTemplatePack } from '@/lib/schemas/apiTemplates';
 import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from '@/lib/templates/portableExport';
 import { getExportSummary, type PortableExportSummary } from '@/lib/templates/templateImportSummary';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-const exportedPackSchema = z
-  .object({ templates: z.array(z.unknown()) })
-  .passthrough();
 
 const exportedSlugSchema = z.object({ slug: z.string().min(1) }).passthrough();
 const readExportedSlugs = (templates: unknown[]): string[] =>
@@ -17,20 +13,20 @@ const readExportedSlugs = (templates: unknown[]): string[] =>
     return parsed.success ? [parsed.data.slug] : [];
   });
 
-type ExportBackup = (params: { teamId?: string }) => Promise<unknown>;
+type ExportBackup = (params: { teamId?: string | undefined }) => Promise<unknown>;
 type LoadPublicCatalog = () => Promise<ChecklistTemplate[]>;
 
 type ExportTemplatePackDependencies = {
-  download: (pack: PortableTemplatePack) => void;
+  download: (pack: ExportedTemplatePack) => void;
   exportBackup?: ExportBackup;
   loadPublicCatalog?: LoadPublicCatalog;
 };
 
 export type ExportTemplatePackOptions = {
   includePublic: boolean;
-  teamId?: string;
-  userId?: string;
-  ownedTemplateIds?: Iterable<string>;
+  teamId?: string | undefined;
+  userId?: string | undefined;
+  ownedTemplateIds?: Iterable<string> | undefined;
 };
 
 export type ExportTemplatePackResult = PortableExportSummary;
@@ -53,12 +49,12 @@ export const exportTemplatePack = async (
 ): Promise<ExportTemplatePackResult> => {
   const exportBackup = dependencies.exportBackup ?? defaultExportBackup;
   const ownedPack = await exportBackup({ teamId: options.teamId });
-  const parsedPack = exportedPackSchema.safeParse(ownedPack);
+  const parsedPack = exportedTemplatePackSchema.safeParse(ownedPack);
   if (!parsedPack.success) {
     throw new Error(EXPORT_PACK_UNREADABLE_MESSAGE);
   }
 
-  let pack: unknown = ownedPack;
+  let pack: ExportedTemplatePack = parsedPack.data;
   if (options.includePublic && dependencies.loadPublicCatalog) {
     const publicTemplates = selectPublicTemplatesForExport(await dependencies.loadPublicCatalog(), {
       userId: options.userId,
@@ -77,7 +73,7 @@ export const exportTemplatePack = async (
 
   const summary = readSummary(pack);
   if (summary.exported > 0) {
-    dependencies.download(pack as PortableTemplatePack);
+    dependencies.download(pack);
   }
   return summary;
 };

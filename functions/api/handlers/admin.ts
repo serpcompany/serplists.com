@@ -1,6 +1,7 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
+import { readJsonPayload } from "../utils/request-json";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -41,8 +42,10 @@ async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean>
   const provided = request.headers.get("X-Admin-Secret");
   if (!provided) return false;
   const [expected, actual] = await Promise.all([sha256(env.ENTITLEMENTS_ADMIN_SECRET), sha256(provided)]);
-  let difference = 0;
-  for (let index = 0; index < expected.length; index += 1) difference |= expected[index] ^ actual[index];
+  let difference = expected.length === actual.length ? 0 : 1;
+  expected.forEach((byte, index) => {
+    difference |= byte ^ (actual[index] ?? 0);
+  });
   return difference === 0;
 }
 
@@ -66,19 +69,10 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
 }
 
 async function upsertOverride(request: Request, env: Env): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Invalid JSON payload", 400);
-  }
-
-  const parsed = overrideBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "Invalid override payload", 400);
-  }
-  const { userId, email, plan, expiresAt } = parsed.data;
-  const note = parsed.data.note ?? null;
+  const read = await readJsonPayload(request, overrideBodySchema, "Invalid override payload");
+  if ("response" in read) return read.response;
+  const { userId, email, plan, expiresAt } = read.payload;
+  const note = read.payload.note ?? null;
 
   const db = createDb(env);
   const idFromUserId = userId === undefined ? undefined : await findUserIdById(db, userId);
@@ -89,12 +83,13 @@ async function upsertOverride(request: Request, env: Env): Promise<Response> {
   if (idFromUserId !== undefined && idFromEmail !== undefined && idFromUserId !== idFromEmail) {
     return jsonError("userId and email belong to different users", 400);
   }
-  const resolvedUserId = (idFromUserId ?? idFromEmail) as string;
+  const resolvedUserId = idFromUserId ?? idFromEmail;
+  if (resolvedUserId === undefined) return jsonError("userId or email required", 400);
 
-  const { entitlement_overrides } = schema;
+  const { entitlementOverrides } = schema;
   const nowIso = new Date().toISOString();
   await db
-    .insert(entitlement_overrides)
+    .insert(entitlementOverrides)
     .values({
       user_id: resolvedUserId,
       plan,
@@ -104,7 +99,7 @@ async function upsertOverride(request: Request, env: Env): Promise<Response> {
       updated_at: nowIso,
     })
     .onConflictDoUpdate({
-      target: entitlement_overrides.user_id,
+      target: entitlementOverrides.user_id,
       set: { plan, expires_at: expiresAt, note, updated_at: nowIso },
     });
 
@@ -122,8 +117,8 @@ async function deleteOverride(env: Env, url: URL): Promise<Response> {
   if (!userId) return jsonError("userId required", 400);
 
   const db = createDb(env);
-  const { entitlement_overrides } = schema;
-  await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
+  const { entitlementOverrides } = schema;
+  await db.delete(entitlementOverrides).where(eq(entitlementOverrides.user_id, userId));
   return json({ success: true });
 }
 

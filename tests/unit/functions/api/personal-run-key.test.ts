@@ -1,17 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dbMocks } from "../../../support/mockedDrizzleD1";
 import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
-
-const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
 
 import {
   authenticatePersonalRunKey,
   createPersonalRunKeySecret,
   markPersonalRunKeyUsed,
 } from "@functions/api/utils/personal-run-key";
+import { apiEnv } from "../../../support/apiEnv";
+import { anyInstanceOf } from "../../../support/asymmetricMatchers";
 
-const mockEnv = { DB: {} as D1Database };
+const mockEnv = apiEnv();
 
 describe("personal run key utility", () => {
   beforeEach(() => {
@@ -61,9 +60,8 @@ describe("personal run key utility", () => {
     "Bearer ordinary-token",
     "Bearer slrk_has spaces",
   ])("rejects malformed authorization without querying D1: %s", async (authorization) => {
-    const headers = authorization ? { Authorization: authorization } : undefined;
     const identity = await authenticatePersonalRunKey(
-      new Request("http://localhost/api/mcp", { headers }),
+      new Request("http://localhost/api/mcp", authorization ? { headers: { Authorization: authorization } } : {}),
       mockEnv,
     );
 
@@ -91,10 +89,11 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: null,
     });
 
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: expect.any(String) });
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: anyInstanceOf(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
 
     vi.clearAllMocks();
@@ -102,6 +101,7 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: new Date().toISOString(),
     });
     expect(dbMocks.db.update).not.toHaveBeenCalled();

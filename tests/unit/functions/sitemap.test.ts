@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../support/elements';
 import { validateXML } from 'xmllint-wasm';
 
 import * as legacyCategoriesSitemapRoute from '@/app/(site)/categories/sitemap.xml/route';
@@ -7,7 +8,6 @@ import * as pagesSitemapRoute from '@/app/sitemaps/pages/[page]/route';
 import * as legacyStaticSitemapRoute from '@/app/sitemaps/static.xml/route';
 import {
   SITEMAP_PAGE_SIZE,
-  buildInMemoryShardIndex,
   canonicalUrl,
   categorySlug,
   handlePagedDatabaseSitemap,
@@ -39,7 +39,7 @@ type SitemapRoute = { GET: (request: Request, context: { params: Promise<{ page:
 async function callTheRouteAsNextJsDoes(
   route: SitemapRoute,
   path: string,
-  options: { method?: string; params?: Record<string, string> } = {},
+  options: { method?: string; params?: { page?: string } } = {},
 ) {
   const page = options.params?.page;
   return route.GET(
@@ -113,13 +113,13 @@ describe('public sitemap behavior', () => {
     expect(categorySlug('🚀')).toBe('');
   });
 
-  it('builds deterministic numbered shards at the configured page size', () => {
+  it('builds deterministic numbered shards at the configured page size', async () => {
     const entries = Array.from({ length: SITEMAP_PAGE_SIZE + 1 }, (_, index) => ({
       path: `/page/${index + 1}`,
       lastmod: index === SITEMAP_PAGE_SIZE ? '2031-01-02T03:04:05Z' : '2030-01-02T03:04:05Z',
     }));
 
-    expect(buildInMemoryShardIndex('categories', entries)).toEqual([
+    expect((await planDurableShardIndex('categories', entries, [])).shards).toEqual([
       { path: '/sitemaps/categories/1.xml', lastmod: '2030-01-02T03:04:05.000Z' },
       { path: '/sitemaps/categories/2.xml', lastmod: '2031-01-02T03:04:05.000Z' },
     ]);
@@ -142,8 +142,8 @@ describe('public sitemap behavior', () => {
     const updated = await planDurableShardIndex('profiles', changed, initial.upserts, '2031-01-01T00:00:00Z');
 
     expect(updated.upserts.map((row) => row.page)).toEqual([1]);
-    expect(updated.shards[0].lastmod).toBe('2031-01-01T00:00:00.000Z');
-    expect(updated.shards[1].lastmod).toBe(initial.shards[1].lastmod);
+    expect(firstOf(updated.shards).lastmod).toBe('2031-01-01T00:00:00.000Z');
+    expect(elementAt(updated.shards, 1).lastmod).toBe(elementAt(initial.shards, 1).lastmod);
   });
 
   it('reports stale pages when the sitemap shrinks', async () => {
@@ -168,7 +168,7 @@ describe('public sitemap behavior', () => {
     const recreated = await planDurableShardIndex('profiles', entries, currentPage, '2032-01-01T00:00:00Z');
 
     expect(recreated.upserts.map((row) => row.page)).toEqual([2]);
-    expect(recreated.shards[1].lastmod).toBe('2032-01-01T00:00:00.000Z');
+    expect(elementAt(recreated.shards, 1).lastmod).toBe('2032-01-01T00:00:00.000Z');
   });
 
   it('loads typed database rows with the correct limit and offset', async () => {

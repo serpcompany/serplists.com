@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcpTemplateTools";
 
-export type JsonRecord = Record<string, unknown>;
+export type SectionAndTaskIds = { sectionId?: string | undefined; taskId?: string | undefined };
 
 export class ToolError extends Error {
   constructor(
@@ -13,9 +14,6 @@ export class ToolError extends Error {
     super(message);
   }
 }
-
-export const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const MAX_TASK_NOTES_LENGTH = 20_000;
 export const MAX_TASK_NOTES_BYTES = 30 * 1024;
@@ -52,32 +50,29 @@ export const getRunArgs = z.object({
   cursor: cursorArg.optional(),
 }).strict();
 
+const runAtRevision = z.object({
+  runId: z.string().trim().min(1),
+  expectedRevision: z.number().int().positive(),
+});
+
 export const updateRunArgs = z.discriminatedUnion("operation", [
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_task_completed"),
     taskId: z.string().trim().min(1),
     completed: z.boolean(),
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_subtask_completed"),
     taskId: z.string().trim().min(1),
     subtaskId: z.string().trim().min(1),
     completed: z.boolean(),
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_task_notes"),
     taskId: z.string().trim().min(1),
     notes: taskNotesArg,
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_run_status"),
     status: z.enum(["in_progress", "completed"]),
   }).strict(),
@@ -92,7 +87,10 @@ function dropNullFields(rawArguments: unknown): unknown {
   return Object.fromEntries(Object.entries(rawArguments).filter(([, value]) => value !== null));
 }
 
-export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, rawArguments: unknown): z.infer<Schema> {
+export function parseToolArguments<Arguments>(
+  schema: z.ZodType<Arguments, z.ZodTypeDef, unknown>,
+  rawArguments: unknown,
+): Arguments {
   const parsed = schema.safeParse(dropNullFields(rawArguments));
   if (parsed.success) return parsed.data;
   const issues = parsed.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
@@ -237,7 +235,8 @@ const toolPermissions: Record<ToolName, RunKeyPermission> = {
 };
 
 export function toolPermission(name: string): RunKeyPermission | undefined {
-  return Object.prototype.hasOwnProperty.call(toolPermissions, name) ? toolPermissions[name as ToolName] : undefined;
+  const tool = toolDefinitions.find((definition) => definition.name === name);
+  return tool ? toolPermissions[tool.name] : undefined;
 }
 
 export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {

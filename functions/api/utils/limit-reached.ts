@@ -1,6 +1,6 @@
 import { jsonError } from './response';
 
-export type LimitContext = 'personal' | 'organization';
+type LimitContext = 'personal' | 'organization';
 export type LimitResource = 'active_runs' | 'templates';
 
 const LIMIT_TEXT: Record<LimitResource, { label: string; items: string }> = {

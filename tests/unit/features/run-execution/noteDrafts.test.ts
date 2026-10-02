@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sectionAt, taskAt } from '../../../support/elements';
 
 import {
   applyNoteDrafts,
@@ -7,24 +8,8 @@ import {
   pruneNoteDrafts,
   updateNoteDraft,
 } from '@/features/run-execution/noteDrafts';
-import type { ChecklistRun } from '@/types/checklist';
 
-const buildRun = (notes: Record<string, string | undefined>): ChecklistRun => ({
-  id: 'run-1',
-  templateId: 'template-1',
-  title: 'Launch',
-  status: 'in_progress',
-  progress: 0,
-  sections: [
-    {
-      id: 'section-1',
-      title: 'Checklist',
-      items: Object.entries(notes).map(([id, value]) => ({ id, title: id, notes: value })),
-    },
-  ],
-  startedAt: '2026-01-01T00:00:00.000Z',
-  userId: 'user-1',
-});
+import { runWithNotes as buildRun } from '../../../fixtures/runExecutionFixtures';
 
 describe('updateNoteDraft', () => {
   it('keeps a draft that differs from the saved notes', () => {
@@ -79,9 +64,9 @@ describe('applyNoteDrafts', () => {
     const drafts = { 'item-1': 'one', 'item-2': 'two' };
 
     const onlyFirst = applyNoteDrafts(run, drafts, ['item-1']);
-    expect(onlyFirst.sections[0].items.map((item) => item.notes)).toEqual(['one', 'old']);
-    expect(applyNoteDrafts(run, drafts).sections[0].items.map((item) => item.notes)).toEqual(['one', 'two']);
-    expect(run.sections[0].items[0].notes).toBeUndefined();
+    expect(sectionAt(onlyFirst, 0).items.map((item) => item.notes)).toEqual(['one', 'old']);
+    expect(sectionAt(applyNoteDrafts(run, drafts), 0).items.map((item) => item.notes)).toEqual(['one', 'two']);
+    expect(taskAt(run, 0, 0).notes).toBeUndefined();
   });
 });
 

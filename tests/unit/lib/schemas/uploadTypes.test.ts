@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { AVATAR_MIME_TYPES } from '../../../fixtures/avatarTypes';
 import {
-  AVATAR_MIME_TYPES,
   describeUploadTypes,
   isAllowedUpload,
   resolveUploadContentType,

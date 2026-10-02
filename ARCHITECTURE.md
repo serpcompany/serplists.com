@@ -13,8 +13,8 @@ what it reads is in [client data](docs/design-docs/client-data.md); product term
 
 | Domain | API (`functions/api/`) | App (`src/`) |
 | --- | --- | --- |
-| Identity and sessions | `better-auth.ts`, `handlers/auth.ts`, `utils/session.ts` | `contexts/CloudflareAuthContext.tsx`, `lib/auth/` |
-| Personal and Organization ownership | `handlers/teams.ts` (the router), `handlers/team-create.ts`, `handlers/team-settings.ts`, `handlers/team-membership.ts`, `handlers/team-invites.ts`, `handlers/team-invite-links.ts`, `handlers/team-invite-accept.ts`, `handlers/team-self-service.ts`, `utils/team-access.ts` | `contexts/WorkspaceContext.tsx`, `features/teams/` |
+| Identity and sessions | `better-auth.ts`, `handlers/auth.ts`, `utils/session.ts` | `contexts/AuthProvider.tsx`, `contexts/CloudflareAuthContext.tsx`, `lib/auth/` |
+| Personal and Organization ownership | `handlers/teams.ts` (the router), `handlers/team-create.ts`, `handlers/team-settings.ts`, `handlers/team-membership.ts`, `handlers/team-invites.ts`, `handlers/team-invite-links.ts`, `handlers/team-invite-accept.ts`, `handlers/team-self-service.ts`, `utils/team-access.ts` | `contexts/WorkspaceProvider.tsx`, `contexts/WorkspaceContext.tsx`, `features/teams/` |
 | Templates | `handlers/templates.ts` (the router), `handlers/template-reads.ts`, `handlers/template-create.ts`, `handlers/template-update.ts`, `handlers/template-archive.ts`, `handlers/template-clone.ts`, `handlers/template-backup.ts`, `utils/template-rows.ts`, `utils/template-permissions.ts`, `utils/payloads.ts`, `utils/template-reconciliation.ts`, `utils/template-identities.ts`, `utils/template-changes.ts`, `utils/template-portable.ts`, `utils/template-writes.ts`, `utils/history-queries.ts` | `contexts/TemplatesContext.tsx`, `features/template-*`, `lib/templates/` |
 | Runs | `handlers/checklists.ts` (the router), `handlers/checklists-reads.ts`, `handlers/checklists-create.ts`, `handlers/checklists-update.ts`, `handlers/checklists-revalidate.ts`, `handlers/checklists-share-link.ts`, `handlers/checklists-archive.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `views/Pricing.tsx` |
@@ -59,10 +59,21 @@ Shared (imported by both sides)
 - views and components calling the API client (`src/lib/api.ts`, `src/lib/api/`) directly (type-only imports are allowed)
 - `src/components/ui/` depending on app state, features, pages, or the API client
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
-- runtime code importing tests or devDependencies; circular imports
+- runtime code importing tests or devDependencies; circular imports. npm packages stay in the
+  graph, unfollowed, so the rules about packages see them: the `exclude` option names only
+  build output at the repository root (`tests/unit/config/dependency-graph.test.ts`)
+- a module in `src/` or `functions/` that no route file in `src/app` and not
+  `next.config.ts` (the security headers) reaches: dead code, with no folder exempt. Code
+  only a script uses lives in `scripts/lib`, as the portable template JSON Schema builder
+  and the README renderers do.
 
 There is no baseline of known violations: every violation fails the check, so fix
 the code rather than the rule.
+
+knip (`pnpm run deadcode:check`) covers the rest of the repository from the entry points its
+tools load (scripts, tests and configs as well as the route files): unused files, exports
+and packages, and packages used without being listed
+([repository checks](docs/RELIABILITY.md#repository-checks)).
 
 Other invariants (Zod at API boundaries, structured logging, product vocabulary,
 file size) are listed with their enforcement in

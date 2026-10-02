@@ -1,7 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { findElement } from '../../../support/elementTree';
+import { AlertDialog } from '@/components/ui/alert-dialog';
+import { findElement, findElementOf } from '../../../support/elementTree';
+
+type CloseDetails = Parameters<NonNullable<ComponentProps<typeof AlertDialog>['onOpenChange']>>[1];
+
+const anEscapeOrAClickOutside: CloseDetails = {
+  reason: 'none',
+  event: new Event('close'),
+  cancel: () => {},
+  allowPropagation: () => {},
+  isCanceled: false,
+  isPropagationAllowed: false,
+  trigger: undefined,
+  preventUnmountOnClose: () => {},
+};
 
 const renderDialog = (pending: boolean) => {
   const onOpenChange = vi.fn();
@@ -15,7 +30,10 @@ const renderDialog = (pending: boolean) => {
     pendingLabel: 'Deleting...',
     title: 'Delete run',
   });
-  const requestClose = dialog.props.onOpenChange as (open: boolean) => void;
+  const alertDialog = findElementOf(dialog, AlertDialog);
+  const onAlertDialogOpenChange = alertDialog?.props.onOpenChange;
+  assert.exists(onAlertDialogOpenChange);
+  const requestClose = (open: boolean) => onAlertDialogOpenChange(open, anEscapeOrAClickOutside);
   return { dialog, onOpenChange, requestClose };
 };
 

@@ -12,8 +12,11 @@ vi.mock("../../functions/api/utils/session", () => ({
 import { handleChecklists } from "../../functions/api/handlers/checklists";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
+import { storedSectionsIn } from "../support/storedJson";
+import { taskIn } from "../support/elements";
+import type { Env } from "@functions/api/types";
 
-type Handler = (request: Request, env: never) => Promise<Response>;
+type Handler = (request: Request, env: Env) => Promise<Response>;
 
 const PARALLEL = 6;
 const now = "2026-09-28T00:00:00.000Z";
@@ -55,33 +58,49 @@ async function burst(handler: Handler, makeRequest: (index: number) => Request) 
   const responses = await Promise.all(Array.from({ length: PARALLEL }, (_, index) => {
     const request = makeRequest(index);
     request.headers.set("x-test-user", "owner");
-    return handler(request, d1.env as never);
+    return handler(request, d1.env);
   }));
   return responses.map((response) => response.status);
 }
 
 const request = (path: string, method: string, body?: unknown) =>
-  new Request(`http://localhost/api/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  new Request(`http://localhost/api/${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
-function envWhoseNextBatchFollowsAConcurrentWrite(statement: string): never {
-  const db = d1.env.DB;
-  let fired = false;
-  const racing = new Proxy(db, {
-    get(target, property) {
-      if (property === "batch") {
-        return async (statements: D1PreparedStatement[]) => {
-          if (!fired) {
-            fired = true;
-            await target.prepare(statement).run();
-          }
-          return target.batch(statements);
-        };
-      }
-      const value = Reflect.get(target, property) as unknown;
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-  return { ...d1.env, DB: racing } as never;
+class D1WhoseNextBatchFollowsAConcurrentWrite implements D1Database {
+  private fired = false;
+
+  constructor(
+    private readonly db: D1Database,
+    private readonly concurrentWrite: string,
+  ) {}
+
+  prepare(query: string): D1PreparedStatement {
+    return this.db.prepare(query);
+  }
+
+  async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    if (!this.fired) {
+      this.fired = true;
+      await this.db.prepare(this.concurrentWrite).run();
+    }
+    return this.db.batch<T>(statements);
+  }
+
+  exec(query: string): Promise<D1ExecResult> {
+    return this.db.exec(query);
+  }
+
+  withSession(...constraintOrBookmark: Parameters<D1Database["withSession"]>): D1DatabaseSession {
+    return this.db.withSession(...constraintOrBookmark);
+  }
+
+  dump(): Promise<ArrayBuffer> {
+    return this.db.dump();
+  }
+}
+
+function envWhoseNextBatchFollowsAConcurrentWrite(statement: string): Env {
+  return { ...d1.env, DB: new D1WhoseNextBatchFollowsAConcurrentWrite(d1.env.DB, statement) };
 }
 
 async function auditCount(resourceId: string, action: string): Promise<number> {
@@ -106,33 +125,33 @@ describe.sequential("audit rows under concurrent writes (local D1), recorded onl
   });
 
   it("run PUT: one save wins and only it is in history", async () => {
-    const statuses = await burst(handleChecklists as Handler, (index) =>
+    const statuses = await burst(handleChecklists, (index) =>
       request("checklists/run-put", "PUT", { title: `Title ${index}`, expected_revision: 7 }));
     expectOneSuccess(statuses, 409);
     expect(await auditCount("run-put", "checklist_run.updated")).toBe(1);
   });
 
   it("share-link PUT: one save wins and only it is in history", async () => {
-    const sections = JSON.parse(runItems);
-    sections[0].items[0].isCompleted = true;
-    const statuses = await burst(handleChecklists as Handler, () =>
+    const sections = storedSectionsIn(runItems);
+    taskIn(sections, 0, 0).isCompleted = true;
+    const statuses = await burst(handleChecklists, () =>
       request("checklists/shared/share-token", "PUT", { sections, expected_revision: 7 }));
     expectOneSuccess(statuses, 409);
     expect(await auditCount("run-shared", "checklist_run.shared_updated")).toBe(1);
   });
 
   it("revalidate: one request wins and only it is in history", async () => {
-    const statuses = await burst(handleChecklists as Handler, () =>
+    const statuses = await burst(handleChecklists, () =>
       request("checklists/run-revalidate/revalidate", "POST", { expected_revision: 7 }));
     expectOneSuccess(statuses, 409);
     expect(await auditCount("run-revalidate", "checklist_run.revalidated")).toBe(1);
   });
 
   it("run archive and restore: one request each succeeds and is recorded", async () => {
-    expectOneSuccess(await burst(handleChecklists as Handler, () => request("checklists/run-archive", "DELETE")), 404);
+    expectOneSuccess(await burst(handleChecklists, () => request("checklists/run-archive", "DELETE")), 404);
     expect(await auditCount("run-archive", "checklist_run.deleted")).toBe(1);
 
-    expectOneSuccess(await burst(handleChecklists as Handler, () => request("checklists/run-restore/restore", "POST")), 400);
+    expectOneSuccess(await burst(handleChecklists, () => request("checklists/run-restore/restore", "POST")), 400);
     expect(await auditCount("run-restore", "checklist_run.restored")).toBe(1);
   });
 
@@ -163,7 +182,7 @@ describe.sequential("audit rows under concurrent writes (local D1), recorded onl
     const response = await handleTemplates(request("templates/template-source", "PUT", {
       expected_version: current?.version,
       sections: [{ id: "s1", title: "S", items: [{ id: "i1", title: "Task" }, { id: "i3", title: "Added" }] }],
-    }), d1.env as never);
+    }), d1.env);
 
     expect(response.status).toBe(200);
     expect(await auditCount("template-source", "template.updated")).toBe(1);
@@ -173,24 +192,24 @@ describe.sequential("audit rows under concurrent writes (local D1), recorded onl
   });
 
   it("template archive and restore: one request each succeeds and is recorded", async () => {
-    expectOneSuccess(await burst(handleTemplates as Handler, () => request("templates/template-archive", "DELETE")), 404);
+    expectOneSuccess(await burst(handleTemplates, () => request("templates/template-archive", "DELETE")), 404);
     expect(await auditCount("template-archive", "template.deleted")).toBe(1);
 
-    expectOneSuccess(await burst(handleTemplates as Handler, () => request("templates/template-restore/restore", "POST")), 400);
+    expectOneSuccess(await burst(handleTemplates, () => request("templates/template-restore/restore", "POST")), 400);
     expect(await auditCount("template-restore", "template.restored")).toBe(1);
   });
 
   it("keeps the audit guards and the share-link actor lookup on indexed reads", async () => {
-    const { checklist_runs, team_members, templates } = schema;
+    const { checklistRuns, teamMembers, templates } = schema;
     const plan = async (query: SQL) => {
       const compiled = new SQLiteSyncDialect().sqlToQuery(query);
       const rows = await d1.env.DB.prepare(`EXPLAIN QUERY PLAN ${compiled.sql}`).bind(...compiled.params).all<{ detail: string }>();
       return rows.results.map(({ detail }) => detail);
     };
     const queries = [
-      sql`select ${rowExistsSql(checklist_runs.id, "run-put", and(eq(checklist_runs.revision, 7), isNull(checklist_runs.deleted_at)))}`,
+      sql`select ${rowExistsSql(checklistRuns.id, "run-put", and(eq(checklistRuns.revision, 7), isNull(checklistRuns.deleted_at)))}`,
       sql`select exists (select 1 from ${templates} where ${and(eq(templates.id, "template-put"), eq(templates.version, 3))})`,
-      sql`select ${team_members.user_id} from ${team_members} where ${and(eq(team_members.team_id, "org"), inArray(team_members.user_id, ["a", "b"]))}`,
+      sql`select ${teamMembers.user_id} from ${teamMembers} where ${and(eq(teamMembers.team_id, "org"), inArray(teamMembers.user_id, ["a", "b"]))}`,
     ];
     for (const query of queries) {
       const steps = await plan(query);

@@ -16,13 +16,11 @@ import {
 import {
   Item,
   ItemActions,
-  ItemContent,
-  ItemDescription,
   ItemGroup,
-  ItemTitle,
 } from '@/components/ui/item';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
+import { assignableRoles, formatRole } from '@/components/account/teamSettingsFormat';
+import { InviteItemContent } from '@/components/account/InviteItemContent';
 import { inviteEmailAfterLink, type AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 import { useTeamInvites } from '@/features/teams/useTeamInvites';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -114,7 +112,9 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="team-invite-role">Role</FieldLabel>
-          <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}>
+          <Select value={inviteRole} onValueChange={(value) => {
+            if (value) setInviteRole(value);
+          }}>
             <SelectTrigger className="w-full" id="team-invite-role">
               <SelectValue>{(role: AssignableTeamRole) => formatRole(role)}</SelectValue>
             </SelectTrigger>
@@ -191,16 +191,13 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
           <ItemGroup className="gap-2">
             {invites.map((invite) => (
               <Item key={invite.id} role="listitem" variant="outline">
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="wrap-anywhere">{invite.email}</ItemTitle>
-                  <ItemDescription className="wrap-anywhere">
-                    Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
-                  </ItemDescription>
-                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    <span>{formatRole(invite.role)}</span>
-                    <span>{formatInviteExpiration(invite.expires_at)}</span>
-                  </div>
-                </ItemContent>
+                <InviteItemContent
+                  title={invite.email}
+                  inviterName={invite.inviterName}
+                  inviterEmail={invite.inviterEmail}
+                  role={invite.role}
+                  expiresAt={invite.expires_at}
+                />
                 <ItemActions>
                   <Button
                     aria-label={`New link for ${invite.email}`}

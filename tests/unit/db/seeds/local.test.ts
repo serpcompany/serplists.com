@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { drizzle } from "drizzle-orm/d1";
 import { describe, expect, it } from "vitest";
+import { onlyElement } from "../../../support/elements";
 import {
   cleanupLocalTestData,
   LEGACY_TEST_TEMPLATE_SLUGS,
@@ -9,56 +10,25 @@ import {
   repairLegacyTestTemplateSlugs,
   seedLocalTestData,
   seedOfficialLocalLogin,
-  TEST_TEMPLATE_IDS,
-  TEST_USER_IDS,
 } from "../../../../db/seeds/local";
+import { TEST_TEMPLATE_IDS, TEST_USER_IDS } from "../../../../db/seeds/local-test-data/ids";
 import * as schema from "../../../../db/schema/index";
-import type { LocalDb } from "../../../../scripts/data/local-d1";
-import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed.mjs";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
 
 type TemplateRow = { id: string; user_id: string; slug: string | null };
-type Method = "run" | "all" | "values" | "get";
 
 function migratedLocalD1DrivenAsTheSeedScriptsDriveIt() {
-  const sqlite = createMigratedD1().sqlite;
-
-  const execute = (sql: string, params: unknown[], method: Method) => {
-    const statement = sqlite.prepare(sql);
-    const values = params as Parameters<typeof statement.run>;
-    if (method === "run") {
-      statement.run(...values);
-      return { rows: [] };
-    }
-    const rows = statement.all(...values).map((row) => Object.values(row as Record<string, unknown>));
-    return { rows: method === "get" ? rows[0] : rows };
-  };
-
-  const db = drizzle(
-    async (sql, params, method) => execute(sql, params, method),
-    async (queries) => {
-      sqlite.exec("BEGIN");
-      try {
-        const results = queries.map(({ sql, params, method }) => execute(sql, params, method));
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    { schema },
-  ) as unknown as LocalDb;
+  const d1 = new SqliteD1();
 
   return {
-    db,
-    runOfficialSeed: () => sqlite.exec(officialSeedSql),
-    templates: () =>
-      sqlite.prepare("SELECT id, user_id, slug FROM templates ORDER BY id").all() as unknown as TemplateRow[],
-    ids: (sql: string) => sqlite.prepare(sql).all().map((row) => String((row as { id: unknown }).id)),
-    exec: (sql: string) => sqlite.exec(sql),
+    db: drizzle(d1.binding, { schema }),
+    runOfficialSeed: () => d1.sqlite.exec(officialSeedSql),
+    templates: () => d1.rows<TemplateRow>("SELECT id, user_id, slug FROM templates ORDER BY id"),
+    ids: (sql: string) => d1.rows(sql).map((row) => String(row["id"])),
+    exec: (sql: string) => d1.sqlite.exec(sql),
   };
 }
 
@@ -361,7 +331,7 @@ describe("readLocalSeedStatus", () => {
     await seedLocalTestData(local.db);
     expect((await readLocalSeedStatus(local.db)).testData).toBe(true);
 
-    const [lastInserted] = local.ids("SELECT source || ' ' || row_key AS id FROM inserted_rows ORDER BY seq DESC LIMIT 1");
+    const lastInserted = onlyElement(local.ids("SELECT source || ' ' || row_key AS id FROM inserted_rows ORDER BY seq DESC LIMIT 1"));
     const [table, rowKey] = lastInserted.split(" ");
     local.exec(`DELETE FROM "${table}" WHERE rowid = ${Number(rowKey)}`);
 

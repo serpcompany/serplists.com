@@ -18,17 +18,11 @@ import { SearchField } from '@/components/layout/SearchField';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { ViewModeToggle } from '@/components/layout/ViewModeToggle';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { LabeledSelect } from '@/components/shared/LabeledSelect';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { ItemGroup } from '@/components/ui/item';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   reportDashboardTemplateRunFailure,
   useDashboardTemplatesModel,
@@ -37,6 +31,7 @@ import { usePageVisit } from '@/hooks/usePageVisit';
 import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { isStaleRecordError } from '@/lib/editConflicts';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import { formatCount } from '@/lib/utils/pluralize';
 import {
@@ -101,16 +96,7 @@ const Templates = () => {
         }
 
         if (sortBy === 'tasks') {
-          const leftTasks = left.sections.reduce(
-            (count, section) => count + section.items.length,
-            0,
-          );
-          const rightTasks = right.sections.reduce(
-            (count, section) => count + section.items.length,
-            0,
-          );
-
-          return rightTasks - leftTasks;
+          return countTemplateItems(right) - countTemplateItems(left);
         }
 
         return compareTemplatesByRecent(left, right);
@@ -213,45 +199,23 @@ const Templates = () => {
         </Field>
 
         <div className="flex items-end gap-3">
-          <Field className="flex-1 sm:w-36 sm:flex-none">
-            <FieldLabel htmlFor={`${fieldId}-visibility`}>Visibility</FieldLabel>
-            <Select
-              items={VISIBILITY_FILTER_LABELS}
-              value={filterVisibility}
-              onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
-            >
-              <SelectTrigger className="w-full" id={`${fieldId}-visibility`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(VISIBILITY_FILTER_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <LabeledSelect
+            className="flex-1 sm:w-36 sm:flex-none"
+            id={`${fieldId}-visibility`}
+            label="Visibility"
+            labels={VISIBILITY_FILTER_LABELS}
+            value={filterVisibility}
+            onValueChange={setFilterVisibility}
+          />
 
-          <Field className="flex-1 sm:w-40 sm:flex-none">
-            <FieldLabel htmlFor={`${fieldId}-sort`}>Sort by</FieldLabel>
-            <Select
-              items={SORT_OPTION_LABELS}
-              value={sortBy}
-              onValueChange={(value) => setSortBy(value as SortOption)}
-            >
-              <SelectTrigger className="w-full" id={`${fieldId}-sort`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(SORT_OPTION_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <LabeledSelect
+            className="flex-1 sm:w-40 sm:flex-none"
+            id={`${fieldId}-sort`}
+            label="Sort by"
+            labels={SORT_OPTION_LABELS}
+            value={sortBy}
+            onValueChange={setSortBy}
+          />
 
           <ViewModeToggle onChange={setViewMode} value={viewMode} />
         </div>

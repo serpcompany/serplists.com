@@ -5,11 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+import type { useTemplateLists } from '@/contexts/TemplatesContext';
 
-const mockUseTemplateLists = vi.fn();
+type TemplateListsArgs = Parameters<typeof useTemplateLists>;
+
+const mockUseTemplateLists = vi.fn<(...args: TemplateListsArgs) => Partial<ReturnType<typeof useTemplateLists>>>();
 
 vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplateLists: (...args: unknown[]) => mockUseTemplateLists(...args),
+  useTemplateLists: (...args: TemplateListsArgs) => mockUseTemplateLists(...args),
 }));
 
 type Library = ReturnType<typeof useTemplateLibrary>;

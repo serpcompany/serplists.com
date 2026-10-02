@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import type { JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
@@ -12,10 +13,11 @@ import {
   invalidCursor,
   MAX_RESULT_BYTES,
   resultTooLarge,
+  type ToolResult,
 } from "./agentMcpPages";
 import { summarizeRun } from "./agentMcpRuns";
 import { listTemplatesArgs } from "./agentMcpTemplateTools";
-import { listRunsArgs, parseToolArguments, type JsonRecord } from "./agentMcpTools";
+import { listRunsArgs, parseToolArguments } from "./agentMcpTools";
 
 export const LIST_PAGE_ROWS = 100;
 const LIST_CURSOR_RESERVE_BYTES = 512;
@@ -35,7 +37,7 @@ const keyAfter = (sortKey: unknown, id: unknown, after: After) =>
 
 const templateSortKey = sql`coalesce(${schema.templates.updated_at}, ${schema.templates.created_at})`;
 
-export function selectTemplatePage(db: ReturnType<typeof createDb>, userId: string, after: After | undefined, limit: number) {
+function selectTemplatePage(db: ReturnType<typeof createDb>, userId: string, after: After | undefined, limit: number) {
   const { templates } = schema;
   return db
     .select({
@@ -64,14 +66,14 @@ export function selectTemplatePage(db: ReturnType<typeof createDb>, userId: stri
     .limit(limit);
 }
 
-export function selectRunPage(
+function selectRunPage(
   db: ReturnType<typeof createDb>,
   userId: string,
   status: "in_progress" | "completed" | undefined,
   after: After | undefined,
   limit: number,
 ) {
-  const runs = schema.checklist_runs;
+  const runs = schema.checklistRuns;
   return db
     .select({
       id: runs.id,
@@ -127,7 +129,8 @@ function listPage<Row>({ name, rowsAndOneMore, owned, summarize, cursor }: Listi
   }
   const more = consumed < candidates.length || rowsAndOneMore.length > LIST_PAGE_ROWS;
   if (more && consumed === 0) throw resultTooLarge();
-  return bounded({ [name]: page, ...(more ? { nextCursor: encodeCursor(cursor(candidates[consumed - 1])) } : {}) });
+  const lastConsumed = more ? candidates[consumed - 1] : undefined;
+  return bounded({ [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) });
 }
 
 function readListCursor(value: string | undefined, list: ListCursor["l"]): ListCursor | undefined {
@@ -173,13 +176,14 @@ export async function listRuns(env: Env, identity: PersonalRunKeyIdentity, rawAr
     name: "runs",
     rowsAndOneMore,
     owned: (row) => row.user_id === identity.userId && row.team_id === null && row.deleted_at === null,
-    summarize: (row) => ({ ...summarizeRun(row as JsonRecord), title: boundedText(row.title) }),
+    summarize: (row) => ({ ...summarizeRun(row), title: boundedText(row.title) }),
     cursor: (row) => ({ l: "runs", ...(status ? { st: status } : {}), k: row.created_at, i: String(row.id) }),
   });
 }
 
-export function describeList(result: JsonRecord, noun: "template" | "run"): string {
-  const count = Array.isArray(result[`${noun}s`]) ? (result[`${noun}s`] as unknown[]).length : 0;
+export function describeList(result: ToolResult, noun: "template" | "run"): string {
+  const listed = result[`${noun}s`];
+  const count = Array.isArray(listed) ? listed.length : 0;
   const more = typeof result.nextCursor === "string" ? ` More follows: call list_${noun}s with cursor set to nextCursor.` : "";
   return `Found ${count} personal ${noun}(s).${more}`;
 }

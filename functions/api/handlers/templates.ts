@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { createDb } from '../db';
 import { jsonError } from '../utils/response';
+import { readJsonBody } from '../utils/request-json';
 import { getSessionUserId } from '../utils/session';
 import { archiveTemplate, restoreTemplate } from './template-archive';
 import { handleTemplateBackup } from './template-backup';
@@ -41,49 +42,28 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return cloneTemplate(request, env, db, userId, templatesSubpath[0]);
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return jsonError('Invalid JSON payload', 400);
-    }
-
-    return createTemplateForUser(request, env, userId, body);
+    const read = await readJsonBody(request);
+    if ('response' in read) return read.response;
+    return createTemplateForUser(request, env, userId, read.body);
   }
 
-  if (request.method === 'PUT') {
+  if (request.method === 'PUT' || request.method === 'DELETE') {
     if (!userId) {
       return jsonError('Unauthorized', 401);
     }
 
     const templateId = url.pathname.split('/').pop();
-
     if (!templateId || templateId === 'templates') {
       return jsonError('Template ID required', 400);
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return jsonError('Invalid JSON payload', 400);
+    if (request.method === 'DELETE') {
+      return archiveTemplate(request, env, db, userId, templateId);
     }
 
-    return updateTemplateForUser(request, env, userId, templateId, body);
-  }
-
-  if (request.method === 'DELETE') {
-    if (!userId) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const templateId = url.pathname.split('/').pop();
-
-    if (!templateId || templateId === 'templates') {
-      return jsonError('Template ID required', 400);
-    }
-
-    return archiveTemplate(request, env, db, userId, templateId);
+    const read = await readJsonBody(request);
+    if ('response' in read) return read.response;
+    return updateTemplateForUser(request, env, userId, templateId, read.body);
   }
 
   return new Response('Method Not Allowed', { status: 405 });

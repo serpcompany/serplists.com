@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { firstOf } from '../../support/elements';
 
-import { buildCreateRunRequest, mapApiTemplate } from '@/contexts/TemplatesContext';
+import { buildCreateRunRequest } from '@/contexts/TemplatesContext';
+import { mapApiTemplate } from '@/lib/templates/apiTemplateMapper';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -99,6 +101,17 @@ describe('buildCreateRunRequest', () => {
   });
 });
 
+const textBlock = { id: 'content-1', type: 'text', value: 'Some text content' };
+const subItemsBlock = (secondSubItem: Record<string, unknown>) => ({
+  id: 'content-2',
+  type: 'subItems',
+  value: '',
+  subItems: [
+    { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
+    { id: 'sub-2', title: 'Sub-item 2', ...secondSubItem },
+  ],
+});
+
 const importedSections = [
   {
     id: 'section-1',
@@ -108,18 +121,7 @@ const importedSections = [
         id: 'item-1',
         title: 'Item with description',
         description: 'This is a detailed description',
-        contents: [
-          { id: 'content-1', type: 'text', value: 'Some text content' },
-          {
-            id: 'content-2',
-            type: 'subItems',
-            value: '',
-            subItems: [
-              { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
-              { id: 'sub-2', title: 'Sub-item 2' },
-            ],
-          },
-        ],
+        contents: [textBlock, subItemsBlock({})],
       },
       { id: 'item-2', title: 'Simple item', description: 'Just a simple item' },
     ],
@@ -137,21 +139,10 @@ const storedTemplateRow = (items: unknown, overrides: Record<string, unknown> = 
 
 describe('mapApiTemplate on an imported template as the API stores it', () => {
   it("keeps every task's description, content blocks and Sub-tasks", () => {
-    const [section] = mapApiTemplate(storedTemplateRow(JSON.stringify(importedSections))).sections;
+    const section = firstOf(mapApiTemplate(storedTemplateRow(JSON.stringify(importedSections))).sections);
 
     expect(section.items.map((item) => item.description)).toEqual(['This is a detailed description', 'Just a simple item']);
-    expect(section.items[0].contents).toEqual([
-      { id: 'content-1', type: 'text', value: 'Some text content' },
-      {
-        id: 'content-2',
-        type: 'subItems',
-        value: '',
-        subItems: [
-          { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
-          { id: 'sub-2', title: 'Sub-item 2', isCompleted: false },
-        ],
-      },
-    ]);
+    expect(firstOf(section.items).contents).toEqual([textBlock, subItemsBlock({ isCompleted: false })]);
   });
 
   it('reads the items column the same whether it arrives as JSON text or as an array', () => {
@@ -181,7 +172,7 @@ describe('buildCreateRunRequest from an imported template', () => {
   it("carries every task's title, description and content blocks into the run, with every task and Sub-task unticked", () => {
     const template = mapApiTemplate(storedTemplateRow(JSON.stringify(importedSections)));
 
-    const [section] = buildCreateRunRequest({ template, templateId: template.id }).runSections;
+    const section = firstOf(buildCreateRunRequest({ template, templateId: template.id }).runSections);
 
     expect(section.items[0]).toMatchObject({
       title: 'Item with description',

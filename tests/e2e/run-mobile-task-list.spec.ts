@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun, openTheRunAt, openTheRunAtDesktopWidth } from './support/run-saves';
 
 async function createRun(page: Page) {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title: `Mobile task list QA ${Date.now()}`,
@@ -24,18 +26,13 @@ async function createRun(page: Page) {
   return run.id;
 }
 
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
-}
-
 for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 }]) {
   test(`at ${viewport.width}px any task can be opened from the Tasks list`, async ({ page }) => {
     await loginAsAdmin(page);
     const runId = await createRun(page);
     await page.setViewportSize(viewport);
 
-    await page.goto(`/dashboard/runs/${runId}/`);
-    await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+    await openTheRunAt(page, runId);
     await expect(page.locator('[data-run-progress-panel]')).toBeHidden();
 
     await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -59,9 +56,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 
 test('at desktop width the task column shows and the Tasks button does not', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
-
-  await page.goto(`/dashboard/runs/${runId}/`);
+  await openTheRunAtDesktopWidth(page, runId);
   await expect(page.locator('[data-run-progress-panel]')).toBeVisible();
   await expect(page.locator('[data-mobile-run-tasks-trigger]')).toBeHidden();
   await page.locator('[data-run-progress-panel]').getByRole('button', { name: /Task E/ }).click();

@@ -7,15 +7,13 @@ export const UPLOAD_BUCKETS = [
 
 export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
-export const AVATAR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
-
 type UploadKind = {
   label: string;
   extensions: readonly string[];
   mimeTypes: readonly string[];
 };
 
-const typeStoredForUntypedFile = (kind: UploadKind): string => kind.mimeTypes[0];
+const typeStoredForUntypedFile = (kind: UploadKind): string | null => kind.mimeTypes[0] ?? null;
 
 const IMAGE_KINDS: readonly UploadKind[] = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },
@@ -108,7 +106,7 @@ export const resolveUploadContentType = (
   file: { name: string; type: string },
 ): string | null => {
   const { kinds } = UPLOAD_KINDS[bucket];
-  const type = file.type.split(';')[0].trim().toLowerCase();
+  const type = (file.type.split(';')[0] ?? '').trim().toLowerCase();
 
   if (!UNKNOWN_TYPES.has(type)) {
     return kinds.some((kind) => kind.mimeTypes.includes(type)) ? type : null;

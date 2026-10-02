@@ -1,18 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
+import { z } from 'zod';
 
-import { API_BASE_URL, apiJson, apiRequest } from './support/api-requests';
+import { API_BASE_URL, apiJson } from './support/api-requests';
+import { apiRunSchema, createdRunSchema, runShareCreatedSchema, sectionsOfStoredItems } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
-
-type StoredRun = {
-  progress: number;
-  items: string | Array<{ items: Array<{ title: string; isCompleted?: boolean }> }>;
-};
+import { deleteRun } from './support/run-saves';
 
 async function readOwnerRun(page: Page, runId: string) {
-  const run = await apiJson<StoredRun>(page, `/checklists/${runId}`);
-  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{
-    items: Array<{ title: string; isCompleted?: boolean }>;
-  }>;
+  const run = await apiJson(page, `/checklists/${runId}`, apiRunSchema);
+  const sections = sectionsOfStoredItems(run.items);
   return {
     progress: run.progress,
     tasks: sections.flatMap((section) => section.items.map((item) => `${item.title}:${item.isCompleted === true}`)),
@@ -20,16 +16,20 @@ async function readOwnerRun(page: Page, runId: string) {
 }
 
 async function createSharedRun(page: Page, run: { title: string; sections: unknown[] }) {
-  const { id: runId } = await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body: run });
-  const { shareToken } = await apiJson<{ shareToken: string }>(page, `/checklists/run/${runId}/share`, {
+  const { id: runId } = await apiJson(page, '/checklists', createdRunSchema, { method: 'POST', body: run });
+  const { shareToken } = await apiJson(page, `/checklists/run/${runId}/share`, runShareCreatedSchema, {
     method: 'POST',
     body: {},
   });
   return { runId, shareToken };
 }
 
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+async function aGuestWhoseLinkWorks(browser: Browser, shareToken: string) {
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
+  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  return { guestContext, guest, sharedUrl };
 }
 
 test('a share-link guest can tick tasks but cannot rewrite or wipe the run', async ({ browser, page }) => {
@@ -48,7 +48,7 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
   const guest = await guestContext.newPage();
   const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
   const guestRevision = async () =>
-    ((await (await guest.request.get(sharedUrl)).json()) as { revision: number }).revision;
+    z.object({ revision: z.number() }).passthrough().parse(await (await guest.request.get(sharedUrl)).json()).revision;
 
   await guest.goto(`/share/${shareToken}/`);
   await expect(guest.getByRole('heading', { name: 'Task A' })).toBeVisible();
@@ -107,7 +107,7 @@ test('a share-link guest is told what they may do, completes the Run and stays o
   await expect(guest).toHaveURL(new RegExp(`/share/${shareToken}/$`));
   await expect(guest.getByText('Completed', { exact: true })).toBeVisible();
   await expect(guest.getByRole('checkbox', { name: 'Mark "Task A" complete' })).toBeDisabled();
-  await expect.poll(async () => (await apiJson<{ status: string }>(page, `/checklists/${runId}`)).status).toBe('completed');
+  await expect.poll(async () => (await apiJson(page, `/checklists/${runId}`, apiRunSchema)).status).toBe('completed');
 
   await guestContext.close();
   await deleteRun(page, runId);
@@ -123,10 +123,7 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
     sections: [{ id: 'stop', title: 'Section', items: [{ id: 'stop-a', title: 'Task A' }] }],
   });
 
-  const guestContext = await browser.newContext();
-  const guest = await guestContext.newPage();
-  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
-  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  const { guestContext, guest, sharedUrl } = await aGuestWhoseLinkWorks(browser, shareToken);
 
   await page.goto('/dashboard/runs/');
   const row = page.locator('div.group', { hasText: title });
@@ -153,10 +150,7 @@ test('stopping a share from the run page turns the guest link off, and the page 
     sections: [{ id: 'page', title: 'Section', items: [{ id: 'page-a', title: 'Task A' }] }],
   });
 
-  const guestContext = await browser.newContext();
-  const guest = await guestContext.newPage();
-  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
-  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  const { guestContext, guest, sharedUrl } = await aGuestWhoseLinkWorks(browser, shareToken);
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByText('Shared', { exact: true })).toBeVisible();

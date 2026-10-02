@@ -1,13 +1,10 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LoadUserProfileResult } from '@/features/profile/loadUserProfile';
 import { UserProfileContent } from '@/views/UserProfile';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const renderProfile = (result: LoadUserProfileResult | null) => {
   navigation.reset('/profile/alice', { params: { username: 'alice' } });

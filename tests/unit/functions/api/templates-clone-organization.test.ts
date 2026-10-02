@@ -1,68 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
+import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
+import { activeMember, publicTemplateSource } from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
 
-const membership = (role: string) => [
-  { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role, status: 'active' },
-];
+const membership = (role: string) => [activeMember(role)];
 
-const publicSource = [
-  {
-    id: 'template-1',
-    title: 'Public Template',
-    description: '',
-    items: JSON.stringify([]),
-    category: '[]',
-    tags: '[]',
-    user_id: 'other-user',
-    is_public: true,
-    slug: 'public-template',
-    created_at: '2026-04-18T00:00:00.000Z',
-    updated_at: null,
-    version: 1,
-  },
-];
+const publicSource = [publicTemplateSource()];
 
 const cloneIntoOrganization = () =>
-  handleTemplates(
-    new Request('http://localhost/api/templates/template-1/clone', {
-      method: 'POST',
-      body: JSON.stringify({ teamId: 'team-1', visibility: 'private' }),
-    }),
-    { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as never,
-  );
+  handleTemplates(apiRequest('templates/template-1/clone', 'POST', { teamId: 'team-1', visibility: 'private' }), mockEnv);
 
 describe('POST /api/templates/:id/clone into an Organization, which decides for the template detail page whether a Free Organization may take the copy', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    dbMocks.db.batch.mockResolvedValue([]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForContext).mockResolvedValue({
-      plan: 'free',
-      limits: { maxTemplates: 1, maxActiveRuns: 3 },
-    });
+    resetToASignedOutVisitorOnTheFreePlan();
+    signInWithPlans('user-123', FREE_PLAN);
   });
 
   it('copies into a Free Organization that is under its Template limit', async () => {
@@ -87,7 +42,7 @@ describe('POST /api/templates/:id/clone into an Organization, which decides for 
       .mockResolvedValueOnce([{ count: 1 }]);
 
     const response = await cloneIntoOrganization();
-    const data = (await response.json()) as { code?: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -97,7 +52,7 @@ describe('POST /api/templates/:id/clone into an Organization, which decides for 
     dbMocks.selectChain.limit.mockResolvedValueOnce(membership('viewer'));
 
     const response = await cloneIntoOrganization();
-    const data = (await response.json()) as { code?: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBeUndefined();

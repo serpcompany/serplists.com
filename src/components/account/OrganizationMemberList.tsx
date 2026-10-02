@@ -102,9 +102,9 @@ export function OrganizationMemberList({
                         <Select
                           value={member.role}
                           disabled={controlsDisabled}
-                          onValueChange={(value) =>
-                            onUpdateMember(member, { role: value as AssignableTeamRole })
-                          }
+                          onValueChange={(value) => {
+                            if (value && value !== 'owner') onUpdateMember(member, { role: value });
+                          }}
                         >
                           <SelectTrigger aria-label={`Role for ${memberLabel}`} className="w-full" id={roleId}>
                             <SelectValue>{(role: TeamMember['role']) => formatRole(role)}</SelectValue>
@@ -124,9 +124,9 @@ export function OrganizationMemberList({
                         <Select
                           value={member.status}
                           disabled={controlsDisabled}
-                          onValueChange={(value) =>
-                            onUpdateMember(member, { status: value as TeamMemberStatus })
-                          }
+                          onValueChange={(value) => {
+                            if (value) onUpdateMember(member, { status: value });
+                          }}
                         >
                           <SelectTrigger aria-label={`Status for ${memberLabel}`} className="w-full" id={statusId}>
                             <SelectValue>{(status: TeamMemberStatus) => formatMemberStatus(status)}</SelectValue>

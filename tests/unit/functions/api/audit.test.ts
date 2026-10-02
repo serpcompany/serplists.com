@@ -1,18 +1,23 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
-import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
+import { insertRowWhere } from '@functions/api/utils/guarded-insert';
+import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
+import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
+import { apiEnv } from '../../../support/apiEnv';
+import { recordsIn } from '../../../support/mcpResponses';
+import { jsonRecordIn } from '../../../support/storedJson';
 
-const drizzleThatOnlyBuildsSql = createDb({ DB: {} } as never);
+const drizzleThatOnlyBuildsSql = createDb(apiEnv());
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
-type SqlParam = string | number | null;
 
 function migratedDatabase(): DatabaseSync {
-  const { sqlite: db } = createMigratedD1();
+  const { sqlite: db } = new SqliteD1();
   db.exec(`
     INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');
@@ -26,16 +31,16 @@ function migratedDatabase(): DatabaseSync {
 
 function runGeneratedSql(db: DatabaseSync, query: BuiltQuery): number {
   const { sql: text, params } = query.toSQL();
-  return Number(db.prepare(text).run(...(params as SqlParam[])).changes);
+  return Number(db.prepare(text).run(...params.map(toSqliteValue)).changes);
 }
 
 async function reconcileStatements(expectedRevision: number) {
-  const { checklist_runs } = schema;
+  const { auditEvents, checklistRuns } = schema;
   const whereClause = and(
-    eq(checklist_runs.id, 'run-1'),
-    eq(checklist_runs.revision, expectedRevision),
-    eq(checklist_runs.status, 'in_progress'),
-    isNull(checklist_runs.deleted_at),
+    eq(checklistRuns.id, 'run-1'),
+    eq(checklistRuns.revision, expectedRevision),
+    eq(checklistRuns.status, 'in_progress'),
+    isNull(checklistRuns.deleted_at),
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: 'user-1',
@@ -46,15 +51,15 @@ async function reconcileStatements(expectedRevision: number) {
     createdAt: '2026-02-01T00:00:00.000Z',
   });
   return {
-    auditInsert: insertAuditEventWhen(drizzleThatOnlyBuildsSql, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
-    runUpdate: drizzleThatOnlyBuildsSql.update(checklist_runs).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
+    auditInsert: insertRowWhere(drizzleThatOnlyBuildsSql, auditEvents, auditEvent, sql`exists (select 1 from ${checklistRuns} where ${whereClause})`),
+    runUpdate: drizzleThatOnlyBuildsSql.update(checklistRuns).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
   };
 }
 
 const events = (db: DatabaseSync) =>
-  db.prepare(`SELECT action, resource_id, metadata_json FROM audit_events`).all() as Array<Record<string, string>>;
+  db.prepare(`SELECT action, resource_id, metadata_json FROM audit_events`).all();
 
-describe('insertAuditEventWhen', () => {
+describe('insertRowWhere for an audit event', () => {
   it('records the event when the guarded write applies', async () => {
     const db = migratedDatabase();
     const { auditInsert, runUpdate } = await reconcileStatements(4);
@@ -62,9 +67,9 @@ describe('insertAuditEventWhen', () => {
     expect(runGeneratedSql(db, auditInsert)).toBe(1);
     expect(runGeneratedSql(db, runUpdate)).toBe(1);
     expect(events(db)).toEqual([
-      expect.objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
+      objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
-    expect(JSON.parse(events(db)[0].metadata_json).retired[0].id).toBe('item-dns');
+    expect(firstOf(recordsIn(jsonRecordIn(valueAt(firstOf(events(db)), 'metadata_json'))['retired'])).id).toBe('item-dns');
   });
 
   it('records nothing when the guarded write misses because someone saved the run after it was read', async () => {
@@ -143,13 +148,13 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
 
     expect(rowBytes(values)).toBeLessThan(ROW_BUDGET_BYTES);
     for (const column of [values.before_json, values.after_json]) {
-      const snapshot = JSON.parse(column ?? '{}');
+      const snapshot = jsonRecordIn(column ?? '{}');
       expect(snapshot).not.toHaveProperty('items');
       expect(snapshot).not.toHaveProperty('retired_items');
       expect(snapshot).not.toHaveProperty('share_token');
-      expect(snapshot).toEqual(expect.objectContaining({ id: 'run-1', status: 'in_progress' }));
+      expect(snapshot).toEqual(objectContaining({ id: 'run-1', status: 'in_progress' }));
     }
-    const diff = JSON.parse(values.diff_json ?? '{}');
+    const diff = jsonRecordIn(values.diff_json ?? '{}');
     expect(diff).toEqual({
       items: { sections: 1, items: 700, completed: ['item-42'] },
       progress: 1,
@@ -176,7 +181,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
       diff: { items: JSON.stringify(after) },
     }));
 
-    expect(JSON.parse(values.diff_json ?? '{}').items).toEqual({
+    expect(jsonRecordIn(values.diff_json ?? '{}')['items']).toEqual({
       sections: 1,
       items: 4,
       completed: ['c/c1'],
@@ -203,9 +208,9 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(bytes(threeByteText)).toBe(90_000);
     const values = await buildAuditEventValues(input({ metadata: { note: threeByteText } }));
 
-    const marker = JSON.parse(values.metadata_json ?? '{}');
-    expect(marker).toEqual({ truncated: true, bytes: expect.any(Number), sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
-    expect(marker.bytes).toBeGreaterThan(90_000);
+    const marker = jsonRecordIn(values.metadata_json ?? '{}');
+    expect(marker).toEqual({ truncated: true, bytes: anyInstanceOf(Number), sha256: stringMatching(/^[0-9a-f]{64}$/) });
+    expect(marker['bytes']).toBeGreaterThan(90_000);
     expect(bytes(values.metadata_json)).toBeLessThan(200);
   });
 

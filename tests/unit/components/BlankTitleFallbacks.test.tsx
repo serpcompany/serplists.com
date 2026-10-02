@@ -1,6 +1,8 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { elementAt, taskIn } from '../../support/elements';
 
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
@@ -8,10 +10,6 @@ import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const sectionsWithLegacyBlankTitles: ChecklistSection[] = [
   { id: 'section-a', title: 'Prep', items: [{ id: 'item-1', title: 'Pack' }] },
@@ -41,6 +39,7 @@ describe('blank section and sub-task titles saved before the editor defaulted th
     const html = renderToStaticMarkup(
       <RunProgressPanel
         sections={sectionsWithLegacyBlankTitles}
+        progress={0}
         currentSectionId={null}
         currentTaskId={null}
         onSelectTask={noop}
@@ -53,9 +52,9 @@ describe('blank section and sub-task titles saved before the editor defaulted th
   it('shows "Section N" in the task breadcrumb', () => {
     const html = renderToStaticMarkup(
       <TaskExecutionPanel
-        section={sectionsWithLegacyBlankTitles[1]}
+        section={elementAt(sectionsWithLegacyBlankTitles, 1)}
         sectionIndex={1}
-        task={sectionsWithLegacyBlankTitles[1].items[0]}
+        task={taskIn(sectionsWithLegacyBlankTitles, 1, 0)}
         taskIndex={0}
         totalTasks={1}
         onFinishRun={noop}
@@ -77,7 +76,7 @@ describe('blank section and sub-task titles saved before the editor defaulted th
 
   it('labels a blank sub-task by its position in a run', () => {
     const html = renderToStaticMarkup(
-      <ContentRenderer contents={sectionsWithLegacyBlankTitles[1].items[0].contents ?? []} />,
+      <ContentRenderer contents={taskIn(sectionsWithLegacyBlankTitles, 1, 0).contents ?? []} />,
     );
 
     expect(html).toContain('Check title');
@@ -112,12 +111,18 @@ describe('blank section and sub-task titles saved before the editor defaulted th
         ownerSlug="owner"
         ownerPath="/profile/owner"
         isAuthenticated={false}
+        canSaveTemplate={false}
+        canStartRun={false}
+        isBillingError={false}
         isBillingLoading={false}
         isProUser={false}
         isCreatingRun={false}
         isSaving={false}
+        isTeamWorkspace={false}
+        isWorkspaceLoading={false}
+        workspaceError={null}
         onStartRun={noop}
-        onSaveTemplate={noop}
+        onSaveTemplate={async () => true}
       />,
     );
 

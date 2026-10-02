@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 import { SecuritySection } from '@/components/account/SecuritySection';
 
@@ -16,23 +17,25 @@ const renderSignOutOtherSessionsSwitch = () => {
   const html = renderToStaticMarkup(<SecuritySection />);
   const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? [];
   expect(switches).toHaveLength(1);
-  return { html, switchTag: switches[0] };
+  const [switchTag] = switches;
+  assert.exists(switchTag);
+  return { html, switchTag };
 };
 
 describe('SecuritySection', () => {
   it('names the sign-out-other-sessions switch with its visible label and describes it, so assistive tech announces what it does, not just "switch, on"', () => {
     const { html, switchTag } = renderSignOutOtherSessionsSwitch();
 
-    const id = switchTag.match(/\sid="([^"]+)"/)?.[1];
+    const id = capturedGroup(switchTag.match(/\sid="([^"]+)"/), 1);
     expect(id).toBeTruthy();
     expect(html).toMatch(
-      new RegExp(`<label[^>]*for="${escapeRegExp(id!)}"[^>]*>Sign out other sessions</label>`),
+      new RegExp(`<label[^>]*for="${escapeRegExp(id)}"[^>]*>Sign out other sessions</label>`),
     );
 
-    const describedBy = switchTag.match(/\saria-describedby="([^"]+)"/)?.[1];
+    const describedBy = capturedGroup(switchTag.match(/\saria-describedby="([^"]+)"/), 1);
     expect(describedBy).toBeTruthy();
     expect(html).toMatch(
-      new RegExp(`<p[^>]*id="${escapeRegExp(describedBy!)}"[^>]*>Keeps you signed in on this device.</p>`),
+      new RegExp(`<p[^>]*id="${escapeRegExp(describedBy)}"[^>]*>Keeps you signed in on this device.</p>`),
     );
   });
 

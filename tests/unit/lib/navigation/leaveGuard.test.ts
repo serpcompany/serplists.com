@@ -18,6 +18,11 @@ afterEach(() => {
   cleanups.splice(0).forEach((cleanup) => cleanup());
 });
 
+const expectNoExitWhenTheUserCancels = async (signOut: () => Promise<boolean>) => {
+  await expect(leaveAfterConfirmed(signOut, () => false)).resolves.toBe(false);
+  expect(signOut).not.toHaveBeenCalled();
+};
+
 describe('leave guard', () => {
   it('allows leaving without asking when no page has unsaved changes', () => {
     const confirmDialog = vi.fn(() => false);
@@ -62,8 +67,7 @@ describe('leave guard', () => {
     const signOut = vi.fn().mockResolvedValue(true);
     register({ message: 'Unsaved template', shouldConfirm: () => true, onLeaveConfirmed: vi.fn() });
 
-    await expect(leaveAfterConfirmed(signOut, () => false)).resolves.toBe(false);
-    expect(signOut).not.toHaveBeenCalled();
+    await expectNoExitWhenTheUserCancels(signOut);
 
     await expect(leaveAfterConfirmed(signOut, () => true)).resolves.toBe(true);
     expect(signOut).toHaveBeenCalledTimes(1);
@@ -83,8 +87,7 @@ describe('leave guard', () => {
     });
     const signOut = vi.fn().mockResolvedValue(false);
 
-    await expect(leaveAfterConfirmed(signOut, () => false)).resolves.toBe(false);
-    expect(signOut).not.toHaveBeenCalled();
+    await expectNoExitWhenTheUserCancels(signOut);
 
     await expect(leaveAfterConfirmed(signOut, () => true)).resolves.toBe(false);
     expect(signOut).toHaveBeenCalledTimes(1);

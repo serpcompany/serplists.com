@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ImageOff } from 'lucide-react';
 
 import { resolveTaskImageSource } from './taskImageSource';
+import { UserContentImage } from './UserContentImage';
 
 interface TaskImageViewProps {
   alt: string;
@@ -23,7 +24,7 @@ export const TaskImageView: React.FC<TaskImageViewProps> = ({ alt, onFail, src }
     );
   }
 
-  return <img alt={alt} className="w-full max-h-96 object-contain" onError={onFail} src={src} />;
+  return <UserContentImage alt={alt} className="w-full max-h-96 object-contain" onError={onFail} src={src} />;
 };
 
 interface TaskImageProps {

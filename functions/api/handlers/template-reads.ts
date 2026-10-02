@@ -14,7 +14,7 @@ import {
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 import {
-  getTemplateSelectColumns,
+  findTemplateById,
   parseTemplateRow,
   selectTemplatesWithOwner,
   withRulesColumnFallback,
@@ -62,7 +62,7 @@ async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response>
   }
 
   const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, ownerId, includeRules));
-  return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row as unknown as Record<string, unknown>))));
+  return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row))));
 }
 
 async function readActiveTemplate(env: Env, userId: string | null, matches: SQL): Promise<Response> {
@@ -73,7 +73,7 @@ async function readActiveTemplate(env: Env, userId: string | null, matches: SQL)
       .limit(1),
   );
 
-  const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+  const body = template ? await serializeTemplateForViewer(env, template, userId) : null;
   return body ? json(body) : jsonError('Template not found', 404);
 }
 
@@ -97,7 +97,7 @@ async function listArchivedTemplates(env: Env, url: URL, userId: string | null):
       .orderBy(desc(templates.updated_at)),
   );
 
-  return json(rows.map((row) => parseTemplateRow(row as unknown as Record<string, unknown>)));
+  return json(rows.map((row) => parseTemplateRow(row)));
 }
 
 async function readTemplateHistory(
@@ -107,24 +107,17 @@ async function readTemplateHistory(
   userId: string | null,
   templateId: string,
 ): Promise<Response> {
-  const { templates } = schema;
   if (!userId) {
     return jsonError('Unauthorized', 401);
   }
 
   const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
-  const [template] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules))
-      .from(templates)
-      .where(eq(templates.id, templateId))
-      .limit(1),
-  );
+  const template = await findTemplateById(db, templateId);
 
-  if (!template || !(await canViewPrivateTemplate(env, template as unknown as Record<string, unknown>, userId))) {
+  if (!template || !(await canViewPrivateTemplate(env, template, userId))) {
     return jsonError('Template not found', 404);
   }
-  const subject = getTemplateSubject(template as unknown as Record<string, unknown>, userId);
+  const subject = getTemplateSubject(template, userId);
 
   try {
     const [versionRows, eventRows] = await Promise.all([
@@ -161,7 +154,7 @@ async function listOrganizationTemplates(env: Env, teamId: string, userId: strin
       .orderBy(desc(templates.created_at)),
   );
 
-  return json(rows.map((row) => parseTemplateRow(row as unknown as Record<string, unknown>)));
+  return json(rows.map((row) => parseTemplateRow(row)));
 }
 
 async function listCatalogOrPersonalTemplates(
@@ -190,12 +183,11 @@ async function listCatalogOrPersonalTemplates(
         .where(and(listed, isNull(templates.deleted_at)))
         .orderBy(desc(templates.created_at)),
     );
-    return json(rows.map((row) => {
-      const template = row as unknown as Record<string, unknown>;
-      return !isPublicCatalog && isOwnPersonalTemplateRow(template, userId)
+    return json(rows.map((template) =>
+      !isPublicCatalog && isOwnPersonalTemplateRow(template, userId)
         ? parseTemplateRow(template)
-        : toPublicTemplate(parseTemplateRow(template));
-    }));
+        : toPublicTemplate(parseTemplateRow(template)),
+    ));
   };
 
   return isPublicCatalog

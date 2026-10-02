@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
+import { firstOf } from '../../../support/elements';
+import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
+import { z } from 'zod';
+import { apiRequest } from '../../../support/apiRequest';
+import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn() }));
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
 vi.mock('@functions/api/utils/personal-run-key', () => ({
   authenticatePersonalRunKey: vi.fn(),
   markPersonalRunKeyUsed: vi.fn(),
@@ -17,27 +13,31 @@ vi.mock('@functions/api/utils/personal-run-key', () => ({
 import { handleAgentMcp } from '@functions/api/handlers/agentMcp';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { authenticatePersonalRunKey } from '@functions/api/utils/personal-run-key';
-import { getSessionUserId } from '@functions/api/utils/session';
 import { mcpToolCall } from '../../../support/agentMcp';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const lostRace = [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }];
+const mcpToolCallResult = z
+  .object({ result: z.object({ isError: z.boolean().optional(), structuredContent: z.unknown() }).passthrough() })
+  .passthrough();
 const sections = [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'Task' }] }];
+
+async function expectThePersonalLimitReached(response: Response, details: Record<string, unknown>) {
+  const data = await readJson(response, jsonObject);
+
+  expect(response.status).toBe(403);
+  expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { ...details, context: 'personal' } }));
+  return data;
+}
 
 describe('limit-guarded writes that lose the race to another request answer 403 limit_reached, never success', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    chainSelectsUpdatesAndDeletes(dbMocks);
+    resetToASignedOutVisitorOnTheFreePlan();
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue({ kind: 'insert' });
     dbMocks.insertChain.select.mockReturnValue({ kind: 'guarded-insert' });
     dbMocks.db.batch.mockResolvedValue(lostRace);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-1');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'free', limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    signInWithPlans('user-1', FREE_PLAN);
   });
 
   it('run create answers 403 and uses only guarded inserts', async () => {
@@ -45,15 +45,10 @@ describe('limit-guarded writes that lose the race to another request answer 403 
     const activeRunsAfterTheLostRace = [{ count: 3 }];
     dbMocks.selectChain.limit.mockResolvedValueOnce(activeRunsAtThePreCheck).mockResolvedValueOnce(activeRunsAfterTheLostRace);
 
-    const response = await handleChecklists(new Request('http://localhost/api/checklists', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Run', sections }),
-    }), env);
-    const data = await response.json() as Record<string, unknown>;
+    const response = await handleChecklists(apiRequest('checklists', 'POST', { title: 'Run', sections }), mockEnv);
 
-    expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 3, current: 3, resource: 'active_runs', context: 'personal' } }));
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
+    await expectThePersonalLimitReached(response, { limit: 3, current: 3, resource: 'active_runs' });
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
 
@@ -63,10 +58,10 @@ describe('limit-guarded writes that lose the race to another request answer 403 
       .mockResolvedValueOnce([{ count: 2 }])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/restore', { method: 'POST' }), env);
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/restore', { method: 'POST' }), mockEnv);
 
     expect(response.status).toBe(403);
-    expect((await response.json() as Record<string, unknown>).code).toBe('limit_reached');
+    expect((await readJson(response, apiErrorBody)).code).toBe('limit_reached');
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
 
@@ -79,16 +74,11 @@ describe('limit-guarded writes that lose the race to another request answer 403 
       .mockResolvedValueOnce(templatesWithTheSlug)
       .mockResolvedValueOnce(templatesAfterTheLostRace);
 
-    const response = await handleTemplates(new Request('http://localhost/api/templates', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Template', sections }),
-    }), env);
-    const data = await response.json() as Record<string, unknown>;
+    const response = await handleTemplates(apiRequest('templates', 'POST', { title: 'Template', sections }), mockEnv);
 
-    expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 1, current: 1, resource: 'templates', context: 'personal' } }));
+    const data = await expectThePersonalLimitReached(response, { limit: 1, current: 1, resource: 'templates' });
     expect(data).not.toHaveProperty('id');
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
   });
 
   it('MCP start_run answers limit_reached', async () => {
@@ -103,8 +93,8 @@ describe('limit-guarded writes that lose the race to another request answer 403 
       .mockResolvedValueOnce([{ count: 2 }])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    const response = await handleAgentMcp(mcpToolCall('start_run', { templateId: 'template-1' }), env);
-    const body = await response.json() as any;
+    const response = await handleAgentMcp(mcpToolCall('start_run', { templateId: 'template-1' }), mockEnv);
+    const body = await readJson(response, mcpToolCallResult);
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent).toEqual(expect.objectContaining({ error: 'limit_reached', details: { limit: 3, current: 3 } }));

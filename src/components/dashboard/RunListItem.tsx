@@ -13,7 +13,8 @@ import {
 
 import { IconTile } from '@/components/layout/IconTile';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,11 +44,11 @@ type RunListItemProps = {
   isRevalidating: boolean;
   isStoppingShare: boolean;
   onDelete: () => void;
-  onRevalidate?: () => void;
+  onRevalidate?: (() => void) | undefined;
   onShare: () => void;
-  onStopSharing?: () => void;
+  onStopSharing?: (() => void) | undefined;
   run: ChecklistRun;
-  template?: RunSourceTemplate | null;
+  template?: RunSourceTemplate | null | undefined;
 };
 
 export function RunListItem({

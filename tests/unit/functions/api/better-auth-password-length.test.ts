@@ -1,29 +1,28 @@
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const memory = vi.hoisted(() => ({ db: {} as Record<string, any[]> }));
-
-vi.mock('better-auth/adapters/drizzle', () => ({
-  drizzleAdapter: () => memoryAdapter(memory.db),
-}));
-
-vi.mock('@functions/api/db', () => ({
-  createDb: vi.fn(() => ({})),
-  schema: {},
-}));
+import { firstOf } from '../../../support/elements';
+import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
+import { z } from 'zod';
 
 import { createBetterAuth } from '@functions/api/better-auth';
 import { NEW_PASSWORD_BODY_FIELDS } from '@functions/api/utils/password-length';
-import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { silenceLogs } from '../../../support/apiRouter';
+import {
+  LOCAL_AUTH_ORIGIN as BASE_URL,
+  captureTheEmailsSent,
+  postToBetterAuth,
+  sessionCookieFrom,
+} from '../../../support/betterAuth';
+import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
 const EMAIL = 'john@test.com';
 const PASSWORD = 'original-password-1';
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
   RESEND_API_KEY: 're_test_123',
-} as any;
+});
 
 const ascii = (bytes: number) => 'a'.repeat(bytes);
 const fourByteEmoji = (count: number) => '\u{1F600}'.repeat(count);
@@ -39,25 +38,16 @@ function signIn(password: string, email = EMAIL) {
 }
 
 async function errorMessage(response: Response): Promise<string> {
-  return String((await response.json()).message ?? '');
+  return String((await readJson(response, z.object({ message: z.string().optional() }).passthrough())).message ?? '');
 }
 
 describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes', { timeout: 30_000 }, () => {
   let sentEmails: string[];
 
   beforeEach(() => {
-    memory.db = { users: [], session: [], account: [], verification: [] };
-    sentEmails = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
-        sentEmails.push(String(JSON.parse(String(init?.body)).text));
-        return new Response('{}', { status: 200 });
-      }),
-    );
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    emptyTheAuthTables();
+    sentEmails = captureTheEmailsSent();
+    silenceLogs();
   });
 
   afterEach(() => {
@@ -72,7 +62,7 @@ describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes',
 
     expect(response.status).toBe(400);
     expect(await errorMessage(response)).toMatch(/72/);
-    expect(memory.db.users).toEqual([]);
+    expect(inMemoryAuth.tables.users).toEqual([]);
     expect(await signIn(`${shared}-anything-else`).then((r) => r.status)).not.toBe(200);
   });
 
@@ -84,7 +74,7 @@ describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes',
 
     expect(response.status).toBe(400);
     expect(await errorMessage(response)).toBe('Invalid password');
-    expect(memory.db.users).toEqual([]);
+    expect(inMemoryAuth.tables.users).toEqual([]);
   });
 
   it('refuses a change-password request without a newPassword and keeps the old password', async () => {
@@ -149,27 +139,35 @@ describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes',
   it('still signs in an existing account whose stored password is longer than 72 bytes', async () => {
     await signUp(PASSWORD);
     const legacyPassword = `${ascii(80)}-set-before-the-limit`;
-    memory.db.account[0].password = await bcrypt.hash(legacyPassword, 4);
+    firstOf(inMemoryAuth.tables.account).password = await bcrypt.hash(legacyPassword, 4);
 
     expect((await signIn(legacyPassword)).status).toBe(200);
   });
 });
+
+const endpointOptions = z.object({ body: z.object({ shape: z.record(z.unknown()) }).passthrough().optional() }).passthrough();
+
+const pathOf = (endpoint: unknown): string | undefined =>
+  typeof endpoint === 'function' && 'path' in endpoint && typeof endpoint.path === 'string' ? endpoint.path : undefined;
+
+const bodyFieldsOf = (endpoint: unknown): string[] => {
+  const options = typeof endpoint === 'function' && 'options' in endpoint ? endpoint.options : undefined;
+  return Object.keys(endpointOptions.safeParse(options).data?.body?.shape ?? {});
+};
 
 const ENDPOINTS_THAT_ONLY_CHECK_A_PASSWORD_ALREADY_SET = ['/sign-in/email', '/sign-in/username', '/delete-user'];
 
 describe('NEW_PASSWORD_BODY_FIELDS', () => {
   it('covers every configured Better Auth endpoint that takes a new password', () => {
     const request = new Request(`${BASE_URL}/api/auth/sign-up/email`, { method: 'POST' });
-    const endpoints = Object.values(createBetterAuth(env, request).api) as Array<{
-      path: string;
-      options?: { body?: { shape?: Record<string, unknown> } };
-    }>;
+    const endpoints = Object.values(createBetterAuth(env, request).api);
 
-    const passwordFields = endpoints.flatMap((endpoint) =>
-      Object.keys(endpoint.options?.body?.shape ?? {})
+    const passwordFields = endpoints.flatMap((endpoint) => {
+      const path = pathOf(endpoint);
+      return bodyFieldsOf(endpoint)
         .filter((field) => /password/i.test(field) && field !== 'currentPassword')
-        .map((field) => ({ path: endpoint.path, field })),
-    );
+        .map((field) => ({ path: String(path), field }));
+    });
     expect(passwordFields.length).toBeGreaterThan(0);
 
     for (const { path, field } of passwordFields) {

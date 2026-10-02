@@ -1,26 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf, sectionAt, valueAt } from "../../../support/elements";
+import { callToolWithAFreshRunKey, openAFreshMcpDatabase } from "../../../support/agentMcpOnSqlite";
+import type { SqliteD1 } from "../../../support/sqlite-d1";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH, toolDefinitions } from "@functions/api/handlers/agentMcpTools";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import {
   contentSaveBytes,
   RUN_CONTENT_MAX_BYTES,
   TEMPLATE_CONTENT_MAX_BYTES,
 } from "@/lib/schemas/contentLimits";
 import { TEMPLATE_DESCRIPTION_MAX, TEMPLATE_LIST_ITEM_MAX, TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_TITLE_MAX } from "@/lib/schemas/templateLimits";
-import { authenticateWithAFreshRunKey, mcpToolCall, resultBytes } from "../../../support/agentMcp";
+import { mcpRunsPage, mcpTemplateResult, mcpTemplatesPage, resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText, MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse } from "../../../support/jsonText";
 import { readRunInFull } from "../../../support/runPages";
 import { readTemplateInFull } from "../../../support/templatePages";
+import type { McpRecord } from "../../../support/mcpResponses";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -28,18 +22,12 @@ const NOW = "2026-09-30T00:00:00.000Z";
 const CREATE_TEMPLATE_MAX_SECTIONS = 100;
 const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 
-let d1: MigratedSqliteD1;
-let calls = 0;
+let d1: SqliteD1;
 
-async function call(name: string, args: JsonRecord): Promise<JsonRecord> {
-  calls += 1;
-  authenticateWithAFreshRunKey(authenticatePersonalRunKey);
-  const response = await handleAgentMcp(mcpToolCall(name, args, calls), { DB: d1.binding } as never);
-  const body = await response.json() as JsonRecord;
-  expect(body.error, name).toBeUndefined();
-  const result = body.result as JsonRecord;
+async function call(name: string, args: JsonRecord): Promise<McpRecord> {
+  const { result } = await callToolWithAFreshRunKey(d1, name, args);
   expect(result.isError, `${name}: ${toJson(result.structuredContent).slice(0, 300)}`).toBeUndefined();
-  return result.structuredContent as JsonRecord;
+  return result.structuredContent;
 }
 
 const task = (id: string, textLength: number) => ({
@@ -52,14 +40,17 @@ const task = (id: string, textLength: number) => ({
   ],
 });
 
-function maximumTemplateSections(): JsonRecord[] {
-  const taskTooLargeForOneResult = task("big", 100_000);
-  const sections: JsonRecord[] = [{ id: "s0", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: [taskTooLargeForOneResult] }];
+type TemplateSection = { id: string; title: string; items: Array<ReturnType<typeof task>> };
+
+function maximumTemplateSections(): TemplateSection[] {
+  let lastTasks = [task("big", 100_000)];
+  const sections: TemplateSection[] = [{ id: "s0", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: lastTasks }];
   for (let index = 1; contentSaveBytes(sections) < TEMPLATE_CONTENT_MAX_BYTES - 16_000; index += 1) {
-    sections.push({ id: `s${index}`, title: `Section ${index}`, items: Array.from({ length: 10 }, (_, t) => task(`s${index}-t${t}`, 500)) });
+    lastTasks = Array.from({ length: 10 }, (_, t) => task(`s${index}-t${t}`, 500));
+    sections.push({ id: `s${index}`, title: `Section ${index}`, items: lastTasks });
   }
   expect(sections.length).toBeLessThanOrEqual(CREATE_TEMPLATE_MAX_SECTIONS);
-  const last = ((sections.at(-1)?.items as JsonRecord[])[0].contents as JsonRecord[])[0];
+  const last = firstOf(firstOf(lastTasks).contents);
   const bytesLeft = TEMPLATE_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   last.value = multibyteProse(String(last.value).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
@@ -73,7 +64,9 @@ const largestTemplateHeader = () => ({
   tags: Array.from({ length: TEMPLATE_LIST_MAX_ITEMS }, (_, index) => `${index}${costliestJsonText(TEMPLATE_LIST_ITEM_MAX - 2)}`),
 });
 
-function insertTemplate(id: string, sections: unknown[], fields: JsonRecord = {}) {
+type StoredTemplateFields = { title?: string; description?: string; categories?: string[]; tags?: string[]; createdAt?: string };
+
+function insertTemplate(id: string, sections: unknown[], fields: StoredTemplateFields = {}) {
   d1.run(`INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, created_at, updated_at,
       version, type, owner_type, team_id, created_by_user_id, content_version)
     VALUES (?, 'user-1', ?, ?, ?, 0, ?, ?, ?, NULL, 1, 'checklist', 'user', NULL, 'user-1', 1)`,
@@ -81,7 +74,7 @@ function insertTemplate(id: string, sections: unknown[], fields: JsonRecord = {}
   JSON.stringify(fields.categories ?? []), JSON.stringify(fields.tags ?? []), fields.createdAt ?? NOW);
 }
 
-function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fields: JsonRecord = {}) {
+function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fields: { title?: string; createdAt?: string } = {}) {
   d1.run(`INSERT INTO checklist_runs (id, user_id, template_id, title, items, status, started_at, created_at, progress, team_id,
       created_by_user_id, started_by_user_id, template_version, revision, retired_items)
     VALUES (?, 'user-1', NULL, ?, ?, 'in_progress', ?, ?, 0, NULL, 'user-1', 'user-1', 1, 1, ?)`,
@@ -90,21 +83,25 @@ function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fie
 
 const runTask = (id: string, notes: number) => ({ ...task(id, 200), isCompleted: false, notes: multibyteProse(notes) });
 
-function liveContentJustUnderTheRunLimit(): JsonRecord[] {
-  const sections: JsonRecord[] = [
+type RunSection = { id: string; title: string; items: Array<ReturnType<typeof runTask>> };
+
+function liveContentJustUnderTheRunLimit(): RunSection[] {
+  let lastTasks: Array<ReturnType<typeof runTask>> = [];
+  const sections: RunSection[] = [
     { id: "notes", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: Array.from({ length: 12 }, (_, index) => runTask(`note-${index}`, MAX_TASK_NOTES_LENGTH)) },
     { id: "huge", title: "Huge", items: [runTask("huge-note", NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES)] },
   ];
   for (let index = 0; contentSaveBytes(sections) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
-    sections.push({ id: `area-${index}`, title: `Area ${index}`, items: Array.from({ length: 12 }, (_, t) => runTask(`area-${index}-${t}`, 500)) });
+    lastTasks = Array.from({ length: 12 }, (_, t) => runTask(`area-${index}-${t}`, 500));
+    sections.push({ id: `area-${index}`, title: `Area ${index}`, items: lastTasks });
   }
-  const filler = (sections.at(-1)?.items as JsonRecord[])[0];
+  const filler = firstOf(lastTasks);
   const bytesLeft = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   filler.notes = multibyteProse(String(filler.notes).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   return sections;
 }
 
-function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
+function maximumRun(): { sections: RunSection[]; retired: JsonRecord[] } {
   const sections = liveContentJustUnderTheRunLimit();
   const aboutOneMegabyteOfRetiredWork: JsonRecord[] = [
     ...Array.from({ length: 20 }, (_, index) => ({
@@ -123,8 +120,8 @@ function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
   return { sections, retired: aboutOneMegabyteOfRetiredWork };
 }
 
-function withRoomForTheLongestNotes(run: { sections: JsonRecord[]; retired: JsonRecord[] }) {
-  (run.sections[0].items as JsonRecord[]).splice(0, 2);
+function withRoomForTheLongestNotes(run: { sections: RunSection[]; retired: JsonRecord[] }) {
+  sectionAt(run, 0).items.splice(0, 2);
   return run;
 }
 
@@ -132,7 +129,7 @@ function liftTheTemplateAndActiveRunLimits() {
   d1.run("INSERT INTO entitlement_overrides (user_id, plan, created_at) VALUES ('user-1', 'pro', ?)", NOW);
 }
 
-async function everyPageOf(name: "list_templates" | "list_runs"): Promise<JsonRecord[]> {
+async function everyPageOf(name: "list_templates" | "list_runs"): Promise<McpRecord[]> {
   const pages = [await call(name, {})];
   while (typeof pages.at(-1)?.nextCursor === "string") pages.push(await call(name, { cursor: pages.at(-1)?.nextCursor }));
   return pages;
@@ -146,7 +143,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
       insertTemplate(`t-${String(index).padStart(3, "0")}`, [], { title: titleOverTodaysLimit, description: descriptionOverTodaysLimit });
     }
     const pages = await everyPageOf("list_templates");
-    expect(pages.flatMap((page) => page.templates as unknown[])).toHaveLength(150);
+    expect(pages.flatMap((page) => mcpTemplatesPage.parse(page).templates)).toHaveLength(150);
     return pages;
   },
 
@@ -169,14 +166,14 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
 
   async update_template() {
     const created = await call("create_template", { ...largestTemplateHeader(), sections: maximumTemplateSections() });
-    const templateId = (created.template as JsonRecord).id;
-    const versionOf = (result: JsonRecord) => (result.template as JsonRecord).version;
+    const templateId = mcpTemplateResult.parse(created).template.id;
+    const versionOf = (result: JsonRecord) => mcpTemplateResult.parse(result).template.version;
     const results = [
       await call("update_template", { templateId, expectedVersion: 1, operation: "replace_task", taskId: "big", task: { title: "Bigger" } }),
     ];
-    results.push(await call("update_template", { templateId, expectedVersion: versionOf(results[0]), title: `${costliestJsonText(TEMPLATE_TITLE_MAX - 1)}!` }));
+    results.push(await call("update_template", { templateId, expectedVersion: versionOf(firstOf(results)), title: `${costliestJsonText(TEMPLATE_TITLE_MAX - 1)}!` }));
     const sections = maximumTemplateSections().reverse();
-    results.push(await call("update_template", { templateId, expectedVersion: versionOf(results[1]), sections }));
+    results.push(await call("update_template", { templateId, expectedVersion: versionOf(elementAt(results, 1)), sections }));
     expect(results.map(versionOf)).toEqual([2, 3, 4]);
     return results;
   },
@@ -191,7 +188,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
   async list_runs() {
     for (let index = 0; index < 150; index += 1) insertRun(`r-${String(index).padStart(3, "0")}`, [], [], { title: costliestJsonText(1_000) });
     const pages = await everyPageOf("list_runs");
-    expect(pages.flatMap((page) => page.runs as unknown[])).toHaveLength(150);
+    expect(pages.flatMap((page) => mcpRunsPage.parse(page).runs)).toHaveLength(150);
     return pages;
   },
 
@@ -221,9 +218,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
 
 describe("the largest result of every MCP tool", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new MigratedSqliteD1();
+    d1 = openAFreshMcpDatabase();
     d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'user-1@example.test', 'User', 1, ?)", NOW);
     liftTheTemplateAndActiveRunLimits();
   });
@@ -233,7 +228,7 @@ describe("the largest result of every MCP tool", () => {
   });
 
   it.each(toolDefinitions.map((tool) => tool.name))("keeps every %s result within the bound", async (name) => {
-    const results = await cases[name]();
+    const results = await valueAt(cases, name)();
 
     expect(results.length).toBeGreaterThan(0);
     for (const result of results) expect(resultBytes(result), name).toBeLessThanOrEqual(MAX_RESULT_BYTES);

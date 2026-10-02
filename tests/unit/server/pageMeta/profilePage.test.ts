@@ -1,16 +1,12 @@
+import { SECRET_THE_API_ROUTER_VALIDATES, serveTheSiteFrom, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { loadProfilePageSeo } from '@/server/pageMeta/profilePage';
-import { SECRET_THE_API_ROUTER_VALIDATES, unreachableD1, serverContext } from '../../../support/nextServerContext';
-import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
-
-let d1: MigratedSqliteD1;
+let d1: SqliteD1;
 
 const addUser = (id: string, username: string, name: string | null) =>
   d1.run(
@@ -36,10 +32,8 @@ const addPublicTemplate = (id: string, userId: string, category: string) =>
 const params = (username: string) => ({ params: Promise.resolve({ username }) });
 
 beforeEach(() => {
-  d1 = new MigratedSqliteD1();
-  serverContext.env = { DB: d1.binding, BETTER_AUTH_SECRET: SECRET_THE_API_ROUTER_VALIDATES };
-  serverContext.host = 'serplists.com';
-  vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  d1 = new SqliteD1();
+  serveTheSiteFrom(d1);
 });
 
 afterEach(() => {

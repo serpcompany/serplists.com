@@ -9,8 +9,7 @@ import {
   type TemplateDetailApiClient,
   tryRefreshTemplateLists,
 } from './templateDetailApi';
-
-type TemplateUpdater = (current: ChecklistTemplate | null) => ChecklistTemplate | null;
+import type { TemplateUpdater } from './useTemplateDetailRecord';
 
 const VISIBILITY_FAILED_MESSAGE = 'Failed to update template visibility';
 

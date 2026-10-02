@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf, taskIn } from '../../support/elements';
 
 import { canFinishRun } from '@/features/run-execution/primaryTaskAction';
 import { mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
 import { sanitizeStoredSections } from '@/lib/schemas/storedSections';
 import { countRunTasks } from '@/lib/utils/checklistSections';
+import type { TaskRecord } from '@/lib/schemas/jsonRecords';
 import { applyRunOperation } from '@functions/api/handlers/agentMcpRuns';
 import {
   calculateRunProgress,
@@ -11,8 +13,10 @@ import {
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
+import { objectContaining } from '../../support/asymmetricMatchers';
+import { errorThrownBy } from '../../support/thrownError';
 
-type Json = Record<string, any>;
+type Json = Record<string, unknown>;
 
 const hidden = (isCompleted: boolean) => ({ id: 'hidden', title: 'Hidden', isCompleted });
 const visible = (isCompleted: boolean) => ({ id: 'visible', title: 'Visible', isCompleted });
@@ -20,7 +24,7 @@ const task = (fields: Json) => ({ id: 'task-1', title: 'Write copy', ...fields }
 const onText = (isCompleted: boolean) => ({ type: 'text', value: 'Steps', subItems: [hidden(isCompleted)] });
 const onImage = (isCompleted: boolean) => ({ type: 'image', value: 'https://example.com/a.png', subItems: [hidden(isCompleted)] });
 const subTasksBlock = (isCompleted: boolean) => ({ type: 'subItems', value: '', subItems: [visible(isCompleted)] });
-const sectionsOf = (...items: Json[]) => [{ id: 'section-1', title: 'Launch', items }];
+const sectionsOf = (...items: TaskRecord[]) => [{ id: 'section-1', title: 'Launch', items }];
 
 const fixtures: Array<[string, Json[]]> = [
   ['sub-items on a text block', sectionsOf(task({ isCompleted: true, contents: [onText(false), subTasksBlock(true)] }))],
@@ -46,16 +50,16 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
 
     applyRunOperation(sections, { runId: 'run-1', expectedRevision: 1, operation: 'set_subtask_completed', taskId: 'task-1', subtaskId: 'visible', completed: true });
 
-    expect(sections[0].items[0].isCompleted).toBe(true);
+    expect(taskIn(sections, 0, 0).isCompleted).toBe(true);
     expect(findOpenRunTasks(sections).open).toEqual([]);
   });
 
   it('does not let an agent tick a sub-item the run page never shows', () => {
     const sections = sectionsOf(task({ isCompleted: false, contents: [onText(false), subTasksBlock(false)] }));
 
-    expect(() => applyRunOperation(sections, {
+    expect(errorThrownBy(() => applyRunOperation(sections, {
       runId: 'run-1', expectedRevision: 1, operation: 'set_subtask_completed', taskId: 'task-1', subtaskId: 'hidden', completed: true,
-    })).toThrow(expect.objectContaining({ code: 'subtask_not_found' }));
+    }))).toMatchObject({ code: 'subtask_not_found' });
   });
 
   it('keeps a completed task complete when its Template is reconciled', () => {
@@ -64,7 +68,7 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
 
     const result = reconcileRunSections(previous, template, []);
 
-    expect(result.sections[0].items[0].isCompleted).toBe(true);
+    expect(result.sections).toMatchObject([{ items: [{ isCompleted: true }] }]);
     expect(result.newlyRetired).toEqual([]);
   });
 
@@ -82,9 +86,9 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
   });
 
   it('are the only sub-items stored content keeps on a block', () => {
-    const [section] = sanitizeStoredSections(sectionsOf(task({ contents: [onText(false), subTasksBlock(true)] })));
+    const section = firstOf(sanitizeStoredSections(sectionsOf(task({ contents: [onText(false), subTasksBlock(true)] }))));
 
-    expect(section.items).toEqual([expect.objectContaining({
+    expect(section.items).toEqual([objectContaining({
       contents: [{ type: 'text', value: 'Steps' }, { type: 'subItems', value: '', subItems: [visible(true)] }],
     })]);
   });

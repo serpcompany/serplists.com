@@ -5,7 +5,7 @@ description: Run and debug the SERP Lists Playwright browser tests. Picks the sm
 
 # Run and debug the browser tests
 
-The browser tests run the production build on an isolated local stack: `tests/e2e/run-smoke.mjs`
+The browser tests run the production build on an isolated local stack: `tests/e2e/run-smoke.ts`
 builds the app with OpenNext and `SITE_ENV=production`, wipes, migrates, and seeds its own D1 in
 `.wrangler/smoke-state`, and serves the build in workerd on a free port from 4173. One workerd
 process renders every page, so the tests run on one Playwright worker. Run one stack at a time
@@ -39,8 +39,9 @@ app code, because the tests load the build, not the source.
 4. To watch it happen, go through the same steps on `pnpm run preview` with the `verify-web`
    skill.
 
-CI runs `test:smoke` on pull requests and `test:e2e:full` on promotions to `main`. When a run
-fails, CI uploads `tests/test-results/` as the `playwright-evidence` artifact:
+The `Browser tests` workflow (`.github/workflows/browser-tests.yml`) runs only on pull requests:
+`test:smoke` on PRs into `staging` and `test:e2e:full` on promotions to `main`. When a run
+fails, it uploads `tests/test-results/` as the `playwright-evidence` artifact:
 `gh run download <run-id> -n playwright-evidence` fetches it, and
 `gh run view <run-id> --log-failed` shows the failing step's log.
 
@@ -55,7 +56,9 @@ often miss:
   quick-fill buttons), and move inside the app with `navigateInApp()` from
   `tests/e2e/support/navigation.ts`.
 - Set up and read data with `apiRequest()` or `apiJson()` from
-  `tests/e2e/support/api-requests.ts`, not with a fetch inside `page.evaluate()`.
+  `tests/e2e/support/api-requests.ts`, not with a fetch inside `page.evaluate()`. Each call passes
+  the schema of the body it reads (the app's own, from `tests/e2e/support/api-bodies.ts`, or
+  `bodyNotRead`), so a spec never trusts a guessed shape.
 - Use only the data `seed-test` creates (`db/seeds/local.ts`) and the bundled Templates, or create
   what the spec needs in the spec.
 - Keep `localhost`: `127.0.0.1` drops the session cookie.

@@ -1,23 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
-import { fillSignInForm, type TestUser } from './support/sign-in';
+import { apiJson, bodyNotRead } from './support/api-requests';
+import {
+  openAccountMenu,
+  signOutFromTheAccountMenu as signOut,
+  submitTheSignInForm,
+  type TestUser,
+} from './support/sign-in';
 
 async function signIn(page: Page, user: TestUser) {
   await page.goto('/login/');
-  await fillSignInForm(page, user);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-async function openAccountMenu(page: Page) {
-  await page.getByRole('button', { name: 'Account menu' }).click();
-}
-
-async function signOut(page: Page) {
-  await openAccountMenu(page);
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
+  await submitTheSignInForm(page, user);
 }
 
 async function openSignedInTab(page: Page) {
@@ -26,7 +19,7 @@ async function openSignedInTab(page: Page) {
 }
 
 async function replaceSessionCookieWithoutSigningOut(page: Page, email: string) {
-  await apiJson(page, '/auth/sign-in/email', {
+  await apiJson(page, '/auth/sign-in/email', bodyNotRead, {
     method: 'POST',
     body: { email, password: 'password123' },
   });
@@ -41,14 +34,18 @@ async function expectAccountEmail(page: Page, email: string, notEmail: string) {
   await page.keyboard.press('Escape');
 }
 
-test('an open tab follows another tab that signs in as someone else, without a reload', async ({ context }) => {
-  test.setTimeout(120_000);
+async function twoTabsSignedInAsAdmin(context: BrowserContext) {
   const tab1 = await context.newPage();
   const tab2 = await context.newPage();
   await signIn(tab1, 'admin');
   await openSignedInTab(tab1);
-
   await openSignedInTab(tab2);
+  return { tab1, tab2 };
+}
+
+test('an open tab follows another tab that signs in as someone else, without a reload', async ({ context }) => {
+  test.setTimeout(120_000);
+  const { tab1, tab2 } = await twoTabsSignedInAsAdmin(context);
   await replaceSessionCookieWithoutSigningOut(tab2, 'john@test.com');
 
   await tab1.bringToFront();
@@ -60,11 +57,7 @@ test('an open tab follows another tab that signs in as someone else, without a r
 
 test('a sign-out in one tab signs the other tab out, and a sign-in brings it back, without a reload', async ({ context }) => {
   test.setTimeout(120_000);
-  const tab1 = await context.newPage();
-  const tab2 = await context.newPage();
-  await signIn(tab1, 'admin');
-  await openSignedInTab(tab1);
-  await openSignedInTab(tab2);
+  const { tab1, tab2 } = await twoTabsSignedInAsAdmin(context);
 
   await signOut(tab2);
   await tab1.bringToFront();

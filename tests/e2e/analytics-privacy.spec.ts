@@ -35,8 +35,10 @@ const SENSITIVE_PAGES = [
 ];
 
 const pathWithoutSecretValues = (path: string): string => {
-  const [pathname, query = ''] = path.split('?');
-  const keys = [...new URLSearchParams(query).keys()];
+  const queryStart = path.indexOf('?');
+  if (queryStart === -1) return path;
+  const pathname = path.slice(0, queryStart);
+  const keys = [...new URLSearchParams(path.slice(queryStart + 1)).keys()];
   return keys.length > 0 ? `${pathname}?${keys.join('&')}` : pathname;
 };
 

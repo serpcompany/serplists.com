@@ -12,7 +12,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-function ContentHarness(): JSX.Element {
+function ContentHarness(): React.JSX.Element {
   const form = useForm<TemplateEditorFormValues>({
     defaultValues: buildTemplateEditorFormValues({
       sections: [
@@ -67,8 +67,8 @@ describe('ContentEditor accessible names', () => {
     const html = renderToStaticMarkup(<ContentHarness />);
 
     expect(getByAccessibleName(html, 'Text Content')?.tag).toBe('textarea');
-    expect(getByAccessibleName(html, 'Sub-task 1')?.attrs.value).toBe('Laptop');
-    expect(getByAccessibleName(html, 'Sub-task 2')?.attrs.value).toBe('Charger');
+    expect(getByAccessibleName(html, 'Sub-task 1')?.attrs['value']).toBe('Laptop');
+    expect(getByAccessibleName(html, 'Sub-task 2')?.attrs['value']).toBe('Charger');
     expect(getByAccessibleName(html, 'Remove sub-task 1')?.tag).toBe('button');
     expect(getByAccessibleName(html, 'Remove sub-task 2')?.tag).toBe('button');
   });
@@ -84,7 +84,7 @@ describe('ContentEditor block delete button', () => {
       'focus-visible:opacity-100',
       '[@media(hover:none)]:opacity-100',
     ]) {
-      expect(remove?.attrs.class).toContain(className);
+      expect(remove?.attrs['class']).toContain(className);
     }
   });
 });

@@ -63,7 +63,7 @@ export type WorkspaceStatus = 'ready' | 'loading' | 'error';
 export const WORKSPACE_NOT_READY_MESSAGE =
   "Your Organizations haven't loaded yet, so this can't be saved. Try again in a moment.";
 
-export function assertWorkspaceReady(status: WorkspaceStatus | undefined): void {
+export function assertWorkspaceReady(status: WorkspaceStatus): void {
   if (status === 'loading' || status === 'error') {
     throw new Error(WORKSPACE_NOT_READY_MESSAGE);
   }

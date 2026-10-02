@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
-import { getTemplateDetailQueryKey } from '@/features/template-detail/templateDetailQuery';
 import {
   type TemplateDetailRecord,
   useTemplateDetailRecord,
 } from '@/features/template-detail/useTemplateDetailRecord';
+import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { createQueryClientWithAppDefaults } from '../../../support/appQueryClient';
@@ -23,7 +23,7 @@ const template: ChecklistTemplate = {
   version: 3,
 };
 
-const key = getTemplateDetailQueryKey('template-1', 'user-1');
+const key = queryKeys.templateDetail('template-1', 'user-1');
 
 const renderOnceFromTheCache = (queryClient: QueryClient) => {
   let record: TemplateDetailRecord | undefined;

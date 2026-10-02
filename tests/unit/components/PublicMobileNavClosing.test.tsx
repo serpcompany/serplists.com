@@ -1,28 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import '../../support/reactHooksKeptBetweenRenders';
+import { navigation } from '../../support/mockedNextNavigation';
+import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: null }) }));
 
 import { PublicMobileNav } from '@/components/layout/PublicMobileNav';
 import { Sheet } from '@/components/ui/sheet';
 
-import { findElement } from '../../support/elementTree';
+import { findElement, handlerOf } from '../../support/elementTree';
 import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
-import { navigation } from '../../support/nextNavigation';
 
 const renderSheet = () => {
   const sheet = findElement(renderUntilNoStateIsSetDuringRender(() => PublicMobileNav()), (element) => element.type === Sheet);
-  expect(sheet).not.toBeNull();
-  return sheet!;
+  assert.exists(sheet);
+  return sheet;
 };
 
 const openSheet = () => {
-  (renderSheet().props.onOpenChange as (open: boolean) => void)(true);
+  handlerOf(renderSheet(), 'onOpenChange')(true);
   expect(renderSheet().props.open).toBe(true);
 };
 

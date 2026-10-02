@@ -29,6 +29,12 @@ binding with `--preview`; do not change them to use the database name directly.
 - `db/schema/` (Drizzle) owns every object Drizzle can represent: tables, columns,
   defaults, constraints, foreign keys, and indexes. The generated reference is
   [generated/db-schema.md](../generated/db-schema.md).
+  - Each table is a camelCase export that takes its SQL name as the first argument:
+    `export const checklistRuns = sqliteTable("checklist_runs", { ... })`. Columns are
+    property keys named as in SQL (`user_id: text("user_id")`), so code reads
+    `checklistRuns.user_id`.
+  - Renaming an export changes no SQL. ESLint's naming convention
+    ([repository checks](../RELIABILITY.md#repository-checks)) refuses a snake_case export.
 - `db/migrations/` owns the ordered D1 migration history; D1 records applied
   migrations in `d1_migrations`.
 - SQL-only objects Drizzle cannot represent (currently the sitemap triggers) are
@@ -112,7 +118,7 @@ list migration state, and detect schema drift without applying anything. If
 `check:prod:d1-schema` fails, production is missing tables, columns, named indexes
 or SQL-only triggers the deployed API needs; apply pending migrations before
 shipping the frontend. The check requires every Drizzle table, column and named
-index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.mjs`, which a
+index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.ts`, which a
 unit test keeps equal to `db/schema/`) and every trigger in
 `db/sql-only-schema.json`, on its table and with the recorded definition. Extra
 columns, indexes and tables are allowed.
@@ -166,7 +172,11 @@ baseline.
   checks this for every seeded Template and saves the seeded Organization Template.
   The `d1:profile` synthetic data (`scripts/d1-profile-dataset.ts`) follows the same
   rule, checked by `tests/unit/scripts/d1-profile-dataset.test.ts`.
-  The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
+  `db/seeds/local.ts` is the module the seed scripts and tests import. The test data it
+  writes lives in `db/seeds/local-test-data/`, one module per kind of row (people,
+  Organizations, Templates, Runs, then activity and history), which `seedLocalTestData`
+  inserts in that order with one clock, after `cleanup.ts` there deletes the old rows.
+  The seed stages are listed once in `scripts/lib/local-d1-seed.ts`.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing
   (`tests/integration/setup-local-seed.test.ts`). seedLocalTestData runs without a

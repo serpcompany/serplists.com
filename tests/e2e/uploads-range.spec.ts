@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { z } from 'zod';
 
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
 
@@ -16,7 +17,7 @@ test('an uploaded video answers byte-range requests with 206 from the local R2 b
     },
   });
   expect(upload.status()).toBe(200);
-  const { key } = (await upload.json()) as { key: string };
+  const { key } = z.object({ key: z.string() }).passthrough().parse(await upload.json());
   const fileUrl = `${apiBaseUrl}/uploads/file?key=${encodeURIComponent(key)}`;
 
   try {

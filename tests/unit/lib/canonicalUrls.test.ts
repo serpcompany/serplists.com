@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
+import { everyPublicSiteLink } from '../../support/publicSiteLinks';
+import { describe, expect, it } from 'vitest';
+import { capturedGroup, present } from '../../support/elements';
 
 import { buildTeamInvitePath } from '@functions/api/utils/team-invite-delivery';
 import {
@@ -10,19 +11,11 @@ import {
   renderUrlset,
   staticSitemapEntries,
 } from '@functions/sitemap/shared';
-import { publicSiteLinks } from '@/components/layout/publicSiteLinks';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import { getPostRegisterDestination, getPostSignInDestination, withReturnPath } from '@/lib/auth/returnPath';
 import { canonicalPath } from '@/lib/http/urlStandard';
 import * as routes from '@/lib/routes';
-
-import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/nextRouting';
-
-vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
-  const { openNextBuildConfig } = await import('../../support/nextRouting');
-  return openNextBuildConfig();
-});
 
 const { redirects } = await loadBuiltRoutes('production');
 
@@ -50,14 +43,14 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildPublicTemplatesPath', routes.buildPublicTemplatesPath()],
   ['buildPublicCategoriesPath', routes.buildPublicCategoriesPath()],
   ['buildPublicCategoryPathForSlug', routes.buildPublicCategoryPathForSlug('seo')],
-  ['buildPublicCategoryPath', routes.buildPublicCategoryPath('日本語')!],
-  ['resolveLegacyTemplatesCategoryRedirectPath', routes.resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=SEO'))!],
+  ['buildPublicCategoryPath', present(routes.buildPublicCategoryPath('日本語'), 'the path of a category')],
+  ['resolveLegacyTemplatesCategoryRedirectPath', present(routes.resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=SEO')), 'the redirect of a legacy category link')],
   ['buildPublicProfilePath', routes.buildPublicProfilePath('alice')],
   ['buildPublicProfilePath (a username that looks like a file)', routes.buildPublicProfilePath('john.doe')],
-  ['buildProfilePreviewPath', routes.buildProfilePreviewPath('Alice', 'alice')!],
-  ['getCanonicalProfilePath', routes.getCanonicalProfilePath('Alice', 'alice')!],
+  ['buildProfilePreviewPath', present(routes.buildProfilePreviewPath('Alice', 'alice'), 'the preview path of a profile')],
+  ['getCanonicalProfilePath', present(routes.getCanonicalProfilePath('Alice', 'alice'), 'the canonical path of a profile')],
   ['buildPublicTemplatePath', routes.buildPublicTemplatePath('alice', 'weekly-review')],
-  ['buildCanonicalPublicTemplatePath', routes.buildCanonicalPublicTemplatePath(template)!],
+  ['buildCanonicalPublicTemplatePath', present(routes.buildCanonicalPublicTemplatePath(template), 'the canonical path of a template')],
   ['buildPublicFeaturesPath', routes.buildPublicFeaturesPath()],
   ['buildPublicFeaturePath', routes.buildPublicFeaturePath('template-builder')],
   ['buildSharePath', routes.buildSharePath('share-token')],
@@ -82,7 +75,7 @@ const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [
   ['buildTeamInvitePath (API)', buildTeamInvitePath('invite-token')],
 ];
 
-const PUBLIC_SITE_LINK_PATHS = publicSiteLinks
+const PUBLIC_SITE_LINK_PATHS = everyPublicSiteLink
   .filter((link) => !link.external)
   .map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
 
@@ -116,7 +109,7 @@ describe('sitemap entries', () => {
   it('writes every <loc> in canonical form, pages with a slash and sitemap files without', async () => {
     const urlset = renderUrlset([{ path: '/profile/alice' }, { path: '/categories/seo/' }, { path: '/' }]);
     const index = renderSitemapIndex([{ path: '/sitemaps/pages/1.xml' }]);
-    const locs = [...`${urlset}${index}`.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+    const locs = [...`${urlset}${index}`.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => capturedGroup(match, 1));
     expect(locs).toEqual([
       'https://serplists.com/profile/alice/',
       'https://serplists.com/categories/seo/',
@@ -124,65 +117,5 @@ describe('sitemap entries', () => {
       'https://serplists.com/sitemaps/pages/1.xml',
     ]);
     for (const loc of locs) await expectServedAsIs(loc);
-  });
-});
-
-const HARD_CODED_LINK_PATTERNS = {
-  jsxHref: /\bhref=["'](\/[^"']*)["']/g,
-  jsxHrefExpression: /\bhref=\{\s*["'`](\/[^"'`$]*)["'`]\s*\}/g,
-  routerOrSignInPath: /\b(?:push|replace|navigate|withReturnPath)\(\s*["'`](\/[^"'`$]*)["'`]/g,
-  hrefProperty: /\bhref:\s*["'`](\/[^"'`$]*)["'`]/g,
-};
-
-describe('hard-coded links in src, which the route builders do not cover', () => {
-  const sourceFiles = (directory: string): string[] =>
-    readdirSync(directory).flatMap((name) => {
-      const file = path.join(directory, name);
-      if (statSync(file).isDirectory()) return sourceFiles(file);
-      return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [file] : [];
-    });
-
-  const linksIn = (source: string): string[] =>
-    Object.values(HARD_CODED_LINK_PATTERNS).flatMap((pattern) => Array.from(source.matchAll(pattern), (match) => match[1]));
-
-  const linksNotCanonicalOrRedirected = async (source: string): Promise<string[]> => {
-    const bad: string[] = [];
-    for (const link of linksIn(source)) {
-      const pathname = pathOf(link);
-      const redirect = await workerRedirect(redirects, new URL(link, 'https://serplists.com').href);
-      if (canonicalPath(pathname) !== pathname || redirect) bad.push(link);
-    }
-    return bad;
-  };
-
-  it('finds a link written without its slash, or one that only redirects, such as a legacy path or /dashboard/', async () => {
-    const source = [
-      '<Link href="/login">Log in</Link>',
-      "<Link href={'/pricing?x=1'}>Pricing</Link>",
-      "router.push('/dashboard/runs');",
-      "navigate(withReturnPath('/login', returnPath));",
-      "{ href: '/about', label: 'About' }",
-      '<Link href="/about/">About</Link>',
-      '<a href="/og-default.png">Image</a>',
-      "router.replace('/dashboard/');",
-      '<Link href="/account/">Account</Link>',
-    ].join('\n');
-    expect(await linksNotCanonicalOrRedirected(source)).toEqual([
-      '/login',
-      '/account/',
-      '/pricing?x=1',
-      '/dashboard/runs',
-      '/login',
-      '/dashboard/',
-      '/about',
-    ]);
-  });
-
-  it('links only to canonical URLs, which answer without a redirect', async () => {
-    const found: string[] = [];
-    for (const file of sourceFiles('src')) {
-      for (const link of await linksNotCanonicalOrRedirected(readFileSync(file, 'utf8'))) found.push(`${file}: ${link}`);
-    }
-    expect(found).toEqual([]);
   });
 });

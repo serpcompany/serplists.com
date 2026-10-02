@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getApiEnv } from '@functions/api/env';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const SECRET = 'test-better-auth-secret-32-chars-minimum!!';
 
-function parse(overrides: Record<string, string>) {
-  return () => getApiEnv({ BETTER_AUTH_SECRET: SECRET, ...overrides } as any);
+function parse(overrides: Partial<Env>) {
+  return () => getApiEnv(apiEnv({ BETTER_AUTH_SECRET: SECRET, ...overrides }));
 }
 
 describe('getApiEnv origin variables', () => {

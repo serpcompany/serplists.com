@@ -1,11 +1,11 @@
-import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { reloadObservedQueries } from '@/features/teams/reloadObservedQueries';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 
-export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string; canManageTeam: boolean }) {
+export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string | undefined; canManageTeam: boolean }) {
   const userId = useAuth().user?.id;
   const queryClient = useQueryClient();
   const signedIn = Boolean(userId);
@@ -18,13 +18,13 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
 
   const membersQuery = useQuery({
     queryKey: keys.members,
-    queryFn: () => api.getTeamMembers(activeTeamId as string),
+    queryFn: activeTeamId ? () => api.getTeamMembers(activeTeamId) : skipToken,
     enabled: signedIn && Boolean(activeTeamId),
     staleTime: 60 * 1000,
   });
   const activityQuery = useQuery({
     queryKey: keys.activity,
-    queryFn: () => api.getTeamActivity(activeTeamId as string),
+    queryFn: activeTeamId ? () => api.getTeamActivity(activeTeamId) : skipToken,
     enabled: signedIn && Boolean(activeTeamId && canManageTeam),
     staleTime: 30 * 1000,
   });

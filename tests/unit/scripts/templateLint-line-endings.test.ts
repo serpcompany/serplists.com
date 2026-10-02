@@ -4,6 +4,8 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { lintSingleTemplateSource, lintTemplatePair, lintYamlTemplateBundle } from '@/../scripts/lib/templateLint';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const examplesRoot = path.join(process.cwd(), 'docs/product-specs/portable-templates/examples');
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
@@ -50,7 +52,7 @@ describe('templateLint on the CRLF files a Windows clone with core.autocrlf chec
   it('still reports real drift in a CRLF artifact', async () => {
     const dir = copyAsCrlf('minimal', (file, text) => {
       if (file !== 'template.json') return text;
-      const parsed = JSON.parse(text) as { title: string };
+      const parsed = parseJsonText(text, z.object({ title: z.string() }).passthrough());
       return text.replace(JSON.stringify(parsed.title), JSON.stringify(`${parsed.title} (edited)`));
     });
 

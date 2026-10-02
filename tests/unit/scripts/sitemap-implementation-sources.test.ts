@@ -1,13 +1,16 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { cruise } from 'dependency-cruiser';
+import extractTSConfig from 'dependency-cruiser/config-utl/extract-ts-config';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
 
 const repoRoot = process.cwd();
 
-const readRowsButListNoUrls = ['db/', 'functions/api/'];
+const SITEMAP_ROUTE_HANDLERS_AND_FUNCTIONS = ['src/app/sitemap.xml', 'src/app/sitemaps', 'functions/sitemap'];
+
+const READ_ROWS_BUT_LIST_NO_URLS = ['db/', 'functions/api/'];
 
 const leftOutOnPurpose = new Map([
   ['functions/sitemap/bundled-catalog.generated.json', 'the catalog itself'],
@@ -15,61 +18,36 @@ const leftOutOnPurpose = new Map([
   ['src/app/sitemaps/static.xml/route.ts', 'a redirect'],
 ]);
 
-const toRepoPath = (absolute: string) => path.relative(repoRoot, absolute).split(path.sep).join('/');
-
-function listFiles(directory: string): string[] {
-  return readdirSync(path.join(repoRoot, directory)).flatMap((name) => {
-    const relative = `${directory}/${name}`;
-    if (statSync(path.join(repoRoot, relative)).isDirectory()) return listFiles(relative);
-    return /\.tsx?$/.test(name) ? [relative] : [];
-  });
+async function modulesTheSitemapCodeReaches(): Promise<string[]> {
+  const { output } = await cruise(
+    SITEMAP_ROUTE_HANDLERS_AND_FUNCTIONS,
+    {
+      tsPreCompilationDeps: true,
+      doNotFollow: { path: ['node_modules', ...READ_ROWS_BUT_LIST_NO_URLS.map((prefix) => `^${prefix}`)] },
+      tsConfig: { fileName: 'tsconfig.json' },
+    },
+    { extensions: ['.ts', '.tsx', '.js', '.mjs', '.json'] },
+    { tsConfig: extractTSConfig('tsconfig.json') },
+  );
+  if (typeof output === 'string') throw new Error(`dependency-cruiser answered with text: ${output.slice(0, 200)}`);
+  return output.modules
+    .map((module) => module.source)
+    .filter((source) => /^(src|functions)\//.test(source))
+    .filter((source) => !READ_ROWS_BUT_LIST_NO_URLS.some((prefix) => source.startsWith(prefix)));
 }
 
-function repositoryImportBase(fromFile: string, specifier: string): string | null {
-  if (specifier.startsWith('.')) return path.resolve(repoRoot, path.dirname(fromFile), specifier);
-  if (specifier.startsWith('@/')) return path.resolve(repoRoot, 'src', specifier.slice(2));
-  if (specifier.startsWith('@functions/')) return path.resolve(repoRoot, 'functions', specifier.slice(11));
-  return null;
-}
+let reached: string[] = [];
 
-function resolveImport(fromFile: string, specifier: string): string | null {
-  const base = repositoryImportBase(fromFile, specifier);
-  if (base === null) return null;
-  const candidates = [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts'), path.join(base, 'index.tsx')];
-  const found = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
-  if (!found) throw new Error(`Cannot resolve ${specifier} from ${fromFile}`);
-  return toRepoPath(found);
-}
-
-function reachableFiles(entries: string[]): Set<string> {
-  const seen = new Set<string>();
-  const queue = [...entries];
-  while (queue.length > 0) {
-    const file = queue.shift()!;
-    if (seen.has(file)) continue;
-    seen.add(file);
-    if (!/\.tsx?$/.test(file)) continue;
-    const { importedFiles } = ts.preProcessFile(readFileSync(path.join(repoRoot, file), 'utf8'), true, true);
-    for (const { fileName } of importedFiles) {
-      const resolved = resolveImport(file, fileName);
-      if (resolved && !readRowsButListNoUrls.some((prefix) => resolved.startsWith(prefix))) queue.push(resolved);
-    }
-  }
-  return seen;
-}
+beforeAll(async () => {
+  reached = await modulesTheSitemapCodeReaches();
+}, 60_000);
 
 describe('SITEMAP_IMPLEMENTATION_SOURCES', () => {
-  const sitemapRouteHandlersAndFunctions = [
-    ...listFiles('src/app/sitemap.xml'),
-    ...listFiles('src/app/sitemaps'),
-    ...listFiles('functions/sitemap'),
-  ];
-
   it('names every module the sitemap functions reach, since only those files move the catalog\'s implementation date', () => {
     const listed = new Set<string>(SITEMAP_IMPLEMENTATION_SOURCES);
-    const missing = [...reachableFiles(sitemapRouteHandlersAndFunctions)]
-      .filter((file) => !listed.has(file) && !leftOutOnPurpose.has(file))
-      .sort();
+    const missing = reached.filter((file) => !listed.has(file) && !leftOutOnPurpose.has(file)).sort();
+
+    expect(reached).toEqual(expect.arrayContaining(['functions/sitemap/routes.ts', 'src/app/sitemap.xml/route.ts']));
     expect(missing).toEqual([]);
   });
 

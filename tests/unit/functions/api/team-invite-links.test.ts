@@ -1,52 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
-
-const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-
-const sessionMocks = vi.hoisted(() => ({
-  getSessionUserId: vi.fn(),
-}));
-
-const auditMocks = vi.hoisted(() => ({
-  buildAuditEventValues: vi.fn(async (input: { action: string; before?: unknown; after?: unknown }) => ({
-    id: "audit-event",
-    actor_user_id: "user-1",
-    subject_type: "team",
-    subject_id: "team-1",
-    resource_type: "team_invite",
-    resource_id: "invite-1",
-    action: input.action,
-    before_json: JSON.stringify(input.before ?? null),
-    after_json: JSON.stringify(input.after ?? null),
-    diff_json: null,
-    metadata_json: null,
-    request_id: null,
-    ip_hash: null,
-    user_agent: null,
-    created_at: "2026-01-01T00:00:00.000Z",
-  })),
-}));
-
-vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock("@functions/api/utils/session", () => ({
-  getSessionUserId: sessionMocks.getSessionUserId,
-}));
-
-vi.mock("@functions/api/utils/audit", () => ({
-  buildAuditEventValues: auditMocks.buildAuditEventValues,
-}));
+import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
+import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
+import { z } from "zod";
 
 import { handleTeams } from "@functions/api/handlers/teams";
 import { columnNamesIn } from "../../../support/drizzleSql";
+import { jsonObject, readJson } from "../../../support/readJson";
 import { sha256Hex } from "@functions/api/utils/crypto";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-};
+const inviteLinkBody = z
+  .object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string(), delivery: z.unknown() })
+  .passthrough();
+const inviteBody = z.object({ role: z.string() }).passthrough();
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 
@@ -68,7 +34,7 @@ function newLinkRequest(body?: unknown, inviteId = "invite-1") {
   return new Request(`http://localhost/api/teams/team-1/invites/${inviteId}/link`, {
     method: "POST",
     headers: { Origin: "https://app.serplists.test" },
-    body: typeof body === "undefined" ? undefined : JSON.stringify(body),
+    ...(typeof body === "undefined" ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -77,21 +43,13 @@ async function replaceTheLinkAsAnAdmin() {
     .mockResolvedValueOnce([membership("admin")])
     .mockResolvedValueOnce([pendingInvite()]);
   const response = await handleTeams(newLinkRequest(), mockEnv);
-  return { response, data: await response.json(), storedChanges: () => dbMocks.updateChain.set.mock.calls[0][0] };
+  return { response, data: await readJson(response, inviteLinkBody), storedChanges: () => firstOf(dbMocks.updateChain.set.mock.calls)[0] };
 }
 
 describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost link since only its token hash is kept", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.db.batch.mockReset();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    resetTeamsHandlerMocks();
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   it("replaces the pending invite's token and returns a new link", async () => {
@@ -99,11 +57,11 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
-      expect.objectContaining({
+      objectContaining({
         id: "invite-1",
         email: "newhire@example.com",
         role: "viewer",
-        expiresAt: expect.any(String),
+        expiresAt: anyInstanceOf(String),
       }),
     );
     expect(typeof data.inviteToken).toBe("string");
@@ -123,16 +81,16 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     const updates = storedChanges();
     expect(updates.token_hash).toBe(await sha256Hex(data.inviteToken));
     expect(updates.token_hash).not.toBe(data.inviteToken);
-    expect(Date.parse(updates.expires_at)).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect(Date.parse(String(updates.expires_at))).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect(updates.role).toBe("viewer");
   });
 
   it("repeats the pending checks in the write, scoped to this Organization", async () => {
     await replaceTheLinkAsAnAdmin();
 
-    const whereColumns = columnNamesIn(dbMocks.updateChain.where.mock.calls[0][0]);
+    const whereColumns = columnNamesIn(firstOf(dbMocks.updateChain.where.mock.calls)[0]);
     expect(whereColumns).toEqual(
-      expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
+      arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
   });
 
@@ -143,7 +101,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
     expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledTimes(1);
-    const auditInput = auditMocks.buildAuditEventValues.mock.calls[0][0];
+    const auditInput = firstOf(auditMocks.buildAuditEventValues.mock.calls)[0];
     expect(auditInput.action).toBe("team_invite.link_reissued");
     const auditText = JSON.stringify(auditInput);
     expect(auditText).not.toContain(data.inviteToken);
@@ -157,15 +115,15 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
       .mockResolvedValueOnce([pendingInvite()]);
 
     const response = await handleTeams(newLinkRequest({ role: "editor" }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, inviteBody);
 
     expect(response.status).toBe(200);
     expect(data.role).toBe("editor");
-    expect(dbMocks.updateChain.set.mock.calls[0][0].role).toBe("editor");
-    expect(auditMocks.buildAuditEventValues.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        before: expect.objectContaining({ role: "viewer" }),
-        after: expect.objectContaining({ role: "editor" }),
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0].role).toBe("editor");
+    expect(firstOf(auditMocks.buildAuditEventValues.mock.calls)[0]).toEqual(
+      objectContaining({
+        before: objectContaining({ role: "viewer" }),
+        after: objectContaining({ role: "editor" }),
       }),
     );
   });
@@ -198,9 +156,9 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(404);
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
-    const whereColumns = columnNamesIn(dbMocks.selectChain.where.mock.calls[1][0]);
+    const whereColumns = columnNamesIn(elementAt(dbMocks.selectChain.where.mock.calls, 1)[0]);
     expect(whereColumns).toEqual(
-      expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
+      arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
   });
 
@@ -211,11 +169,11 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTeams(newLinkRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
-    expect(data.inviteToken).toBeUndefined();
-    expect(data.inviteUrl).toBeUndefined();
+    expect(data).not.toHaveProperty('inviteToken');
+    expect(data).not.toHaveProperty('inviteUrl');
   });
 
   it("does not create a second invite when posting to an invite's subpath", async () => {

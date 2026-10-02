@@ -1,23 +1,18 @@
+import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf, sectionAt } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import type { TemplateEditorSection } from '@/lib/forms/templateEditorForm';
 
-import { findAllElements } from '../../../support/elementTree';
+import { findAllElements, handlerOf } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted(() => ({
-  sections: [] as Array<{ id: string; title: string; items: unknown[] }>,
-  fields: [] as Array<Record<string, unknown>>,
-  nextFieldId: 0,
-}));
-
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
-  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'outline' };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
+const harness = vi.hoisted(() => {
+  const sections: TemplateEditorSection[] = [];
+  const fields: Array<Record<string, unknown>> = [];
+  return { sections, fields, nextFieldId: 0 };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
@@ -39,8 +34,6 @@ vi.mock('react-hook-form', async (importOriginal) => {
   };
 });
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
-
 const section = (id: string, title: string): TemplateEditorSection => ({
   id,
   title,
@@ -56,8 +49,8 @@ function resetSectionsWithNewFieldIds(sections: TemplateEditorSection[]): void {
 }
 
 function dragSecondSectionAboveFirst(): void {
-  harness.fields = [harness.fields[1], harness.fields[0]];
-  harness.sections = [harness.sections[1], harness.sections[0]];
+  harness.fields = [elementAt(harness.fields, 1), firstOf(harness.fields)];
+  harness.sections = [sectionAt(harness, 1), sectionAt(harness, 0)];
 }
 
 function render(): React.ReactNode {
@@ -76,13 +69,12 @@ function toggleLabels(tree: React.ReactNode): string[] {
   return findAllElements(tree, (element) => {
     const label = element.props['aria-label'];
     return typeof label === 'string' && /^(Collapse|Expand) /.test(label);
-  }).map((element) => element.props['aria-label'] as string);
+  }).map((element) => String(element.props['aria-label']));
 }
 
 function clickToggle(tree: React.ReactNode, label: string): void {
-  const [button] = findAllElements(tree, (element) => element.props['aria-label'] === label);
-  expect(button).toBeDefined();
-  (button.props.onClick as () => void)();
+  const button = firstOf(findAllElements(tree, (element) => element.props['aria-label'] === label));
+  handlerOf(button, 'onClick')();
 }
 
 describe('SectionSidebar section expansion', () => {

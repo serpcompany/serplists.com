@@ -2,7 +2,7 @@ import { formatValidationError } from '@/lib/schemas/formatValidationError';
 import type { TemplateImportResult } from '@/lib/utils/templateBackup';
 
 export const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
-export const SUPPORTED_IMPORT_EXTENSIONS = ['.json', '.md', '.markdown', '.yaml', '.yml'];
+const SUPPORTED_IMPORT_EXTENSIONS = ['.json', '.md', '.markdown', '.yaml', '.yml'];
 
 export type ImportPreview = TemplateImportResult & { fileName: string };
 

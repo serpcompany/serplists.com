@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { PageEmptyState, PageLoadingState } from '@/components/layout/PageState';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
@@ -80,13 +81,6 @@ const PublicTemplate = () => {
     workspaceStatus,
   });
   const displayTemplate = template;
-  const displayTotalItems =
-    template && totalItems > 0
-      ? totalItems
-      : (displayTemplate?.sections ?? []).reduce(
-          (count, section) => count + section.items.length,
-          0,
-        );
 
   useEffect(() => {
     if (!displayTemplate) {
@@ -222,7 +216,7 @@ const PublicTemplate = () => {
       <PublicTemplateView
         key={displayTemplate.id}
         template={displayTemplate}
-        totalItems={displayTotalItems}
+        totalItems={totalItems}
         ownerSlug={ownerSlug}
         ownerPath={ownerPath}
         isAuthenticated={isAuthenticated}

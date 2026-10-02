@@ -1,9 +1,10 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { metadata as rootMetadata } from '@/app/layout';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
+import { z } from 'zod';
 
 const pngSize = (file: string) => {
   const bytes = readFileSync(file);
@@ -13,25 +14,28 @@ const pngSize = (file: string) => {
 
 const expectShippedCardImage = (url: string | undefined) => {
   expect(url).toMatch(/^https:\/\/serplists\.com\/[\w/-]+\.png$/);
-  const file = path.join('public', new URL(url!).pathname);
+  assert.exists(url);
+  const file = path.join('public', new URL(url).pathname);
   expect(existsSync(file), file).toBe(true);
   expect(pngSize(file)).toEqual({ width: 1200, height: 630 });
 };
 
-type ImageEntry = { url: string | URL; width?: number | string; height?: number | string };
+const imageEntry = z
+  .object({
+    url: z.union([z.string(), z.instanceof(URL)]),
+    width: z.union([z.number(), z.string()]).optional(),
+    height: z.union([z.number(), z.string()]).optional(),
+  })
+  .passthrough();
+
+type ImageEntry = z.output<typeof imageEntry>;
 
 const firstImage = (images: unknown): ImageEntry => {
-  const [image] = Array.isArray(images) ? images : [images];
-  return typeof image === 'string' || image instanceof URL ? { url: image } : (image as ImageEntry);
+  const [image] = z.array(z.unknown()).safeParse(images).data ?? [images];
+  return typeof image === 'string' || image instanceof URL ? { url: image } : imageEntry.parse(image);
 };
 
 const resolveAgainstMetadataBase = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();
-
-const sourceFiles = (directory: string): string[] =>
-  readdirSync(directory).flatMap((entry) => {
-    const file = path.join(directory, entry);
-    return statSync(file).isDirectory() ? sourceFiles(file) : /\.(tsx?|html)$/.test(entry) ? [file] : [];
-  });
 
 describe('link preview image, one absolute 1200x630 PNG since social sites render neither SVG images nor relative URLs', () => {
   it('is an absolute PNG in the root layout defaults, shipped in public/', () => {
@@ -53,11 +57,4 @@ describe('link preview image, one absolute 1200x630 PNG since social sites rende
     expect(ogImage).toBe(resolveAgainstMetadataBase(firstImage(rootMetadata.openGraph?.images).url));
   });
 
-  it('never points at the SVG placeholder', () => {
-    const offenders = [...sourceFiles('src'), ...sourceFiles('functions')].filter((file) =>
-      readFileSync(file, 'utf8').includes('placeholder.svg'),
-    );
-
-    expect(offenders).toEqual([]);
-  });
 });

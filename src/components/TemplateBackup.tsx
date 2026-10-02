@@ -35,7 +35,8 @@ import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/utils/pluralize";
 import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
-import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
+import { TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
+import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE } from "@/components/templateBackupUpgradeMessage";
 import { TemplateImportPreview } from "@/components/TemplateImportPreview";
 import { TemplateImportResult } from "@/components/TemplateImportResult";
 import { ListLoadErrorState } from "@/components/dashboard/ListLoadErrorState";
@@ -301,7 +302,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor={importVisibilityId}>Import visibility</FieldLabel>
-            <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
+            <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => {
+              if (value) setImportVisibility(value);
+            }}>
               <SelectTrigger className="w-full sm:w-72" id={importVisibilityId}>
                 <SelectValue placeholder="Choose visibility" />
               </SelectTrigger>

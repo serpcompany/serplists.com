@@ -1,33 +1,16 @@
+import '../../support/mockedNextNavigation';
+import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
+import { renderTheCategoryPageAt } from '../../support/categoryPage';
 import { FileText } from 'lucide-react';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
 import { findCategoryByLegacySlug } from '@/components/checklist-library/discovery-utils';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { buildPublicCategoryPath } from '@/lib/routes';
-import CategoryDetail from '@/views/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
-
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: null }),
-}));
-
-const renderCategoryPage = (location: string) => {
-  navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
-  return renderToStaticMarkup(<CategoryDetail />);
-};
+const renderCategoryPage = renderTheCategoryPageAt;
 
 const robotsTagThePageAdds = (markup: string) => markup.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 
@@ -134,8 +117,8 @@ describe('CategoryDetail for categories in other scripts', () => {
       );
 
       const path = buildPublicCategoryPath(name);
-      expect(path).not.toBeNull();
-      const markup = renderCategoryPage(path!);
+      assert.exists(path);
+      const markup = renderCategoryPage(path);
 
       expect(markup).not.toContain('That page does not exist');
       expect(markup).toContain('Guide Checklist');

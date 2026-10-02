@@ -1,47 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
+import { jsonObject, readJson } from '../../../support/readJson';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
+import { jsonRecordIn } from '../../../support/storedJson';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
-const pro = { plan: 'pro' as const, limits: { maxTemplates: null, maxActiveRuns: null } };
 const membership = { id: 'member-1', team_id: 'team-1', user_id: 'member-b', role: 'runner', status: 'active' };
 const sections = [{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }];
 const COMPLETED_AT = '2026-01-01T00:00:00.000Z';
@@ -81,38 +45,26 @@ async function put(body: Record<string, unknown>) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
     method: 'PUT',
     body: JSON.stringify({ expected_revision: 4, ...body }),
-  }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  }), mockEnv);
+  return { response, data: await readJson(response, jsonObject) };
 }
 
-function savedUpdates(): Record<string, unknown> {
+function savedUpdates() {
   expect(dbMocks.updateChain.set).toHaveBeenCalledOnce();
-  return dbMocks.updateChain.set.mock.calls[0][0];
+  return firstOf(dbMocks.updateChain.set.mock.calls)[0];
 }
 
 function auditDiff(): Record<string, unknown> {
   const auditRow = dbMocks.insertChain.values.mock.calls
-    .map(([row]) => row as Record<string, unknown>)
+    .map(([row]) => row)
     .find((row) => typeof row.diff_json === 'string');
-  expect(auditRow).toBeDefined();
-  return JSON.parse(auditRow!.diff_json as string);
+  assert.exists(auditRow);
+  return jsonRecordIn(auditRow.diff_json);
 }
 
 describe('run completion stamps on PUT /api/checklists/:id, which only a transition into completed writes', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue('member-b');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(pro);
-    vi.mocked(getEntitlementsForContext).mockResolvedValue(pro);
+    resetToASignedInUser('member-b', PRO_PLAN);
   });
 
   it('keeps the original completer and time when another member renames a completed run', async () => {
@@ -170,7 +122,7 @@ describe('run completion stamps on PUT /api/checklists/:id, which only a transit
 
     const updates = savedUpdates();
     expect(updates.completed_by_user_id).toBe('member-b');
-    expect(Date.parse(updates.completed_at as string)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(String(updates.completed_at))).toBeGreaterThanOrEqual(before - 1000);
     expect(auditDiff()).toEqual(expect.objectContaining({ completed_by_user_id: 'member-b' }));
   });
 
@@ -215,25 +167,17 @@ describe('run completion stamps on PUT /api/checklists/:id, which only a transit
 
 describe('run completion stamps on POST /api/checklists', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue('member-b');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(pro);
+    resetToASignedInUser('member-b', PRO_PLAN);
   });
 
   it('stamps a run created as completed', async () => {
     const response = await handleChecklists(new Request('http://localhost/api/checklists', {
       method: 'POST',
       body: JSON.stringify({ title: 'Done already', sections, status: 'completed' }),
-    }), env);
+    }), mockEnv);
 
     expect(response.status).toBe(200);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, unknown>;
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.status).toBe('completed');
     expect(inserted.completed_by_user_id).toBe('member-b');
     expect(typeof inserted.completed_at).toBe('string');

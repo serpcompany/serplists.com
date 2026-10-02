@@ -1,15 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => sessionMocks);
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+import type { StoredRow } from "../../../support/d1Doubles";
+import { apiEnv } from "../../../support/apiEnv";
+import { z } from "zod";
+import { readJson } from "../../../support/readJson";
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
+
+const revokeBody = z.object({ revokedAt: z.unknown() }).passthrough();
 
 const ORIGINAL_REVOKED_AT = "2026-09-19T02:00:00.000Z";
 
 describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   const addUser = (id: string) =>
     database.sqlite
@@ -23,21 +28,21 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
       )
       .run(id, userId, `Key ${id}`, `slrk_${id}`, `hash-${id}`, revokedAt);
 
-  const storedRevokedAt = (id: string) =>
-    (database.sqlite.prepare("SELECT revoked_at FROM personal_run_keys WHERE id = ?").get(id) as
-      | { revoked_at: string | null }
-      | undefined)?.revoked_at;
+  const storedRevokedAt = (id: string) => {
+    const row: StoredRow | undefined = database.sqlite.prepare("SELECT revoked_at FROM personal_run_keys WHERE id = ?").get(id);
+    return row?.revoked_at;
+  };
 
   const revoke = async (id: string) => {
     const response = await handleAgentKeys(
       new Request(`http://localhost/api/agent-keys/${id}`, { method: "DELETE" }),
-      { DB: database.d1 } as never,
+      apiEnv({ DB: database.binding }),
     );
-    return { status: response.status, body: await response.json() };
+    return { status: response.status, body: await readJson(response, revokeBody) };
   };
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
     addUser("user-1");
     addUser("user-2");
@@ -53,7 +58,7 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
     const { status, body } = await revoke("key-1");
 
     expect(status).toBe(200);
-    expect(body).toEqual({ id: "key-1", revokedAt: expect.any(String) });
+    expect(body).toEqual({ id: "key-1", revokedAt: anyInstanceOf(String) });
     expect(storedRevokedAt("key-1")).toBe(body.revokedAt);
   });
 
@@ -84,7 +89,7 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
     for (const id of ["missing", "key-2", "key-3"]) {
       await expect(revoke(id)).resolves.toEqual({
         status: 404,
-        body: expect.objectContaining({ error: "Personal run key not found" }),
+        body: objectContaining({ error: "Personal run key not found" }),
       });
     }
     expect(storedRevokedAt("key-2")).toBeNull();

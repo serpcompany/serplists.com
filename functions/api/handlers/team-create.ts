@@ -2,6 +2,7 @@ import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 import {
   generateUniqueTeamSlug,
   isTeamSlugTaken,
@@ -24,11 +25,11 @@ export async function createTeam(
   body: unknown,
 ): Promise<Response> {
   const { db, request, userId } = context;
-  const { audit_events, team_members, teams } = schema;
+  const { auditEvents, teamMembers, teams } = schema;
 
   const parsed = createTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
   }
 
   const now = new Date().toISOString();
@@ -76,8 +77,8 @@ export async function createTeam(
     try {
       await db.batch([
         db.insert(teams).values(team),
-        db.insert(team_members).values(membership),
-        db.insert(audit_events).values(auditEvent),
+        db.insert(teamMembers).values(membership),
+        db.insert(auditEvents).values(auditEvent),
       ]);
     } catch (error) {
       if (!isTeamSlugUniqueViolation(error)) throw error;

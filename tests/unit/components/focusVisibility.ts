@@ -1,3 +1,5 @@
+import { capturedGroup } from '../../support/elements';
+
 export type MarkupNode = {
   attrs: Record<string, string>;
   children: MarkupNode[];
@@ -13,7 +15,7 @@ export function parseMarkup(html: string): MarkupNode {
   const tokens = /<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>|([^<]+)/g;
   let current = root;
   for (const match of html.matchAll(tokens)) {
-    const [, closing, tag, rawAttrs, selfClosing, text] = match;
+    const [, closing, , , selfClosing, text] = match;
     if (text !== undefined) {
       current.children.push({ attrs: {}, children: [], parent: current, tag: '#text', text });
       continue;
@@ -22,9 +24,10 @@ export function parseMarkup(html: string): MarkupNode {
       current = current.parent ?? root;
       continue;
     }
+    const tag = capturedGroup(match, 2);
     const attrs: Record<string, string> = {};
-    for (const attr of rawAttrs.matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
-      attrs[attr[1]] = attr[2] ?? '';
+    for (const attr of capturedGroup(match, 3).matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
+      attrs[capturedGroup(attr, 1)] = attr[2] ?? '';
     }
     const node: MarkupNode = { attrs, children: [], parent: current, tag, text: '' };
     current.children.push(node);
@@ -51,10 +54,10 @@ export function textOf(node: MarkupNode): string {
 }
 
 const classTokens = (node: MarkupNode): string[] =>
-  (node.attrs.class ?? '').split(/\s+/).filter(Boolean);
+  (node.attrs['class'] ?? '').split(/\s+/).filter(Boolean);
 
 const isFocusable = (node: MarkupNode): boolean => {
-  if (node.attrs.tabindex === '-1' || 'disabled' in node.attrs) return false;
+  if (node.attrs['tabindex'] === '-1' || 'disabled' in node.attrs) return false;
   if (node.tag === 'a') return 'href' in node.attrs;
   return ['button', 'input', 'select', 'textarea'].includes(node.tag) || 'tabindex' in node.attrs;
 };

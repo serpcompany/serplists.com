@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { reportTheProPlan } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 
 const portablePack = (title: string) =>
@@ -13,13 +14,7 @@ const brokenYaml = ['title: Fixed YAML Template', 'sections:', '  - title: ""', 
 
 test('each chosen import file replaces the preview and clears the file input', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.route('**/api/billing/status**', (route) =>
-    route.fulfill({
-      body: JSON.stringify({ billingEnabled: true, plan: 'pro' }),
-      contentType: 'application/json',
-      status: 200,
-    }),
-  );
+  await reportTheProPlan(page);
 
   await page.goto('/dashboard/import-templates/');
   const input = page.getByLabel('Select a YAML, JSON, or Markdown template file');

@@ -12,7 +12,7 @@ describe('page metadata URL', () => {
 
     expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/seo/');
     expect(metadata.openGraph?.url).toBe('https://serplists.com/categories/seo/');
-    expect(buildPageJsonLd(seo).url).toBe('https://serplists.com/categories/seo/');
+    expect(buildPageJsonLd(seo)).toHaveProperty('url', 'https://serplists.com/categories/seo/');
   });
 
   it('never carries a query string or hash into the canonical URL', () => {
@@ -53,8 +53,8 @@ describe('page metadata branding', () => {
     const jsonLd = buildPageJsonLd({ title: 'Audit', type: 'article', publishedTime: '2026-01-01' });
 
     expect(jsonLd['@type']).toBe('Article');
-    expect(jsonLd.publisher).toEqual({ '@type': 'Organization', name: APP_BRAND_NAME });
-    expect(jsonLd.datePublished).toBe('2026-01-01');
+    expect(jsonLd).toHaveProperty('publisher', { '@type': 'Organization', name: APP_BRAND_NAME });
+    expect(jsonLd).toHaveProperty('datePublished', '2026-01-01');
     expect(jsonLd).not.toHaveProperty('author');
     expect(buildPageMetadata({ title: 'Audit', type: 'article', publishedTime: '2026-01-01' }).openGraph).toMatchObject({
       type: 'article',

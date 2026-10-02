@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import type { StoredRow } from "../../../support/d1Doubles";
+import { present } from "../../../support/elements";
 
 const migration = readFileSync(
   new URL("../../../../db/migrations/0025_add_personal_run_keys.sql", import.meta.url),
@@ -22,10 +24,10 @@ describe("personal run key migration", () => {
       VALUES (?, ?, ?, ?, ?)
     `).run("key-1", "user-1", "Codex", "slrk_example1", "stored-hash");
 
-    const key = db.prepare(`
+    const key: StoredRow = present(db.prepare(`
       SELECT id, user_id, name, key_prefix, key_hash, created_at, last_used_at, revoked_at
       FROM personal_run_keys
-    `).get() as Record<string, unknown>;
+    `).get(), "the stored Run Key");
     expect(key).toMatchObject({
       id: "key-1",
       user_id: "user-1",
@@ -47,7 +49,7 @@ describe("personal run key migration", () => {
 
     const idColumn = db.prepare("PRAGMA table_info('personal_run_keys')")
       .all()
-      .find((column) => column.name === "id");
+      .find(({ name }) => name === "id");
     expect(idColumn).toMatchObject({ name: "id", notnull: 1, pk: 1 });
 
     const foreignKey = db.prepare("PRAGMA foreign_key_list('personal_run_keys')").get();
@@ -82,7 +84,7 @@ describe("personal run key migration", () => {
       { id: "new-key", permissions: '["templates:read","runs:read","runs:write"]' },
     ]);
     expect(db.prepare("PRAGMA table_info('personal_run_keys')").all()
-      .find((column) => column.name === "permissions")).toMatchObject({ notnull: 1 });
+      .find(({ name }) => name === "permissions")).toMatchObject({ notnull: 1 });
     db.close();
   });
 });

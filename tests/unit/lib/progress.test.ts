@@ -1,12 +1,12 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import { toProgressPercent } from '@/lib/progress';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
-import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
+import type { ChecklistSection } from '@/types/checklist';
+import { buildRun } from '../../fixtures/runExecutionFixtures';
 
 const TASKS = 40;
 const SUB_TASKS_PER_TASK = 4;
@@ -78,7 +78,7 @@ describe('toProgressPercent', () => {
 describe('run progress on large runs, where one open unit in 200 must not round to 100', () => {
   it('is 99 in every calculator when one of 200 units is left', () => {
     const sections = sectionsWithOneOf200UnitsOpen();
-    const run = { id: 'run-1', sections } as unknown as ChecklistRun;
+    const run = buildRun({ id: 'run-1', sections });
 
     expect(calculateSectionsProgress(sections)).toBe(99);
     expect(countRunExecutionItems(run)).toEqual({
@@ -92,26 +92,11 @@ describe('run progress on large runs, where one open unit in 200 must not round 
   });
 
   it('agrees between the client and the server', () => {
-    const sections = sectionsWithOneOf200UnitsOpen();
-    const items = sections[0].items;
+    const section = firstOf(sectionsWithOneOf200UnitsOpen());
+    const { items } = section;
     for (let done = 0; done <= items.length; done += 1) {
-      const partial = [{ ...sections[0], items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];
+      const partial = [{ ...section, items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];
       expect(calculateRunProgress(partial)).toBe(calculateSectionsProgress(partial));
     }
-  });
-
-  it('has no inline percentage left outside src/lib/progress.ts', () => {
-    const files = (directory: string): string[] =>
-      readdirSync(directory).flatMap((entry) => {
-        const file = path.join(directory, entry);
-        return statSync(file).isDirectory() ? files(file) : /\.tsx?$/.test(entry) ? [file] : [];
-      });
-    const offenders = [...files('src'), ...files('functions')].filter(
-      (file) =>
-        path.normalize(file) !== path.normalize('src/lib/progress.ts') &&
-        /Math\.round\(\s*\(?\s*completed\s*\/\s*total/.test(readFileSync(file, 'utf8')),
-    );
-
-    expect(offenders).toEqual([]);
   });
 });

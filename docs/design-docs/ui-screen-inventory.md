@@ -429,7 +429,7 @@ existing content, invent nothing):
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
     would render every console page per request.
   - The rows are 44px tall, the old sidebar's full-size targets
-    (`tests/e2e/template-editor-bugs.spec.ts`), where shadcn's are 32px; collapsed to icons
+    (`tests/e2e/template-screens-layout.spec.ts`), where shadcn's are 32px; collapsed to icons
     they are shadcn's 32px squares.
 
 ### Auth card frame
@@ -511,8 +511,8 @@ existing content, invent nothing):
   grid](#section-row-over-a-card-grid) for the workflow steps and the starter library;
   [Bordered list cards](#bordered-list-cards) for the product surfaces; [Call-to-action
   banner](#call-to-action-banner) for the closing card. No category tiles: counting categories
-  needs the public catalog, which Home must not load
-  (`tests/unit/contexts/catalogConsumers.test.ts`, [D1 cost](d1-cost.md)).
+  needs the public catalog, which Home must not load (an ESLint convention lets only the
+  pages that show the catalog load it, [D1 cost](d1-cost.md)).
 - **REFERENCE IMAGES:** home-1.png (hero); prompts-1.png (cards with a corner badge);
   home-2.png, home-3.png (section rows); home-3.png, home-4.png, prompts-2.png (bordered list
   cards); home-7.png (banner); home-mobile.png.

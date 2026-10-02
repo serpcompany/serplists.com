@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 import { assertProductionApiUrl } from './scripts/lib/buildEnv';
-import { applyDevBindings } from './scripts/lib/dev-bindings.mjs';
+import { applyDevBindings } from './scripts/lib/dev-bindings';
 import {
   CONTENT_SECURITY_POLICY,
   LOCAL_CONTENT_SECURITY_POLICY,
@@ -42,6 +42,7 @@ const LEGACY_PATH_REDIRECTS = [
 const DASHBOARD_HOME_REDIRECT = { source: '/dashboard', destination: '/dashboard/templates/', permanent: false };
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   turbopack: {

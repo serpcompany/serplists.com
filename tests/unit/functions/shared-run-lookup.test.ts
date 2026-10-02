@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadSharedRunTitle } from '../../../functions/seo/shared-run-lookup';
-import type { Env } from '../../../functions/api/types';
-import { createMigratedD1 } from '../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../support/sqlite-d1';
+import { apiEnv } from '../../support/apiEnv';
 
 const NOW = '2026-09-30T00:00:00.000Z';
 
 describe('loadSharedRunTitle', () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  const env = () => ({ DB: database.d1 }) as unknown as Env;
+  let database: SqliteD1;
+  const env = () => apiEnv({ DB: database.binding });
 
   const addRun = (id: string, { isPublic = 1, deletedAt = null as string | null } = {}) =>
     database.sqlite
@@ -18,7 +18,7 @@ describe('loadSharedRunTitle', () => {
       .run(id, `Run ${id}`, NOW, NOW, isPublic, `token-${id}`, deletedAt);
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     database.sqlite
       .prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('owner', 'owner@example.test', 'Owner', 1, ?)")
       .run(NOW);

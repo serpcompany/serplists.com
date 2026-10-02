@@ -1,52 +1,58 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
-import { varFromWranglerToml } from '../../../support/wranglerToml';
+import { silenceLogs } from '../../../support/apiRouter';
+import { SqliteD1 } from '../../../support/sqlite-d1';
+import { wranglerEnvVars } from '../../../support/wranglerToml';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import { present } from '../../../support/elements';
+import type { Env } from '@functions/api/types';
 
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
 const PASSWORD = 'a-strong-unbreached-passphrase-81';
 
 describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED and never the request host', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let breachedPasswordAndEmailProviderCalls: ReturnType<typeof vi.fn>;
 
   const previewEnv = () =>
-    ({
-      DB: database.d1,
+    apiEnv({
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.preview.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
-      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.preview.vars', 'CORS_ALLOWED_ORIGINS'),
-    }) as any;
+      AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('preview').AUTH_EMAIL_VERIFICATION_REQUIRED,
+      CORS_ALLOWED_ORIGINS: wranglerEnvVars('preview').CORS_ALLOWED_ORIGINS,
+    });
 
-  const productionEnv = (overrides: Record<string, unknown> = {}) =>
-    ({
-      DB: database.d1,
+  const productionEnv = (overrides: Partial<Env> = {}) =>
+    apiEnv({
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
-      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.production.vars', 'CORS_ALLOWED_ORIGINS'),
+      AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
+      CORS_ALLOWED_ORIGINS: wranglerEnvVars('production').CORS_ALLOWED_ORIGINS,
       ...overrides,
-    }) as any;
+    });
 
-  function signUp(origin: string, env: unknown, email: string) {
+  function signUp(origin: string, env: Env, email: string) {
     return apiWorker.fetch(
       new Request(`${origin}/api/auth/sign-up/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Origin: origin },
         body: JSON.stringify({ email, password: PASSWORD, name: 'Staging Tester' }),
       }),
-      env as any,
+      env,
     );
   }
 
-  const userCount = () => (database.sqlite.prepare('SELECT count(*) AS count FROM users').get() as { count: number }).count;
+  const userCount = () => {
+    const { count } = present(database.sqlite.prepare('SELECT count(*) AS count FROM users').get(), 'the user count');
+    return count;
+  };
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     breachedPasswordAndEmailProviderCalls = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordAndEmailProviderCalls);
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    silenceLogs();
   });
 
   afterEach(() => {
@@ -75,7 +81,7 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
       const response = await signUp(origin, productionEnv(), 'new-user@example.com');
 
       expect(response.status).toBe(503);
-      expect((await response.json()).code).toBe('auth_email_unavailable');
+      expect((await readJson(response, apiErrorBody)).code).toBe('auth_email_unavailable');
       expect(userCount()).toBe(0);
     },
   );

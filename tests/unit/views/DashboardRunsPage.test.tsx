@@ -1,3 +1,5 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import { workspaceRoles } from '../../support/mockedWorkspaceRoles';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,13 +10,14 @@ import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features
 import { createApiError } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
+import type { useAuth } from '@/contexts/CloudflareAuthContext';
+import type { useTemplateLists, useTemplates } from '@/contexts/TemplatesContext';
+import { elementAt } from '../../support/elements';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+type TemplatesModel = ReturnType<typeof useTemplates> & ReturnType<typeof useTemplateLists>;
 
-const mockUseAuth = vi.fn();
-const mockUseTemplates = vi.fn();
+const mockUseAuth = vi.fn<() => Partial<ReturnType<typeof useAuth>>>();
+const mockUseTemplates = vi.fn<() => Partial<TemplatesModel>>();
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => mockUseAuth(),
@@ -24,17 +27,6 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => mockUseTemplates(),
   useTemplateLists: () => mockUseTemplates(),
 }));
-
-const workspaceRoles = vi.hoisted(() => ({ roles: {} as Record<string, 'viewer' | 'editor' | 'admin'> }));
-
-vi.mock('@/contexts/WorkspaceContext', async () => {
-  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
-  return {
-    useWorkspace: () => ({
-      getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
-    }),
-  };
-});
 
 vi.mock('sonner', () => ({
   toast: {
@@ -174,6 +166,23 @@ const publicCatalogTemplate: ChecklistTemplate = {
 const publicCatalogOnly: ChecklistTemplate[] = [publicCatalogTemplate];
 const privateTemplatesOnlyInAllTemplates: ChecklistTemplate[] = [privateTemplate];
 
+const signInAsTheDevUser = () =>
+  mockUseAuth.mockReturnValue({
+    user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
+    logout: vi.fn().mockResolvedValue({ ok: true }),
+  });
+
+const showTheRuns = (state: Partial<TemplatesModel>) =>
+  mockUseTemplates.mockReturnValue({
+    templates: publicCatalogOnly,
+    templatesLoading: false,
+    runsLoading: false,
+    updateRun: vi.fn(),
+    revalidateRun: vi.fn(),
+    deleteRun: vi.fn(),
+    ...state,
+  });
+
 const renderRunsPage = () => {
   navigation.reset('/dashboard/runs/');
   return renderToStaticMarkup(
@@ -190,20 +199,8 @@ describe('/dashboard/runs presentation', () => {
   });
 
   const renderEveryRun = () => {
-    mockUseAuth.mockReturnValue({
-      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
-      allTemplates: privateTemplatesOnlyInAllTemplates,
-      templatesLoading: false,
-      runs,
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    signInAsTheDevUser();
+    showTheRuns({ allTemplates: privateTemplatesOnlyInAllTemplates, runs });
     return renderRunsPage();
   };
 
@@ -246,7 +243,7 @@ describe('/dashboard/runs presentation', () => {
   });
 
   it('links runs to private workspace Templates and to catalog-only public Templates', () => {
-    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' }, logout: vi.fn() });
     const organizationTemplate: ChecklistTemplate = {
       ...privateTemplate,
       id: 'org-template',
@@ -254,19 +251,13 @@ describe('/dashboard/runs presentation', () => {
       teamId: 'team-1',
     };
     const allTemplatesInThatOrganization = [organizationTemplate];
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
+    showTheRuns({
       allTemplates: allTemplatesInThatOrganization,
-      templatesLoading: false,
       runs: [
-        { ...runs[0], id: 'run-org', templateId: 'org-template', title: 'Acme' },
-        { ...runs[1], id: 'run-public', templateId: 'template-1', title: 'Beta' },
-        { ...runs[2], id: 'run-library', templateId: '', title: 'Library run' },
+        { ...elementAt(runs, 0), id: 'run-org', templateId: 'org-template', title: 'Acme' },
+        { ...elementAt(runs, 1), id: 'run-public', templateId: 'template-1', title: 'Beta' },
+        { ...elementAt(runs, 2), id: 'run-library', templateId: '', title: 'Library run' },
       ],
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
     });
 
     const html = renderRunsPage();
@@ -281,18 +272,8 @@ describe('/dashboard/runs presentation', () => {
   });
 
   it('keeps the runs route structure visible while data is loading', () => {
-    mockUseAuth.mockReturnValue({
-      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    mockUseTemplates.mockReturnValue({
-      templates: [],
-      templatesLoading: false,
-      runs: [],
-      runsLoading: true,
-      updateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    signInAsTheDevUser();
+    showTheRuns({ templates: [], runs: [], runsLoading: true });
 
     const html = renderRunsPage();
 
@@ -308,20 +289,8 @@ describe('/dashboard/runs presentation', () => {
     ['a failed load', new Error('HTTP 500'), 'Retry'],
     ['an expired session', createApiError(401, { error: 'Unauthorized' }), 'Sign in'],
   ])('shows %s instead of an empty runs list', (_name, runsError, action) => {
-    mockUseAuth.mockReturnValue({
-      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    mockUseTemplates.mockReturnValue({
-      templates: [],
-      templatesLoading: false,
-      runs: [],
-      runsLoading: false,
-      runsError,
-      refetchRuns: vi.fn(),
-      updateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    signInAsTheDevUser();
+    showTheRuns({ templates: [], runs: [], runsError, refetchRuns: vi.fn() });
 
     const html = renderRunsPage();
 
@@ -332,19 +301,8 @@ describe('/dashboard/runs presentation', () => {
   });
 
   it('offers Stop sharing to update, which makes the run private and revalidatable, instead of a revalidation that must fail on a shared snapshot', () => {
-    mockUseAuth.mockReturnValue({
-      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
-      templatesLoading: false,
-      runs: [{ ...runs[3], isStale: true, isPublic: true }],
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    signInAsTheDevUser();
+    showTheRuns({ runs: [{ ...elementAt(runs, 3), isStale: true, isPublic: true }] });
 
     const html = renderRunsPage();
 
@@ -354,19 +312,8 @@ describe('/dashboard/runs presentation', () => {
   });
 
   it('marks shared runs so owners can see which links are live', () => {
-    mockUseAuth.mockReturnValue({
-      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn(),
-    });
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
-      templatesLoading: false,
-      runs: [{ ...runs[0], isPublic: true }, runs[1]],
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    signInAsTheDevUser();
+    showTheRuns({ runs: [{ ...elementAt(runs, 0), isPublic: true }, elementAt(runs, 1)] });
 
     const html = renderRunsPage();
 
@@ -412,19 +359,16 @@ describe('/dashboard/runs presentation', () => {
     expect(queryClient.invalidateQueries).not.toHaveBeenCalled();
   });
 
-  it('hides run actions an Organization viewer cannot use', () => {
-    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
-    workspaceRoles.roles = { acme: 'viewer' };
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
+  const showAStalePrivateAcmeRun = () =>
+    showTheRuns({
       allTemplates: privateTemplatesOnlyInAllTemplates,
-      templatesLoading: false,
-      runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
+      runs: [{ ...elementAt(runs, 3), teamId: 'acme', isStale: true, isPublic: false }],
     });
+
+  it('hides run actions an Organization viewer cannot use', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' }, logout: vi.fn() });
+    workspaceRoles.roles = { acme: 'viewer' };
+    showAStalePrivateAcmeRun();
 
     const html = renderRunsPage();
 
@@ -434,18 +378,9 @@ describe('/dashboard/runs presentation', () => {
   });
 
   it('keeps the run options for members who can share or delete', () => {
-    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' }, logout: vi.fn() });
     workspaceRoles.roles = { acme: 'editor' };
-    mockUseTemplates.mockReturnValue({
-      templates: publicCatalogOnly,
-      allTemplates: privateTemplatesOnlyInAllTemplates,
-      templatesLoading: false,
-      runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
-      runsLoading: false,
-      updateRun: vi.fn(),
-      revalidateRun: vi.fn(),
-      deleteRun: vi.fn(),
-    });
+    showAStalePrivateAcmeRun();
 
     const html = renderRunsPage();
 

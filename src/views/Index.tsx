@@ -22,11 +22,12 @@ import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
 import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
 import {
   buildCanonicalPublicTemplatePath,
@@ -35,7 +36,6 @@ import {
   buildPublicTemplatesPath,
   buildRegisterPath,
 } from '@/lib/routes';
-import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -83,13 +83,6 @@ const productSurfaces = [
     icon: Eye,
   },
 ] as const;
-
-function countTemplateItems(template: ChecklistTemplate): number {
-  return template.sections.reduce(
-    (total, section) => total + section.items.length,
-    0,
-  );
-}
 
 const Index = () => {
   const { user } = useAuth();

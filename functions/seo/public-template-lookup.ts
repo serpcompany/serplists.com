@@ -5,7 +5,7 @@ import { templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { withEdgeCache } from '../api/utils/edge-cache';
-import { normalizeStringArray } from '../api/utils/payloads';
+import { normalizeStringArray } from '../../src/lib/schemas/jsonArrays';
 import { looksLikeTemplateId } from '../api/utils/slug';
 
 const CACHE_TTL_SECONDS = 5 * 60;

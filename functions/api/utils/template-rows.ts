@@ -3,14 +3,26 @@ import { z } from 'zod';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
+import { templateOwnerProfile } from '../../../src/lib/schemas/templateOwnerProfile';
 import { log } from './logger';
-import { normalizeSectionsPayload, normalizeStringArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { withStableTemplateIdentities } from './template-identities';
 import { isMissingRulesColumnError } from './template-writes';
 
 export type TemplateDb = ReturnType<typeof createDb>;
 
 type QueryResult<T> = PromiseLike<T> | T;
+
+type TemplateRow = typeof schema.templates.$inferSelect;
+export type TemplateRowColumns = Pick<
+  TemplateRow,
+  'id' | 'items' | 'category' | 'tags' | 'seo_title' | 'seo_description' | 'type'
+> & {
+  rules?: TemplateRow['rules'] | undefined;
+  owner_username?: string | null | undefined;
+  owner_full_name?: string | null | undefined;
+};
 
 export function getTemplateSelectColumns(includeRules: boolean) {
   const { templates } = schema;
@@ -55,21 +67,27 @@ export async function withRulesColumnFallback<T>(
   }
 }
 
-export function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
+export async function findTemplateById(db: TemplateDb, templateId: string) {
+  const { templates } = schema;
+  const [template] = await withRulesColumnFallback((includeRules) =>
+    db.select(getTemplateSelectColumns(includeRules)).from(templates).where(eq(templates.id, templateId)).limit(1),
+  );
+  return template;
+}
+
+export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
   let sections: unknown[] = [];
-  if (typeof template.items !== 'undefined') {
-    const normalized = normalizeSectionsPayload(template.items);
-    if (normalized.error) {
-      log('warn', 'template_items_parse_failed', { templateId: template.id });
-    } else {
-      sections = withStableTemplateIdentities(normalized.sections);
-    }
+  const normalized = normalizeSectionsPayload(template.items);
+  if (normalized.error) {
+    log('warn', 'template_items_parse_failed', { templateId: template.id });
+  } else {
+    sections = withStableTemplateIdentities(normalized.sections);
   }
 
   let rules: unknown[] | undefined;
-  if (typeof template.rules !== 'undefined' && template.rules !== null) {
+  if (typeof template.rules === 'string') {
     try {
-      const parsedRules = typeof template.rules === 'string' ? JSON.parse(template.rules) : template.rules;
+      const parsedRules: unknown = JSON.parse(template.rules);
       const validatedRules = z.array(portableTemplateRuleSchema).safeParse(parsedRules);
       if (validatedRules.success) {
         rules = validatedRules.data;
@@ -79,23 +97,17 @@ export function parseTemplateRow<T extends Record<string, unknown>>(template: T)
     }
   }
 
-  const { items: _rawItemsColumn, ...columns } = template;
+  const { items, ...columns } = template;
   return {
     ...columns,
     sections,
     rules,
     categories: normalizeStringArray(template.category),
     tags: normalizeStringArray(template.tags),
-    seoTitle: typeof template.seo_title === 'string' ? template.seo_title : '',
-    seoDescription: typeof template.seo_description === 'string' ? template.seo_description : '',
-    type: typeof template.type === 'string' ? template.type : 'checklist',
-    ownerProfile:
-      typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
-        ? {
-            username: typeof template.owner_username === 'string' ? template.owner_username : undefined,
-            full_name: typeof template.owner_full_name === 'string' ? template.owner_full_name : undefined,
-          }
-        : undefined,
+    seoTitle: template.seo_title ?? '',
+    seoDescription: template.seo_description ?? '',
+    type: template.type,
+    ownerProfile: templateOwnerProfile(template),
   };
 }
 

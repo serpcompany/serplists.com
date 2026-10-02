@@ -2,7 +2,7 @@ import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { getEntitlementsForContext, getEntitlementsForUser } from './entitlements';
-import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
 export type RunOwnerContext = { userId: string; teamId: string | null };
@@ -14,21 +14,21 @@ export type ActiveRunCapacity = { limit: number | null; hit: ActiveRunLimitHit |
 type Db = ReturnType<typeof createDb>;
 
 export function activeRunsInContext(owner: RunOwnerContext): SQL {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const inContext = owner.teamId
-    ? eq(checklist_runs.team_id, owner.teamId)
-    : and(eq(checklist_runs.user_id, owner.userId), isNull(checklist_runs.team_id));
-  return and(inContext, eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at)) as SQL;
+    ? eq(checklistRuns.team_id, owner.teamId)
+    : and(eq(checklistRuns.user_id, owner.userId), isNull(checklistRuns.team_id));
+  return allConditions(inContext, eq(checklistRuns.status, 'in_progress'), isNull(checklistRuns.deleted_at));
 }
 
 export function activeRunCapacityAvailableSql(owner: RunOwnerContext, limit: number): SQL {
-  return sql`(select count(*) from ${schema.checklist_runs} where ${activeRunsInContext(owner)}) < ${limit}`;
+  return sql`(select count(*) from ${schema.checklistRuns} where ${activeRunsInContext(owner)}) < ${limit}`;
 }
 
 export async function countActiveRuns(env: Env, owner: RunOwnerContext): Promise<number> {
   const [row] = await createDb(env)
     .select({ count: sql<number>`count(*)` })
-    .from(schema.checklist_runs)
+    .from(schema.checklistRuns)
     .where(activeRunsInContext(owner))
     .limit(1);
   return row?.count ?? 0;
@@ -59,18 +59,18 @@ export async function findActiveRunLimitHit(
 
 export function runInsertStatements(
   db: Db,
-  run: typeof schema.checklist_runs.$inferInsert & { id: string },
-  auditEvent: typeof schema.audit_events.$inferInsert,
+  run: typeof schema.checklistRuns.$inferInsert & { id: string },
+  auditEvent: typeof schema.auditEvents.$inferInsert,
   owner: RunOwnerContext,
   limit: number | null,
 ) {
-  const { audit_events, checklist_runs } = schema;
+  const { auditEvents, checklistRuns } = schema;
   if (limit === null) {
-    return [db.insert(checklist_runs).values(run), db.insert(audit_events).values(auditEvent)] as const;
+    return [db.insert(checklistRuns).values(run), db.insert(auditEvents).values(auditEvent)] as const;
   }
   return [
-    insertRowWhere(db, checklist_runs, run, activeRunCapacityAvailableSql(owner, limit)),
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, run.id)),
+    insertRowWhere(db, checklistRuns, run, activeRunCapacityAvailableSql(owner, limit)),
+    insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(checklistRuns.id, run.id)),
   ] as const;
 }
 
@@ -84,4 +84,16 @@ export function activeRunLimitResponse(
 
 export function isReopening(currentStatus: unknown, nextStatus: unknown): boolean {
   return nextStatus === 'in_progress' && currentStatus !== 'in_progress';
+}
+
+export async function reopenLimitResponse(
+  env: Env,
+  run: Pick<typeof schema.checklistRuns.$inferSelect, 'status' | 'team_id' | 'user_id'>,
+  nextStatus: unknown,
+  actingUserId: string | null,
+): Promise<Response | null> {
+  if (!isReopening(run.status, nextStatus)) return null;
+  const owner = { userId: run.user_id, teamId: run.team_id ?? null };
+  const hit = await findActiveRunLimitHit(env, owner, actingUserId);
+  return hit ? activeRunLimitResponse(owner, hit, 'reopen') : null;
 }

@@ -1,23 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { loadTemplateDetailData } from './loadTemplateDetail';
-import {
-  buildTemplateDetailQueryOptions,
-  getTemplateDetailQueryKey,
-} from './templateDetailQuery';
+import { buildTemplateDetailQueryOptions } from './templateDetailQuery';
 
 export type TemplateUpdater = (
   current: ChecklistTemplate | null,
 ) => ChecklistTemplate | null;
 
 type TemplateDetailRecordOptions = {
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'private' | 'public';
-  ownerUsername?: string;
-  userId?: string;
+  ownerUsername?: string | undefined;
+  userId?: string | undefined;
 };
 
 export type TemplateDetailRecord = {
@@ -92,7 +90,7 @@ const usePrivateTemplateRecord = (
     }),
     enabled,
   });
-  const queryKey = getTemplateDetailQueryKey(options.identifier, options.userId);
+  const queryKey = queryKeys.templateDetail(options.identifier, options.userId);
   const { refetch } = query;
   const hasTemplate = Boolean(query.data);
   const isGone = query.data === null && !query.isFetching && !query.isError;

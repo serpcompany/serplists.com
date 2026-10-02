@@ -15,7 +15,7 @@ export const updateNoteDraft = (
   value: string,
   savedNotes: string | undefined,
 ): NoteDrafts => {
-  const { [itemId]: _previous, ...rest } = drafts;
+  const { [itemId]: previousDraft, ...rest } = drafts;
   return value === (savedNotes ?? '') ? rest : { ...rest, [itemId]: value };
 };
 

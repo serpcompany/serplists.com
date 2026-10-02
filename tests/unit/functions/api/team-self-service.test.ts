@@ -1,39 +1,13 @@
 import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
-import type { SQL } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
-
-const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-
-const sessionMocks = vi.hoisted(() => ({
-  getSessionUserId: vi.fn(),
-}));
-
-const auditMocks = vi.hoisted(() => ({
-  buildAuditEventValues: vi.fn(async (input: { action: string }) => ({
-    id: "audit-event",
-    action: input.action,
-  })),
-}));
-
-vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock("@functions/api/utils/session", () => ({
-  getSessionUserId: sessionMocks.getSessionUserId,
-}));
-
-vi.mock("@functions/api/utils/audit", () => ({
-  buildAuditEventValues: auditMocks.buildAuditEventValues,
-}));
+import { sqlExpression } from "../../../support/drizzleSql";
+import { beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
+import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 
 import { handleTeams } from "@functions/api/handlers/teams";
-
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-};
+import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
+import { parseJsonText } from "../../../support/storedJson";
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -87,22 +61,14 @@ function expectNoWrites() {
 function conditionalAuditQuery() {
   expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
-  return new SQLiteAsyncDialect().sqlToQuery(dbMocks.insertChain.select.mock.calls[0][0] as SQL);
+  return new SQLiteAsyncDialect().sqlToQuery(sqlExpression(firstOf(dbMocks.insertChain.select.mock.calls)[0]));
 }
 
 const previewRequest = (token = "invite-token") =>
   new Request(`http://localhost/api/teams/invites/${token}`);
 
 describe("Organization invite preview, which writes nothing so opening a link joins no one", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
-  });
+  beforeEach(resetTeamsHandlerMocks);
 
   it("describes a pending invite without accepting it", async () => {
     dbMocks.selectChain.limit
@@ -120,7 +86,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
       teamName: "Acme Corp",
       teamSlug: "acme-corp",
       role: "editor",
-      expiresAt: expect.any(String),
+      expiresAt: anyInstanceOf(String),
       inviterName: "Owner User",
       inviterEmail: "owner@example.com",
     });
@@ -136,7 +102,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const body = await response.text();
 
     expect(response.status).toBe(403);
-    expect(JSON.parse(body).code).toBe("invite_email_mismatch");
+    expect(parseJsonText(body, apiErrorBody).code).toBe("invite_email_mismatch");
     expect(body).not.toContain("Acme Corp");
     expect(body).not.toContain("owner@example.com");
     expectNoWrites();
@@ -150,7 +116,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const response = await handleTeams(previewRequest(), mockEnv);
 
     expect(response.status).toBe(410);
-    expect((await response.json()).code).toBe("invite_expired");
+    expect((await readJson(response, apiErrorBody)).code).toBe("invite_expired");
     expectNoWrites();
   });
 
@@ -205,7 +171,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toEqual(expect.objectContaining({ status: "already_member", teamName: "Acme Corp", role: "viewer" }));
+    expect(data).toEqual(objectContaining({ status: "already_member", teamName: "Acme Corp", role: "viewer" }));
     expectNoWrites();
   });
 
@@ -222,13 +188,8 @@ describe("Organization invite preview, which writes nothing so opening a link jo
 
 describe("Organization invite decline", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    resetTeamsHandlerMocks();
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   const declineRequest = () =>
@@ -243,10 +204,10 @@ describe("Organization invite decline", () => {
 
     expect(response.status).toBe(200);
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ revoked_at: expect.any(String) }),
+      objectContaining({ revoked_at: anyInstanceOf(String) }),
     );
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "team_invite.declined", actorUserId: "user-1" }),
+      objectContaining({ action: "team_invite.declined", actorUserId: "user-1" }),
     );
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
   });
@@ -259,13 +220,13 @@ describe("Organization invite decline", () => {
     await handleTeams(declineRequest(), mockEnv);
 
     const revokeThenAuditOfItsRow = [dbMocks.updateChain, dbMocks.insertChain];
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual(revokeThenAuditOfItsRow);
-    const revokedAt = dbMocks.updateChain.set.mock.calls[0][0].revoked_at;
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual(revokeThenAuditOfItsRow);
+    const revokedAt = firstOf(dbMocks.updateChain.set.mock.calls)[0].revoked_at;
     const query = conditionalAuditQuery();
     expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_invites"/);
     expect(query.sql).toContain('"team_invites"."id" = ?');
     expect(query.sql).toContain('"team_invites"."revoked_at" = ?');
-    expect(query.params).toEqual(expect.arrayContaining(["invite-1", revokedAt]));
+    expect(query.params).toEqual(arrayContaining(["invite-1", revokedAt]));
   });
 
   it("returns 404, not success, when the invite is accepted in another tab during the decline", async () => {
@@ -275,10 +236,10 @@ describe("Organization invite decline", () => {
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTeams(declineRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
-    expect(data.success).toBeUndefined();
+    expect(data).not.toHaveProperty("success");
   });
 
   it("does not let another account decline the invite", async () => {
@@ -306,16 +267,11 @@ describe("Organization invite decline", () => {
 
 describe("Leaving an Organization", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
+    resetTeamsHandlerMocks();
     const membershipLookupChainsOn = dbMocks.selectChain;
     const pendingInvitesTheLeaverCreated: never[] = [];
     dbMocks.selectChain.where.mockReset().mockReturnValueOnce(membershipLookupChainsOn).mockResolvedValue(pendingInvitesTheLeaverCreated);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   const leaveRequest = () =>
@@ -331,7 +287,7 @@ describe("Leaving an Organization", () => {
     expect(response.status).toBe(200);
     expect(dbMocks.db.delete).toHaveBeenCalledTimes(1);
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: "team_member.left",
         actorUserId: "user-1",
         resource: { type: "team_member", id: "member-1" },
@@ -348,14 +304,14 @@ describe("Leaving an Organization", () => {
     await handleTeams(leaveRequest(), mockEnv);
 
     const auditOnTheDeleteConditionThenDelete = [dbMocks.insertChain, dbMocks.deleteChain];
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual(auditOnTheDeleteConditionThenDelete);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual(auditOnTheDeleteConditionThenDelete);
     const query = conditionalAuditQuery();
     expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_members"/);
     for (const column of ["id", "team_id", "user_id"]) {
       expect(query.sql).toContain(`"team_members"."${column}" = ?`);
     }
     expect(query.sql).toContain('"team_members"."role" <> ?');
-    expect(query.params).toEqual(expect.arrayContaining(["member-1", "team-1", "user-1", "owner"]));
+    expect(query.params).toEqual(arrayContaining(["member-1", "team-1", "user-1", "owner"]));
   });
 
   it("returns 409, not success, when ownership moves to the member or they leave in another tab during the leave", async () => {
@@ -366,11 +322,11 @@ describe("Leaving an Organization", () => {
     dbMocks.db.batch.mockResolvedValueOnce(membershipChangedAfterTheRead);
 
     const response = await handleTeams(leaveRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("membership_changed");
-    expect(data.success).toBeUndefined();
+    expect(data).not.toHaveProperty("success");
   });
 
   it("asks the owner to transfer ownership first", async () => {
@@ -381,7 +337,7 @@ describe("Leaving an Organization", () => {
     const response = await handleTeams(leaveRequest(), mockEnv);
 
     expect(response.status).toBe(400);
-    expect((await response.json()).code).toBe("owner_must_transfer");
+    expect((await readJson(response, apiErrorBody)).code).toBe("owner_must_transfer");
     expectNoWrites();
   });
 

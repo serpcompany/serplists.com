@@ -4,7 +4,8 @@ import { useId, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,

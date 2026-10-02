@@ -15,7 +15,7 @@ export const UPLOAD_BUCKET_BY_TYPE: Record<FileUploadType, TemplateUploadBucket>
   file: 'template-files',
 };
 
-export type UploadedFileInfo = { url: string; fileName?: string; fileSize?: number };
+export type UploadedFileInfo = { url: string; fileName?: string | undefined; fileSize?: number | undefined };
 
 export const uploadSelectedFile = async ({
   file,
@@ -25,7 +25,7 @@ export const uploadSelectedFile = async ({
 }: {
   file: File;
   type: FileUploadType;
-  onUploadStart?: (upload: Promise<UploadResult>) => void;
+  onUploadStart?: ((upload: Promise<UploadResult>) => void) | undefined;
   onUploaded: (info: UploadedFileInfo) => void;
 }): Promise<boolean> => {
   const validation = validateFile(file, type);

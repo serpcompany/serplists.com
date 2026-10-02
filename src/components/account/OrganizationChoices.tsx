@@ -8,7 +8,8 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import type { IncomingTeamInvite, TeamSummary } from '@/lib/api';
-import { formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
+import { formatRole } from '@/components/account/teamSettingsFormat';
+import { InviteItemContent } from '@/components/account/InviteItemContent';
 
 type IncomingInviteListProps = {
   acceptingInviteId: string | null;
@@ -23,16 +24,13 @@ export function IncomingInviteList({ acceptingInviteId, invites, onAccept }: Inc
       <ItemGroup className="gap-2">
         {invites.map((invite) => (
           <Item key={invite.id} role="listitem" variant="outline">
-            <ItemContent className="min-w-0">
-              <ItemTitle className="wrap-anywhere">{invite.teamName}</ItemTitle>
-              <ItemDescription className="wrap-anywhere">
-                Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
-              </ItemDescription>
-              <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                <span>{formatRole(invite.role)}</span>
-                <span>{formatInviteExpiration(invite.expiresAt)}</span>
-              </div>
-            </ItemContent>
+            <InviteItemContent
+              title={invite.teamName}
+              inviterName={invite.inviterName}
+              inviterEmail={invite.inviterEmail}
+              role={invite.role}
+              expiresAt={invite.expiresAt}
+            />
             <ItemActions>
               <Button
                 aria-label={`Accept invite to ${invite.teamName}`}

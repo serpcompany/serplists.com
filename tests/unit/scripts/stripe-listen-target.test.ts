@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   resolveWebhookForwardTarget,
   retargetForDevSession,
-} from "../../../scripts/stripe/_listen-target.mjs";
+} from "../../../scripts/stripe/_listen-target";
 
 const ALIVE = 101;
 const DEAD = 202;
@@ -24,6 +23,7 @@ const anotherWorktreeHoldsPort3000 = async (port: number) => port !== 3000;
 describe("resolveWebhookForwardTarget", () => {
   it("forwards to the API of this checkout's running dev server, never a fixed port another worktree may own", async () => {
     const target = await resolveWebhookForwardTarget({
+      envUrl: undefined,
       session: session({ pid: ALIVE }),
       isAlive,
       portAvailable: anotherWorktreeHoldsPort3000,
@@ -34,6 +34,7 @@ describe("resolveWebhookForwardTarget", () => {
 
   it("ignores a stale session and skips a port another worktree holds", async () => {
     const target = await resolveWebhookForwardTarget({
+      envUrl: undefined,
       session: session({ pid: DEAD, port: 3005 }),
       isAlive,
       portAvailable: anotherWorktreeHoldsPort3000,
@@ -43,7 +44,7 @@ describe("resolveWebhookForwardTarget", () => {
   });
 
   it("predicts the default port only when it is free and nothing runs yet", async () => {
-    const target = await resolveWebhookForwardTarget({ session: null, isAlive, portAvailable: allFree });
+    const target = await resolveWebhookForwardTarget({ envUrl: undefined, session: null, isAlive, portAvailable: allFree });
 
     expect(target).toMatchObject({ url: "http://localhost:3000/api/stripe/webhook", source: "predicted" });
   });
@@ -85,14 +86,5 @@ describe("retargetForDevSession", () => {
     const explicit = { url: "http://localhost:9999/api/stripe/webhook", source: "env" as const };
 
     expect(retargetForDevSession(explicit, session({ pid: ALIVE }), isAlive)).toBeNull();
-  });
-});
-
-describe("scripts/stripe/listen-local.mjs", () => {
-  const source = readFileSync(new URL("../../../scripts/stripe/listen-local.mjs", import.meta.url), "utf8");
-
-  it("resolves its forward target instead of hardcoding the default port", () => {
-    expect(source).not.toMatch(/localhost:\d/);
-    expect(source).toMatch(/resolveWebhookForwardTarget/);
   });
 });

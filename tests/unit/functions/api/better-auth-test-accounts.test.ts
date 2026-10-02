@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE } from '@functions/api/utils/test-email-block';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { silenceLogs } from '../../../support/apiRouter';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
+import { betterAuthErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const PASSWORD = 'original-password-1';
 
 describe('test accounts under the production auth policy, which Better Auth enforces on the ways in the router does not check', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  let localEnv: any;
-  let productionEnv: any;
+  let database: SqliteD1;
+  let localEnv: Env;
+  let productionEnv: Env;
 
   function authRequest(origin: string, path: string, body: unknown, env = productionEnv) {
     return postToBetterAuth(env, path, { body, origin });
@@ -26,18 +30,16 @@ describe('test accounts under the production auth policy, which Better Auth enfo
   }
 
   beforeEach(() => {
-    database = createMigratedD1();
-    localEnv = {
-      DB: database.d1,
+    database = new SqliteD1();
+    localEnv = apiEnv({
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-    };
+    });
     productionEnv = { ...localEnv, AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', RESEND_API_KEY: 're_test_123' };
     const breachedPasswordLookupFindingNothing = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordLookupFindingNothing);
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    silenceLogs();
   });
 
   afterEach(() => {
@@ -55,7 +57,7 @@ describe('test accounts under the production auth policy, which Better Auth enfo
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
+    expect((await readJson(response, betterAuthErrorBody)).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
     expect(response.headers.get('set-cookie') ?? '').not.toContain('session_token=');
     expect(database.sqlite.prepare('SELECT count(*) AS count FROM session').get()).toEqual({ count: 1 });
   });
@@ -69,7 +71,7 @@ describe('test accounts under the production auth policy, which Better Auth enfo
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
+    expect((await readJson(response, betterAuthErrorBody)).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
   });
 
   it('refuses a test-domain sign-up in production and stores nothing', async () => {

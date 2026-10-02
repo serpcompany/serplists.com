@@ -1,11 +1,11 @@
 import type { AgentMcpConnection } from "../../../src/lib/schemas/agentMcpConnection";
-import { isLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
+import { isCanonicalLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
 import type { Env } from "../types";
 import { urlOrigin } from "./origin-list";
 
 const MCP_PATH = "/api/mcp";
 
-export function configuredOrigins(env: Env): Set<string> {
+function configuredOrigins(env: Env): Set<string> {
   const origins = new Set<string>();
   for (const value of [env.FRONTEND_URL, ...(env.CORS_ALLOWED_ORIGINS?.split(",") ?? [])]) {
     const origin = urlOrigin(value);
@@ -30,7 +30,7 @@ export function requestHostIsSafe(request: Request, env: Env): boolean {
   const requestUrl = new URL(request.url);
   if (host && host.toLowerCase() !== requestUrl.host.toLowerCase()) return false;
 
-  if (isLoopbackHostname(requestUrl.hostname)) return true;
+  if (isCanonicalLoopbackHostname(requestUrl.hostname)) return true;
 
   const allowedHosts = new Set(
     Array.from(configuredOrigins(env), (origin) => new URL(origin).host.toLowerCase()),

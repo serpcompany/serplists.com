@@ -1,12 +1,10 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplateBackup } from '@/components/TemplateBackup';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+import type { useTemplateLists } from '@/contexts/TemplatesContext';
 
 type BillingQueryResult = {
   data?: { billingEnabled?: boolean; plan: 'free' | 'pro' | 'team' };
@@ -18,22 +16,32 @@ type BillingQueryResult = {
   refetch: () => Promise<unknown>;
 };
 
-const mocks = vi.hoisted(() => ({
-  billingQuery: null as unknown as BillingQueryResult,
-  exportInFlight: false,
-  templateListOptions: [] as unknown[],
-  templateLists: {
-    allTemplates: [] as Array<Record<string, unknown>>,
-    templatesError: null as unknown,
-    templatesLoading: false,
-  },
-  workspace: {
-    activeTeamId: undefined as string | undefined,
-    activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
-    canEditTemplates: true,
-    isTeamWorkspace: false,
-  },
-}));
+const mocks = vi.hoisted(() => {
+  const billingQueryStillLoading: BillingQueryResult = {
+    error: null,
+    fetchStatus: 'fetching',
+    isError: false,
+    isLoading: true,
+    isPending: true,
+    refetch: async () => undefined,
+  };
+  return {
+    billingQuery: billingQueryStillLoading,
+    exportInFlight: false,
+    templateListOptions: [] as Array<Parameters<typeof useTemplateLists>[0]>,
+    templateLists: {
+      allTemplates: [] as Array<Record<string, unknown>>,
+      templatesError: null as unknown,
+      templatesLoading: false,
+    },
+    workspace: {
+      activeTeamId: undefined as string | undefined,
+      activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
+      canEditTemplates: true,
+      isTeamWorkspace: false,
+    },
+  };
+});
 
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
@@ -49,7 +57,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplateLists: (options?: unknown) => {
+  useTemplateLists: (options?: Parameters<typeof useTemplateLists>[0]) => {
     mocks.templateListOptions.push(options);
     return {
       allTemplates: mocks.templateLists.allTemplates,
@@ -82,7 +90,6 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const failedBillingQuery = (): BillingQueryResult => ({
-  data: undefined,
   error: new Error('HTTP 500'),
   fetchStatus: 'idle',
   isError: true,
@@ -183,7 +190,7 @@ describe('TemplateBackup template lists', () => {
 
     expect(mocks.templateListOptions.length).toBeGreaterThan(0);
     for (const options of mocks.templateListOptions) {
-      expect((options as { catalog?: boolean } | undefined)?.catalog).not.toBe(true);
+      expect(options?.catalog).not.toBe(true);
     }
   });
 });

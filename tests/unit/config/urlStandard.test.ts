@@ -1,20 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-
-import { canonicalPath } from '@/lib/http/urlStandard';
-import { SMOKE_TEST_HEADER, STAGING_ORIGIN } from '@/lib/seo/siteOrigin';
-
 import {
   loadBuiltRoutes,
   nextServerRedirect,
   workerRedirect,
   type RedirectResult,
   type RequestOptions,
-} from '../../support/nextRouting';
+} from '../../support/builtRoutes';
+import { describe, expect, it } from 'vitest';
 
-vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
-  const { openNextBuildConfig } = await import('../../support/nextRouting');
-  return openNextBuildConfig();
-});
+import { canonicalPath } from '@/lib/http/urlStandard';
+import { SMOKE_TEST_HEADER, STAGING_ORIGIN } from '@/lib/seo/siteOrigin';
 
 const PRODUCTION = await loadBuiltRoutes('production');
 const STAGING = await loadBuiltRoutes('staging');

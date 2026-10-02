@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { apiTemplateSchema } from './support/api-bodies';
 import { PAST_THE_TEAMS_LIST_STALE_TIME, returnToTabAfter } from './support/navigation';
 import { loginAs } from './support/sign-in';
 
-const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist/';
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
 function countRequests(page: Page, matches: (url: URL) => boolean) {
@@ -30,7 +31,7 @@ for (const signedIn of [false, true]) {
 
 test('the Start a Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
   await loginAs(page, 'john');
-  const { id: templateId } = await apiJson<{ id: string }>(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`);
+  const { id: templateId } = await apiJson(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`, apiTemplateSchema);
 
   const readsById = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/${templateId}`));
   await page.clock.install();

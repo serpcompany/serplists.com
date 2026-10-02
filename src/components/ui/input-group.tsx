@@ -6,7 +6,6 @@ import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -55,7 +54,7 @@ function InputGroupAddon({
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest("button")) {
+        if (e.target instanceof Element && e.target.closest("button")) {
           return
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus()
@@ -132,27 +131,10 @@ function InputGroupInput({
   )
 }
 
-function InputGroupTextarea({
-  className,
-  ...props
-}: React.ComponentProps<"textarea">) {
-  return (
-    <Textarea
-      data-slot="input-group-control"
-      className={cn(
-        "flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none ring-0 focus-visible:ring-0 disabled:bg-transparent aria-invalid:ring-0 dark:bg-transparent dark:disabled:bg-transparent",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
 export {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupText,
   InputGroupInput,
-  InputGroupTextarea,
 }

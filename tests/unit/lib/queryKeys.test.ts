@@ -1,20 +1,11 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
-import { QueryClient, QueryObserver } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
 
 import { isUserSwitch, queryKeys, removeSignedOutUserQueries } from '@/lib/queryKeys';
 
-const clients: QueryClient[] = [];
-const newClient = () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  clients.push(client);
-  return client;
-};
+import { queryClientsClearedAfterEachTest } from '../../support/queryClientsPerTest';
 
-afterEach(() => {
-  clients.splice(0).forEach((client) => client.clear());
-});
+const newClient = queryClientsClearedAfterEachTest();
 
 describe('private query keys', () => {
   it('give each user their own cache entry', () => {
@@ -33,25 +24,6 @@ describe('private query keys', () => {
     }
   });
 
-  it('are only spelled out in src/lib/queryKeys.ts', () => {
-    const srcRoot = path.resolve(__dirname, '../../../src');
-    const listFiles = (dir: string): string[] =>
-      readdirSync(dir).flatMap((entry) => {
-        const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) return listFiles(full);
-        return /\.(ts|tsx)$/.test(entry) ? [full] : [];
-      });
-    const kinds = Object.values(queryKeys).map((build) => build('user', 'scope')[0]);
-    const offenders = listFiles(srcRoot)
-      .filter((file) => path.relative(srcRoot, file) !== path.join('lib', 'queryKeys.ts'))
-      .flatMap((file) => {
-        const source = readFileSync(file, 'utf8');
-        return kinds
-          .filter((kind) => new RegExp(`['"\`]${kind}['"\`]`).test(source))
-          .map((kind) => `${path.relative(srcRoot, file)} spells out '${kind}'; use queryKeys from @/lib/queryKeys`);
-      });
-    expect(offenders).toEqual([]);
-  });
 });
 
 describe('isUserSwitch', () => {

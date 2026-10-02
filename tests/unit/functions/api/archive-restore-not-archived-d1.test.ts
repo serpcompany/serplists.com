@@ -1,32 +1,39 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => sessionMocks);
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { sessionMocks } from "../../../support/mockedSession";
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { apiEnvOn } from "../../../support/apiEnv";
+import { objectContaining } from "../../../support/asymmetricMatchers";
+import { present } from "../../../support/elements";
+import { readJson } from "../../../support/readJson";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+
+const restoreBody = z.object({ code: z.unknown() }).passthrough();
 
 const NOW = "2026-09-28T00:00:00.000Z";
 const ITEMS = JSON.stringify([{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }]);
 
 describe("restore of an item that is not archived, on the migrated tables", () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  const env = () => ({ DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
+  let database: SqliteD1;
+  const env = () => apiEnvOn(database);
 
   const exec = (query: string, ...params: Array<string | number | null>) =>
     database.sqlite.prepare(query).run(...params);
 
   const post = async (handler: typeof handleTemplates, path: string) => {
     const response = await handler(new Request(`http://localhost/api/${path}`, { method: "POST" }), env());
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return { status: response.status, body: await readJson(response, restoreBody) };
   };
 
-  const auditCount = (action: string) =>
-    (database.sqlite.prepare("SELECT count(*) AS value FROM audit_events WHERE action = ?").get(action) as { value: number }).value;
+  const auditCount = (action: string) => {
+    const { value } = present(database.sqlite.prepare("SELECT count(*) AS value FROM audit_events WHERE action = ?").get(action), "the audit count");
+    return value;
+  };
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
     exec("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'user-1@example.test', 'User', 1, ?)", NOW);
     exec(
@@ -50,7 +57,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
   it("answers a Template restored elsewhere with code not_archived and records nothing", async () => {
     await expect(post(handleTemplates, "templates/template-1/restore")).resolves.toEqual({
       status: 400,
-      body: expect.objectContaining({ error: "Template is not archived", code: "not_archived" }),
+      body: objectContaining({ error: "Template is not archived", code: "not_archived" }),
     });
     expect(auditCount("template.restored")).toBe(0);
   });
@@ -58,7 +65,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
   it("answers a Run restored elsewhere with code not_archived and records nothing", async () => {
     await expect(post(handleChecklists, "checklists/run-1/restore")).resolves.toEqual({
       status: 400,
-      body: expect.objectContaining({ error: "Checklist is not archived", code: "not_archived" }),
+      body: objectContaining({ error: "Checklist is not archived", code: "not_archived" }),
     });
     expect(auditCount("checklist_run.restored")).toBe(0);
   });

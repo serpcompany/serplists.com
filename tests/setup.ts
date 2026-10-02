@@ -1,4 +1,4 @@
-import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env.mjs';
+import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env';
 
 forgetGitRepositoryOverrides();
 
@@ -14,7 +14,7 @@ const localStorageThatKeepsNothing = {
 global.localStorage = localStorageThatKeepsNothing;
 
 class TextOnlyFileReader {
-  onload: ((event: any) => void) | null = null;
+  onload: ((event: { target: { result: string } }) => void) | null = null;
   onerror: (() => void) | null = null;
   result: string | null = null;
 
@@ -23,15 +23,17 @@ class TextOnlyFileReader {
     blob.arrayBuffer().then((buffer) => {
       const text = new TextDecoder().decode(buffer);
       this.result = text;
-      if (this.onload) {
+      const { onload } = this;
+      if (onload) {
         setTimeout(() => {
-          this.onload!({ target: { result: text } });
+          onload.call(this, { target: { result: text } });
         }, 0);
       }
     }).catch(() => {
-      if (this.onerror) {
+      const { onerror } = this;
+      if (onerror) {
         setTimeout(() => {
-          this.onerror!();
+          onerror.call(this);
         }, 0);
       }
     });
@@ -39,5 +41,5 @@ class TextOnlyFileReader {
 }
 
 if (typeof FileReader === 'undefined') {
-  (global as any).FileReader = TextOnlyFileReader;
+  Object.assign(globalThis, { FileReader: TextOnlyFileReader });
 }

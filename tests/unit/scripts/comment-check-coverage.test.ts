@@ -9,15 +9,15 @@ import {
   checkedLanguage,
   commentCheckOf,
   filesGitTracksOrWouldTrack,
-  findComments,
-  WORKFLOWS_AWAITING_A_PERSON,
-} from '../../../scripts/check-no-comments-lib.mjs';
+} from '../../../scripts/check-no-comments-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
+import { isError, rulesFor } from '../../support/eslintConfig';
 
 const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
-const COMMENT_CHECK_COMMAND = 'node scripts/check-no-comments.mjs';
+const COMMENT_CHECK_COMMAND = 'node --import tsx scripts/check-no-comments.ts';
 
 const packageScripts = z
-  .object({ scripts: z.record(z.string()) })
+  .object({ scripts: z.object({ 'check:repo': z.string() }).catchall(z.string()) })
   .parse(JSON.parse(readFileSync('package.json', 'utf8'))).scripts;
 const preCommitCommands = z
   .object({ 'pre-commit': z.object({ commands: z.record(z.object({ glob: z.string().optional(), run: z.string() })) }) })
@@ -36,8 +36,8 @@ describe('the comment checks', { timeout: 60_000 }, () => {
   it('cover every file the repository holds: by ESLint, check-no-comments, GENERATED_FILES, as Markdown, or as a format without comments', () => {
     expect(
       repositoryFiles.filter((file) => commentCheckOf(file) === null),
-      'No comment check covers these files. Teach scripts/check-no-comments-lib.mjs to read their format (FILE_LANGUAGES or ' +
-        'DOTFILE_LANGUAGES, with its comment scanner in scripts/lib/comment-ranges.mjs), list a file a generator writes in ' +
+      'No comment check covers these files. Teach scripts/check-no-comments-lib.ts to read their format (FILE_LANGUAGES or ' +
+        'DOTFILE_LANGUAGES, with its comment scanner in scripts/lib/comment-ranges.ts), list a file a generator writes in ' +
         'GENERATED_FILES, or add a format that has no comment syntax to FORMATS_WITHOUT_COMMENTS.',
     ).toEqual([]);
   });
@@ -46,14 +46,13 @@ describe('the comment checks', { timeout: 60_000 }, () => {
     const eslint = new ESLint();
     const unchecked: string[] = [];
     for (const file of repositoryFiles.filter((path) => commentCheckOf(path) === 'ESLint')) {
-      const rule = (await eslint.calculateConfigForFile(file))?.rules?.['serplists/no-comments'];
-      if (!Array.isArray(rule) || rule[0] !== 2) unchecked.push(file);
+      if (!isError((await rulesFor(eslint, file))['serplists/no-comments'])) unchecked.push(file);
     }
 
     expect(
       unchecked,
       'ESLint does not apply serplists/no-comments to these files. Take them out of the ignores of the no-comments block ' +
-        'in eslint.config.js (or of the global ignores) and remove their comments.',
+        'in eslint.config.ts (or of the global ignores) and remove their comments.',
     ).toEqual([]);
   });
 
@@ -71,23 +70,21 @@ describe('the comment checks', { timeout: 60_000 }, () => {
   });
 });
 
-describe('WORKFLOWS_AWAITING_A_PERSON', () => {
-  it('lists only workflows that still have comments, so the list only shrinks', () => {
-    for (const file of WORKFLOWS_AWAITING_A_PERSON) {
-      expect(existsSync(file), `${file} is gone: take it out of WORKFLOWS_AWAITING_A_PERSON.`).toBe(true);
-      expect(
-        findComments(file, readFileSync(file, 'utf8')).length,
-        `${file} has no comments left: take it out of WORKFLOWS_AWAITING_A_PERSON in scripts/check-no-comments-lib.mjs.`,
-      ).toBeGreaterThan(0);
-    }
+describe('the comment check on workflows', () => {
+  const workflows = repositoryFiles.filter((file) => file.startsWith('.github/workflows/'));
+
+  it('reads every workflow, the Claude review and weekly maintenance workflows included', () => {
+    expect(workflows).toEqual(
+      expect.arrayContaining(['.github/workflows/claude-code-review.yml', '.github/workflows/maintenance.yml']),
+    );
+    expect(workflows.filter((file) => checkedLanguage(file) === null)).toEqual([]);
   });
 
-  it('leaves the listed workflows to a person and still checks the other files it is given', () => {
-    const [workflow] = WORKFLOWS_AWAITING_A_PERSON;
-    const result = spawnSync(process.execPath, ['scripts/check-no-comments.mjs', workflow, 'lefthook.yml'], { encoding: 'utf8' });
+  it('finds no comment in any workflow, and skips none of them', () => {
+    const { command, args } = buildScriptInvocation('scripts/check-no-comments.ts', workflows);
+    const result = spawnSync(command, args, { encoding: 'utf8' });
 
+    expect(result.stdout).toContain(`check-no-comments: no comments in ${workflows.length} file(s).`);
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain(`check-no-comments: skipped ${workflow}, which a person must clean`);
-    expect(result.stdout).toContain('check-no-comments: no comments in 1 file(s).');
   });
 });

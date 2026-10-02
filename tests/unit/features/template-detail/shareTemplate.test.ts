@@ -7,7 +7,13 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import { shareTemplateToPublic } from '@/features/template-detail/shareTemplate';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+import type { TemplateUpdater } from '@/features/template-detail/useTemplateDetailRecord';
+import { present } from '../../../support/elements';
+
 const ORIGIN = 'https://serplists.com';
+const SHARED_AT_ALICES_LINK = { kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/camping-checklist/` };
+const editConflict = () => createApiError(409, { code: 'edit_conflict', error: 'Template changed' });
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -27,17 +33,33 @@ const buildTemplate = (
   ...overrides,
 });
 
-const buildApiClient = (profile: Record<string, unknown> | Error = { username: null }) => ({
-  clonePublicTemplate: vi.fn(),
-  getBillingStatus: vi.fn(),
-  getProfileById:
-    profile instanceof Error
-      ? vi.fn().mockRejectedValue(profile)
-      : vi.fn().mockResolvedValue(profile),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate: vi.fn().mockResolvedValue({}),
-});
+const buildApiClient = (profile: Record<string, unknown> | Error = { username: null }) =>
+  templateDetailApiClient({
+    getProfileById: profile instanceof Error ? vi.fn().mockRejectedValue(profile) : vi.fn().mockResolvedValue(profile),
+    updateTemplate: vi.fn().mockResolvedValue({}),
+  });
+
+const aShareThatConflicts = () => {
+  const apiClient = buildApiClient({ username: 'alice' });
+  apiClient.updateTemplate.mockRejectedValue(editConflict());
+  return { apiClient, reloadAfterConflict: vi.fn().mockResolvedValue(undefined), onTemplateChange: vi.fn() };
+};
+
+const share = (
+  apiClient: ReturnType<typeof buildApiClient>,
+  options: Partial<Parameters<typeof shareTemplateToPublic>[0]> = {},
+) =>
+  shareTemplateToPublic({
+    apiClient,
+    canShare: true,
+    isAuthenticated: true,
+    onTemplateChange: vi.fn(),
+    origin: ORIGIN,
+    template: buildTemplate(),
+    userId: 'user-1',
+    username: undefined,
+    ...options,
+  });
 
 describe('shareTemplateToPublic', () => {
   it('leaves a private template private when the owner has no username', async () => {
@@ -45,17 +67,7 @@ describe('shareTemplateToPublic', () => {
     const onTemplateChange = vi.fn();
     const invalidateTemplates = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      invalidateTemplates,
-      isAuthenticated: true,
-      onTemplateChange,
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { invalidateTemplates, onTemplateChange });
 
     expect(result).toEqual({
       kind: 'error',
@@ -70,16 +82,7 @@ describe('shareTemplateToPublic', () => {
   it('changes nothing when the owner profile cannot be loaded', async () => {
     const apiClient = buildApiClient(new Error('network down'));
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient);
 
     expect(result.kind).toBe('error');
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
@@ -90,22 +93,9 @@ describe('shareTemplateToPublic', () => {
     const onTemplateChange = vi.fn();
     const invalidateTemplates = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      invalidateTemplates,
-      isAuthenticated: true,
-      onTemplateChange,
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { invalidateTemplates, onTemplateChange });
 
-    expect(result).toEqual({
-      kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
-    });
+    expect(result).toEqual(SHARED_AT_ALICES_LINK);
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
       is_public: true,
@@ -120,21 +110,9 @@ describe('shareTemplateToPublic', () => {
   it('uses the signed-in username when the profile has none yet', async () => {
     const apiClient = buildApiClient({ username: null });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: 'alice',
-    });
+    const result = await share(apiClient, { username: 'alice' });
 
-    expect(result).toEqual({
-      kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
-    });
+    expect(result).toEqual(SHARED_AT_ALICES_LINK);
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
   });
 
@@ -142,16 +120,9 @@ describe('shareTemplateToPublic', () => {
     const apiClient = buildApiClient({ username: 'alice' });
     const onTemplateChange = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
+    const result = await share(apiClient, {
       invalidateTemplates: vi.fn().mockRejectedValue(new Error('refetch failed')),
-      isAuthenticated: true,
       onTemplateChange,
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
     });
 
     expect(result.kind).toBe('ok');
@@ -164,21 +135,9 @@ describe('shareTemplateToPublic', () => {
     const apiClient = buildApiClient({ username: 'alice' });
     apiClient.updateTemplate.mockResolvedValue({ version: 3, slug: 'camping-checklist' });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
-      template: buildTemplate({ isPublic: true }),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { template: buildTemplate({ isPublic: true }) });
 
-    expect(result).toEqual({
-      kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
-    });
+    expect(result).toEqual(SHARED_AT_ALICES_LINK);
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
       is_public: true,
@@ -187,25 +146,14 @@ describe('shareTemplateToPublic', () => {
   });
 
   it('gives no link when a public copy went private or was re-slugged elsewhere', async () => {
-    const apiClient = buildApiClient({ username: 'alice' });
-    apiClient.updateTemplate.mockRejectedValue(
-      createApiError(409, { code: 'edit_conflict', error: 'Template changed' }),
-    );
-    const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
-    const onTemplateChange = vi.fn();
+    const { apiClient, reloadAfterConflict, onTemplateChange } = aShareThatConflicts();
     const invalidateTemplates = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
+    const result = await share(apiClient, {
       invalidateTemplates,
-      isAuthenticated: true,
       onTemplateChange,
-      origin: ORIGIN,
       reloadAfterConflict,
       template: buildTemplate({ isPublic: true, slug: 'old', version: 5 }),
-      userId: 'user-1',
-      username: undefined,
     });
 
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
@@ -229,16 +177,10 @@ describe('shareTemplateToPublic', () => {
     const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
     const onTemplateChange = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
+    const result = await share(apiClient, {
       onTemplateChange,
-      origin: ORIGIN,
       reloadAfterConflict,
       template: buildTemplate({ isPublic: true }),
-      userId: 'user-1',
-      username: undefined,
     });
 
     expect(reloadAfterConflict).toHaveBeenCalledTimes(1);
@@ -251,15 +193,9 @@ describe('shareTemplateToPublic', () => {
     apiClient.updateTemplate.mockResolvedValue({ version: 5, slug: 'new' });
     const onTemplateChange = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
+    const result = await share(apiClient, {
       onTemplateChange,
-      origin: ORIGIN,
       template: buildTemplate({ isPublic: true, slug: 'old', version: 5 }),
-      userId: 'user-1',
-      username: undefined,
     });
 
     expect(result).toEqual({ kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/new/` });
@@ -271,12 +207,7 @@ describe('shareTemplateToPublic', () => {
   it("looks up the Creator's current username when someone else shares their template", async () => {
     const apiClient = buildApiClient({ username: 'alicejones' });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
+    const result = await share(apiClient, {
       template: buildTemplate({
         isPublic: true,
         ownerProfile: { username: 'alice' },
@@ -297,7 +228,7 @@ describe('shareTemplateToPublic', () => {
   it('publishes again after the switch made the template private, with a version the server accepts', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
     const shown = buildTemplate({ isPublic: true });
-    const onVisibilityChange = vi.fn();
+    const onVisibilityChange = vi.fn<(update: TemplateUpdater) => void>();
     await setTemplateVisibility({
       apiClient,
       canEdit: true,
@@ -305,19 +236,10 @@ describe('shareTemplateToPublic', () => {
       onTemplateChange: onVisibilityChange,
       template: shown,
     });
-    const afterSwitch = onVisibilityChange.mock.calls[0]?.[0](shown) as ChecklistTemplate;
+    const afterSwitch = present(present(onVisibilityChange.mock.calls[0], 'the visibility update')[0](shown), 'the template after the switch');
     const onShare = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: onShare,
-      origin: ORIGIN,
-      template: afterSwitch,
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { onTemplateChange: onShare, template: afterSwitch });
 
     expect(result.kind).toBe('ok');
     expect(apiClient.updateTemplate).toHaveBeenLastCalledWith('template-1', {
@@ -330,19 +252,13 @@ describe('shareTemplateToPublic', () => {
   it('shares library templates without a username or a request, since they are not stored rows', async () => {
     const apiClient = buildApiClient();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
+    const result = await share(apiClient, {
       template: buildTemplate({
         id: 'repo:camping-checklist',
         isPublic: true,
         userId: REPO_TEMPLATE_USER_ID,
       }),
       userId: REPO_TEMPLATE_USER_ID,
-      username: undefined,
     });
 
     expect(result).toEqual({
@@ -355,14 +271,9 @@ describe('shareTemplateToPublic', () => {
   it('refuses when the viewer may not share the template and leaves it unchanged', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
+    const result = await share(apiClient, {
       canShare: false,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
       template: buildTemplate({ userId: 'someone-else' }),
-      userId: 'user-1',
       username: 'alice',
     });
 
@@ -376,21 +287,13 @@ describe('shareTemplateToPublic', () => {
   it('lets an Organization editor share a template someone else created', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
+    const result = await share(apiClient, {
       template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
       userId: 'bob-id',
       username: 'bob',
     });
 
-    expect(result).toEqual({
-      kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
-    });
+    expect(result).toEqual(SHARED_AT_ALICES_LINK);
     expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
   });
@@ -398,12 +301,7 @@ describe('shareTemplateToPublic', () => {
   it("never builds the link from the sharer's username for a template someone else created", async () => {
     const apiClient = buildApiClient({ username: null });
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange: vi.fn(),
-      origin: ORIGIN,
+    const result = await share(apiClient, {
       template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
       userId: 'bob-id',
       username: 'bob',
@@ -418,45 +316,19 @@ describe('shareTemplateToPublic', () => {
 
   it('keeps local state unchanged when the visibility change is rejected', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
-    apiClient.updateTemplate.mockRejectedValue(
-      createApiError(409, { code: 'edit_conflict', error: 'Template changed' }),
-    );
+    apiClient.updateTemplate.mockRejectedValue(editConflict());
     const onTemplateChange = vi.fn();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange,
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { onTemplateChange });
 
     expect(result).toEqual({ kind: 'error', message: 'Template changed' });
     expect(onTemplateChange).not.toHaveBeenCalled();
   });
 
   it('reloads the stored template after an edit conflict so a retry can succeed', async () => {
-    const apiClient = buildApiClient({ username: 'alice' });
-    apiClient.updateTemplate.mockRejectedValue(
-      createApiError(409, { code: 'edit_conflict', error: 'Template changed' }),
-    );
-    const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
-    const onTemplateChange = vi.fn();
+    const { apiClient, reloadAfterConflict, onTemplateChange } = aShareThatConflicts();
 
-    const result = await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange,
-      origin: ORIGIN,
-      reloadAfterConflict,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    const result = await share(apiClient, { onTemplateChange, reloadAfterConflict });
 
     expect(reloadAfterConflict).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
@@ -471,16 +343,7 @@ describe('shareTemplateToPublic', () => {
     apiClient.updateTemplate.mockResolvedValue({ version: 4, slug: 'camping-checklist' });
     const onTemplateChange = vi.fn();
 
-    await shareTemplateToPublic({
-      apiClient,
-      canShare: true,
-      isAuthenticated: true,
-      onTemplateChange,
-      origin: ORIGIN,
-      template: buildTemplate(),
-      userId: 'user-1',
-      username: undefined,
-    });
+    await share(apiClient, { onTemplateChange });
 
     expect(onTemplateChange).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'template-1', isPublic: true, version: 4 }),

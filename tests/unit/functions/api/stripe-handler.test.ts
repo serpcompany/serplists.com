@@ -1,20 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { handleStripe } from "@functions/api/handlers/stripe";
-import { seedBillingUser } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, seedBillingUser } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+import { apiEnv, TEST_AUTH_SECRET } from "../../../support/apiEnv";
 import { signedWebhookRequest } from "./support/stripe-webhook";
+import { apiErrorBody, readJson } from "../../../support/readJson";
+
+const webhookReceipt = z.object({ received: z.boolean().optional(), duplicate: z.boolean().optional() }).passthrough();
 
 const WEBHOOK_SECRET = "whsec_test";
 
 let d1: SqliteD1;
 
 function env() {
-  return {
+  return apiEnv({
     DB: d1.binding,
-    BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
+    BETTER_AUTH_SECRET: TEST_AUTH_SECRET,
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     STRIPE_SECRET_KEY: "sk_test_handler",
-  } as never;
+  });
 }
 
 function subscriptionObject() {
@@ -90,7 +95,7 @@ function checkoutCompletedEvent(id: string) {
 
 describe("Stripe webhook handler", () => {
   beforeEach(() => {
-    d1 = createSqliteD1(billingSchemaSql());
+    d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
     seedBillingUser(d1, "user-123");
     vi.stubGlobal(
       "fetch",
@@ -142,7 +147,7 @@ describe("Stripe webhook handler", () => {
     await deliver(checkoutCompletedEvent("evt_duplicate"));
 
     const response = await deliver(checkoutCompletedEvent("evt_duplicate"));
-    const data = await response.json();
+    const data = await readJson(response, webhookReceipt);
 
     expect(response.status).toBe(200);
     expect(data.duplicate).toBe(true);
@@ -174,7 +179,7 @@ describe("Stripe webhook handler", () => {
       livemode: true,
       data: { object: subscriptionObject() },
     });
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(500);
     expect(data.error).toBe("Stripe webhook processing failed");
@@ -247,7 +252,7 @@ describe("Stripe webhook handler", () => {
     failOnlyTheFirstWrite();
 
     const response = await deliver(checkoutCompletedEvent("evt_transient"));
-    const data = await response.json();
+    const data = await readJson(response, webhookReceipt);
 
     expect(response.status).toBe(500);
     expect(data.duplicate).toBeUndefined();
@@ -291,7 +296,7 @@ describe("Stripe webhook handler", () => {
 
     expect(await (await deliver(event)).json()).toEqual({ received: true });
     expect(eventErrors("evt_invoice")).toEqual([{ error: null }]);
-    expect((await (await deliver(event)).json()).duplicate).toBe(true);
+    expect((await readJson(await deliver(event), webhookReceipt)).duplicate).toBe(true);
   });
 
   it("acknowledges a subscription event for a user who no longer exists instead of failing forever", async () => {
@@ -303,5 +308,22 @@ describe("Stripe webhook handler", () => {
     expect(response.status).toBe(200);
     expect(storedSubscriptions()).toEqual([]);
     expect(eventErrors("evt_deleted_user")).toEqual([{ error: null }]);
+  });
+
+  it("refuses a signed event whose fields have the wrong types, recording nothing so Stripe retries it", async () => {
+    const response = await deliver({ ...subscriptionEvent("evt_malformed"), created: "yesterday" });
+
+    expect(response.status).toBe(400);
+    expect(eventErrors("evt_malformed")).toEqual([]);
+    expect(storedSubscriptions()).toEqual([]);
+  });
+
+  it("acknowledges a completed Checkout whose session it cannot read, storing no customer", async () => {
+    const event = checkoutCompletedEvent("evt_unreadable_session");
+    const response = await deliver({ ...event, data: { object: { customer: { id: "cus_123" }, client_reference_id: 7 } } });
+
+    expect(response.status).toBe(200);
+    expect(d1.rows("SELECT stripe_customer_id FROM stripe_customers")).toEqual([]);
+    expect(eventErrors("evt_unreadable_session")).toEqual([{ error: null }]);
   });
 });

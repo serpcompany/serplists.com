@@ -9,14 +9,10 @@ export const REPO_TEMPLATE_OWNER_NAME = 'SERP Lists Library';
 export const REPO_TEMPLATE_OWNER_SLUG = 'serp';
 export const REPO_TEMPLATE_FALLBACK_TIMESTAMP = '2026-03-22T00:00:00.000Z';
 
-type RepoTemplateModule = {
-  default?: unknown;
-};
-
 type RepoTemplateCreatePayload = {
   title: string;
   description?: string;
-  type?: 'checklist' | 'recipe';
+  type?: 'checklist' | 'recipe' | undefined;
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
@@ -25,18 +21,12 @@ type RepoTemplateCreatePayload = {
   isPublic: boolean;
   categories?: string[];
   tags?: string[];
-  teamId?: string;
+  teamId?: string | undefined;
 };
 
-const repoTemplateModules = templatePackModules as Record<string, RepoTemplateModule>;
-
 const getSourceData = (value: unknown): unknown => {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'default' in (value as RepoTemplateModule)
-  ) {
-    return (value as RepoTemplateModule).default;
+  if (value && typeof value === 'object' && 'default' in value) {
+    return value.default;
   }
   return value;
 };
@@ -219,4 +209,4 @@ export const buildRepoTemplateCreatePayload = (
   teamId: destinationTeamIdOrPersonal,
 });
 
-export const repoTemplates = normalizeRepoTemplateSources(repoTemplateModules);
+export const repoTemplates = normalizeRepoTemplateSources(templatePackModules);

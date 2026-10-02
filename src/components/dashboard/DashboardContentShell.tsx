@@ -93,7 +93,7 @@ interface DashboardEmptyStateProps {
   description: ReactNode;
   icon?: ReactNode;
   title: ReactNode;
-  titleAs?: 'h1' | 'h2' | 'h3';
+  titleAs?: 'h1' | 'h2' | 'h3' | undefined;
 }
 
 export function DashboardEmptyState({

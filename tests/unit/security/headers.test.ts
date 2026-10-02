@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
+import { elementAt } from '../../support/elements';
+import { isContentRecord } from '@/lib/schemas/jsonRecords';
 
+import { templatePackModules } from '@/data/public-template-packs';
 import { renderStaticHeaders } from '@/lib/http/securityHeaders';
 import { EMBED_FRAME_ORIGINS } from '@/lib/utils/embedOrigins';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
@@ -14,7 +15,7 @@ const productionContentSecurityPolicy = (): Map<string, string[]> => {
   if (!line) throw new Error('public/_headers has no Content-Security-Policy line');
 
   const directives = new Map<string, string[]>();
-  for (const directive of line.split('Content-Security-Policy:')[1].split(';')) {
+  for (const directive of elementAt(line.split('Content-Security-Policy:'), 1).split(';')) {
     const [name, ...sources] = directive.trim().split(/\s+/);
     if (name) directives.set(name, sources);
   }
@@ -22,23 +23,19 @@ const productionContentSecurityPolicy = (): Map<string, string[]> => {
 };
 
 const collectPackVideoValues = (): string[] => {
-  const packDir = 'src/data/public-template-packs';
   const values: string[] = [];
   const visit = (node: unknown) => {
     if (Array.isArray(node)) {
       node.forEach(visit);
       return;
     }
-    if (!node || typeof node !== 'object') return;
-    const record = node as Record<string, unknown>;
-    if (record.type === 'video' && typeof record.value === 'string') {
-      values.push(record.value);
+    if (!isContentRecord(node)) return;
+    if (node.type === 'video' && typeof node.value === 'string') {
+      values.push(node.value);
     }
-    Object.values(record).forEach(visit);
+    Object.values(node).forEach(visit);
   };
-  for (const file of readdirSync(packDir).filter((name) => name.endsWith('.json'))) {
-    visit(JSON.parse(readFileSync(path.join(packDir, file), 'utf8')));
-  }
+  Object.values(templatePackModules).forEach(visit);
   return values;
 };
 
@@ -108,7 +105,8 @@ describe('deployment security headers', () => {
     for (const link of [...YOUTUBE_VIDEO_LINKS, ...CLIPY_VIDEO_LINKS]) {
       const source = getVideoEmbedSource(link);
       expect({ link, kind: source?.kind }).toEqual({ link, kind: 'iframe' });
-      expect({ link, allowed: frameSources.has(new URL(source!.url).origin) }).toEqual({
+      assert.exists(source);
+      expect({ link, allowed: frameSources.has(new URL(source.url).origin) }).toEqual({
         link,
         allowed: true,
       });

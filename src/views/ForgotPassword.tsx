@@ -1,18 +1,15 @@
 'use client';
 
 import { useState } from "react";
-import { Loader2, MailCheck } from "lucide-react";
+import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
-import { AuthPageShell } from "@/components/auth/AuthPageShell";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { LabeledInput, StatusNotice } from "@/components/auth/AuthFields";
+import { AuthPageShell, BackToSignInFooter } from "@/components/auth/AuthPageShell";
+import { BusyButton } from "@/components/shared/BusyButton";
+import { FieldGroup } from "@/components/ui/field";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
 import { getAuthErrorMessage } from "@/lib/auth/authErrors";
-import { buildLoginPath, buildResetPasswordPath } from "@/lib/routes";
-
-import { Link } from '@/components/navigation/Link';
+import { buildResetPasswordPath } from "@/lib/routes";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -50,42 +47,27 @@ const ForgotPassword = () => {
     <AuthPageShell
       title="Reset your password"
       description="We'll email you a link to reset your password."
-      footer={
-        <>
-          Remembered it? <Link href={buildLoginPath()}>Back to sign in</Link>
-        </>
-      }
+      footer={<BackToSignInFooter />}
     >
       {submitted ? (
-        <Alert role="status">
-          <MailCheck />
-          <AlertTitle>
-            Check your inbox for a reset link. If it doesn&apos;t show up, check spam or try again.
-          </AlertTitle>
-        </Alert>
+        <StatusNotice icon={<MailCheck />}>
+          Check your inbox for a reset link. If it doesn&apos;t show up, check spam or try again.
+        </StatusNotice>
       ) : (
         <form onSubmit={handleSubmit}>
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="email">Email</FieldLabel>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-              />
-            </Field>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 data-icon="inline-start" className="animate-spin" /> Sending link...
-                </>
-              ) : (
-                "Send reset link"
-              )}
-            </Button>
+            <LabeledInput
+              id="email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+            <BusyButton type="submit" busy={isSubmitting} busyLabel="Sending link...">
+              Send reset link
+            </BusyButton>
           </FieldGroup>
         </form>
       )}

@@ -19,7 +19,7 @@ type AuthErrorBody = z.infer<typeof authErrorBodySchema>;
 
 export class AuthStatusError extends Error {
   readonly status: number;
-  readonly retryAfterSeconds?: number;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(status: number, retryAfterSeconds?: number) {
     super(`Failed to load auth status: ${status}`);
@@ -38,7 +38,7 @@ function readAuthError(error: unknown): AuthErrorBody | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function rateLimitMessage(retryAfterSeconds?: number): string {
+function rateLimitMessage(retryAfterSeconds?: number): string {
   if (retryAfterSeconds === undefined) {
     return 'Too many attempts. Please wait a few minutes and try again.';
   }

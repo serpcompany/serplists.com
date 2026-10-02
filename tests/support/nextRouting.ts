@@ -1,3 +1,5 @@
+import { IncomingMessage, type IncomingHttpHeaders } from 'node:http';
+import { Socket } from 'node:net';
 import { format } from 'node:url';
 
 import { PHASE_PRODUCTION_SERVER } from 'next/constants';
@@ -7,6 +9,9 @@ import { modifyRouteRegex } from 'next/dist/lib/redirect-status';
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
 import { matchHas, prepareDestination } from 'next/dist/shared/lib/router/utils/prepare-destination';
 import type { NextConfig } from 'next';
+import type { ManifestRedirectRoute } from 'next/dist/build';
+import type { RedirectDefinition } from '@opennextjs/aws/types/next-types.js';
+import type { InternalEvent } from '@opennextjs/aws/types/open-next.js';
 
 import nextConfigFor from '../../next.config';
 
@@ -23,10 +28,18 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-type ManifestRedirect = ReturnType<typeof buildCustomRoute> & {
-  statusCode: number;
-  internal?: boolean;
-};
+type ManifestRedirect = RedirectDefinition & { statusCode: number };
+
+function withItsStatusCode(route: ManifestRedirectRoute): ManifestRedirect {
+  if (route.statusCode === undefined) throw new Error(`Next.js built the redirect from ${route.source} without a status code.`);
+  return { ...route, statusCode: route.statusCode };
+}
+
+function requestWithHeaders(headers: IncomingHttpHeaders): IncomingMessage {
+  const request = new IncomingMessage(new Socket());
+  request.headers = headers;
+  return request;
+}
 
 type HeaderRule = Awaited<ReturnType<NonNullable<NextConfig['headers']>>>[number];
 
@@ -59,9 +72,7 @@ export async function loadBuiltRoutes(siteEnv: string | undefined) {
     const routes = await loadCustomRoutes(config as Parameters<typeof loadCustomRoutes>[0]);
     return {
       config,
-      redirects: routes.redirects.map(
-        (route) => buildCustomRoute('redirect', route, ['/_next']) as ManifestRedirect,
-      ),
+      redirects: routes.redirects.map((route) => withItsStatusCode(buildCustomRoute('redirect', route, ['/_next']))),
       headers: routes.headers as HeaderRule[],
     };
   });
@@ -78,7 +89,7 @@ export function nextServerRedirect(
   { headers = {} }: RequestOptions = {},
 ): RedirectResult | null {
   const { parsed, query } = splitUrl(url);
-  const req = { headers: { ...lowercaseKeys(headers), host: parsed.host } };
+  const req = requestWithHeaders({ ...lowercaseKeys(headers), host: parsed.host });
   for (const route of redirects) {
     const match = getPathMatch(route.source, {
       strict: true,
@@ -87,7 +98,7 @@ export function nextServerRedirect(
     });
     let params = match(parsed.pathname);
     if (params && (route.has || route.missing)) {
-      const hasParams = matchHas(req as never, query, route.has, route.missing);
+      const hasParams = matchHas(req, query, route.has, route.missing);
       params = hasParams ? Object.assign(params, hasParams) : false;
     }
     if (!params) continue;
@@ -97,7 +108,9 @@ export function nextServerRedirect(
       params,
       query,
     });
-    const search = new URLSearchParams(parsedDestination.query as Record<string, string>).toString();
+    const search = new URLSearchParams(
+      Object.entries(parsedDestination.query).map(([key, value]) => [key, String(value)]),
+    ).toString();
     delete (parsedDestination as { query?: unknown }).query;
     parsedDestination.search = search ? `?${search}` : '';
     return { status: route.statusCode, location: format(parsedDestination) };
@@ -113,7 +126,7 @@ export async function workerRedirect(
   const { handleRedirects } = await import('@opennextjs/aws/core/routing/matcher.js');
   const { normalizeLocationHeader } = await import('@opennextjs/aws/core/routing/util.js');
   const { parsed, query } = splitUrl(url);
-  const event = {
+  const event: InternalEvent = {
     type: 'core',
     method: 'GET',
     rawPath: parsed.pathname,
@@ -123,15 +136,15 @@ export async function workerRedirect(
     cookies: {},
     remoteAddress: '127.0.0.1',
   };
-  const result = handleRedirects(event as never, redirects as never);
+  const result = handleRedirects(event, redirects);
   if (!result) return null;
-  const locationAsRoutingHandlerWritesIt = normalizeLocationHeader(String(result.headers.Location), parsed.href, true);
+  const locationAsRoutingHandlerWritesIt = normalizeLocationHeader(String(result.headers['Location']), parsed.href, true);
   return { status: result.statusCode, location: locationAsRoutingHandlerWritesIt };
 }
 
 export function headersFor(rules: HeaderRule[], url: string): Map<string, string[]> {
   const { parsed, query } = splitUrl(url);
-  const req = { headers: { host: parsed.host } };
+  const req = requestWithHeaders({ host: parsed.host });
   const applied = new Map<string, string[]>();
   for (const rule of rules) {
     const match = getPathMatch(rule.source, {
@@ -140,7 +153,7 @@ export function headersFor(rules: HeaderRule[], url: string): Map<string, string
       regexModifier: (regex: string) => modifyRouteRegex(regex),
     });
     if (match(parsed.pathname) === false) continue;
-    if (matchHas(req as never, query, rule.has, rule.missing) === false) continue;
+    if (matchHas(req, query, rule.has, rule.missing) === false) continue;
     for (const { key, value } of rule.headers) {
       applied.set(key.toLowerCase(), [...(applied.get(key.toLowerCase()) ?? []), value]);
     }

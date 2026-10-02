@@ -5,7 +5,7 @@ import { authJsonError } from './response';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function mediaType(contentType: string | null): string {
-  return (contentType ?? '').split(';')[0].trim().toLowerCase();
+  return ((contentType ?? '').split(';')[0] ?? '').trim().toLowerCase();
 }
 
 export function rejectUnsafeAuthRequest(request: Request, env: Env): Response | null {

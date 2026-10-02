@@ -1,48 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
+import { dbMocks, FREE_PLAN, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
+import { apiRequest } from '../../../support/apiRequest';
+import { z } from 'zod';
+import { readJson } from '../../../support/readJson';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
-const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
-const pro = { plan: 'pro' as const, limits: { maxTemplates: null, maxActiveRuns: null } };
+const reopenBody = z.object({ code: z.unknown(), details: z.unknown() }).passthrough();
+
 const membership = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' };
 const sections = [{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }];
 
@@ -76,15 +43,12 @@ const ownTemplate = {
 };
 
 async function send(path: string, method: string, body: unknown) {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
-    method,
-    body: JSON.stringify(body),
-  }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  const response = await handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
+  return { response, data: await readJson(response, reopenBody) };
 }
 
 function expectLimitReached(
-  result: { response: Response; data: Record<string, unknown> },
+  result: { response: Response; data: { code?: unknown; details?: unknown } },
   context: 'personal' | 'organization' = 'personal',
 ) {
   expect(result.response.status).toBe(403);
@@ -96,19 +60,7 @@ function expectLimitReached(
 
 describe('reopening a run respects the active-run limit, since it adds an active run', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(free);
-    vi.mocked(getEntitlementsForContext).mockResolvedValue(free);
+    resetToASignedInUser('user-123', FREE_PLAN);
   });
 
   it('refuses to revalidate a completed run at the limit', async () => {
@@ -161,7 +113,7 @@ describe('reopening a run respects the active-run limit, since it adds an active
   });
 
   it('lets a Pro user reopen a completed run', async () => {
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(pro);
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
     dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
 
     const { response } = await send('run-1', 'PUT', { status: 'in_progress', expected_revision: 2 });
@@ -178,7 +130,7 @@ describe('reopening a run respects the active-run limit, since it adds an active
       .mockResolvedValueOnce([{ count: 3 }]);
 
     expectLimitReached(await send('run-1', 'PUT', { status: 'in_progress', expected_revision: 2 }), 'organization');
-    expect(getEntitlementsForContext).toHaveBeenCalledWith(env, expect.objectContaining({ type: 'team', teamId: 'team-1' }));
+    expect(getEntitlementsForContext).toHaveBeenCalledWith(mockEnv, expect.objectContaining({ type: 'team', teamId: 'team-1' }));
     expect(getEntitlementsForUser).not.toHaveBeenCalled();
   });
 
@@ -189,7 +141,7 @@ describe('reopening a run respects the active-run limit, since it adds an active
       .mockResolvedValueOnce([{ count: 3 }]);
 
     expectLimitReached(await send('shared/token-1', 'PUT', { status: 'in_progress', expected_revision: 2 }));
-    expect(getEntitlementsForUser).toHaveBeenCalledWith(env, 'owner-1');
+    expect(getEntitlementsForUser).toHaveBeenCalledWith(mockEnv, 'owner-1');
   });
 
   it('lets a share-link guest keep saving an in-progress run without checking the limit', async () => {

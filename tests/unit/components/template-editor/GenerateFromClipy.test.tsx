@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerateFromClipy } from '@/components/template-editor/GenerateFromClipy';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
-import { findElement } from '../../../support/elementTree';
+import { findElement, handlerOf } from '../../../support/elementTree';
 
 const stubbedHooks = vi.hoisted(() => ({
   collectedEffects: [] as Array<() => void | (() => void)>,
@@ -36,7 +36,7 @@ const render = (props: Partial<React.ComponentProps<typeof GenerateFromClipy>>) 
   const tree = GenerateFromClipy({ onGenerated: vi.fn(), ...props });
   const button = findElement(tree, (element) => typeof element.props.onClick === 'function');
   if (!button) throw new Error('Generate button not found');
-  return () => (button.props.onClick as () => void)();
+  return () => handlerOf(button, 'onClick')();
 };
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));

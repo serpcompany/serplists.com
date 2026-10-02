@@ -6,5 +6,7 @@ const font = (family: string) => (options: FontOptions = {}) => ({
   variable: options.variable ?? `--font-${family}`,
 });
 
-export const Geist = font('geist');
-export const Geist_Mono = font('geist-mono');
+const geist = font('geist');
+const geistMono = font('geist-mono');
+
+export { geist as Geist, geistMono as Geist_Mono };

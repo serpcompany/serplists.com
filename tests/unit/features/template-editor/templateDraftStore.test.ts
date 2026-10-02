@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt } from "../../../support/elements";
 
 import {
   clearTemplateDraft,
@@ -15,35 +16,9 @@ import {
 } from "@/features/template-editor/templateDraftStore";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-const createStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> & { items: Map<string, string> } => {
-  const items = new Map<string, string>();
-  return {
-    items,
-    get length() {
-      return items.size;
-    },
-    key: (index) => Array.from(items.keys())[index] ?? null,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
+import { memoryStorage as createStorage, storageThatThrows } from "../../../fixtures/memoryStorage";
 
-const throwingStorage: TemplateDraftStorage = {
-  getItem: () => {
-    throw new Error("SecurityError");
-  },
-  setItem: () => {
-    throw new Error("QuotaExceededError");
-  },
-  removeItem: () => {
-    throw new Error("SecurityError");
-  },
-};
+const throwingStorage: TemplateDraftStorage = storageThatThrows;
 
 const draftValues = buildTemplateEditorFormValues({
   title: "Launch checklist",
@@ -208,7 +183,7 @@ describe("listing a user's kept drafts across contexts, which the new-template e
     const contexts = listTemplateDraftContexts("u1", storage);
 
     expect(contexts.map((context) => context.teamId)).toEqual([null, "org-1"]);
-    expect(contexts[1].draft.values).toEqual(draftValues);
+    expect(elementAt(contexts, 1).draft.values).toEqual(draftValues);
   });
 
   it("does not mistake another user whose id starts the same for this one", () => {

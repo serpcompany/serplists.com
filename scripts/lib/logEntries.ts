@@ -12,8 +12,16 @@ export type LogEntry = {
   event: string;
   timestamp: string | undefined;
   requestId: string | undefined;
-  fields: Record<string, unknown>;
+  fields: LogFields;
 };
+
+interface LogFields extends Record<string, unknown> {
+  method?: unknown;
+  path?: unknown;
+  status?: unknown;
+  durationMs?: unknown;
+  errorName?: unknown;
+}
 
 type ParsedLine = Omit<LogEntry, "lineNumber">;
 
@@ -58,15 +66,18 @@ function parseApiLine(text: string): ParsedLine | null {
 function parseNextAccessLine(text: string): ParsedLine | null {
   const groups = nextAccessLine.exec(text)?.groups;
   if (!groups) return null;
-  const fields: Record<string, unknown> = {
-    method: groups.method,
-    path: groups.path,
-    status: Number(groups.status),
-    durationMs: toMilliseconds(groups.duration ?? "0", groups.unit ?? "ms"),
+  const { method, path, status, duration, unit, breakdown } = groups;
+  const fields: LogFields = {
+    method,
+    path,
+    status: Number(status),
+    durationMs: toMilliseconds(duration ?? "0", unit ?? "ms"),
   };
-  for (const part of (groups.breakdown ?? "").split(",")) {
+  for (const part of (breakdown ?? "").split(",")) {
     const timing = breakdownTiming.exec(part)?.groups;
-    if (timing?.name) fields[`${camelCase(timing.name)}Ms`] = toMilliseconds(timing.duration ?? "0", timing.unit ?? "ms");
+    if (!timing) continue;
+    const { name, duration: timingDuration, unit: timingUnit } = timing;
+    if (name) fields[`${camelCase(name)}Ms`] = toMilliseconds(timingDuration ?? "0", timingUnit ?? "ms");
   }
   return { source: "next", level: "info", event: "next_request", timestamp: undefined, requestId: undefined, fields };
 }

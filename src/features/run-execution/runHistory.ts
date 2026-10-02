@@ -7,7 +7,7 @@ export const RUN_HISTORY_PREVIEW_LIMIT = HISTORY_DISPLAY_LIMIT;
 type RunHistoryClient = Pick<typeof api, 'getChecklistHistory'>;
 
 export const buildRunHistoryQuery = (params: {
-  runId?: string;
+  runId?: string | undefined;
   mode: 'private' | 'shared';
   client: RunHistoryClient;
 }) => ({

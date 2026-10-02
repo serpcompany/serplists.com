@@ -2,14 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import { getOrganizationPermissions, PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
-import type { ChecklistRun } from '@/types/checklist';
+import { buildRun } from '../../../fixtures/runExecutionFixtures';
 
-const staleRun = {
-  id: 'run-1',
-  isPublic: false,
-  isStale: true,
-  status: 'completed',
-} as ChecklistRun;
+const staleRun = buildRun({ id: 'run-1', isPublic: false, isStale: true, status: 'completed' });
 
 describe('getRunRowActions', () => {
   it('offers everything on a Personal run', () => {

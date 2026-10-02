@@ -13,12 +13,12 @@ const ECMASCRIPT_DATE_TIME_FORMAT = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d
 
 const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
 
-const originalTz = process.env.TZ;
+const originalTz = process.env['TZ'];
 beforeAll(() => {
-  process.env.TZ = ZONE_FAR_FROM_UTC;
+  process.env['TZ'] = ZONE_FAR_FROM_UTC;
 });
 afterAll(() => {
-  process.env.TZ = originalTz;
+  process.env['TZ'] = originalTz;
 });
 
 describe('parseDbTimestamp', () => {
@@ -29,6 +29,10 @@ describe('parseDbTimestamp', () => {
     expect(parseDbTimestamp(' 2025-12-26 09:18:30.25 ')?.toISOString()).toBe(
       '2025-12-26T09:18:30.250Z',
     );
+  });
+
+  it('reads an ISO timestamp with a T and no zone as UTC, as D1 stores times', () => {
+    expect(parseDbTimestamp('2025-12-26T09:18:30')?.toISOString()).toBe('2025-12-26T09:18:30.000Z');
   });
 
   it('keeps ISO values with a zone as they are', () => {

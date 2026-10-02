@@ -1,23 +1,17 @@
 import type { Adapter, GenericEndpointContext } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { log } from './logger';
+import { isUniqueViolationOn } from './unique-violation';
 
-export const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
-export const USERNAME_TAKEN_MESSAGE = 'Username is already taken. Please try another.';
+const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
+const USERNAME_TAKEN_MESSAGE = 'Username is already taken. Please try another.';
 
-export function usernameTakenError(): APIError {
+function usernameTakenError(): APIError {
   return new APIError('UNPROCESSABLE_ENTITY', { message: USERNAME_TAKEN_MESSAGE, code: USERNAME_TAKEN_CODE });
 }
 
-const USERNAME_UNIQUE_VIOLATION = /UNIQUE constraint failed: users\.username\b/i;
-
 export function isUsernameUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
-    if (USERNAME_UNIQUE_VIOLATION.test(current.message)) return true;
-    current = current.cause;
-  }
-  return false;
+  return isUniqueViolationOn(error, 'users.username');
 }
 
 export async function assertUsernameAvailableForUpdate(
@@ -41,18 +35,16 @@ export function mapUsernameConflicts<Options>(createAdapter: (options: Options) 
     const adapter = createAdapter(options);
     return {
       ...adapter,
-      create: mapConflictsFrom(adapter.create, 'create'),
-      update: mapConflictsFrom(adapter.update, 'update'),
+      create: (data) => mapConflicts(adapter.create(data), 'create'),
+      update: (data) => mapConflicts(adapter.update(data), 'update'),
     };
   };
 }
 
-function mapConflictsFrom<Write extends (...args: never[]) => Promise<unknown>>(write: Write, operation: string): Write {
-  const mapped = (...args: Parameters<Write>) =>
-    write(...args).catch((error: unknown) => {
-      if (!isUsernameUniqueViolation(error)) throw error;
-      log('warn', 'username_unique_conflict', { operation });
-      throw usernameTakenError();
-    });
-  return mapped as Write;
+function mapConflicts<Result>(write: Promise<Result>, operation: string): Promise<Result> {
+  return write.catch((error: unknown) => {
+    if (!isUsernameUniqueViolation(error)) throw error;
+    log('warn', 'username_unique_conflict', { operation });
+    throw usernameTakenError();
+  });
 }

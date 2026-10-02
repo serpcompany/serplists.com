@@ -7,9 +7,9 @@ interface ProfileDataInput {
 }
 
 interface CurrentUserInput {
-  name?: string;
-  username?: string;
-  image?: string | null;
+  name?: string | undefined;
+  username?: string | undefined;
+  image?: string | null | undefined;
 }
 
 export interface AccountUpdatePayload {
@@ -22,7 +22,7 @@ export type AccountUpdatePlan =
   | { ok: true; updates: AccountUpdatePayload }
   | { ok: false; error: string };
 
-export const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
+const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
 
 export const buildAccountUpdatePayload = (
   profileData: ProfileDataInput,
@@ -99,7 +99,7 @@ export interface ProfileFormValues {
 }
 
 export const profileFormFromUser = (
-  user: CurrentUserInput & { email?: string }
+  user: CurrentUserInput & { email?: string | undefined }
 ): ProfileFormValues => ({
   email: user.email || "",
   fullName: user.name || "",

@@ -39,21 +39,20 @@ function paramsUnderAppRouterPattern(pattern: string, pathname: string): RoutePa
   const pathSegments = splitPath(pathname);
   const params: RouteParams = {};
 
-  for (let index = 0; index < patternSegments.length; index += 1) {
-    const segment = patternSegments[index];
-    const catchAll = /^\[(\[)?\.\.\.([^\]]+)\]\]?$/.exec(segment);
-    if (catchAll) {
+  for (const [index, segment] of patternSegments.entries()) {
+    const [, optionalMarker, catchAllName] = /^\[(\[)?\.\.\.([^\]]+)\]\]?$/.exec(segment) ?? [];
+    if (catchAllName !== undefined) {
       const rest = pathSegments.slice(index).map(safeDecode);
-      const optional = Boolean(catchAll[1]);
+      const optional = Boolean(optionalMarker);
       if (rest.length === 0 && !optional) return null;
-      if (rest.length > 0) params[catchAll[2]] = rest;
+      if (rest.length > 0) params[catchAllName] = rest;
       return params;
     }
     const value = pathSegments[index];
     if (value === undefined) return null;
-    const dynamic = /^\[([^\]]+)\]$/.exec(segment);
-    if (dynamic) {
-      params[dynamic[1]] = safeDecode(value);
+    const [, dynamicName] = /^\[([^\]]+)\]$/.exec(segment) ?? [];
+    if (dynamicName !== undefined) {
+      params[dynamicName] = safeDecode(value);
     } else if (segment !== value) {
       return null;
     }
@@ -88,19 +87,27 @@ const createStorage = (): Storage => {
 };
 
 export class ReadonlyURLSearchParams extends URLSearchParams {
-  append(): never {
+  override append(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  delete(): never {
+  override delete(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  set(): never {
+  override set(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  sort(): never {
+  override sort(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
 }
+
+export function objectInheriting(prototype: object): object {
+  const created: unknown = Object.create(prototype);
+  if (typeof created !== 'object' || created === null) throw new Error('Object.create made no object');
+  return created;
+}
+
+const theDomWindowIfAny = (): object => (typeof window === 'undefined' ? Object.prototype : window);
 
 const copyState = (state: unknown) => (state === undefined ? null : structuredClone(state));
 
@@ -111,16 +118,21 @@ const toAppPath = (href: string) => {
 
 export function createBrowser() {
   let origin = DEFAULT_ORIGIN;
-  let entries: Entry[] = [{ href: `${DEFAULT_ORIGIN}/`, state: null }];
+  const startHref = `${DEFAULT_ORIGIN}/`;
+  let entries: Entry[] = [{ href: startHref, state: null }];
   let index = 0;
   let fixedParams: RouteParams | null = {};
   let routes: string[] = [];
-  let snapshotTheHooksRead: Snapshot = { href: entries[0].href, params: {} };
+  let snapshotTheHooksRead: Snapshot = { href: startHref, params: {} };
   const subscribers = new Set<() => void>();
   const searchParamsCache = new Map<string, ReadonlyURLSearchParams>();
   const events = new EventTarget();
 
-  const current = () => entries[index];
+  const current = (): Entry => {
+    const entry = entries[index];
+    if (!entry) throw new Error(`The in-memory browser has no history entry at index ${index}`);
+    return entry;
+  };
   const resolve = (url: string | URL | null | undefined) => new URL(url ?? current().href, current().href).href;
   const paramsFor = (href: string): RouteParams =>
     fixedParams ?? findRoute(routes, new URL(href).pathname)?.params ?? {};
@@ -222,7 +234,7 @@ export function createBrowser() {
     go: (delta = 0) => traverseOnALaterTask(delta),
   };
 
-  const window = {
+  const window = Object.assign(objectInheriting(theDomWindowIfAny()), {
     location,
     history,
     addEventListener: events.addEventListener.bind(events),
@@ -244,7 +256,7 @@ export function createBrowser() {
     }),
     requestAnimationFrame: (callback: (time: number) => void) => setTimeout(() => callback(Date.now()), 0),
     cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-  };
+  });
 
   const log: NavigationRecord[] = [];
 

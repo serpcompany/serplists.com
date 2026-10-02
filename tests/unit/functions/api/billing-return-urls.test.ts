@@ -1,28 +1,24 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { present } from "../../../support/elements";
+import { sessionMocks } from "../../../support/mockedSession";
 import { buildConsoleSettingsPath } from "@/lib/routes";
-import { emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
+import { billingSchemaSql, emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const ORIGIN = "https://serplists.test";
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 
 const env = () => stripeBillingEnv(d1, { FRONTEND_URL: ORIGIN });
 
 function sentForm(): URLSearchParams {
-  const [, init] = fetchMock.mock.calls.find(([, call]) => (call as RequestInit).method === "POST") as [
-    string,
-    RequestInit,
-  ];
-  return new URLSearchParams(String(init.body));
+  const [, init] = present(fetchMock.mock.calls.find(([, call]) => call?.method === "POST"), "a POST to Stripe");
+  return new URLSearchParams(String(init?.body));
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, "user-1", "cus_1");
   sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

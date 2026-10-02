@@ -18,7 +18,7 @@ export interface CompletionStampInput {
   currentStatus: unknown;
   currentCompletedAt: unknown;
   nextStatus: unknown;
-  requestedCompletedAt?: string | null;
+  requestedCompletedAt?: string | null | undefined;
   userId: string | null;
   now: string;
 }

@@ -1,8 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { APP_BRAND_NAME, buildPageTitle } from '@/lib/brand';
+import { templatePackModules } from '@/data/public-template-packs';
+import { APP_BRAND_NAME, buildPageTitle, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 
 describe('buildPageTitle', () => {
   it('adds the brand to a page title', () => {
@@ -29,11 +28,10 @@ describe('buildPageTitle', () => {
 
 describe('brand name in the app', () => {
   it('never uses the old placeholder brand', () => {
-    const offenders = readdirSync('src', { recursive: true, encoding: 'utf8' })
-      .map((file) => path.join('src', file))
-      .filter((file) => /\.(tsx?|html|css|json)$/.test(file))
-      .filter((file) => readFileSync(file, 'utf8').includes('Checklist App'));
+    const packs = Object.values(templatePackModules).map((pack) => JSON.stringify(pack));
+    const shipped = [APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION, buildPageTitle(undefined), ...packs];
 
-    expect(offenders).toEqual([]);
+    expect(Object.keys(templatePackModules).length).toBeGreaterThan(0);
+    expect(shipped.filter((text) => text.includes('Checklist App'))).toEqual([]);
   });
 });

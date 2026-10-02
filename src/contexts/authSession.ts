@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type AuthErrorCode = 'EMAIL_NOT_VERIFIED' | 'UNKNOWN';
+type AuthErrorCode = 'EMAIL_NOT_VERIFIED' | 'UNKNOWN';
 
 export interface AuthActionResult {
   ok: boolean;
@@ -12,14 +12,14 @@ type AuthClientError = { status?: number; code?: string; message?: string } | nu
 export type AuthClientResult = { data?: unknown; error?: AuthClientError } | null | undefined;
 
 export const SIGN_OUT_FAILED_MESSAGE = 'Sign out failed. Check your connection and try again.';
-export const SIGN_OUT_RATE_LIMITED_MESSAGE = 'Sign out failed: too many requests. Wait a moment and try again.';
+const SIGN_OUT_RATE_LIMITED_MESSAGE = 'Sign out failed: too many requests. Wait a moment and try again.';
 
 const hasNoSession = (error: NonNullable<AuthClientError>): boolean =>
   error.status === 401 ||
   (error.status === 400 &&
     (error.code === 'FAILED_TO_GET_SESSION' || /failed to get session/i.test(error.message ?? '')));
 
-export function interpretSignOutResult(result: AuthClientResult): AuthActionResult {
+function interpretSignOutResult(result: AuthClientResult): AuthActionResult {
   const error = result?.error;
   if (!error || hasNoSession(error)) {
     return { ok: true };
@@ -75,7 +75,12 @@ export type SessionUser = z.infer<typeof sessionUserSchema>;
 export type SessionCheck =
   | { kind: 'authenticated'; user: SessionUser; session: unknown }
   | { kind: 'unauthenticated' }
-  | { kind: 'unknown'; status?: number };
+  | { kind: 'unknown'; status?: number | undefined };
+
+const sessionUserOf = (data: unknown): unknown =>
+  typeof data === 'object' && data !== null && 'user' in data ? data.user : undefined;
+
+const signUpTokenSchema = z.object({ token: z.string().min(1) });
 
 export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result) {
@@ -88,9 +93,10 @@ export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result.data) {
     return { kind: 'unauthenticated' };
   }
-  const user = sessionUserSchema.safeParse((result.data as { user?: unknown }).user);
+  const sessionUser = sessionUserOf(result.data);
+  const user = sessionUserSchema.safeParse(sessionUser);
   if (!user.success) {
-    return (result.data as { user?: unknown }).user == null ? { kind: 'unauthenticated' } : { kind: 'unknown' };
+    return sessionUser == null ? { kind: 'unauthenticated' } : { kind: 'unknown' };
   }
   return { kind: 'authenticated', user: user.data, session: result.data };
 }
@@ -141,7 +147,7 @@ export function applySessionCheck(check: SessionCheck, current: SessionState): S
     : { user: null, session: null, status: 'unavailable' };
 }
 
-export const SESSION_RETRY_DELAYS_MS = [1_000, 3_000];
+const SESSION_RETRY_DELAYS_MS = [1_000, 3_000];
 
 export async function checkSessionWithRetry(
   getSession: () => Promise<AuthClientResult>,
@@ -150,9 +156,9 @@ export async function checkSessionWithRetry(
   const retryDelaysMs = options.retryDelaysMs ?? SESSION_RETRY_DELAYS_MS;
   const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let check: SessionCheck = { kind: 'unknown' };
-  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
-    if (attempt > 0) {
-      await wait(retryDelaysMs[attempt - 1]);
+  for (const delayBeforeAttempt of [undefined, ...retryDelaysMs]) {
+    if (delayBeforeAttempt !== undefined) {
+      await wait(delayBeforeAttempt);
     }
     try {
       check = classifySessionResult(await getSession());
@@ -182,6 +188,5 @@ export function resolveProtectedRouteAction(status: SessionStatus): ProtectedRou
 }
 
 export function signUpRequiresEmailVerification(signUpData: unknown): boolean {
-  const token = (signUpData as { token?: unknown } | null | undefined)?.token;
-  return typeof token !== 'string' || token.length === 0;
+  return !signUpTokenSchema.safeParse(signUpData).success;
 }

@@ -2,9 +2,9 @@ import { z } from "zod";
 
 export type TemplateUpdateResult = {
   version: number;
-  slug?: string;
-  structureChanged?: boolean;
-  reconciledRuns?: number;
+  slug?: string | undefined;
+  structureChanged?: boolean | undefined;
+  reconciledRuns?: number | undefined;
 };
 
 const templateUpdateResponseSchema = z
@@ -19,15 +19,9 @@ const templateUpdateResponseSchema = z
 export const TEMPLATE_UPDATE_RESPONSE_ERROR =
   "The template was saved, but the server's answer could not be read. Reload before saving again.";
 
-export function parseTemplateUpdateResponse(body: unknown): TemplateUpdateResult {
-  const parsed = templateUpdateResponseSchema.safeParse(body);
-  if (!parsed.success) {
-    throw new Error(TEMPLATE_UPDATE_RESPONSE_ERROR);
-  }
-  return {
-    version: parsed.data.version,
-    slug: parsed.data.slug || undefined,
-    structureChanged: parsed.data.structureChanged,
-    reconciledRuns: parsed.data.reconciledRuns,
-  };
-}
+export const templateUpdateResultSchema = templateUpdateResponseSchema.transform((data): TemplateUpdateResult => ({
+  version: data.version,
+  slug: data.slug || undefined,
+  structureChanged: data.structureChanged,
+  reconciledRuns: data.reconciledRuns,
+}));

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleStripe } from "@functions/api/handlers/stripe";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { seedBillingUser } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, seedBillingUser } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+import { apiEnv, TEST_AUTH_SECRET, withoutVars, type OptionalEnvVar } from "../../../support/apiEnv";
+import type { Env } from "@functions/api/types";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 
 const WEBHOOK_SECRET = "whsec_ordering_test";
@@ -35,15 +37,15 @@ function subscriptionObject(state: SubscriptionState) {
   };
 }
 
-function env(overrides: Record<string, unknown> = {}) {
-  return {
+function env(overrides: Partial<Env> = {}): Env {
+  return apiEnv({
     DB: d1.binding,
-    BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
+    BETTER_AUTH_SECRET: TEST_AUTH_SECRET,
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     STRIPE_SECRET_KEY: "sk_test_ordering",
     STRIPE_PRO_PRICE_ID: PRICE_ID,
     ...overrides,
-  } as never;
+  });
 }
 
 async function deliver(
@@ -51,13 +53,13 @@ async function deliver(
   type: string,
   created: number,
   payloadState: SubscriptionState,
-  envOverrides: Record<string, unknown> = {},
+  varsLeftOut: OptionalEnvVar[] = [],
 ): Promise<Response> {
   const request = await signedWebhookRequest(
     { id: eventId, type, created, livemode: false, data: { object: subscriptionObject(payloadState) } },
     WEBHOOK_SECRET,
   );
-  return handleStripe(request, env(envOverrides));
+  return handleStripe(request, withoutVars(env(), varsLeftOut));
 }
 
 function recordFailedEarlierDelivery(eventId: string, type: string, created: number) {
@@ -78,7 +80,7 @@ async function plan(): Promise<string> {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
   stripeState = null;
   stripeGetStatus = 200;
@@ -175,7 +177,7 @@ describe("Stripe webhook subscription events delivered out of order, or retried 
   });
 
   it("never reopens a canceled subscription or rewinds to incomplete without a secret key", async () => {
-    const noSecretKey = { STRIPE_SECRET_KEY: undefined };
+    const noSecretKey: OptionalEnvVar[] = ["STRIPE_SECRET_KEY"];
 
     await deliver("evt_updated", "customer.subscription.updated", 101, { status: "active" }, noSecretKey);
     await deliver("evt_created", "customer.subscription.created", 100, { status: "incomplete" }, noSecretKey);

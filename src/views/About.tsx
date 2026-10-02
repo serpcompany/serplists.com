@@ -6,7 +6,7 @@ import { CardGrid } from '@/components/layout/CardGrid';
 import { MediaCard } from '@/components/layout/MediaCard';
 import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { buildContactPath, buildPublicFeaturesPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';

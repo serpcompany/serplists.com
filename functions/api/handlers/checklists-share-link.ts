@@ -3,8 +3,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
-import { canUpdateRun, canViewRun } from '../utils/run-access';
-import { auditedRunUpdate, batchUpdateMissed, getRunSubject } from '../utils/checklist-runs';
+import { auditedRunUpdate, findRunToUpdate, getRunSubject } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 
 export async function shareChecklistRun(
   request: Request,
@@ -13,24 +13,15 @@ export async function shareChecklistRun(
   userId: string,
   runId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   if (!runId || runId === 'run') {
     return jsonError('Checklist run ID required', 400);
   }
 
-  const [run] = await db
-    .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
-    .limit(1);
-
-  if (!run || !(await canViewRun(env, run as unknown as Record<string, unknown>, userId))) {
-    return jsonError('Checklist run not found', 404);
-  }
-  if (!(await canUpdateRun(env, run as unknown as Record<string, unknown>, userId))) {
-    return jsonError('Forbidden', 403);
-  }
+  const found = await findRunToUpdate(env, db, runId, userId, 'Checklist run not found');
+  if ('response' in found) return found.response;
+  const { run } = found;
 
   const now = new Date().toISOString();
   const shareToken = crypto.randomUUID();
@@ -43,20 +34,20 @@ export async function shareChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(run as unknown as Record<string, unknown>, userId),
+    subject: getRunSubject(run, userId),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_created',
-    before: run as unknown as Record<string, unknown>,
-    after: { ...(run as unknown as Record<string, unknown>), ...shareUpdates },
+    before: run,
+    after: { ...run, ...shareUpdates },
     diff: shareUpdates,
     request,
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
-    run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
-    isNull(checklist_runs.deleted_at),
+    run.team_id ? eq(checklistRuns.team_id, run.team_id) : eq(checklistRuns.user_id, userId),
+    isNull(checklistRuns.deleted_at),
   ), shareUpdates, auditEvent));
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist run not found', 404);
   }
 
@@ -74,21 +65,11 @@ export async function stopSharingChecklistRun(
   userId: string,
   runId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
-  const [run] = await db
-    .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
-    .limit(1);
-  const runRecord = run as unknown as Record<string, unknown>;
-
-  if (!run || !(await canViewRun(env, runRecord, userId))) {
-    return jsonError('Checklist run not found', 404);
-  }
-  if (!(await canUpdateRun(env, runRecord, userId))) {
-    return jsonError('Forbidden', 403);
-  }
+  const found = await findRunToUpdate(env, db, runId, userId, 'Checklist run not found');
+  if ('response' in found) return found.response;
+  const { run } = found;
   if (!run.is_public) {
     return json({ id: runId, isPublic: false });
   }
@@ -96,17 +77,17 @@ export async function stopSharingChecklistRun(
   const now = new Date().toISOString();
   const revokeUpdates = { is_public: false, share_token: null, share_expires_at: null, share_used_at: null, updated_at: now };
   const sharedRun = and(
-    run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
-    eq(checklist_runs.is_public, true),
-    isNull(checklist_runs.deleted_at),
+    run.team_id ? eq(checklistRuns.team_id, run.team_id) : eq(checklistRuns.user_id, userId),
+    eq(checklistRuns.is_public, true),
+    isNull(checklistRuns.deleted_at),
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(runRecord, userId),
+    subject: getRunSubject(run, userId),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_revoked',
-    before: runRecord,
-    after: { ...runRecord, ...revokeUpdates },
+    before: run,
+    after: { ...run, ...revokeUpdates },
     diff: revokeUpdates,
     request,
     createdAt: now,

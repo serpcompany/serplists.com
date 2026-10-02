@@ -10,7 +10,7 @@ import {
   buildDiscoveryCategories,
   type DiscoveryCategory,
 } from '@/components/checklist-library/discovery-utils';
-import { mapApiTemplate } from '@/contexts/templateListFetchers';
+import { mapApiTemplate } from '@/lib/templates/apiTemplateMapper';
 import { buildCategoryPageTitle, describeCategoryPage } from '@/lib/publicPageMeta';
 import { mergePublicTemplateCollections, repoTemplates } from '@/lib/repoTemplateCatalog';
 import {
@@ -18,6 +18,7 @@ import {
   buildPublicCategoryPathForSlug,
   hasCanonicalPublicTemplatePath,
 } from '@/lib/routes';
+import { apiTemplateListSchema } from '@/lib/schemas/apiTemplates';
 import type { PageSeo } from '@/lib/seo/pageMetadata';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { getPredefinedCategories } from '@/utils/categories';
@@ -30,21 +31,22 @@ const CACHE_KEY = '/__page-meta/v1/categories';
 
 const summarySchema = z.array(z.object({ slug: z.string(), name: z.string(), count: z.number() }));
 
-const toTemplates = (rows: unknown): ChecklistTemplate[] =>
-  (Array.isArray(rows) ? rows : []).flatMap((row) => {
+const toTemplates = (body: unknown): ChecklistTemplate[] => {
+  const rows = apiTemplateListSchema.safeParse(body);
+  return (rows.success ? rows.data : []).flatMap((row) => {
     try {
-      return typeof row === 'object' && row !== null
-        ? [mapApiTemplate(row as Record<string, unknown>)]
-        : [];
+      return [mapApiTemplate(row)];
     } catch {
       return [];
     }
   });
+};
 
 const buildCategorySummary = async (): Promise<Response> => {
   const catalog = await fetchApi('/api/templates?scope=public');
   if (!catalog.ok) return new Response(null, { status: 503 });
-  const templates = mergePublicTemplateCollections(repoTemplates, toTemplates(await catalog.json())).filter(
+  const catalogBody: unknown = await catalog.json();
+  const templates = mergePublicTemplateCollections(repoTemplates, toTemplates(catalogBody)).filter(
     (template) => template.isPublic === true && hasCanonicalPublicTemplatePath(template),
   );
   const categoryNames = new Set<string>(getPredefinedCategories());
@@ -52,7 +54,7 @@ const buildCategorySummary = async (): Promise<Response> => {
   return Response.json(buildDiscoveryCategories(templates, Array.from(categoryNames).sort()));
 };
 
-export const loadCategorySummary = cache(async (): Promise<DiscoveryCategory[] | null> => {
+const loadCategorySummary = cache(async (): Promise<DiscoveryCategory[] | null> => {
   try {
     const origin = await getRequestOrigin();
     const response = await withEdgeCache(new Request(origin), CACHE_KEY, CACHE_TTL_SECONDS, buildCategorySummary);

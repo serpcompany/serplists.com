@@ -20,7 +20,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 
-export interface TagOption {
+interface TagOption {
   label: string
   value: string
 }

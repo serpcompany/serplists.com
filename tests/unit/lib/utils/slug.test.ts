@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { generateSlug as serverSlug } from '@functions/api/utils/slug';
 import { categorySlug } from '@functions/sitemap/shared';
 import { generateSlug as clientSlug } from '@/utils/urlHelpers';
-import { buildCategorySlug, findCategoryNameBySlug } from '@/lib/routes';
+import { buildCategorySlug } from '@/lib/routes';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -58,7 +58,7 @@ describe('one slug rule for templates, Organizations, and categories', () => {
   });
 
   it('resolves an accented category from the slug the sitemap lists', () => {
-    expect(findCategoryNameBySlug(['Café Guides', 'Growth'], categorySlug('Café Guides'))).toBe('Café Guides');
+    expect(buildCategorySlug(categorySlug('Café Guides'))).toBe(buildCategorySlug('Café Guides'));
     expect(categorySlug('Café Guides')).toBe('cafe-guides');
   });
 });

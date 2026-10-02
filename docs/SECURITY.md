@@ -45,9 +45,9 @@
   `admin@test.com` and the other personas in `src/lib/auth/devUsers.ts` are ordinary
   sign-ups that anyone can register where email verification is off. API code never
   grants anything by email address: local seeds give the personas their plans as data
-  (seeded `entitlement_overrides` rows), and
-  `tests/unit/security/no-persona-emails-in-api.test.ts` fails if `functions/` names a
-  persona's address.
+  (seeded `entitlement_overrides` rows), and ESLint refuses a persona's address anywhere in
+  `functions/` (`serplists/restricted-code`; `tests/unit/config/code-conventions.test.ts`
+  checks it for every address in `DEV_TEST_USERS`).
 - **Auth requests are CSRF-protected in the router.** Better Auth also parses
   form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
   and a cross-site HTML form needs no CORS preflight and sends no `SameSite=Lax`
@@ -97,8 +97,10 @@
   succeeds with the original revoke time (a retry, or another tab); a missing key
   and another user's key get the same 404.
 - **`/api/mcp` answers only known hosts** (DNS-rebinding defense in
-  `functions/api/utils/agent-mcp-host.ts`): loopback hosts and the hosts in
-  `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`.
+  `functions/api/utils/agent-mcp-host.ts`): `localhost`, `127.0.0.1` and `[::1]`
+  (`isCanonicalLoopbackHostname`) and the hosts in `FRONTEND_URL` and
+  `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`, even another name for this
+  machine such as `app.localhost`.
   Per-deployment URLs such as `https://<hash>.<project>.pages.dev` are never listed,
   so Agent Access asks the server which endpoint to show
   (`GET /api/agent-keys/connection`). On a host the check rejects, it shows the
@@ -173,7 +175,7 @@ Workers, each environment's Worker has its own secrets:
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist; also the remote hosts `/api/mcp` accepts. The first valid one (`FRONTEND_URL` first) is the MCP endpoint Agent Access shows on any other host |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
-| `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
+| `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for `localhost`, `127.0.0.1` and `[::1]`, `isCanonicalLoopbackHostname` in `src/lib/utils/loopbackHostname.ts`; `false` turns them off there too) |
 | `NEXT_PUBLIC_API_URL` | Optional; points the pages at another API instead of `/api` on their own origin. A build refuses a loopback value ([development environment](design-docs/development-environment.md#set-up)) |
 
 Rules:
@@ -182,12 +184,15 @@ Rules:
   `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `NEXT_PUBLIC_`
   client variables, `emptyStringAsUndefined: true`). Next.js inlines a `NEXT_PUBLIC_` value
   into the browser bundle only where the code names it in full, so `src/env.ts` lists each
-  one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole. URL values
+  one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole, and
+  `src/next-public-env.d.ts` declares each on `NodeJS.ProcessEnv` so that dot read
+  type-checks. URL values
   are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
-  host (`functions/api/utils/origin-list.ts`, mirrored in plain JavaScript for the script,
-  which Node runs without a TypeScript loader, in `scripts/lib/origin-list.mjs`;
-  `tests/unit/scripts/origin-list-parity.test.ts` keeps the two equal). A bare host (`serplists.com`), `host:port` with no scheme (which
+  host (`functions/api/utils/origin-list.ts`; `scripts/check-env.ts` checks the API's own schema,
+  `API_ENV_SCHEMA` in `functions/api/env-schema.ts`, and
+  `tests/unit/config/committed-origins.test.ts` holds the values `wrangler.toml` and
+  `.dev.vars.example` commit to it). A bare host (`serplists.com`), `host:port` with no scheme (which
   parses with the opaque origin `null`), a wildcard, a URL with credentials, or a list
   with no entries fails every request with the configuration `500`. A path or
   trailing slash is dropped, and empty entries (a trailing comma) are ignored.
@@ -198,7 +203,7 @@ Rules:
   the process environment by an approved secret manager. `pnpm run
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
-  `scripts/secret-scan.mjs` scans every git-tracked file, or the files passed to
+  `scripts/secret-scan.ts` scans every git-tracked file, or the files passed to
   it, as literal paths through secretlint's engine. The secretlint CLI would read
   route files such as `functions/api/[[route]].ts` as globs and skip them. Deleted
   files, folders, and anything under `.git` or `node_modules` (the folders the CLI skips
@@ -229,7 +234,7 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
   cross-origin client (local development) can read how long a `429` lasts.
 
 Locally, `pnpm run dev:all` passes its server's origin as `FRONTEND_URL` and adds it to
-`CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.mjs`).
+`CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.ts`).
 
 ## Secrets in URLs and third-party tags
 
@@ -315,8 +320,8 @@ neither throw nor merge unrelated clients into one bucket, and the port that
   the session-check allowlist on method and exact path, the path as `URL` parses it
   (no query string, dot segments resolved).
 - Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
-  uploads, the legacy Organization routes `teams`, and Run Key management under
-  `agent-keys`): 120 per minute.
+  uploads, the legacy Organization routes `teams`, Run Key management under
+  `agent-keys`, and any other path not exempt below): 120 per minute.
 - Admin (every request under `/api/admin`, whatever its method): 10 per minute per IP
   on deployed hosts (120 locally, where local and browser-test runs share 127.0.0.1),
   in its own bucket. The endpoint checks a secret that
@@ -331,11 +336,12 @@ neither throw nor merge unrelated clients into one bucket, and the port that
   (120 locally, as for admin), in their own bucket, and 10 per minute per account in
   the billing handler whatever the IP. `GET /api/billing/status` and Stripe webhooks
   are never limited.
-- `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. Every route
-  family the router dispatches is either limited there or listed in
-  `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
-  Its prefixes match the router's own dispatch (`path.startsWith`), so every request a
-  handler receives is counted.
+- `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. It is
+  deny-by-default too: a state-changing request counts as a write unless its route is
+  admin, billing or MCP, or is listed (with everything under it) in
+  `RATE_LIMIT_EXEMPT_ROUTES` with a reason. So a route family added to the router is
+  limited from its first request, and a write to a path no handler serves (a 404)
+  counts as well. The unit tests check both defaults and every exemption.
 - MCP also limits each authenticated Run Key to 120 requests per minute
   (`RUN_KEY_REQUESTS_PER_MINUTE`, which the per-IP MCP limit doubles), so one key's
   full budget always fits under the per-IP MCP limit, and refuses an IP after 10
@@ -411,10 +417,13 @@ whole large template or run, and no edit needs one sent back. MCP run writes kee
 content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
 agent writes come back in one result.
-The cap uses `Content-Length`, or counts the bytes of a clone of the body when it is
-missing or malformed, which buffers at most the cap. The count never waits for the
-clone's cancel: cancelling one branch of a cloned (teed) body settles only once the
-other branch is cancelled too, so waiting would hang every oversized request. Uploads
+The cap uses `Content-Length`, or, when it is missing or malformed, reads the body once,
+stopping as soon as it passes the cap, so it buffers at most the cap, and hands the
+handler a request built from those bytes (`readBodyWithinLimit` in
+`functions/api/utils/body.ts`). It never counts a clone: in Node's fetch (Vitest,
+`next dev`) a clone that is garbage collected cancels the original's body, so a handler
+that read the body after an await failed with "Body is unusable", and cancelling one
+branch of a teed body settles only once the other is cancelled too. Uploads
 are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file
 size, so an upload without a valid `Content-Length` (a chunked body) gets `411`

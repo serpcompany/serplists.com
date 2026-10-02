@@ -2,10 +2,11 @@ import { Env } from '../types';
 import { createDb } from '../db';
 import {
   describePayloadError,
-  normalizeStringArray,
+  getRequestedTeamId,
   parseSectionsPayload,
   templatePayloadSchema,
 } from '../utils/payloads';
+import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -38,10 +39,6 @@ export type TemplateWriteOptions = {
   privatePersonalOnly?: boolean;
   auditMetadata?: Record<string, unknown>;
 };
-
-function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
-  return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
-}
 
 export async function createTemplateForUser(
   request: Request,

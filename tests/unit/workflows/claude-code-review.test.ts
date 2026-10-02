@@ -1,12 +1,19 @@
-import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { elementAt } from '../../support/elements';
 import { z } from 'zod';
+
+import {
+  aWorkDirRemovedAfterAll,
+  expectTheGuardToFailWithNoLogOrAnErrorResult,
+  readWorkflowFile,
+  runNodeScript,
+  withAFakeGitHubApi,
+  workflowStepSchema,
+  writeTheGuardAndItsLog,
+} from '../../support/workflowGuards';
 
 const SKILL_PATH = '.claude/skills/pr-review/SKILL.md';
 const skillFrontmatter = z
@@ -14,26 +21,14 @@ const skillFrontmatter = z
   .parse(yaml.load(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(SKILL_PATH, 'utf8'))?.[1] ?? ''));
 const SKILL_TOOLS = skillFrontmatter['allowed-tools'].split(',').map((tool) => tool.trim()).filter(Boolean);
 
-const stepSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().optional(),
-  if: z.string().optional(),
-  uses: z.string().optional(),
-  shell: z.string().optional(),
-  run: z.string().optional(),
-  env: z.record(z.string()).optional(),
-  with: z.record(z.unknown()).optional(),
-});
 const workflowSchema = z.object({
-  jobs: z.object({ review: z.object({ steps: z.array(stepSchema) }) }),
+  jobs: z.object({ review: z.object({ steps: z.array(workflowStepSchema) }) }),
 });
 
-const steps = workflowSchema.parse(
-  yaml.load(readFileSync('.github/workflows/claude-code-review.yml', 'utf8')),
-).jobs.review.steps;
+const steps = workflowSchema.parse(readWorkflowFile('.github/workflows/claude-code-review.yml')).jobs.review.steps;
 const reviewIndex = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
-const reviewStep = steps[reviewIndex];
-const claudeArgs = String(reviewStep?.with?.claude_args ?? '');
+const reviewStep = elementAt(steps, reviewIndex);
+const claudeArgs = String(reviewStep.with?.['claude_args'] ?? '');
 
 const findGuard = () => {
   const outputRef = `steps.${reviewStep.id}.outputs.execution_file`;
@@ -41,12 +36,12 @@ const findGuard = () => {
     Object.values(step.env ?? {}).some((value) => value.includes(outputRef)),
   );
   const guard = steps[guardIndex];
-  const envName = Object.entries(guard?.env ?? {}).find(([, value]) => value.includes(outputRef))?.[0];
+  if (!guard) throw new Error('No step reads the review execution_file output');
+  const envName = Object.entries(guard.env ?? {}).find(([, value]) => value.includes(outputRef))?.[0];
   return { guard, guardIndex, envName };
 };
 
-const workDir = mkdtempSync(path.join(tmpdir(), 'claude-review-guard-'));
-afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+const workDir = aWorkDirRemovedAfterAll('claude-review-guard-');
 
 const REPO = 'serpcompany/serplists.com';
 const PR = '7';
@@ -62,7 +57,7 @@ type PullRequest = {
   status?: number;
 };
 
-const withFakeGitHub = async <T>(pullRequest: PullRequest, run: (apiUrl: string) => Promise<T>) => {
+const withFakeGitHub = <T>(pullRequest: PullRequest, run: (apiUrl: string) => Promise<T>) => {
   const toComments = (items: Posted[] = []) =>
     items.map(({ login, at, updatedAt, details }) => ({
       user: { login },
@@ -78,51 +73,27 @@ const withFakeGitHub = async <T>(pullRequest: PullRequest, run: (apiUrl: string)
       submitted_at: at,
     })),
   };
-  const server = createServer((request, response) => {
-    const body = routes[new URL(request.url ?? '/', 'http://localhost').pathname];
+  return withAFakeGitHubApi((url, response) => {
+    const body = routes[url.pathname];
     const status = pullRequest.status ?? (body ? 200 : 404);
     response.writeHead(status, { 'content-type': 'application/json' });
     response.end(JSON.stringify(status === 200 ? body : { message: 'Not allowed' }));
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  try {
-    return await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
+  }, run);
 };
 
 const runGuard = (executionLog: unknown, pullRequest: PullRequest = {}) =>
   withFakeGitHub(pullRequest, (apiUrl) => {
     const { guard, envName } = findGuard();
-    const scriptPath = path.join(workDir, 'guard.cjs');
-    writeFileSync(scriptPath, guard.run ?? '');
-    let executionFile = '';
-    if (executionLog !== undefined) {
-      executionFile = path.join(workDir, 'execution.json');
-      writeFileSync(executionFile, JSON.stringify(executionLog));
-    }
-    const child = spawn(process.execPath, [scriptPath], {
-      env: {
-        ...process.env,
-        [envName ?? 'EXECUTION_FILE']: executionFile,
-        GITHUB_API_URL: apiUrl,
-        GITHUB_REPOSITORY: REPO,
-        GITHUB_STEP_SUMMARY: '',
-        GITHUB_TOKEN: 'test-token',
-        PR_NUMBER: PR,
-        REVIEW_BOT: BOT,
-        REVIEW_STARTED_AT: STARTED_AT,
-      },
-    });
-    let output = '';
-    const collect = (chunk: Buffer) => {
-      output += chunk.toString();
-    };
-    child.stdout.on('data', collect);
-    child.stderr.on('data', collect);
-    return new Promise<{ status: number | null; output: string }>((resolve) => {
-      child.on('close', (status) => resolve({ status, output }));
+    const { scriptPath, executionFile } = writeTheGuardAndItsLog(workDir, guard.run ?? '', executionLog);
+    return runNodeScript(scriptPath, {
+      [envName ?? 'EXECUTION_FILE']: executionFile,
+      GITHUB_API_URL: apiUrl,
+      GITHUB_REPOSITORY: REPO,
+      GITHUB_STEP_SUMMARY: '',
+      GITHUB_TOKEN: 'test-token',
+      PR_NUMBER: PR,
+      REVIEW_BOT: BOT,
+      REVIEW_STARTED_AT: STARTED_AT,
     });
   });
 
@@ -145,9 +116,9 @@ const deniedGhPrView = {
 
 describe('Claude code review workflow', () => {
   it('runs the repository review skill, from the base branch, with every tool it uses', () => {
-    expect(reviewStep?.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
-    expect(reviewStep.with?.prompt, 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
-    expect(reviewStep.with?.plugins).toBeUndefined();
+    expect(reviewStep.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
+    expect(reviewStep.with?.['prompt'], 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
+    expect(reviewStep.with?.['plugins']).toBeUndefined();
     const allowList = claudeArgs.match(/--allowedTools\s+"([^"]+)"/)?.[1] ?? '';
     const allowed = new Set(allowList.split(',').map((tool) => tool.trim()));
 
@@ -158,7 +129,7 @@ describe('Claude code review workflow', () => {
   });
 
   it('keeps subagents in the foreground, so the review ends only after they report', () => {
-    expect(reviewStep.env?.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
+    expect(reviewStep.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
   });
 
   it('gives Claude and its subagents the rules outside the checkout', () => {
@@ -169,10 +140,11 @@ describe('Claude code review workflow', () => {
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
-    expect(steps[rulesStep].env?.BASE_REF, 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
-    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:AGENTS.md');
-    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
-    expect(steps[rulesStep].run).not.toMatch(/\bcat AGENTS\.md/);
+    const rules = elementAt(steps, rulesStep);
+    expect(rules.env?.['BASE_REF'], 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
+    expect(rules.run).toContain('git show FETCH_HEAD:AGENTS.md');
+    expect(rules.run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
+    expect(rules.run).not.toMatch(/\bcat AGENTS\.md/);
     expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--strict-mcp-config');
@@ -181,7 +153,6 @@ describe('Claude code review workflow', () => {
   it('runs a guard after the review that reads its execution log and the PR', () => {
     const { guard, guardIndex, envName } = findGuard();
 
-    expect(guard, 'no step reads the review execution_file output').toBeDefined();
     expect(guardIndex).toBeGreaterThan(reviewIndex);
     expect(envName).toBeTruthy();
     expect(guard.shell).toBe('node {0}');
@@ -194,9 +165,7 @@ describe('Claude code review workflow', () => {
   });
 
   it('fails when the run left no log or ended in an error', async () => {
-    expect((await runGuard(undefined)).status).not.toBe(0);
-    expect((await runGuard([{ type: 'system', subtype: 'init' }])).status).not.toBe(0);
-    expect((await runGuard([resultEntry({ is_error: true, subtype: 'error_max_turns' })])).status).not.toBe(0);
+    await expectTheGuardToFailWithNoLogOrAnErrorResult(runGuard, resultEntry);
   });
 
   it('fails when the run ended while subagents were still working', async () => {
@@ -283,7 +252,7 @@ describe('Claude code review workflow', () => {
   });
 });
 
-const findingsIndex = steps.findIndex((step) => step.env?.CONTEXT_FILE !== undefined);
+const findingsIndex = steps.findIndex((step) => step.env?.['CONTEXT_FILE'] !== undefined);
 const findingsStep = steps[findingsIndex];
 
 const runFindings = (pullRequest: PullRequest) =>
@@ -292,9 +261,9 @@ const runFindings = (pullRequest: PullRequest) =>
     const contextFile = path.join(workDir, 'review-context.md');
     writeFileSync(scriptPath, findingsStep?.run ?? '');
     writeFileSync(contextFile, '# Repository rules for this review\n');
-    const child = spawn(process.execPath, [scriptPath], {
-      env: {
-        ...process.env,
+    return runNodeScript(
+      scriptPath,
+      {
         CONTEXT_FILE: contextFile,
         GITHUB_API_URL: apiUrl,
         GITHUB_REPOSITORY: REPO,
@@ -302,14 +271,8 @@ const runFindings = (pullRequest: PullRequest) =>
         PR_NUMBER: PR,
         REVIEW_BOT: BOT,
       },
-    });
-    let output = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    return new Promise<{ status: number | null; output: string; context: string }>((resolve) => {
-      child.on('close', (status) => resolve({ status, output, context: readFileSync(contextFile, 'utf8') }));
-    });
+      ['stdout'],
+    ).then(({ status, output }) => ({ status, output, context: readFileSync(contextFile, 'utf8') }));
   });
 
 describe('earlier findings passed to the review', () => {
@@ -318,7 +281,7 @@ describe('earlier findings passed to the review', () => {
     expect(findingsIndex).toBeLessThan(reviewIndex);
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(findingsIndex).toBeGreaterThan(rulesStep);
-    expect(findingsStep.env).toMatchObject({ GITHUB_TOKEN: '${{ github.token }}', REVIEW_BOT: BOT });
+    expect(elementAt(steps, findingsIndex).env).toMatchObject({ GITHUB_TOKEN: '${{ github.token }}', REVIEW_BOT: BOT });
   });
 
   it("lists Claude's inline comments and summary, and leaves out everyone else's", async () => {

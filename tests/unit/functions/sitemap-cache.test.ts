@@ -1,20 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
-import { cachedSitemap } from '../../../functions/sitemap/cache';
+import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
-import type { Env } from '../../../functions/api/types';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
 import { GET as profilesShardGet } from '@/app/sitemaps/profiles/[page]/route';
 import { GET as templatesShardGet } from '@/app/sitemaps/templates/[page]/route';
-import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
-  ...(await import('../../support/nextServerContext')).requestScopeMock,
-}));
+import { apiEnv } from '../../support/apiEnv';
+import { D1DatabaseDouble, D1StatementDouble, d1Result } from '../../support/d1Doubles';
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
@@ -27,29 +22,30 @@ let publishedShards: Array<[string, number]>;
 let statements: string[];
 let cacheStore: Map<string, Response>;
 
-const envWithFixtureRevisionsAndEmptyShardBuilds = {
-  DB: {
-    prepare: (query: string) => {
-      statements.push(query);
-      let params: unknown[] = [];
-      const statement = {
-        bind: (...values: unknown[]) => { params = values; return statement; },
-        raw: async () => {
-          if (query.includes('from "sitemap_revisions"')) return revisions;
-          if (query.includes('from "sitemap_shard_revisions"')) {
-            return publishedShards
-              .filter(([kind, page]) => params[0] === kind && params[1] === page)
-              .map(([, page]) => [page]);
-          }
-          return [];
-        },
-        all: async () => ({ results: [] }),
-        run: async () => ({ success: true, meta: {}, results: [] }),
-      };
-      return statement;
-    },
-  },
-} as unknown as Env;
+class FixtureRevisionsStatement extends D1StatementDouble {
+  protected async allRows() {
+    return d1Result([]);
+  }
+
+  protected async rawRows(): Promise<unknown[][]> {
+    if (this.sql.includes('from "sitemap_revisions"')) return revisions;
+    if (this.sql.includes('from "sitemap_shard_revisions"')) {
+      return publishedShards
+        .filter(([kind, page]) => this.params[0] === kind && this.params[1] === page)
+        .map(([, page]) => [page]);
+    }
+    return [];
+  }
+}
+
+class FixtureRevisionsAndEmptyShardBuilds extends D1DatabaseDouble {
+  prepare(sql: string): FixtureRevisionsStatement {
+    statements.push(sql);
+    return new FixtureRevisionsStatement(sql);
+  }
+}
+
+const envWithFixtureRevisionsAndEmptyShardBuilds = apiEnv({ DB: new FixtureRevisionsAndEmptyShardBuilds() });
 
 function context(url: string, method = 'GET') {
   const pending: Promise<unknown>[] = [];
@@ -122,7 +118,7 @@ describe('cached sitemaps', () => {
     vi.unstubAllGlobals();
   });
 
-  const builder = () => vi.fn(async (request: Request) => xmlResponse(request, '<urlset/>'));
+  const builder = () => vi.fn(async (request: Request, _revisions: SitemapRevisions) => xmlResponse(request, '<urlset/>'));
 
   it('builds once and serves repeats from the cache until a sitemap revision changes', async () => {
     const build = builder();
@@ -142,7 +138,7 @@ describe('cached sitemaps', () => {
 
     expect(head.status).toBe(200);
     expect(await head.text()).toBe('');
-    expect(build.mock.calls[0][0].method).toBe('GET');
+    expect(firstOf(build.mock.calls)[0].method).toBe('GET');
     expect(await get.text()).toBe('<urlset/>');
     expect(build).toHaveBeenCalledOnce();
   });
@@ -249,7 +245,8 @@ describe('cached sitemaps', () => {
   });
 
   it('keys a missing revision row as a stable value that a new row replaces', async () => {
-    const categories = families.find((family) => family.name === 'categories')!;
+    const categories = families.find((family) => family.name === 'categories');
+    assert.exists(categories);
     revisions = [['profiles', '2030-01-01 00:00:00.000'], ['templates', '2030-01-01 00:00:00.000']];
     expect(await servingTheRealRouteRebuilds(categories)).toBe(true);
     expect(await servingTheRealRouteRebuilds(categories)).toBe(false);
@@ -263,7 +260,7 @@ describe('cached sitemaps', () => {
     revisions = allKinds.map((each) => [each, `2030-01-0${allKinds.indexOf(each) + 1} 00:00:00.000`]);
     const build = builder();
     await serve(build, 'https://serplists.com/sitemaps/templates/1.xml', 'GET', { kind: 'templates', page: '1' });
-    expect([...build.mock.calls[0][1]]).toEqual([['templates', '2030-01-03 00:00:00.000']]);
+    expect([...firstOf(build.mock.calls)[1]]).toEqual([['templates', '2030-01-03 00:00:00.000']]);
   });
 
   it('rejects unsupported methods before reading D1', async () => {

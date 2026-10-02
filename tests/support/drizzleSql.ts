@@ -1,21 +1,36 @@
-function unseenRecord(value: unknown, seen: Set<unknown>): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || seen.has(value)) return null;
-  seen.add(value);
-  return value as Record<string, unknown>;
+import { SQL } from 'drizzle-orm';
+
+export function sqlExpression(value: unknown): SQL {
+  if (value instanceof SQL) return value;
+  throw new Error(`Expected a drizzle SQL expression, but got ${typeof value}.`);
 }
 
-const queryChunks = (record: Record<string, unknown>): unknown[] => (Array.isArray(record.queryChunks) ? record.queryChunks : []);
+interface SqlNode {
+  name?: unknown;
+  queryChunks?: unknown;
+  value?: unknown;
+}
+
+const isSqlNode = (value: unknown): value is SqlNode => typeof value === 'object' && value !== null;
+
+function unseenNode(value: unknown, seen: Set<unknown>): SqlNode | null {
+  if (!isSqlNode(value) || seen.has(value)) return null;
+  seen.add(value);
+  return value;
+}
+
+const queryChunks = (node: SqlNode): unknown[] => (Array.isArray(node.queryChunks) ? node.queryChunks : []);
 
 export function columnNamesIn(sqlExpression: unknown, seen = new Set<unknown>()): string[] {
-  const record = unseenRecord(sqlExpression, seen);
-  if (!record) return [];
-  const own = typeof record.name === 'string' ? [record.name] : [];
-  return [...own, ...queryChunks(record).flatMap((chunk) => columnNamesIn(chunk, seen))];
+  const node = unseenNode(sqlExpression, seen);
+  if (!node) return [];
+  const own = typeof node.name === 'string' ? [node.name] : [];
+  return [...own, ...queryChunks(node).flatMap((chunk) => columnNamesIn(chunk, seen))];
 }
 
 export function paramValuesIn(sqlExpression: unknown, seen = new Set<unknown>()): unknown[] {
-  const record = unseenRecord(sqlExpression, seen);
-  if (!record) return [];
-  const own = 'encoder' in record && 'value' in record ? [record.value] : [];
-  return [...own, ...queryChunks(record).flatMap((chunk) => paramValuesIn(chunk, seen))];
+  const node = unseenNode(sqlExpression, seen);
+  if (!node) return [];
+  const own = 'encoder' in node && 'value' in node ? [node.value] : [];
+  return [...own, ...queryChunks(node).flatMap((chunk) => paramValuesIn(chunk, seen))];
 }

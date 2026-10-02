@@ -1,5 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
+import { sessionMocks } from "../../../support/mockedSession";
+import "../../../support/checkoutWithoutARateLimit";
 import {
+  billingSchemaSql,
   emptyStripeList,
   postToBilling,
   seedBillingUser,
@@ -8,15 +12,10 @@ import {
   stripeErrorResponse,
   stripeSubscription as stripeSubscriptionFor,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+import { readJson } from "../../../support/readJson";
+import { billingStatusSchema } from "@/lib/schemas/accountResponses";
 import { signedWebhookRequest } from "./support/stripe-webhook";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
-  checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
-}));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 
 import { handleBilling } from "@functions/api/handlers/billing";
 import { handleStripe } from "@functions/api/handlers/stripe";
@@ -26,7 +25,7 @@ const USER_ID = "user-1";
 const WEBHOOK_SECRET = "whsec_stale";
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 let staleCustomerListAnswer: "missing" | "empty" | "error";
 let subscriptionsStripeCanRetrieve: Map<string, Record<string, unknown>>;
 let subscriptionRetrieveFails: boolean;
@@ -43,16 +42,15 @@ const missingCustomer = (id: string) =>
     message: `No such customer: '${id}'`,
   });
 
-type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey?: string };
+type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey: string | undefined };
 
 function calls(): Call[] {
   return fetchMock.mock.calls.map(([url, init]) => {
-    const request = init as RequestInit & { headers?: Record<string, string> };
     return {
-      method: request.method ?? "GET",
+      method: init?.method ?? "GET",
       url: String(url),
-      form: new URLSearchParams(String(request.body ?? "")),
-      idempotencyKey: request.headers?.["Idempotency-Key"],
+      form: new URLSearchParams(String(init?.body ?? "")),
+      idempotencyKey: new Headers(init?.headers).get("Idempotency-Key") ?? undefined,
     };
   });
 }
@@ -70,10 +68,10 @@ function storedCustomer(): string | undefined {
 
 const post = (path: "checkout" | "portal") => postToBilling(env(), path);
 
-async function billingStatus(): Promise<Record<string, unknown>> {
+async function billingStatus() {
   const response = await handleBilling(new Request("http://localhost/api/billing/status"), env());
   expect(response.status).toBe(200);
-  return response.json();
+  return readJson(response, billingStatusSchema.passthrough());
 }
 
 const storeSubscription = (id: string, customerId: string, status: string, priceId = "price_other_mode") =>
@@ -93,7 +91,7 @@ const subscriptionReads = () =>
   calls().filter((call) => call.method === "GET" && call.url.startsWith("https://api.stripe.com/v1/subscriptions/"));
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID, "cus_stale");
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   staleCustomerListAnswer = "missing";
@@ -151,8 +149,8 @@ describe("checkout with a Stripe customer that no longer exists", () => {
     expect(result.status).toBe(200);
     expect(result.body.url).toBe("https://checkout.stripe.test/cs_1");
     expect(customerCreates()).toHaveLength(1);
-    expect(customerCreates()[0].form.get("metadata[userId]")).toBe(USER_ID);
-    expect(customerCreates()[0].idempotencyKey).toContain("cus_stale");
+    expect(firstOf(customerCreates()).form.get("metadata[userId]")).toBe(USER_ID);
+    expect(firstOf(customerCreates()).idempotencyKey).toContain("cus_stale");
     expect(storedCustomer()).toBe("cus_new");
     expect(sessionCalls().map((call) => call.form.get("customer"))).toEqual(["cus_new"]);
   });
@@ -164,8 +162,9 @@ describe("checkout with a Stripe customer that no longer exists", () => {
 
     expect(result.status).toBe(200);
     expect(storedCustomer()).toBe("cus_new");
-    const [first, retry] = sessionCalls();
     expect(sessionCalls()).toHaveLength(2);
+    const first = firstOf(sessionCalls());
+    const retry = elementAt(sessionCalls(), 1);
     expect(first.form.get("customer")).toBe("cus_stale");
     expect(retry.form.get("customer")).toBe("cus_new");
     expect(retry.idempotencyKey).not.toBe(first.idempotencyKey);
@@ -295,9 +294,9 @@ describe("the Customer Portal with a Stripe customer that no longer exists", () 
   });
 });
 
-describe("a missing customer with a stored subscription on a current Pro price, which means the deployed keys are wrong, not the customer", () => {
-  const CONTACT_SUPPORT = "Your billing account could not be found. Contact support.";
+const CONTACT_SUPPORT = "Your billing account could not be found. Contact support.";
 
+describe("a missing customer with a stored subscription on a current Pro price, which means the deployed keys are wrong, not the customer", () => {
   it("keeps the customer at the portal and says to contact support", async () => {
     storeSubscription("sub_pro", "cus_stale", "active", "price_pro");
 

@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
-import { getImageDimensions, optimizeImage, planImageUpload } from '@/lib/imageOptimization';
+import { optimizeImage, planImageUpload } from '@/lib/imageOptimization';
 
 const LIMITS = { maxWidth: 1920, maxHeight: 1080 };
 const MB = 1024 * 1024;
@@ -212,8 +212,8 @@ describe('object URL release, so no uploaded image stays referenced until the ta
 
   const photo = () => new File(['raw-bytes'], 'photo.png', { type: 'image/png' });
 
-  let createObjectURL: ReturnType<typeof vi.spyOn>;
-  let revokeObjectURL: ReturnType<typeof vi.spyOn>;
+  let createObjectURL: MockInstance<typeof URL.createObjectURL>;
+  let revokeObjectURL: MockInstance<typeof URL.revokeObjectURL>;
 
   beforeEach(() => {
     imageOutcome = 'load';
@@ -274,22 +274,6 @@ describe('object URL release, so no uploaded image stays referenced until the ta
 
       await expect(settleWithin(optimizeImage(photo()))).rejects.toThrow('Could not get canvas context');
       expect(createObjectURL).toHaveBeenCalledTimes(1);
-      expect(revokeObjectURL).toHaveBeenCalledTimes(1);
-      expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-1');
-    });
-  });
-
-  describe('getImageDimensions', () => {
-    it('releases the object URL after reading the size', async () => {
-      await expect(settleWithin(getImageDimensions(photo()))).resolves.toEqual({ height: 3000, width: 4000 });
-      expect(revokeObjectURL).toHaveBeenCalledTimes(1);
-      expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-1');
-    });
-
-    it('releases the object URL when the image cannot be decoded', async () => {
-      imageOutcome = 'error';
-
-      await expect(settleWithin(getImageDimensions(photo()))).rejects.toThrow('Failed to load image');
       expect(revokeObjectURL).toHaveBeenCalledTimes(1);
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-1');
     });

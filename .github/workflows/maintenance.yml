@@ -1,14 +1,8 @@
 name: Weekly maintenance
 
-# Two recurring cleanup jobs, built on the deterministic `pnpm run maintenance:report`:
-# - doc-gardening: Claude fixes documentation that no longer matches the code and
-#   opens a small fix-up PR into staging.
-# - report: posts the full report (debt, oversized files, stale plans) as one
-#   reusable `ready-for-agent` issue.
-# Scheduled workflows run from the default branch. Details: docs/design-docs/agent-workflow.md.
 on:
   schedule:
-    - cron: "0 14 * * 1" # Mondays 14:00 UTC
+    - cron: "0 14 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -37,7 +31,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: staging
-          # Full history: the report compares each doc's last edit with the code it references.
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -68,13 +61,9 @@ jobs:
         if: env.HAS_CLAUDE_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
         env:
-          # The action stops at Claude's first result, so a subagent left running in the
-          # background is dropped with its work (see the Code Review workflow).
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # No Co-Authored-By trailer on the bot's commits and no "Generated with Claude
-          # Code" line in its PRs: this repository's commits carry no attribution lines.
           settings: '{"attribution": {"commit": false, "pr": false}}'
           prompt: |
             You are this repository's weekly doc gardener. Follow AGENTS.md.
@@ -118,11 +107,6 @@ jobs:
           retention-days: 7
           overwrite: true
 
-      # Inline on purpose, like the review's guard: this job can mint an OIDC token, so it
-      # runs no script from the checkout. tests/unit/workflows/maintenance.test.ts runs it.
-      # It checks the job's outcome: a gardening PR opened during the run, "No doc drift
-      # found", or an open gardening PR left alone. A denied tool only warns when Claude
-      # got there anyway (it often retries a refused command another way).
       - name: Fail if Claude could not finish
         if: env.HAS_CLAUDE_TOKEN == 'true'
         env:
@@ -131,10 +115,10 @@ jobs:
         shell: node {0}
         run: |
           const fs = require('node:fs');
-          // Workflow commands end at a newline and treat % as an escape.
-          const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const asOneWorkflowCommandLine = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const clockSkewAllowanceMs = 30 * 1000;
           const fail = (message) => {
-            console.log(`::error title=Doc gardening did not finish::${clean(message, 900)}`);
+            console.log(`::error title=Doc gardening did not finish::${asOneWorkflowCommandLine(message, 900)}`);
             process.exit(1);
           };
           const readResult = () => {
@@ -151,8 +135,7 @@ jobs:
             if (!result) fail('The execution log has no result entry.');
             return { messages, result };
           };
-          // Open doc-gardening PRs into staging, oldest first.
-          const openGardeningPrs = async () => {
+          const openGardeningPrsIntoStagingOldestFirst = async () => {
             const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
             const response = await fetch(`${api}/pulls?state=open&base=staging&per_page=100`, {
               headers: {
@@ -167,23 +150,22 @@ jobs:
           const main = async () => {
             const { messages, result } = readResult();
             const said = String(result.result || '');
-            console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${clean(said || '(nothing)', 400)}`);
+            console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${asOneWorkflowCommandLine(said || '(nothing)', 400)}`);
             if (result.is_error) fail(`Doc gardening ended with ${result.subtype || 'an error'}.`);
             const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
             const running = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
             if (running.length) fail(`Doc gardening ended with ${running.length} background task(s) still running.`);
-            const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${clean(d.tool_input.command)})` : String(d.tool_name))))];
+            const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${asOneWorkflowCommandLine(d.tool_input.command)})` : String(d.tool_name))))];
 
             const startedAt = Date.parse(process.env.GARDENING_STARTED_AT || '');
             if (Number.isNaN(startedAt)) fail('GARDENING_STARTED_AT is not set, so the check cannot tell whether this run opened a PR.');
             let prs;
             try {
-              prs = await openGardeningPrs();
+              prs = await openGardeningPrsIntoStagingOldestFirst();
             } catch (error) {
               fail(`Could not list the open PRs to check the outcome: ${error.message}`);
             }
-            // Allow for clock skew between the runner and GitHub.
-            const opened = prs.filter((pr) => Date.parse(pr.created_at) >= startedAt - 30 * 1000);
+            const opened = prs.filter((pr) => Date.parse(pr.created_at) >= startedAt - clockSkewAllowanceMs);
             let outcome = null;
             if (opened.length > 0) outcome = `opened ${opened.map((pr) => `#${pr.number}`).join(', ')}`;
             else if (/No doc drift found/i.test(said)) outcome = 'found no doc drift';
@@ -194,7 +176,7 @@ jobs:
               fail(`Doc gardening finished without opening a PR or reporting "No doc drift found".${reason}`);
             }
             if (denied.length > 0) {
-              console.log(`::warning title=Doc gardening was denied tools::Claude was denied ${clean(denied.join(', '), 600)} but still ${outcome}. Allow the tool in claude_args if the job needs it.`);
+              console.log(`::warning title=Doc gardening was denied tools::Claude was denied ${asOneWorkflowCommandLine(denied.join(', '), 600)} but still ${outcome}. Allow the tool in claude_args if the job needs it.`);
             }
             console.log(`Doc gardening ${outcome}.`);
           };

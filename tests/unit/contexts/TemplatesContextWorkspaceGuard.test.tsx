@@ -1,80 +1,34 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 const apiMock = vi.hoisted(() => ({
   createTemplate: vi.fn(),
   createChecklist: vi.fn(),
   importTemplateBackup: vi.fn(),
 }));
-const workspaceState = vi.hoisted(() => ({ status: 'error' as 'ready' | 'loading' | 'error' }));
-
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: undefined,
-    isWorkspaceLoading: workspaceState.status !== 'ready',
-    workspaceScopeId: 'personal',
-    workspaceStatus: workspaceState.status,
-  }),
-}));
+import { aTemplatesProviderForEachTest, launchChecklist, providerWorkspace } from '../../support/templatesProviderHarness';
+import { WORKSPACE_NOT_READY_MESSAGE, type WorkspaceStatus } from '@/contexts/workspaceSelection';
 
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
-import { WORKSPACE_NOT_READY_MESSAGE } from '@/contexts/workspaceSelection';
+const template = (overrides: Partial<ChecklistTemplate> = {}) =>
+  launchChecklist({ userId: 'someone-else', isPublic: true, version: 1, ...overrides });
 
-const template = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
-  id: 'template-1',
-  title: 'Launch Checklist',
-  description: '',
-  sections: [{ id: 'section-1', title: 'Prep', items: [{ id: 'item-1', title: 'Confirm owner' }] }],
-  userId: 'someone-else',
-  createdAt: '2026-07-03T12:00:00.000Z',
-  updatedAt: '2026-07-03T12:00:00.000Z',
-  isPublic: true,
-  categories: [],
-  tags: [],
-  version: 1,
-  ...overrides,
-});
+const renderTemplatesProvider = aTemplatesProviderForEachTest();
+const renderProvider = () => renderTemplatesProvider().context;
 
-const clients: QueryClient[] = [];
-
-function renderProvider() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  clients.push(client);
-  let context: TemplatesContextProps | undefined;
-  const Probe = () => {
-    context = useTemplates();
-    return null;
-  };
-  renderToStaticMarkup(
-    <QueryClientProvider client={client}>
-      <TemplatesProvider>
-        <Probe />
-      </TemplatesProvider>
-    </QueryClientProvider>,
-  );
-  if (!context) throw new Error('TemplatesProvider did not render');
-  return context;
-}
+const confirmTheWorkspace = (status: WorkspaceStatus) => {
+  providerWorkspace.workspaceStatus = status;
+  providerWorkspace.isWorkspaceLoading = status !== 'ready';
+};
 
 describe.each(['loading', 'error'] as const)('writes while the stored Organization is unconfirmed (%s) and the context shows Personal only for display', (status) => {
   beforeEach(() => {
-    workspaceState.status = status;
+    confirmTheWorkspace(status);
     apiMock.createTemplate.mockReset().mockResolvedValue({ id: 'template-2' });
     apiMock.createChecklist.mockReset().mockResolvedValue({ id: 'run-1' });
     apiMock.importTemplateBackup.mockReset().mockResolvedValue({ imported: 1 });
-  });
-
-  afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
   });
 
   it('refuses a new template for the active context instead of creating it in Personal', async () => {
@@ -122,12 +76,8 @@ describe.each(['loading', 'error'] as const)('writes while the stored Organizati
 });
 
 describe('writes once the context is known', () => {
-  afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
-  });
-
   it('creates in Personal when Personal is the confirmed context', async () => {
-    workspaceState.status = 'ready';
+    confirmTheWorkspace('ready');
     apiMock.createTemplate.mockReset().mockResolvedValue({ id: 'template-2' });
     const context = renderProvider();
 

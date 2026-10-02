@@ -12,7 +12,8 @@ import {
   DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 import { PageContainer } from '@/components/layout/page-shell';
-import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { RUN_SHARE_LINK_DESCRIPTION } from '@/components/shared/runShareLinkDescription';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { Button } from '@/components/ui/button';
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
@@ -28,7 +29,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import { useKeptRunNoteDrafts } from '@/features/run-execution/keptNoteDrafts';
 import { RUN_NOTES_UNSAVED_MESSAGE } from '@/features/run-execution/noteDrafts';
-import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
+import { useRunExecutionModel, type RunExecutionActionResult } from '@/features/run-execution/useRunExecutionModel';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
@@ -109,9 +110,7 @@ const ChecklistRunPage = () => {
   const handleBack = () =>
     router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
 
-  const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
-    const result = await toggleItem(itemId, isCompleted);
-
+  const afterToggle = (result: RunExecutionActionResult) => {
     if (result.kind === 'ok') {
       if (result.shouldPromptComplete) {
         setIsCompleteDialogOpen(true);
@@ -124,24 +123,17 @@ const ChecklistRunPage = () => {
     }
   };
 
+  const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
+    afterToggle(await toggleItem(itemId, isCompleted));
+  };
+
   const handleSubItemToggle = async (
     itemId: string,
     contentIndex: number,
     subItemIndex: number,
     isCompleted: boolean,
   ) => {
-    const result = await toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted);
-
-    if (result.kind === 'ok') {
-      if (result.shouldPromptComplete) {
-        setIsCompleteDialogOpen(true);
-      }
-      return;
-    }
-
-    if (result.kind === 'error') {
-      toast.error(result.message || 'Unable to save your progress. Please try again.');
-    }
+    afterToggle(await toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted));
   };
 
   const handleItemNotesSave = async (itemId: string, notes: string) => {

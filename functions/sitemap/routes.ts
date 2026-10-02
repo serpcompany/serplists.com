@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
-import { sitemap_owner_revisions, sitemap_profile_revisions, templates, users } from '../../db/schema/index';
+import { sitemapProfileRevisions, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { cachedSitemap, type SitemapContext, type SitemapRevisions } from './cache';
@@ -16,9 +16,9 @@ import {
   loadCategoryEntries,
   methodNotAllowed,
   mostRecentLastmod,
-  publicTemplateCondition,
   renderSitemapIndex,
   requestSupportsSitemap,
+  selectPublicTemplatesOfListedOwners,
   sitemapImplementationLastmod,
   staticSitemapEntries,
   validTemplateSlugCondition,
@@ -30,58 +30,76 @@ import {
 export const shardPageParam = (fileName: string): string =>
   /^(\d+)\.xml$/i.exec(fileName)?.[1] ?? fileName;
 
+type Db = ReturnType<typeof createDb>;
+
+type ProfileRow = {
+  username: string | null;
+  created_at: string;
+  updated_at: string | null;
+  profile_revision: string | null;
+};
+
+type TemplateRow = {
+  username: string | null;
+  slug: string | null;
+  created_at: string;
+  updated_at: string | null;
+  owner_updated_at: string | null;
+};
+
+const selectListedProfiles = (db: Db) => db
+  .select({
+    username: users.username,
+    created_at: users.created_at,
+    updated_at: users.updated_at,
+    profile_revision: sitemapProfileRevisions.revised_at,
+  })
+  .from(users)
+  .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
+  .where(validUsernameCondition)
+  .orderBy(users.id);
+
+const selectListedTemplates = (db: Db) =>
+  selectPublicTemplatesOfListedOwners(db, { username: users.username, slug: templates.slug }, validTemplateSlugCondition)
+    .orderBy(templates.id);
+
+function profileEntry(row: ProfileRow): SitemapEntry | null {
+  const username = row.username?.trim() ?? '';
+  return isValidUsername(username) ? {
+    path: `/profile/${encodeURIComponent(username)}/`,
+    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
+  } : null;
+}
+
+function templateEntry(row: TemplateRow): SitemapEntry | null {
+  const username = row.username?.trim() ?? '';
+  const slug = row.slug?.trim() ?? '';
+  return isValidUsername(username) && isValidTemplateSlug(slug) ? {
+    path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
+    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
+  } : null;
+}
+
+const entriesOf = <Row>(rows: Row[], toEntry: (row: Row) => SitemapEntry | null): SitemapEntry[] =>
+  rows.flatMap((row) => toEntry(row) ?? []);
+
+function templateCatalogEntries(revisions: SitemapRevisions): SitemapEntry[] {
+  const landingPage = catalogPageEntry('/templates/');
+  return [{
+    ...landingPage,
+    lastmod: mostRecentLastmod(landingPage.lastmod, revisions.get('templates'), bundledInventoryLastmod('templates')),
+  }, ...bundledTemplateEntries()];
+}
+
 export const serveSitemapIndex = (context: SitemapContext): Promise<Response> =>
   cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions), 'index');
 
 async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
   const db = createDb(env);
-  const profileRows = await db
-    .select({
-      username: users.username,
-      created_at: users.created_at,
-      updated_at: users.updated_at,
-      profile_revision: sitemap_profile_revisions.revised_at,
-    })
-    .from(users)
-    .leftJoin(sitemap_profile_revisions, eq(sitemap_profile_revisions.user_id, users.id))
-    .where(validUsernameCondition)
-    .orderBy(users.id);
-  const profiles = profileRows.flatMap((row): SitemapEntry[] => {
-    const username = row.username?.trim() ?? '';
-    return isValidUsername(username) ? [{
-      path: `/profile/${encodeURIComponent(username)}/`,
-      lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
-    }] : [];
-  });
-
-  const templateRows = await db
-    .select({
-      username: users.username,
-      slug: templates.slug,
-      created_at: templates.created_at,
-      updated_at: templates.updated_at,
-      owner_updated_at: sitemap_owner_revisions.revised_at,
-    })
-    .from(templates)
-    .innerJoin(users, eq(users.id, templates.user_id))
-    .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
-    .where(and(publicTemplateCondition, validTemplateSlugCondition, validUsernameCondition))
-    .orderBy(templates.id);
-  const databaseTemplates = templateRows.flatMap((row): SitemapEntry[] => {
-    const username = row.username?.trim() ?? '';
-    const slug = row.slug?.trim() ?? '';
-    return isValidUsername(username) && isValidTemplateSlug(slug) ? [{
-      path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
-      lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
-    }] : [];
-  });
-
+  const profiles = entriesOf(await selectListedProfiles(db), profileEntry);
+  const databaseTemplates = entriesOf(await selectListedTemplates(db), templateEntry);
   const categoryEntries = await loadCategoryEntries(env);
-  const templateLanding = catalogPageEntry('/templates/');
-  const templateEntries = [{
-    ...templateLanding,
-    lastmod: mostRecentLastmod(templateLanding.lastmod, revisions.get('templates'), bundledInventoryLastmod('templates')),
-  }, ...bundledTemplateEntries(), ...databaseTemplates];
+  const templateEntries = [...templateCatalogEntries(revisions), ...databaseTemplates];
   const entries = [
     ...await buildDurableShardIndex(env, 'pages', staticSitemapEntries(), sitemapImplementationLastmod()),
     ...await buildDurableShardIndex(env, 'categories', categoryEntries,
@@ -104,95 +122,24 @@ export const serveCategoriesSitemap = (context: SitemapContext, page: string): P
     () => loadCategoryEntries(context.env),
   ), { kind: 'categories', page });
 
-type ProfileRow = {
-  username: string | null;
-  created_at: string;
-  updated_at: string | null;
-  profile_revision: string | null;
-};
-
 export const serveProfilesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
   const db = createDb(context.env);
   return cachedSitemap(context, (request) => handlePagedDatabaseSitemap<ProfileRow>({
     request,
     params: { page },
-    loadRows: async ({ limit, offset }) => await db
-      .select({
-        username: users.username,
-        created_at: users.created_at,
-        updated_at: users.updated_at,
-        profile_revision: sitemap_profile_revisions.revised_at,
-      })
-      .from(users)
-      .leftJoin(sitemap_profile_revisions, eq(sitemap_profile_revisions.user_id, users.id))
-      .where(validUsernameCondition)
-      .orderBy(users.id)
-      .limit(limit)
-      .offset(offset),
-    toEntry: (row) => {
-      const username = row.username?.trim() ?? '';
-      return isValidUsername(username) ? ({
-        path: `/profile/${encodeURIComponent(username)}/`,
-        lastmod: mostRecentLastmod(
-          row.updated_at || row.created_at,
-          row.profile_revision,
-        ),
-      }) : null;
-    },
+    loadRows: async ({ limit, offset }) => await selectListedProfiles(db).limit(limit).offset(offset),
+    toEntry: profileEntry,
   }), { kind: 'profiles', page });
-};
-
-type TemplateRow = {
-  username: string | null;
-  slug: string | null;
-  created_at: string;
-  updated_at: string | null;
-  owner_updated_at: string | null;
 };
 
 export const serveTemplatesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
   const db = createDb(context.env);
-  const landingPage = catalogPageEntry('/templates/');
   return cachedSitemap(context, (request, revisions) => handlePagedDatabaseSitemap<TemplateRow>({
     request,
     params: { page },
-    prefixEntries: [
-      {
-        ...landingPage,
-        lastmod: mostRecentLastmod(
-          landingPage.lastmod,
-          bundledInventoryLastmod('templates'),
-          revisions.get('templates'),
-        ),
-      },
-      ...bundledTemplateEntries(),
-    ],
-    loadRows: async ({ limit, offset }) => await db
-      .select({
-        username: users.username,
-        slug: templates.slug,
-        created_at: templates.created_at,
-        updated_at: templates.updated_at,
-        owner_updated_at: sitemap_owner_revisions.revised_at,
-      })
-      .from(templates)
-      .innerJoin(users, eq(users.id, templates.user_id))
-      .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
-      .where(and(publicTemplateCondition, validTemplateSlugCondition, validUsernameCondition))
-      .orderBy(templates.id)
-      .limit(limit)
-      .offset(offset),
-    toEntry: (row) => {
-      const username = row.username?.trim() ?? '';
-      const slug = row.slug?.trim() ?? '';
-      return isValidUsername(username) && isValidTemplateSlug(slug) ? ({
-        path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
-        lastmod: mostRecentLastmod(
-          row.updated_at || row.created_at,
-          row.owner_updated_at,
-        ),
-      }) : null;
-    },
+    prefixEntries: templateCatalogEntries(revisions),
+    loadRows: async ({ limit, offset }) => await selectListedTemplates(db).limit(limit).offset(offset),
+    toEntry: templateEntry,
   }), { kind: 'templates', page });
 };
 

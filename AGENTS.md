@@ -44,8 +44,8 @@ Details: [development environment](docs/design-docs/development-environment.md).
 
 ## Definition of done
 
-1. `pnpm run verify` passes. CI runs the same checks plus build, D1 integration,
-   browser tests, and schema parity.
+1. `pnpm run verify` passes. CI runs the same checks plus D1 integration and schema
+   parity; pull requests also run the build and browser tests in their own workflow.
 2. UI changes: attach `pnpm run ui:snap` output or a screenshot to the PR as evidence.
 3. Behavior changes update the docs that describe them (`pnpm run docs:check` keeps
    links and paths honest, not content).
@@ -87,12 +87,6 @@ data; changing product wording or pricing; changing a rule in the core beliefs.
 - Run `pnpm run check:db:drizzle-parity` and `pnpm run db:schema:generate` after changing any of them (CI checks both).
 - Do not apply or commit the baseline currently proposed by `pnpm run db:generate`; Drizzle snapshot initialization is tracked separately.
 
-<!-- BEGIN:nextjs-agent-rules -->
+## This is NOT the Next.js you know
 
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+This version has breaking changes: APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code, and heed deprecation notices. `agentRules: false` in `next.config.ts` stops `next dev` from writing its own copy of this section, with HTML comment markers, into this file.

@@ -71,6 +71,13 @@ describe('applySessionCheck', () => {
 describe('checkSessionWithRetry', () => {
   const wait = vi.fn(async () => {});
 
+  const expectSignedInOnTheThirdTry = async (getSession: Parameters<typeof checkSessionWithRetry>[0]) => {
+    await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toMatchObject({
+      kind: 'authenticated',
+    });
+    expect(getSession).toHaveBeenCalledTimes(3);
+  };
+
   it('retries an unknown answer and returns the session once the server answers', async () => {
     const answers: AuthClientResult[] = [
       failedGetSession(503),
@@ -79,10 +86,7 @@ describe('checkSessionWithRetry', () => {
     ];
     const getSession = vi.fn(async () => answers.shift());
 
-    await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toMatchObject({
-      kind: 'authenticated',
-    });
-    expect(getSession).toHaveBeenCalledTimes(3);
+    await expectSignedInOnTheThirdTry(getSession);
   });
 
   it('retries a rate-limited check and a failed request, and keeps the user signed in', async () => {
@@ -92,10 +96,7 @@ describe('checkSessionWithRetry', () => {
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce({ data: { user, session: {} }, error: null });
 
-    await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toMatchObject({
-      kind: 'authenticated',
-    });
-    expect(getSession).toHaveBeenCalledTimes(3);
+    await expectSignedInOnTheThirdTry(getSession);
   });
 
   it('reports the last failure as unknown after waiting out each retry delay', async () => {

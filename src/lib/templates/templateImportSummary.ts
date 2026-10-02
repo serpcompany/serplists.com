@@ -5,7 +5,7 @@ import type { PortableSkippedTemplate } from "@/lib/schemas/portableTemplatePack
 import { formatCount } from "@/lib/utils/pluralize";
 import type { TemplateImportFailure, TemplateImportSummary } from "@/types/checklist";
 
-const templateImportSummarySchema = z.object({
+export const templateImportSummarySchema = z.object({
   total: z.number(),
   imported: z.number(),
   failed: z.array(z.object({

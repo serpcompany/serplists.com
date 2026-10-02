@@ -1,15 +1,13 @@
 import type { JSX } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
+import { EDITOR_PANEL_HEADING_ID, EDITOR_PANEL_ID } from "@/components/template-editor/editorPanelIds";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
 import { SEOMetaEditor } from "@/components/template-editor/SEOMetaEditor";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { TemplateBasicInfo } from "@/components/template-editor/TemplateBasicInfo";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
-
-export const EDITOR_PANEL_ID = "template-editor-panel";
-export const EDITOR_PANEL_HEADING_ID = "template-editor-panel-title";
 
 interface EditorPanelsProps {
   publicOwnerSlug: string | null;

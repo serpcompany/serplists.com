@@ -1,6 +1,8 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -9,12 +11,8 @@ import {
 } from '@/components/checklist-library/discovery-utils';
 import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { normalizeTemplateEditorDetailsForSave } from '@/lib/forms/templateEditorDetailsForm';
-import { parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
+import { parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const template = (id: string, categories: string[]): ChecklistTemplate => ({
   categories,
@@ -77,9 +75,9 @@ describe('category lists at the write boundary', () => {
       { type: 'application/json' },
     );
 
-    const result = await parseTemplatesFromJSON(file);
+    const result = await parseTemplatesFromFile(file);
 
-    expect(result.templates[0].categories).toEqual(['SEO', 'Travel']);
+    expect(firstOf(result.templates).categories).toEqual(['SEO', 'Travel']);
   });
 
   it('are deduplicated by slug when the editor saves', () => {

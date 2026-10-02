@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+import { z } from "zod";
+
 import { apiRequest } from "./support/api-requests";
 import { loginAsAdmin } from "./support/sign-in";
+
+const importFailure = z.object({ code: z.unknown(), details: z.unknown() }).passthrough();
 
 const templatesArrayJson = JSON.stringify([{
   title: "Launch plan",
@@ -11,7 +15,7 @@ const templatesArrayJson = JSON.stringify([{
 test("template import API returns structured per-template failures for rejected imports", async ({ page }) => {
   await loginAsAdmin(page);
 
-  const result = await apiRequest<Record<string, unknown>>(page, "/templates/backup", {
+  const result = await apiRequest(page, "/templates/backup", importFailure, {
     method: "POST",
     body: {
       templates: [

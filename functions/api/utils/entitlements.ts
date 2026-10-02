@@ -2,14 +2,15 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { getStripeBillingConfig } from "./stripe";
+import { isPaidSubscriptionStatus } from "./stripe-subscriptions";
 
-export type Plan = "free" | "pro" | "team";
+type Plan = "free" | "pro" | "team";
 
 export type EntitlementContext =
   | { type: "user"; userId: string }
   | { type: "team"; teamId: string; userId?: string };
 
-export type EntitlementSource =
+type EntitlementSource =
   | "free"
   | "user_override"
   | "team_override"
@@ -23,10 +24,6 @@ export type Entitlements = {
     maxActiveRuns: number | null;
   };
 };
-
-function isProSubscriptionStatus(status: string): boolean {
-  return status === "active" || status === "trialing";
-}
 
 function isMissingOptionalBillingTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -62,15 +59,15 @@ function teamOverrideEntitlements(plan: string): Entitlements {
 type Db = ReturnType<typeof createDb>;
 
 async function findActiveManualOverride(db: Db, userId: string, nowSeconds: number) {
-  const { entitlement_overrides } = schema;
+  const { entitlementOverrides } = schema;
   try {
     const [override] = await db
       .select()
-      .from(entitlement_overrides)
+      .from(entitlementOverrides)
       .where(
         and(
-          eq(entitlement_overrides.user_id, userId),
-          or(isNull(entitlement_overrides.expires_at), gt(entitlement_overrides.expires_at, nowSeconds))
+          eq(entitlementOverrides.user_id, userId),
+          or(isNull(entitlementOverrides.expires_at), gt(entitlementOverrides.expires_at, nowSeconds))
         )
       )
       .limit(1);
@@ -97,16 +94,16 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     return freeEntitlements();
   }
 
-  const { stripe_subscriptions } = schema;
-  type StripeSubscriptionRow = typeof stripe_subscriptions.$inferSelect;
+  const { stripeSubscriptions } = schema;
+  type StripeSubscriptionRow = typeof stripeSubscriptions.$inferSelect;
 
   let subs: StripeSubscriptionRow[];
   try {
     subs = await db
       .select()
-      .from(stripe_subscriptions)
-      .where(and(eq(stripe_subscriptions.user_id, userId), inArray(stripe_subscriptions.price_id, stripe.proPriceIds)))
-      .orderBy(desc(stripe_subscriptions.updated_at));
+      .from(stripeSubscriptions)
+      .where(and(eq(stripeSubscriptions.user_id, userId), inArray(stripeSubscriptions.price_id, stripe.proPriceIds)))
+      .orderBy(desc(stripeSubscriptions.updated_at));
   } catch (error) {
     if (!isMissingOptionalBillingTableError(error)) {
       throw error;
@@ -115,8 +112,8 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     return freeEntitlements();
   }
 
-  const best = subs.find((s) => isProSubscriptionStatus(s.status)) ?? subs[0] ?? null;
-  const plan = best?.status && isProSubscriptionStatus(best.status) ? "pro" : "free";
+  const best = subs.find((s) => isPaidSubscriptionStatus(s.status)) ?? subs[0] ?? null;
+  const plan = best?.status && isPaidSubscriptionStatus(best.status) ? "pro" : "free";
 
   return plan === "pro"
     ? paidEntitlements("pro", "user_subscription")
@@ -129,17 +126,17 @@ export async function getEntitlementsForContext(env: Env, context: EntitlementCo
   }
 
   const db = createDb(env);
-  const { team_entitlement_overrides } = schema;
+  const { teamEntitlementOverrides } = schema;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   try {
     const [override] = await db
       .select()
-      .from(team_entitlement_overrides)
+      .from(teamEntitlementOverrides)
       .where(
         and(
-          eq(team_entitlement_overrides.team_id, context.teamId),
-          or(isNull(team_entitlement_overrides.expires_at), gt(team_entitlement_overrides.expires_at, nowSeconds))
+          eq(teamEntitlementOverrides.team_id, context.teamId),
+          or(isNull(teamEntitlementOverrides.expires_at), gt(teamEntitlementOverrides.expires_at, nowSeconds))
         )
       )
       .limit(1);

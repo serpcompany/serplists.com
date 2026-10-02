@@ -27,9 +27,9 @@ const paintedBackgroundLightness = (page: Page) =>
     if (!canvasThatReadsAnyCssColor) return null;
     canvasThatReadsAnyCssColor.fillStyle = getComputedStyle(document.body).backgroundColor;
     canvasThatReadsAnyCssColor.fillRect(0, 0, 1, 1);
-    const [red, green, blue, alpha] = canvasThatReadsAnyCssColor.getImageData(0, 0, 1, 1).data;
-    const noBackgroundYet = alpha === 0;
-    return noBackgroundYet ? null : (red + green + blue) / 3;
+    const pixel = canvasThatReadsAnyCssColor.getImageData(0, 0, 1, 1).data;
+    const noBackgroundYet = pixel[3] === 0;
+    return noBackgroundYet ? null : pixel.subarray(0, 3).reduce((sum, channel) => sum + channel, 0) / 3;
   });
 
 test('the page is dark before the app loads for a stored dark theme, and the toggle follows it once the app runs', async ({ page }) => {

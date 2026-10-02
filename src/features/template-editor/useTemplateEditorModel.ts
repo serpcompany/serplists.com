@@ -22,12 +22,12 @@ import type { ChecklistTemplate } from "@/types/checklist";
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
 type TemplateEditorModelDependencies = {
-  apiClient?: TemplateEditorApiClient;
+  apiClient?: TemplateEditorApiClient | undefined;
   saveTemplate?: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
 };
 
 type TemplateEditorModelOptions = {
-  id?: string;
+  id?: string | undefined;
 };
 
 type LoadTemplateEditorDataOptions = {
@@ -35,11 +35,11 @@ type LoadTemplateEditorDataOptions = {
 };
 
 type SaveTemplateEditorDataOptions = {
-  id?: string;
-  expectedVersion?: number;
-  storedSlug?: string;
+  id?: string | undefined;
+  expectedVersion?: number | undefined;
+  storedSlug?: string | undefined;
   values: TemplateEditorFormValues;
-  loadedIsPublic?: boolean;
+  loadedIsPublic?: boolean | undefined;
 };
 
 type SaveTemplateEditorDependencies = {
@@ -54,18 +54,18 @@ export type TemplateEditorSaveResult = SaveTemplateResult & {
 export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
-  templateSlug?: string;
-  version?: number;
-  ownerSlug?: string | null;
-  ownership?: TemplateOwnership;
+  templateSlug?: string | undefined;
+  version?: number | undefined;
+  ownerSlug?: string | null | undefined;
+  ownership?: TemplateOwnership | undefined;
 };
 
-export const buildDefaultTemplateEditorTemplate =
+const buildDefaultTemplateEditorTemplate =
   (): Partial<ChecklistTemplate> => ({});
 
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
-  slugs: { storedSlug?: string; savedSlug?: string } = {},
+  slugs: { storedSlug?: string | undefined; savedSlug?: string | undefined } = {},
   stored?: SaveTemplateResult["saved"],
 ): TemplateEditorLoadResult => {
   const normalizedForm = normalizeTemplateEditorFormForSave(values, slugs);
@@ -91,17 +91,17 @@ export const buildTemplateEditorSavedState = (
 };
 
 export const shouldNavigateToTemplatesAfterSave = (params: {
-  id?: string;
+  id?: string | undefined;
   result: SaveTemplateResult;
 }): boolean => params.result.success && !params.id;
 
 export const shouldLockTemplateEditorWhileSaving = (params: {
-  id?: string;
+  id?: string | undefined;
   isSaving: boolean;
 }): boolean => params.isSaving && !params.id;
 
 export const getTemplateSaveSuccessMessage = (params: {
-  id?: string;
+  id?: string | undefined;
   result: SaveTemplateResult;
 }): string | null => {
   if (!params.result.success) {
@@ -111,8 +111,8 @@ export const getTemplateSaveSuccessMessage = (params: {
 };
 
 export const shouldApplyTemplateEditorSaveResult = (params: {
-  requestedId?: string;
-  currentId?: string;
+  requestedId?: string | undefined;
+  currentId?: string | undefined;
   mounted: boolean;
 }): boolean => params.mounted && params.requestedId === params.currentId;
 
@@ -124,7 +124,7 @@ export type TemplateSaveFeedback = {
 };
 
 export const resolveTemplateSaveFeedback = (params: {
-  id?: string;
+  id?: string | undefined;
   result: TemplateEditorSaveResult;
 }): TemplateSaveFeedback => {
   const successMessage = getTemplateSaveSuccessMessage(params);
@@ -189,9 +189,7 @@ export const loadTemplateEditorData = async (
   }
 
   try {
-    const fetchedTemplate = (await getApiClient(dependencies).getTemplateById(
-      options.id,
-    )) as Record<string, unknown>;
+    const fetchedTemplate = await getApiClient(dependencies).getTemplateById(options.id);
     const template = mapApiTemplateToChecklistTemplate(fetchedTemplate, options.id);
     const storedSections = Array.isArray(fetchedTemplate.sections)
       ? fetchedTemplate.sections

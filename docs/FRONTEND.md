@@ -1,6 +1,8 @@
 # Frontend
 
-A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`), running on
+A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`, with
+`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride` and
+`noFallthroughCasesInSwitch`; see [quality gates](RELIABILITY.md#quality-gates)), running on
 Cloudflare Workers through OpenNext ([ARCHITECTURE.md](../ARCHITECTURE.md)). Server state
 goes through TanStack Query and UI through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)).
 Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
@@ -23,14 +25,20 @@ Enforced by `pnpm run deps:check` ([ARCHITECTURE.md](../ARCHITECTURE.md)): pages
 components never call `src/lib/api.ts` or `src/lib/api/` at runtime (put the call in a feature model
 or context), `components/ui/` stays presentational, only the route files in `src/app`
 and `src/server` import `functions/`, client code never imports `src/server`, and every
-module must be reachable from a route file in `src/app`. Remaining legacy call sites are
+module must be reachable from a route file in `src/app` or from `next.config.ts`, unused
+primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. Remaining legacy call sites are
 tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 
-Some modules export more than components, which ESLint's fast-refresh check
-(`react-refresh/only-export-components`) would warn about: route files export metadata,
-route segment config and handlers, as Next.js expects, `components/ui/` primitives export
-their variants, and contexts their hooks. The check skips them and tests
-(`FILES_THAT_EXPORT_MORE_THAN_COMPONENTS` in `eslint.config.js`).
+A TSX module in `src/` that exports a component exports nothing else. Next.js treats a
+module as a Fast Refresh boundary only when every export is a component, so an edit to a
+mixed module reloads the modules that import it and drops their state. ESLint's
+`react-refresh/only-export-components` refuses the mix in every TSX file in `src/`; the only
+other exports it allows are the ones Next.js reads from a route module (`metadata`,
+`generateMetadata`, `viewport`, route segment config). So a context's hook and its provider
+live apart (`useAuth` in `CloudflareAuthContext.tsx`, `AuthProvider` in `AuthProvider.tsx`;
+likewise `TemplatesProvider` and `WorkspaceProvider`), a primitive's variants have their
+own module (`button-variants.ts`, `navigation-menu-trigger-style.ts`), and shared text or
+ids sit beside the component in a `.ts` file.
 
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
@@ -44,7 +52,7 @@ same HTML on the server and in the browser's first render, or hydration fails: n
 `useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
 visitor's data in module-level state, which the server would share with the next visitor
 (so `Providers` creates the QueryClient in its state, one per tab, with the defaults
-`createQueryClient` in `src/app/providers.tsx` sets). A date in the viewer's time zone
+`createQueryClient` in `src/lib/queryClient.ts` sets). A date in the viewer's time zone
 (`formatLocalDate`) differs between the two as well, so only data the browser loads after
 mounting shows one: the public template page's "Updated" date can, since the page loads its
 template in an effect and the server never renders it.
@@ -110,11 +118,12 @@ and agents (MCP) call them directly and do not follow redirects.
 
 - Link with the builders in `src/lib/routes.ts`, which return canonical paths, and never write
   a page path by hand: no link may depend on a redirect. `tests/unit/lib/canonicalUrls.test.ts`
-  checks every builder, the sitemap entries and the links the API writes, and scans `src` for a
-  hard-coded link that is not in canonical form or that redirects.
+  checks every builder, the sitemap entries and the links the API writes, and ESLint refuses a
+  hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
+  `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.ts`).
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
-  route helpers (`isPathWithin`, `resolveRouteShell`, `resolveConsoleSection`), which accept
-  either form, not with `===` or `startsWith` on a literal.
+  route helpers (`isPathWithin`, `resolveRouteShell`), which accept either form, not with
+  `===` or `startsWith` on a literal.
 - `next.config.ts` sets `trailingSlash: true`, so the URLs Next.js writes (canonical and Open
   Graph URLs) get their slash, and `skipTrailingSlashRedirect: true`: Next.js's own
   trailing-slash redirect would move the API too, and OpenNext skips its redirect for files.
@@ -218,8 +227,8 @@ write: [client data](design-docs/client-data.md).
 
 - `src/lib/api/request.ts` handles the base URL, JSON, and structured errors, and sends the
   Better Auth session cookie with `credentials: 'include'`. It never stores tokens.
-  Responses are not yet parsed with Zod (TD-2 in the
-  [tech debt tracker](exec-plans/tech-debt-tracker.md)).
+  Each call passes the Zod schema of what its endpoint answers and returns the schema's
+  output ([client data](design-docs/client-data.md#the-api-client)).
 - Contexts and feature models own server state with React Query. Query keys include
   the user id and the active Ownership Context so Personal and Organization data
   never mix. Switching context only marks the Template and Run lists stale
@@ -232,6 +241,9 @@ write: [client data](design-docs/client-data.md).
   treat a failed status as unknown, never Free (`getBillingPlanStatus`).
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
+  A query that needs an id it may not have yet (the active Organization, an invite token)
+  passes `skipToken` as its `queryFn` until the id is there, so the function reads the
+  narrowed id instead of asserting it.
   The archive lists load only on `/dashboard/archive/`; deleting a Template or Run
   marks them stale through `src/contexts/templateListCache.ts`. Deleting a Template also
   removes it from the cached catalog and leaves the catalog fresh instead of stale: the
@@ -263,7 +275,8 @@ write: [client data](design-docs/client-data.md).
   catalog is the same for everyone, so it waits only for the session; the workspace
   and run lists also wait for the active context (`src/contexts/templateListObservers.ts`).
   A failed teams request must not hide the public library. Only pages that display the
-  catalog may load it; `tests/unit/contexts/catalogConsumers.test.ts` lists them, and
+  catalog may load it; an ESLint convention allows `catalog: true` only in
+  `useTemplateLibrary()` and the dashboard, and
   data built on the server (such as the import/export pack) never needs it on the
   client. In Personal, `allTemplates` merges the catalog with
   the user's own list; once that list has loaded it is the source of truth for the
@@ -300,9 +313,11 @@ write: [client data](design-docs/client-data.md).
   `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
   404 or "no templates" message only after the catalog loaded. That includes category
   lists and counts (`/categories/`), which would otherwise count only the bundled
-  templates; `tests/unit/contexts/catalogConsumers.test.ts` checks every page that uses
-  `useTemplateLibrary`. A failed catalog request stays an error; it is never cached as
-  an empty catalog.
+  templates. Each page that uses `useTemplateLibrary` has tests of both states
+  (`tests/unit/views/Categories.dom.test.tsx`,
+  `tests/unit/views/ChecklistLibrary.dom.test.tsx`), and an ESLint convention lets only those
+  pages import the hook, so a new one is added with its tests.
+  A failed catalog request stays an error; it is never cached as an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
   blocks site data, even reading `window.localStorage` throws, and one unguarded read in
@@ -344,12 +359,17 @@ write: [client data](design-docs/client-data.md).
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
-  after the user has left. `tests/unit/views/navigateAfterAwait.test.ts` scans `src/`
-  and fails when an async handler navigates, signs in or starts checkout after an
-  await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
-  the visit has ended, a callback given to one of the visit helpers, or a call that is
-  passed the visit), unless it is listed as ungated on purpose. It also fails when a
-  file uses a sign-in or checkout helper without calling `usePageVisit`.
+  after the user has left. ESLint's `serplists/navigate-while-visit-is-current`
+  (`scripts/eslint-rules/navigate-while-visit-is-current.ts`) refuses code in `src/` that
+  navigates, signs in or starts checkout after an await in an async handler, or in a
+  promise's `.then()`, `.catch()` or `.finally()` callback, outside a visit gate (an
+  `if (visit.isCurrent())` branch, an early return once the visit has ended, a callback given
+  to one of the visit helpers, or a call that is passed the visit). In an effect, a flag the
+  effect's cleanup sets to `true` gates its callbacks the same way (`if (isCancelled)
+  return;`). A handler that must move the
+  user on wherever they went, because the account changed (a sign-in, a sign-up, a password
+  reset), says so by moving inside `moveOnAfterAnAccountChange()`
+  (`src/lib/navigation/moveOnAfterAnAccountChange.ts`).
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with
@@ -362,7 +382,11 @@ write: [client data](design-docs/client-data.md).
 - Query functions reject when a request fails; never catch and return `[]`, which
   caches an empty list as fresh data and hides the error. Template and run list
   fetchers (`src/contexts/templateListFetchers.ts`) parse rows one at a time and skip a
-  malformed row. `useTemplateLists()` returns `templatesError` and `runsError`, set only
+  malformed row. They, a profile's public Templates (`loadUserProfile`) and a category
+  page's metadata turn an API Template into the app's with one mapper, `mapApiTemplate`
+  (`src/lib/templates/apiTemplateMapper.ts`), so a card shows the same type, description,
+  categories and visibility wherever it is listed; a missing `is_public` reads as private,
+  as the API's own public filters treat it. `useTemplateLists()` returns `templatesError` and `runsError`, set only
   while the failed list has no data (a failed refetch keeps the last good list). A page
   shows `ListLoadErrorState` (Retry, or Sign in on a `401`) whenever one is set. Never
   decide by the length of a merged list: in Personal the cached catalog can still hold
@@ -371,7 +395,9 @@ write: [client data](design-docs/client-data.md).
   `formatMonthYear`, `formatLocalDate` or `formatLocalDateTime`, all in
   `src/lib/utils/dbTimestamp.ts`, not `new Date(value)`. Columns that default to D1's
   `CURRENT_TIMESTAMP` (such as `users.created_at`) hold UTC as `YYYY-MM-DD HH:MM:SS`,
-  which Safari cannot parse and other browsers read as local time. The formatters
+  which Safari cannot parse and other browsers read as local time. An ISO value with a
+  `T` and no zone is UTC too, and the recent-first sorts
+  (`src/lib/templates/templateRecency.ts`) read times through the same parser. The formatters
   return nothing (`''` or `null`) for a value they cannot read; render nothing then,
   never "Invalid Date".
 - A button that sends the browser to another site (Stripe Checkout or the Customer
@@ -381,8 +407,9 @@ write: [client data](design-docs/client-data.md).
   back/forward cache with its React state intact, so the hook clears the flag on that
   restore, and Billing, Pricing and the template editor refetch billing status too.
   Every checkout entry point uses it, including the Start a Run dialog on My Templates
-  and the editor's Upgrade to Pro; `tests/unit/components/billing-redirect-pending.test.ts`
-  scans `src/` for pending flags next to a checkout or portal call.
+  and the editor's Upgrade to Pro, and ESLint refuses a checkout, portal or redirect flag
+  (`isStartingCheckout` and the like) kept in `useState`. The Billing, Pricing and editor tests
+  restore a page from the back/forward cache and check that it refetches billing status.
 
 ## Template editor forms
 
@@ -407,8 +434,10 @@ How the editor's models load, save, keep drafts and decide who may edit:
   details are dropped, and every content block in the template gets its own id (uploads
   find their block by id, so a repeated id, even `1` beside `"1"`, gets a new one). The editor builds the form from the
   stored sections the API returns, not the display mapper's copy, which drops what no
-  page renders. A loaded template can always be saved without losing content. Save
-  validation errors inside the outline name the section, task, and content block.
+  page renders. A loaded template can always be saved without losing content. Before a
+  save the editor checks only the details' limits (`validateTemplateEditorFormForSave`):
+  the outline holds only values its schema accepts, since stored content is coerced on
+  load and a restored draft or a Clipy draft is parsed with the same schema.
 - An image, video, or file block's `fileName` and `fileSize` describe the file its
   value points to: an upload, or a linked file an author named (`uploadType: "url"`).
   Typing in the URL field writes the value with `withMediaValue`
@@ -470,6 +499,14 @@ How the editor's models load, save, keep drafts and decide who may edit:
   `getSubItemDisplayTitle` (`src/lib/utils/checklistSections.ts`), which fall back to
   "Section N" and "Sub-task N"; a blank sub-task is labeled, never hidden, because
   it still counts toward progress.
+- The display mapper (`normalizeSections` in `src/lib/utils/checklistSections.ts`) reads a
+  content block's id as text, as the editor and the portable export do: a numeric id
+  becomes a string, and an id of any other type is left out. Runs and pages then hold the
+  id their type says, and a run saved from the page stores the text id.
+- It leaves out a Sub-task id that is not text, a legacy numeric one included. Template
+  reads, run reconciliation and the shared-run merge count such an id as missing and pair
+  the Sub-task by its position, so a legacy run saved from the run page or a share link
+  keeps its Sub-task progress through later Template edits.
 - Plan limits (`useTemplateEditorAccess`): the new-template editor warns up front
   when billing status shows the context's template limit is reached, and a save
   refused as a plan gate or for an ended session shows a notice with its action
@@ -493,10 +530,14 @@ Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`)
 only module that imports `react-markdown`. It disables raw HTML and passes links through
 `safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
 
-User images (uploads, and images linked from any host, of any size) render as they are with
-`<img>`, not `next/image`, which would need an image loader for every host. ESLint's
-`@next/next/no-img-element` is off only for the components that show them
-(`USER_CONTENT_IMAGES` in `eslint.config.js`).
+User images (uploads from R2 under any key, and images linked from any host) render with
+`UserContentImage` (`src/components/shared/UserContentImage.tsx`), the one module that renders
+`<img>`. They are served as stored: their size is unknown, so `next/image` would need invented
+dimensions or a fixed box, and its optimizer would need an image binding on Workers and a
+`remotePatterns` entry for every host. The app's own images use `next/image`. A
+`serplists/restricted-code` convention refuses `<img>` anywhere else in `src/`, so Next's
+warn-only `@next/next/no-img-element` is off: the convention errors where it warned
+([repository checks](RELIABILITY.md#repository-checks)).
 
 ## Page titles and meta tags
 
@@ -512,8 +553,10 @@ the page says otherwise. Next.js merges a page's metadata into the layout's shal
 page's `openGraph` or `twitter` replaces the layout's whole object: `buildPageMetadata` names
 the shared image in both again. The route also renders the same text as JSON-LD (`JsonLd` and
 `PageJsonLd` in `src/components/seo/`); a page whose text waits for a lookup gives
-`PageJsonLd` the lookup still in flight, inside `<Suspense>`, so the rest of the page
-streams without waiting for it. A build that is not production also sends
+`PageJsonLd` the lookup still in flight, inside `<Suspense>` (`WithPageJsonLd`), so the rest
+of the page streams without waiting for it. A route whose metadata and JSON-LD come from one
+lookup of its params is built by `seoPage(loadSeo, View)` (`src/components/seo/seoPage.tsx`),
+which gives the route both its `generateMetadata` and its page. A build that is not production also sends
 `X-Robots-Tag: noindex, nofollow`, which wins over the tag (below).
 
 ### Production and other environments
@@ -536,7 +579,7 @@ local build or `next dev`):
 
 Share pages are noindex on every environment, in their metadata and in the `X-Robots-Tag`
 that `next.config.ts` sends for `/share/`. `tests/unit/seo/siteEnvIndexing.test.ts` checks
-both sides, and `scripts/check-site-standards.mjs` checks a running site.
+both sides, and `scripts/check-site-standards.ts` checks a running site.
 
 - Static pages export `metadata` (`/templates/`, `/categories/`, the 404 page).
 - Dynamic public pages look their subject up in `generateMetadata`, the way the page itself

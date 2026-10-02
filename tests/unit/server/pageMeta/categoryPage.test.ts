@@ -1,16 +1,12 @@
+import { createEdgeCache, SECRET_THE_API_ROUTER_VALIDATES, serveTheSiteFrom, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateMetadata } from '@/app/(site)/categories/[categorySlug]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { loadCategoryPageSeo } from '@/server/pageMeta/categoryPage';
-import { SECRET_THE_API_ROUTER_VALIDATES, createEdgeCache, unreachableD1, serverContext } from '../../../support/nextServerContext';
-import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
-
-let d1: MigratedSqliteD1;
+let d1: SqliteD1;
 
 const addPublicTemplate = (id: string, categories: string[], ownerUsername: string | null = 'alice') => {
   d1.run(
@@ -34,10 +30,8 @@ const addPublicTemplate = (id: string, categories: string[], ownerUsername: stri
 const params = (categorySlug: string) => ({ params: Promise.resolve({ categorySlug }) });
 
 beforeEach(() => {
-  d1 = new MigratedSqliteD1();
-  serverContext.env = { DB: d1.binding, BETTER_AUTH_SECRET: SECRET_THE_API_ROUTER_VALIDATES };
-  serverContext.host = 'serplists.com';
-  vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  d1 = new SqliteD1();
+  serveTheSiteFrom(d1);
 });
 
 afterEach(() => {

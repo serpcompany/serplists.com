@@ -1,0 +1,143 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import { filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib';
+import { elementAt } from '../../support/elements';
+
+const repoRoot = process.cwd();
+const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
+const JAVASCRIPT_FILE = /\.(js|jsx|mjs|cjs)$/;
+const DECLARATION_OF_A_JAVASCRIPT_MODULE = /\.d\.(mts|cts)$/;
+const DECLARATION_FILE = /\.d\.(ts|mts|cts)$/;
+const FOLDERS_OF_AUTHORED_CODE = ['src/', 'functions/', 'scripts/', 'db/', 'tests/'];
+const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
+const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
+  'noImplicitOverride',
+  'noFallthroughCasesInSwitch',
+  'exactOptionalPropertyTypes',
+  'noUncheckedIndexedAccess',
+  'noPropertyAccessFromIndexSignature',
+];
+
+const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
+
+const typecheckScript = z
+  .object({ scripts: z.object({ typecheck: z.string() }) })
+  .parse(JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))).scripts.typecheck;
+
+const tsconfigsTypecheckRuns = typecheckScript
+  .split('&&')
+  .map((command) => command.trim().split(/\s+/))
+  .filter(([tool]) => tool === 'tsc')
+  .map((args) => {
+    const projectFlag = args.findIndex((arg) => arg === '-p' || arg === '--project');
+    return path.posix.normalize(projectFlag === -1 ? 'tsconfig.json' : elementAt(args, projectFlag + 1));
+  });
+
+const parsedTsconfig = (tsconfig: string): ts.ParsedCommandLine => {
+  const parsed = ts.getParsedCommandLineOfConfigFile(path.join(repoRoot, tsconfig), {}, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+      throw new Error(`${tsconfig}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`);
+    },
+  });
+  if (!parsed) throw new Error(`TypeScript could not read ${tsconfig}`);
+  return parsed;
+};
+
+const filesTheTsconfigIncludes = (tsconfig: string): string[] =>
+  parsedTsconfig(tsconfig).fileNames.map((file) => path.relative(repoRoot, file).split(path.sep).join('/'));
+
+const configsOnlyJavaScriptLoads = repositoryFiles.filter((file) => !file.includes('/') && JAVASCRIPT_FILE.test(file));
+
+const modulesImportedBy = (file: string): string[] =>
+  ts
+    .preProcessFile(readFileSync(path.join(repoRoot, file), 'utf8'), true, true)
+    .importedFiles.map(({ fileName }) => path.posix.normalize(path.posix.join(path.posix.dirname(file), fileName)));
+
+const importedByAConfigOnlyJavaScriptLoads = new Set(configsOnlyJavaScriptLoads.flatMap(modulesImportedBy));
+const loadedOnlyAsJavaScript = (file: string) =>
+  importedByAConfigOnlyJavaScriptLoads.has(file) || importedByAConfigOnlyJavaScriptLoads.has(file.replace(JAVASCRIPT_FILE, ''));
+
+describe('pnpm run typecheck', () => {
+  it('runs every tsconfig the repository holds', () => {
+    expect(
+      repositoryFiles.filter((file) => TSCONFIG_FILE.test(file) && !tsconfigsTypecheckRuns.includes(file)),
+      'pnpm run typecheck never runs these tsconfigs, so no file only they include is type-checked. Add ' +
+        '"tsc -p <tsconfig>" to the typecheck script in package.json, or delete the tsconfig.',
+    ).toEqual([]);
+  });
+
+  it("holds every tsconfig it runs, the tests' included, to the five settings stricter than strict", () => {
+    expect(
+      tsconfigsTypecheckRuns.flatMap((tsconfig) => {
+        const { options } = parsedTsconfig(tsconfig);
+        return SETTINGS_STRICTER_THAN_STRICT.filter((setting) => options[setting] !== true).map(
+          (setting) => `${tsconfig}: ${setting}`,
+        );
+      }),
+      'These tsconfigs turn off a setting every project keeps on. Set it back to true, or remove the override so the ' +
+        'project inherits it, and fix the errors it reports: narrow the value, give it a default that is right for ' +
+        'that case, or throw an error that names what is missing; type a value read by known keys with the shape it ' +
+        'has and index only a real dictionary; never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
+    ).toEqual([]);
+  });
+
+  it('takes no JavaScript into a project untyped', () => {
+    expect(
+      tsconfigsTypecheckRuns.filter((tsconfig) => parsedTsconfig(tsconfig).options.allowJs === true),
+      'These tsconfigs set allowJs, so a JavaScript module joins the program with the types TypeScript infers from ' +
+        'its code. Set "allowJs": false (Next.js writes its suggested true only when the key is missing) and give the ' +
+        'module a .d.mts beside it, or convert it to TypeScript.',
+    ).toEqual([]);
+  });
+
+  it('keeps every script TypeScript, unless a config only JavaScript can load imports it', () => {
+    expect(
+      repositoryFiles.filter(
+        (file) =>
+          file.startsWith('scripts/') &&
+          (DECLARATION_OF_A_JAVASCRIPT_MODULE.test(file) || (JAVASCRIPT_FILE.test(file) && !loadedOnlyAsJavaScript(file))),
+      ),
+      'These files under scripts/ are JavaScript, or a declaration file written for a JavaScript module, so ' +
+        'pnpm run typecheck never checks their code. Write them in TypeScript: every script runs with tsx\'s loader ' +
+        '(node --import tsx), and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. Only a module ' +
+        `that a root config read without a TypeScript loader imports (${configsOnlyJavaScriptLoads.join(', ')}) may be ` +
+        'JavaScript (docs/design-docs/development-environment.md#writing-scripts).',
+    ).toEqual([]);
+  });
+
+  it('type-checks the declaration files the repository writes with skipLibCheck off', () => {
+    const checkedDeclarations = new Set(
+      tsconfigsTypecheckRuns
+        .filter((tsconfig) => parsedTsconfig(tsconfig).options.skipLibCheck !== true)
+        .flatMap(filesTheTsconfigIncludes),
+    );
+
+    expect(
+      repositoryFiles.filter(
+        (file) =>
+          DECLARATION_FILE.test(file) &&
+          FOLDERS_OF_AUTHORED_CODE.some((folder) => file.startsWith(folder)) &&
+          !checkedDeclarations.has(file),
+      ),
+      'Every other project sets skipLibCheck, which skips declaration files, so no tsconfig pnpm run typecheck runs ' +
+        'checks these. Add each to the "include" of tsconfig.declarations.json, which turns skipLibCheck off.',
+    ).toEqual([]);
+  });
+
+  it('type-checks every TypeScript file the repository holds', () => {
+    const typeChecked = new Set(tsconfigsTypecheckRuns.flatMap(filesTheTsconfigIncludes));
+
+    expect(
+      repositoryFiles.filter((file) => TYPESCRIPT_FILE.test(file) && !typeChecked.has(file)),
+      'No tsconfig that pnpm run typecheck runs includes these files, so their type errors go unseen. Add each to ' +
+        'the "include" of the tsconfig for its folder: tsconfig.json for src/, tsconfig.node.json for scripts/ and ' +
+        'the root config files, functions/tsconfig.json for functions/ and db/, tests/tsconfig.json for tests/. ' +
+        'A .ts file next to a .tsx file of the same name keeps the .tsx one out of every include: rename one of them.',
+    ).toEqual([]);
+  });
+});

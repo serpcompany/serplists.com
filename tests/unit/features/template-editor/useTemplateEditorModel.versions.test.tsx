@@ -1,6 +1,8 @@
+import '../../../support/templateEditorModelWithNoTemplates';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf, sectionAt, taskAt } from '../../../support/elements';
 
 import {
   buildTemplateEditorSavedState,
@@ -11,34 +13,20 @@ import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import type { TemplateSavePayload } from '@/types/checklist';
 
-vi.mock('@/contexts/TemplatesContext', () => {
-  const useTemplates = () => ({
-    getTemplate: vi.fn(() => undefined),
-  });
-  return { useTemplates, useTemplateLists: useTemplates };
-});
-
-vi.mock('@/hooks/useTemplateSave', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/hooks/useTemplateSave')>()),
-  useTemplateSave: () => ({
-    isSaving: false,
-    saveTemplate: vi.fn(),
-  }),
-}));
-
 type EditorModel = ReturnType<typeof useTemplateEditorModel>;
 
 function captureModel(
   id: string,
-  saveTemplate: NonNullable<Parameters<typeof useTemplateEditorModel>[1]>['saveTemplate'],
+  saveTemplate: NonNullable<NonNullable<Parameters<typeof useTemplateEditorModel>[1]>['saveTemplate']>,
 ): EditorModel {
   let captured: EditorModel | undefined;
-  function Harness(): JSX.Element {
+  function Harness(): React.JSX.Element {
     captured = useTemplateEditorModel({ id }, { saveTemplate });
     return <span />;
   }
   renderToStaticMarkup(<Harness />);
-  return captured!;
+  assert.exists(captured);
+  return captured;
 }
 
 describe('useTemplateEditorModel versions', () => {
@@ -102,12 +90,13 @@ describe('useTemplateEditorModel saved values', () => {
     });
 
     const pending = model.save(values);
-    values.sections[0].items[0].description = 'Typed while saving';
+    taskAt(values, 0, 0).description = 'Typed while saving';
     resolveSave({ success: true, errors: [], version: 2 });
     const result = await pending;
 
-    expect(result.savedValues?.sections[0].items[0].description).toBe('Sent text');
-    expect(result.savedValues?.title).toBe('Edited');
+    assert.exists(result.savedValues);
+    expect(taskAt(result.savedValues, 0, 0).description).toBe('Sent text');
+    expect(result.savedValues.title).toBe('Edited');
   });
 });
 
@@ -145,16 +134,17 @@ describe('useTemplateEditorModel saved values after defaults', () => {
       vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
       const first = await model.save(values);
       expect(first.success).toBe(true);
-      expect(first.savedValues?.title).toBe('Untitled Template');
-      expect(first.savedValues?.sections[1].items.map((item) => [item.id, item.title])).toEqual(
-        sent[0].sections[1].items.map((item) => [item.id, item.title]),
+      assert.exists(first.savedValues);
+      expect(first.savedValues.title).toBe('Untitled Template');
+      expect(sectionAt(first.savedValues, 1).items.map((item) => [item.id, item.title])).toEqual(
+        sectionAt(firstOf(sent), 1).items.map((item) => [item.id, item.title]),
       );
 
       vi.setSystemTime(new Date('2026-09-28T10:05:00.000Z'));
-      await model.save(first.savedValues!);
+      await model.save(first.savedValues);
       const itemIds = (payload: TemplateSavePayload) =>
         payload.sections.map((section) => section.items.map((item) => item.id));
-      expect(itemIds(sent[1])).toEqual(itemIds(sent[0]));
+      expect(itemIds(elementAt(sent, 1))).toEqual(itemIds(firstOf(sent)));
     } finally {
       vi.useRealTimers();
     }

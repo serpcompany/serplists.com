@@ -113,7 +113,7 @@ async function respondToRequest(context: { request: Request; env: Env }, request
   const requestHeaders = new Headers(context.request.headers);
   requestHeaders.set('X-Request-Id', requestId);
   requestHeaders.delete('X-Forwarded-Host');
-  const request = new Request(context.request, { headers: requestHeaders });
+  let request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
   const logPath = sanitizeLogPath(path);
@@ -158,11 +158,12 @@ async function respondToRequest(context: { request: Request; env: Env }, request
       return finalize(response);
     }
 
-    const bodyRejection = await checkRequestBodyLimit(request, path);
-    if (bodyRejection) {
-      response = errorResponse(bodyRejection.error, bodyRejection.status);
+    const bodyCheck = await checkRequestBodyLimit(request, path);
+    if ('rejection' in bodyCheck) {
+      response = errorResponse(bodyCheck.rejection.error, bodyCheck.rejection.status);
       return finalize(response);
     }
+    request = bodyCheck.request;
 
     if (rateLimitIp) {
       const limitParams = { method: request.method, path, ip: rateLimitIp, isLocal: isLocalRequest(url) };

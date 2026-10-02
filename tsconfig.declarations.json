@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true
+  },
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.d.mts",
+    "src/**/*.d.cts",
+    "functions/**/*.d.ts",
+    "functions/**/*.d.mts",
+    "functions/**/*.d.cts",
+    "scripts/**/*.d.ts",
+    "scripts/**/*.d.mts",
+    "scripts/**/*.d.cts",
+    "db/**/*.d.ts",
+    "db/**/*.d.mts",
+    "db/**/*.d.cts",
+    "tests/**/*.d.ts",
+    "tests/**/*.d.mts",
+    "tests/**/*.d.cts"
+  ]
+}

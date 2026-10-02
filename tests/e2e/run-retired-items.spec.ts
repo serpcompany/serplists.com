@@ -1,34 +1,30 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJsonAt as api, bodyNotRead } from './support/api-requests';
+import { createdRunSchema, savedTemplateSchema, templateVersion } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
-async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return apiJson<T>(page, path, { method, body });
-}
-
 async function replaceTemplateSectionsAtItsVersion(page: Page, templateId: string, sections: unknown[]) {
-  const { version } = await api<{ version: number }>(page, `/templates/${templateId}`, 'GET');
-  await api(page, `/templates/${templateId}`, 'PUT', { sections, expected_version: version });
+  const { version } = await api(page, `/templates/${templateId}`, 'GET', templateVersion);
+  await api(page, `/templates/${templateId}`, 'PUT', bodyNotRead, { sections, expected_version: version });
 }
 
 test('notes on a task removed from the Template stay visible on the Run', async ({ page }) => {
   await loginAsAdmin(page);
   const suffix = Date.now();
-  const sections = [{
+  const copyTask = { id: `retired-copy-${suffix}`, title: 'Write copy' };
+  const section = {
     id: `retired-${suffix}`,
     title: 'Launch',
-    items: [
-      { id: `retired-dns-${suffix}`, title: 'Check DNS' },
-      { id: `retired-copy-${suffix}`, title: 'Write copy' },
-    ],
-  }];
-  const template = await api<{ id: string }>(page, '/templates', 'POST', {
+    items: [{ id: `retired-dns-${suffix}`, title: 'Check DNS' }, copyTask],
+  };
+  const sections = [section];
+  const template = await api(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Retired work QA ${suffix}`,
     sections,
     is_public: false,
   });
-  const run = await api<{ id: string }>(page, '/checklists', 'POST', { template_id: template.id, title: `Retired run ${suffix}` });
+  const run = await api(page, '/checklists', 'POST', createdRunSchema, { template_id: template.id, title: `Retired run ${suffix}` });
 
   await page.goto(`/dashboard/runs/${run.id}/`);
   await expect(page.getByRole('heading', { name: 'Check DNS' })).toBeVisible();
@@ -38,7 +34,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Write copy' })).toBeVisible();
 
-  await replaceTemplateSectionsAtItsVersion(page, template.id, [{ ...sections[0], items: [sections[0].items[1]] }]);
+  await replaceTemplateSectionsAtItsVersion(page, template.id, [{ ...section, items: [copyTask] }]);
 
   await page.reload();
   const headerTaskCount = page.getByText('0 of 1 task finished').first();
@@ -50,6 +46,6 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   await expect(retired.getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByText('Updated from Template')).toBeVisible();
 
-  await api(page, `/checklists/${run.id}`, 'DELETE');
-  await api(page, `/templates/${template.id}`, 'DELETE');
+  await api(page, `/checklists/${run.id}`, 'DELETE', bodyNotRead);
+  await api(page, `/templates/${template.id}`, 'DELETE', bodyNotRead);
 });

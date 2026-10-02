@@ -18,5 +18,5 @@ export const TEMPLATE_UPLOAD_MAX_BYTES = Math.max(
 );
 
 export function formatUploadLimit(bytes: number): string {
-  return `${Math.round(bytes / MB)}MB`;
+  return `${Math.floor(bytes / MB)}MB`;
 }

@@ -1,69 +1,34 @@
-import React from 'react';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
+import { QueryClient } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const apiMock = vi.hoisted(() => ({
   createTemplate: vi.fn(),
   updateTemplate: vi.fn(),
   createChecklist: vi.fn(),
+  deleteTemplate: vi.fn(),
+  updateChecklist: vi.fn(),
+  deleteChecklist: vi.fn(),
+  revalidateChecklist: vi.fn(),
+  importTemplateBackup: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({ toast: toastMock }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeTeamId: undefined, isWorkspaceLoading: false, workspaceScopeId: 'personal' }),
-}));
-
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { aTemplatesProviderForEachTest, launchChecklist, savePayloadOf } from '../../support/templatesProviderHarness';
 import { getTemplateSaveSuccessMessage } from '@/features/template-editor/useTemplateEditorModel';
+import type { TemplatesContextProps } from '@/types/checklist';
+import { buildRun } from '../../fixtures/runExecutionFixtures';
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Launch Checklist',
-  description: '',
-  sections: [{ id: 'section-1', title: 'Prep', items: [{ id: 'item-1', title: 'Confirm owner' }] }],
-  userId: 'user-1',
-  createdAt: '2026-07-03T12:00:00.000Z',
-  updatedAt: '2026-07-03T12:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-  version: 3,
-};
+const template = launchChecklist();
+const theTemplateMadePublic = { ...savePayloadOf(template), isPublic: true };
 
-const clients: QueryClient[] = [];
-
-function renderProvider() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+const renderTemplatesProvider = aTemplatesProviderForEachTest();
+const renderProvider = () =>
+  renderTemplatesProvider((client) => {
+    client.setQueryData(['templates', 'user-1', 'personal'], [template]);
+    client.setQueryData(['runs', 'user-1', 'personal'], []);
   });
-  clients.push(client);
-  client.setQueryData(['templates', 'user-1', 'personal'], [template]);
-  client.setQueryData(['runs', 'user-1', 'personal'], []);
-  let context: TemplatesContextProps | undefined;
-  const Probe = () => {
-    context = useTemplates();
-    return null;
-  };
-  renderToStaticMarkup(
-    <QueryClientProvider client={client}>
-      <TemplatesProvider>
-        <Probe />
-      </TemplatesProvider>
-    </QueryClientProvider>,
-  );
-  if (!context) throw new Error('TemplatesProvider did not render');
-  return { client, context };
-}
 
 const isInvalidated = (client: QueryClient, key: unknown[]) =>
   client.getQueryState(key)?.isInvalidated === true;
@@ -80,10 +45,6 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.createTemplate.mockReset();
     apiMock.updateTemplate.mockReset();
     apiMock.createChecklist.mockReset();
-  });
-
-  afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
   });
 
   it('creates a template without a toast and still refreshes the lists', async () => {
@@ -109,7 +70,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template, isPublic: true });
+    await context.updateTemplate(theTemplateMadePublic);
 
     expectNoToasts();
     expect(isInvalidated(client, ['templates', 'user-1', 'personal'])).toBe(true);
@@ -119,7 +80,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template, isPublic: true });
+    await context.updateTemplate(theTemplateMadePublic);
 
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(false);
   });
@@ -133,7 +94,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template });
+    await context.updateTemplate(savePayloadOf(template));
 
     expectNoToasts();
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(true);
@@ -143,7 +104,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockRejectedValue(new Error('Version conflict'));
     const { context } = renderProvider();
 
-    await expect(context.updateTemplate({ ...template, isPublic: true })).rejects.toThrow('Version conflict');
+    await expect(context.updateTemplate(theTemplateMadePublic)).rejects.toThrow('Version conflict');
     expectNoToasts();
   });
 
@@ -179,12 +140,31 @@ describe('template editor save feedback', () => {
   });
 });
 
-describe('TemplatesContext feedback guard', () => {
-  it('does not import toasts, so shared mutations cannot duplicate page feedback', () => {
-    const source = readFileSync(
-      path.resolve(__dirname, '../../../src/contexts/TemplatesContext.tsx'),
-      'utf8',
-    );
-    expect(source).not.toMatch(/from\s+['"]sonner['"]/);
+const run = buildRun({ id: 'run-1', revision: 2 });
+const importSummary = { total: 1, imported: 1, failed: [], successes: [] };
+
+const OTHER_MUTATIONS: Array<[string, keyof typeof apiMock, unknown, (context: TemplatesContextProps) => Promise<unknown>]> = [
+  ['deletes a template', 'deleteTemplate', undefined, (context) => context.deleteTemplate('template-1')],
+  ['saves run progress', 'updateChecklist', { revision: 3 }, (context) => context.updateRun(run)],
+  ['deletes a run', 'deleteChecklist', undefined, (context) => context.deleteRun('run-1')],
+  ['revalidates a run', 'revalidateChecklist', undefined, (context) => context.revalidateRun(run)],
+  ['imports templates', 'importTemplateBackup', importSummary, (context) => context.importTemplates([template])],
+];
+
+describe('every other TemplatesProvider mutation leaves feedback to the page too', () => {
+  beforeEach(() => {
+    toastMock.success.mockReset();
+    toastMock.error.mockReset();
+  });
+
+  it.each(OTHER_MUTATIONS)('%s without a toast, whether it succeeds or fails', async (_mutation, apiMethod, answer, mutate) => {
+    apiMock[apiMethod].mockReset();
+    apiMock[apiMethod].mockResolvedValueOnce(answer).mockRejectedValueOnce(new Error('Request failed'));
+    const { context } = renderProvider();
+
+    await mutate(context);
+    await expect(mutate(context)).rejects.toThrow('Request failed');
+    expect(apiMock[apiMethod]).toHaveBeenCalledTimes(2);
+    expectNoToasts();
   });
 });

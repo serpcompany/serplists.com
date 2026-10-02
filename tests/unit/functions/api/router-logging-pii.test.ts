@@ -1,25 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, sendToAFreshApiWorker } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const TEMPLATES_MODULE = '../../../../functions/api/handlers/templates';
 const IP = '203.0.113.5';
 const FORWARDED_IP = '198.51.100.7';
 
-function buildEnv(overrides?: Record<string, unknown>) {
-  return {
+function buildEnv(overrides: Partial<Env> = {}) {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
-  } as any;
+  });
 }
 
 describe('API router logs no personal data', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let lines: string[];
   const handleTemplates = vi.fn(async () => Response.json({ ok: true }));
 
-  async function send(request: Request, env = buildEnv()) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
-    return apiWorker.fetch(request, env);
-  }
+  const send = (request: Request, env = buildEnv()) => sendToAFreshApiWorker(request, env);
 
   beforeEach(() => {
     handleTemplates.mockReset().mockImplementation(async () => Response.json({ ok: true }));
@@ -37,7 +37,7 @@ describe('API router logs no personal data', { timeout: FRESH_ROUTER_IMPORT_TIME
     expect(lines.length).toBeGreaterThan(0);
     for (const value of values) expect(lines.join('\n')).not.toContain(value);
     for (const line of lines) {
-      if (line.startsWith('{')) expect(JSON.parse(line)).not.toHaveProperty('ip');
+      if (line.startsWith('{')) expect(jsonRecordIn(line)).not.toHaveProperty('ip');
     }
   }
 

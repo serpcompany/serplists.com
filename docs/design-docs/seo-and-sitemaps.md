@@ -75,8 +75,8 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   Each family's revision also follows the catalog's `implementationLastmod`, the newest
   commit to the code that shapes sitemap output (`SITEMAP_IMPLEMENTATION_SOURCES` in
   `scripts/lib/sitemapLastmod.ts`), so a deploy that changes that code advances it.
-  `tests/unit/scripts/sitemap-implementation-sources.test.ts` walks the imports of the
-  sitemap routes and fails when a module they reach is missing from the list, except
+  `tests/unit/scripts/sitemap-implementation-sources.test.ts` asks dependency-cruiser for
+  the modules the sitemap routes reach and fails when one is missing from the list, except
   what is left out on purpose: `db/` and `functions/api/` (the schema, the database client
   and the API types decide how rows are read, not which URLs a sitemap lists, and counting
   them would rebuild every sitemap after each schema change), `src/data/publicCategories.ts`

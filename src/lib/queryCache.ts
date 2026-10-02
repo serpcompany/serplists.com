@@ -7,6 +7,8 @@ export const queryKeys = {
   everyTemplateHistory: (templateId: string) => ['templates', 'history', templateId] as const,
   templateHistoryFor: (templateId: string, userId?: string, teamId?: string) =>
     ['templates', 'history', templateId, userId ?? 'guest', teamId ?? 'personal'] as const,
+  templateDetail: (identifier: string | undefined, userId: string | undefined) =>
+    ['templates', 'detail', identifier ?? 'none', userId ?? 'guest'] as const,
 };
 
 export const refreshRunHistory = (queryClient: Pick<QueryClient, 'invalidateQueries'>, runId: string) =>

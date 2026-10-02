@@ -1,12 +1,6 @@
 import { z } from "zod";
 import type { Env } from "../types";
 
-export type StripeConfig = {
-  secretKey: string;
-  webhookSecret: string;
-  proPriceId: string;
-};
-
 export type StripeBillingConfig = {
   secretKey: string;
   proPriceId: string;
@@ -29,41 +23,16 @@ export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   return { secretKey, proPriceId, proPriceIds };
 }
 
-export function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
+function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) return null;
   return { webhookSecret };
-}
-
-export function getStripeConfig(env: Env): StripeConfig | null {
-  const billing = getStripeBillingConfig(env);
-  const webhook = getStripeWebhookConfig(env);
-  if (!billing || !webhook) return null;
-  return { ...billing, ...webhook };
-}
-
-export function assertStripeBillingConfigured(env: Env): StripeBillingConfig {
-  const config = getStripeBillingConfig(env);
-  if (!config) {
-    throw new Error("Stripe billing is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRO_PRICE_ID.");
-  }
-  return config;
 }
 
 export function assertStripeWebhookConfigured(env: Env): StripeWebhookConfig {
   const config = getStripeWebhookConfig(env);
   if (!config) {
     throw new Error("Stripe webhook is not configured. Set STRIPE_WEBHOOK_SECRET.");
-  }
-  return config;
-}
-
-export function assertStripeConfigured(env: Env): StripeConfig {
-  const config = getStripeConfig(env);
-  if (!config) {
-    throw new Error(
-      "Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_PRO_PRICE_ID."
-    );
   }
   return config;
 }
@@ -76,6 +45,8 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   }
   return params.toString();
 }
+
+export const stripeObjectSchema = z.object({ id: z.string().min(1) });
 
 export const expandableStripeIdSchema = z
   .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
@@ -91,7 +62,7 @@ const stripeErrorBodySchema = z.object({
     .passthrough(),
 });
 
-function parseStripeErrorBody(text: string): { type?: string; code?: string; param?: string } {
+function parseStripeErrorBody(text: string): { type?: string | undefined; code?: string | undefined; param?: string | undefined } {
   try {
     const parsed = stripeErrorBodySchema.safeParse(JSON.parse(text));
     return parsed.success ? parsed.data.error : {};
@@ -102,9 +73,9 @@ function parseStripeErrorBody(text: string): { type?: string; code?: string; par
 
 export class StripeApiError extends Error {
   readonly status: number;
-  readonly type?: string;
-  readonly code?: string;
-  readonly param?: string;
+  readonly type: string | undefined;
+  readonly code: string | undefined;
+  readonly param: string | undefined;
 
   constructor(status: number, body: string) {
     const { type, code, param } = parseStripeErrorBody(body);
@@ -139,7 +110,8 @@ async function readStripeResponse(resp: Response): Promise<unknown> {
   if (!resp.ok) {
     throw new StripeApiError(resp.status, text);
   }
-  return JSON.parse(text) as unknown;
+  const body: unknown = JSON.parse(text);
+  return body;
 }
 
 export async function stripeGet(secretKey: string, path: string): Promise<unknown> {
@@ -150,12 +122,13 @@ export async function stripeGet(secretKey: string, path: string): Promise<unknow
   return readStripeResponse(resp);
 }
 
-export async function stripePostForm<T>(
+export async function stripePostForm<Reply>(
   secretKey: string,
   path: string,
   body: Record<string, string | number | boolean | undefined | null>,
+  reply: z.ZodType<Reply, z.ZodTypeDef, unknown>,
   options?: { idempotencyKey?: string },
-): Promise<T> {
+): Promise<Reply> {
   const resp = await fetch(`https://api.stripe.com${path}`, {
     method: "POST",
     headers: {
@@ -166,7 +139,7 @@ export async function stripePostForm<T>(
     body: encodeForm(body),
   });
 
-  return (await readStripeResponse(resp)) as T;
+  return reply.parse(await readStripeResponse(resp));
 }
 
 function parseStripeSignatureHeader(header: string): { timestamp: number; v1: string[] } | null {

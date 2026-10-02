@@ -11,9 +11,10 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 import { toast } from 'sonner';
 import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
 
+import { buildRun } from '../../../fixtures/runExecutionFixtures';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const run = (id: string) => ({ id, revision: 3, isStale: true, isPublic: false }) as ChecklistRun;
+const run = (id: string) => buildRun({ id, revision: 3, isStale: true, isPublic: false });
 const runA = run('run-a');
 const runB = run('run-b');
 

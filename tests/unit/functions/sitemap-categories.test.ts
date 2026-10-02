@@ -1,22 +1,17 @@
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it } from 'vitest';
+import { capturedGroup, lastOf, present } from '../../support/elements';
+import type { StoredRow } from '../../support/d1Doubles';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
-import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
-import { createSqliteD1, type SqliteD1 } from './api/support/sqlite-d1';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
-  ...(await import('../../support/nextServerContext')).requestScopeMock,
-}));
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
@@ -37,13 +32,13 @@ async function get(handler: typeof sitemapIndex, path: string, params: { page?: 
 async function buildBoth() {
   const index = await get(sitemapIndex, '/sitemap.xml');
   const shard = await get(categoriesShard, '/sitemaps/categories/1.xml', { page: '1' });
-  const indexLastmod = index.match(
+  const indexLastmod = capturedGroup(index.match(
     /<loc>https:\/\/serplists\.com\/sitemaps\/categories\/1\.xml<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
-  )?.[1];
-  const stored = db.prepare(
+  ), 1);
+  const stored: StoredRow = present(db.prepare(
     `SELECT content_hash FROM sitemap_shard_revisions WHERE kind = 'categories' AND page = 1`,
-  ).get() as { content_hash: string };
-  const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => match[1]).sort();
+  ).get(), 'the stored categories shard');
+  const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => capturedGroup(match, 1)).sort();
   const landingLastmod = shard.match(
     /<loc>https:\/\/serplists\.com\/categories\/<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
   )?.[1];
@@ -52,13 +47,12 @@ async function buildBoth() {
 
 function expectIndexMatchesShard(result: Awaited<ReturnType<typeof buildBoth>>) {
   expect(createHash('sha256').update(result.shard).digest('hex')).toBe(result.storedHash);
-  expect(result.indexLastmod).toBeDefined();
-  expect(result.indexLastmod! >= result.shardLastmods.at(-1)!).toBe(true);
+  expect(result.indexLastmod >= lastOf(result.shardLastmods)).toBe(true);
 }
 
 describe('categories sitemap index and shard on SQLite with the real triggers, where the index hashes exactly the shard it serves', () => {
   beforeEach(() => {
-    d1 = createSqliteD1();
+    d1 = new SqliteD1({ schemaSql: [] });
     db = d1.sqlite;
     db.exec(`
       CREATE TABLE users (
@@ -113,8 +107,10 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
     const after = await buildBoth();
 
     expect(after.shard).not.toContain('/categories/outdoor-gear');
-    expect(after.landingLastmod! > before.landingLastmod!).toBe(true);
-    expect(after.indexLastmod! > before.indexLastmod!).toBe(true);
+    assert.exists(before.landingLastmod);
+    assert.exists(after.landingLastmod);
+    expect(after.landingLastmod > before.landingLastmod).toBe(true);
+    expect(after.indexLastmod > before.indexLastmod).toBe(true);
     expectIndexMatchesShard(after);
   });
 
@@ -128,7 +124,7 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
     const { shard } = await buildBoth();
     const listed = Array.from(
       shard.matchAll(/<loc>https:\/\/serplists\.com\/categories\/([^<]+)\/<\/loc>/g),
-      (match) => match[1],
+      (match) => capturedGroup(match, 1),
     );
     const used = new Set(
       [...bundledCatalog.templates.flatMap((template) => template.categories), 'Outdoor Gear', 'Engineering']

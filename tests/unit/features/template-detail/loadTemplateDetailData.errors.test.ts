@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadTemplateDetailData } from '@/features/template-detail/useTemplateDetailModel';
+import { loadTemplateDetailData } from '@/features/template-detail/loadTemplateDetail';
 import { createApiError } from '@/lib/api-errors';
+
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
 
 const TEMPLATE_UUID = '4f7c1a52-9b1e-4c1d-8a61-2f8e5b3c9d10';
 
@@ -18,15 +20,7 @@ const serverRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const buildApiClient = (overrides: Record<string, unknown> = {}) => ({
-  clonePublicTemplate: vi.fn(),
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate: vi.fn(),
-  ...overrides,
-});
+const buildApiClient = templateDetailApiClient;
 
 const privateOptions = (identifier: string) => ({
   identifier,
@@ -159,9 +153,9 @@ describe('public template detail load failures', () => {
   });
 });
 
-describe('public template with a UUID-shaped slug, which templates saved before such slugs were refused can have', () => {
-  const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 
+describe('public template with a UUID-shaped slug, which templates saved before such slugs were refused can have', () => {
   it('loads it by slug after the id lookup finds nothing', async () => {
     const apiClient = buildApiClient({
       getTemplateById: vi.fn().mockRejectedValue(createApiError(404)),

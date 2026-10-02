@@ -1,12 +1,7 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
-import tailwindcss from '@tailwindcss/postcss';
-import postcss, { type Rule } from 'postcss';
+import type { Rule } from 'postcss';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-const repoRoot = path.resolve(__dirname, '../../..');
-const globalsPath = path.join(repoRoot, 'src/app/globals.css');
+import { compileTheStylesheetTheRootLayoutImports } from '../../support/appStylesheet';
 
 let css = '';
 let rules: Array<{ rule: Rule; selector: string }> = [];
@@ -20,11 +15,8 @@ const selectorAfterTailwindNesting = (rule: Rule): string => {
     : `${parentSelector} ${rule.selector}`;
 };
 
-const buildGlobalsCssAsTheNextJsBuildDoes = () =>
-  postcss([tailwindcss({ base: repoRoot })]).process(readFileSync(globalsPath, 'utf8'), { from: globalsPath });
-
 beforeAll(async () => {
-  const result = await buildGlobalsCssAsTheNextJsBuildDoes();
+  const result = await compileTheStylesheetTheRootLayoutImports();
   css = result.css;
   rules = [];
   result.root.walkRules((rule) => {
@@ -69,8 +61,8 @@ describe('Tailwind typography for markdown blocks, without which Preflight strip
   });
 
   it('does not wrap inline code in literal backticks', () => {
-    expect(winningDeclarationsFor('.prose :where(code)::before').content).toBe('none');
-    expect(winningDeclarationsFor('.prose :where(code)::after').content).toBe('none');
+    expect(winningDeclarationsFor('.prose :where(code)::before')['content']).toBe('none');
+    expect(winningDeclarationsFor('.prose :where(code)::after')['content']).toBe('none');
   });
 
   it('shows task list checkboxes without bullets', () => {

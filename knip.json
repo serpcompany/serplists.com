@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "open-next.config.ts",
+    "scripts/stripe/bootstrap.ts",
+    "tests/e2e/preview-server.ts",
+    "tests/support/nextFontGoogle.ts"
+  ],
+  "drizzle": {
+    "config": ["db/drizzle.config.ts"]
+  },
+  "eslint": {
+    "config": ["eslint.config.ts", "eslint.type-aware.config.ts"]
+  },
+  "ignoreDependencies": ["@secretlint/secretlint-rule-preset-recommend"],
+  "ignoreBinaries": ["stripe"],
+  "treatConfigHintsAsErrors": true
+}

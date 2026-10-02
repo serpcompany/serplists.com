@@ -4,21 +4,31 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
-const SCRIPT = fileURLToPath(new URL('../../../scripts/check-env.mjs', import.meta.url));
+const SCRIPT = fileURLToPath(new URL('../../../scripts/check-env.ts', import.meta.url));
 const cwdWithoutDevVars = mkdtempSync(path.join(tmpdir(), 'check-env-'));
 
 function checkEnv(overrides: Record<string, string>) {
-  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };
-  Object.assign(env, { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!', ...overrides });
-  return spawnSync(process.execPath, [SCRIPT], { cwd: cwdWithoutDevVars, env, encoding: 'utf8', timeout: 60_000 });
+  const env: NodeJS.ProcessEnv = {
+    PATH: process.env['PATH'],
+    SystemRoot: process.env['SystemRoot'],
+    NODE_ENV: 'test',
+    AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
+    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+    FRONTEND_URL: 'http://localhost:8080',
+    CORS_ALLOWED_ORIGINS: 'http://localhost:8080',
+  };
+  Object.assign(env, overrides);
+  const { command, args } = buildScriptInvocation(SCRIPT);
+  return spawnSync(command, args, { cwd: cwdWithoutDevVars, env, encoding: 'utf8', timeout: 60_000 });
 }
 
 afterAll(() => rmSync(cwdWithoutDevVars, { recursive: true, force: true }));
 
 describe('typecheck:env refuses before a deploy the origins the API refuses at runtime', { timeout: 60_000 }, () => {
 
-  it.each([
+  it.each<Record<string, string>>([
     { CORS_ALLOWED_ORIGINS: 'serplists.com' },
     { CORS_ALLOWED_ORIGINS: 'https://ok.com,localhost:8080' },
     { CORS_ALLOWED_ORIGINS: ' , ' },

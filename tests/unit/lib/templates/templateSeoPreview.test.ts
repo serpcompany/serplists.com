@@ -120,17 +120,17 @@ describe('buildTemplateSeoPreview, which previews the public template URL with t
   it('notes a possible suffix only when the save sends a slug', () => {
     const base = { title: 'Launch', ownerSlug: 'jane', origin: ORIGIN };
 
-    expect(buildTemplateSeoPreview({ ...base, seoUrl: 'launch' }).mayGetSuffix).toBe(true);
-    expect(buildTemplateSeoPreview({ ...base, seoUrl: '' }).mayGetSuffix).toBe(true);
-    expect(
-      buildTemplateSeoPreview({ ...base, seoUrl: 'renamed', storedSlug: 'launch' }).mayGetSuffix,
-    ).toBe(true);
-    expect(
-      buildTemplateSeoPreview({ ...base, seoUrl: 'launch', storedSlug: 'launch' }).mayGetSuffix,
-    ).toBe(false);
-    expect(
-      buildTemplateSeoPreview({ ...base, seoUrl: '', storedSlug: 'launch' }).mayGetSuffix,
-    ).toBe(false);
+    expect(buildTemplateSeoPreview({ ...base, seoUrl: 'launch' })).toMatchObject({ mayGetSuffix: true });
+    expect(buildTemplateSeoPreview({ ...base, seoUrl: '' })).toMatchObject({ mayGetSuffix: true });
+    expect(buildTemplateSeoPreview({ ...base, seoUrl: 'renamed', storedSlug: 'launch' })).toMatchObject({
+      mayGetSuffix: true,
+    });
+    expect(buildTemplateSeoPreview({ ...base, seoUrl: 'launch', storedSlug: 'launch' })).toMatchObject({
+      mayGetSuffix: false,
+    });
+    expect(buildTemplateSeoPreview({ ...base, seoUrl: '', storedSlug: 'launch' })).toMatchObject({
+      mayGetSuffix: false,
+    });
   });
 
   it('uses serplists.com when no origin is given', () => {

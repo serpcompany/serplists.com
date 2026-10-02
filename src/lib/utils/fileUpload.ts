@@ -1,20 +1,17 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
-import { formatAssetSizeLimit } from "@/lib/schemas/templateAssetLimits";
 import { getUploadedAssetKey, isUploadedAssetUrl } from "@/lib/utils/mediaSource";
 import {
   isAllowedUpload,
   unsupportedUploadMessage,
   uploadAcceptAttribute,
 } from "@/lib/schemas/uploadTypes";
-import { UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
+import { formatUploadLimit, UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 
 export type TemplateUploadBucket =
   | 'template-images'
   | 'template-videos'
   | 'template-files';
-
-export type UploadedAssetBucket = TemplateUploadBucket | 'avatars';
 
 export type UploadResult = {
   success: boolean;
@@ -96,7 +93,7 @@ export const validateFile = (
 ): { valid: boolean; error?: string } => {
   const maxSize = UPLOAD_MAX_BYTES[BUCKET_BY_BLOCK_TYPE[type]];
   if (file.size > maxSize) {
-    return { valid: false, error: `File size must be ${formatAssetSizeLimit(maxSize)} or less` };
+    return { valid: false, error: `File size must be ${formatUploadLimit(maxSize)} or less` };
   }
 
   if (type === 'image') {

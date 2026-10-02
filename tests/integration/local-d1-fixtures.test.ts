@@ -4,7 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { count, eq, inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, assert, beforeAll, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { onlyElement } from "../support/elements";
+import { readJson } from "../support/readJson";
 import {
   DEV_PASSWORD_HASH,
   TEST_RUN_IDS,
@@ -13,26 +16,27 @@ import {
   TEST_TEMPLATE_IDS,
   TEST_USER_EMAILS,
   TEST_USER_IDS,
-} from "../../db/seeds/local";
+} from "../../db/seeds/local-test-data/ids";
 import {
   account,
-  audit_events,
-  checklist_runs,
-  entitlement_overrides,
-  team_entitlement_overrides,
-  team_invites,
-  team_members,
+  auditEvents,
+  checklistRuns,
+  entitlementOverrides,
+  teamEntitlementOverrides,
+  teamInvites,
+  teamMembers,
   teams,
-  template_likes,
-  template_versions,
+  templateLikes,
+  templateVersions,
   templates,
-  usage_analytics,
+  usageAnalytics,
   users,
 } from "../../db/schema/index";
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
-import { platformProxyOnLocalD1, runToolInRepo } from "./local-d1-handler-env";
+import { platformProxyOnLocalD1, runScriptInRepo, runToolInRepo } from "./local-d1-handler-env";
+import { apiEnv } from "../support/apiEnv";
 
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn() }));
 
@@ -62,7 +66,15 @@ function runOfficialTemplateSeed() {
 }
 
 function runLocalData(command: "seed-test" | "seed-official-login" | "cleanup" | "reset-passwords") {
-  runToolInRepo("tsx", ["scripts/data/local-d1-data.ts", command, "--persist-to", persistPath]);
+  runScriptInRepo("scripts/data/local-d1-data.ts", [command, "--persist-to", persistPath]);
+}
+
+const EVERY_FIXTURE_SEEDED = [4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5];
+const NO_FIXTURES_LEFT = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+async function expectTheOutsiderKept(db: LocalDb) {
+  expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
+  expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
 }
 
 async function fixtureCounts(db: LocalDb) {
@@ -71,35 +83,35 @@ async function fixtureCounts(db: LocalDb) {
     db.select({ value: count() }).from(account).where(inArray(account.userId, TEST_USER_IDS)),
     db
       .select({ value: count() })
-      .from(entitlement_overrides)
-      .where(inArray(entitlement_overrides.user_id, TEST_USER_IDS)),
+      .from(entitlementOverrides)
+      .where(inArray(entitlementOverrides.user_id, TEST_USER_IDS)),
     db.select({ value: count() }).from(teams).where(inArray(teams.id, TEST_TEAM_IDS)),
     db
       .select({ value: count() })
-      .from(team_members)
-      .where(inArray(team_members.team_id, TEST_TEAM_IDS)),
+      .from(teamMembers)
+      .where(inArray(teamMembers.team_id, TEST_TEAM_IDS)),
     db
       .select({ value: count() })
-      .from(team_invites)
-      .where(inArray(team_invites.team_id, TEST_TEAM_IDS)),
+      .from(teamInvites)
+      .where(inArray(teamInvites.team_id, TEST_TEAM_IDS)),
     db
       .select({ value: count() })
-      .from(team_entitlement_overrides)
-      .where(inArray(team_entitlement_overrides.team_id, TEST_TEAM_IDS)),
+      .from(teamEntitlementOverrides)
+      .where(inArray(teamEntitlementOverrides.team_id, TEST_TEAM_IDS)),
     db
       .select({ value: count() })
       .from(templates)
       .where(inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS])),
-    db.select({ value: count() }).from(checklist_runs).where(inArray(checklist_runs.id, TEST_RUN_IDS)),
-    db.select({ value: count() }).from(template_likes).where(inArray(template_likes.user_id, TEST_USER_IDS)),
-    db.select({ value: count() }).from(usage_analytics).where(inArray(usage_analytics.user_id, TEST_USER_IDS)),
+    db.select({ value: count() }).from(checklistRuns).where(inArray(checklistRuns.id, TEST_RUN_IDS)),
+    db.select({ value: count() }).from(templateLikes).where(inArray(templateLikes.user_id, TEST_USER_IDS)),
+    db.select({ value: count() }).from(usageAnalytics).where(inArray(usageAnalytics.user_id, TEST_USER_IDS)),
     db
       .select({ value: count() })
-      .from(template_versions)
-      .where(inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS)),
-    db.select({ value: count() }).from(audit_events).where(inArray(audit_events.subject_id, TEST_TEAM_IDS)),
+      .from(templateVersions)
+      .where(inArray(templateVersions.template_id, TEST_TEAM_TEMPLATE_IDS)),
+    db.select({ value: count() }).from(auditEvents).where(inArray(auditEvents.subject_id, TEST_TEAM_IDS)),
   ]);
-  return results.map(([row]) => row.value);
+  return results.map((rows) => onlyElement(rows).value);
 }
 
 async function insertOutsider(db: LocalDb) {
@@ -153,35 +165,38 @@ describe("local Drizzle fixture commands", () => {
       runOfficialTemplateSeed();
       runLocalData("seed-official-login");
 
-      let initialTestAccountIds: string[] = [];
+      let initialTestAccountIds: Array<string | null> = [];
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
 
-        const [admin] = await db.select().from(users).where(eq(users.id, "user-1"));
+        const admin = onlyElement(await db.select().from(users).where(eq(users.id, "user-1")));
         const [teamRun] = await db
           .select()
-          .from(checklist_runs)
-          .where(eq(checklist_runs.id, "team-run-growth-launch"));
+          .from(checklistRuns)
+          .where(eq(checklistRuns.id, "team-run-growth-launch"));
         const [invite] = await db
           .select()
-          .from(team_invites)
-          .where(eq(team_invites.id, "team-invite-seed-client-john"));
+          .from(teamInvites)
+          .where(eq(teamInvites.id, "team-invite-seed-client-john"));
         const testAccounts = await db.select().from(account).where(inArray(account.userId, TEST_USER_IDS));
 
         expect(admin).toMatchObject({ email: "admin@test.com", name: "Admin (Pro)" });
         const overridesThatAloneMakeThePersonasPro = await db
-          .select({ userId: entitlement_overrides.user_id, plan: entitlement_overrides.plan })
-          .from(entitlement_overrides)
-          .where(inArray(entitlement_overrides.user_id, ["user-1", "user-3"]));
-        expect(overridesThatAloneMakeThePersonasPro.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
+          .select({ userId: entitlementOverrides.user_id, plan: entitlementOverrides.plan })
+          .from(entitlementOverrides)
+          .where(inArray(entitlementOverrides.user_id, ["user-1", "user-3"]))
+          .orderBy(entitlementOverrides.user_id);
+        expect(overridesThatAloneMakeThePersonasPro).toEqual([
           { userId: "user-1", plan: "pro" },
           { userId: "user-3", plan: "pro" },
         ]);
-        expect(admin.auth_created_at?.getTime() % 1000).toBe(0);
-        expect(admin.auth_updated_at?.getTime() % 1000).toBe(0);
+        assert.exists(admin.auth_created_at);
+        assert.exists(admin.auth_updated_at);
+        expect(admin.auth_created_at.getTime() % 1000).toBe(0);
+        expect(admin.auth_updated_at.getTime() % 1000).toBe(0);
         expect(teamRun).toMatchObject({ progress: 33, assigned_to_user_id: "user-4" });
         expect(invite).toMatchObject({ email: "john@test.com", role: "editor" });
-        expect(testAccounts.every(({ id }) => /^[0-9a-f]{32}$/.test(id))).toBe(true);
+        expect(testAccounts.every(({ id }) => id !== null && /^[0-9a-f]{32}$/.test(id))).toBe(true);
         expect(
           testAccounts.every(
             ({ createdAt, updatedAt }) =>
@@ -192,14 +207,13 @@ describe("local Drizzle fixture commands", () => {
 
         expect(OFFICIAL_TEMPLATE_IDS).toHaveLength(5);
         expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
       });
 
       runLocalData("cleanup");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        expect(await fixtureCounts(db)).toEqual(NO_FIXTURES_LEFT);
         expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
         expect(await db.select().from(users).where(eq(users.id, "serp-user"))).toHaveLength(1);
         expect(
@@ -208,11 +222,10 @@ describe("local Drizzle fixture commands", () => {
         expect(
           await db
             .select()
-            .from(entitlement_overrides)
-            .where(eq(entitlement_overrides.user_id, "serp-user")),
+            .from(entitlementOverrides)
+            .where(eq(entitlementOverrides.user_id, "serp-user")),
         ).toHaveLength(1);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
 
         await db.insert(users).values({
           id: "user-1",
@@ -237,7 +250,7 @@ describe("local Drizzle fixture commands", () => {
       runLocalData("seed-test");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
         const recoveredTestAccountIds = (
           await db.select({ id: account.id }).from(account).where(inArray(account.userId, TEST_USER_IDS))
         )
@@ -304,12 +317,12 @@ describe("local Drizzle fixture commands", () => {
           { id: "team-user-acme", name: "Acme", created_by_user_id: "user-2", created_at: createdAt },
           { id: "team-outsider-co", name: "Outsider Co", created_by_user_id: OUTSIDER_ID, created_at: createdAt },
         ]);
-        await db.insert(team_members).values([
+        await db.insert(teamMembers).values([
           { id: "acme-owner", team_id: "team-user-acme", user_id: "user-2", role: "owner", created_at: createdAt },
           { id: "outsider-owner", team_id: "team-outsider-co", user_id: OUTSIDER_ID, role: "owner", created_at: createdAt },
           { id: "outsider-jane", team_id: "team-outsider-co", user_id: "user-3", role: "admin", created_at: createdAt },
         ]);
-        await db.insert(team_invites).values([
+        await db.insert(teamInvites).values([
           {
             id: "acme-invite",
             team_id: "team-user-acme",
@@ -338,7 +351,7 @@ describe("local Drizzle fixture commands", () => {
           team_id: "team-outsider-co",
           created_at: createdAt,
         });
-        await db.insert(template_versions).values({
+        await db.insert(templateVersions).values({
           id: "outsider-team-template-v1",
           template_id: "outsider-team-template",
           version: 1,
@@ -353,32 +366,31 @@ describe("local Drizzle fixture commands", () => {
       runLocalData("cleanup");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        expect(await fixtureCounts(db)).toEqual(NO_FIXTURES_LEFT);
         const remainingTeams = await db
           .select({ id: teams.id })
           .from(teams)
           .where(inArray(teams.id, ["team-user-acme", "team-outsider-co"]));
         expect(remainingTeams).toEqual([{ id: "team-outsider-co" }]);
         expect(
-          await db.select().from(team_invites).where(inArray(team_invites.invited_by_user_id, TEST_USER_IDS)),
+          await db.select().from(teamInvites).where(inArray(teamInvites.invited_by_user_id, TEST_USER_IDS)),
         ).toEqual([]);
         expect(
           await db
             .select()
-            .from(template_versions)
-            .where(inArray(template_versions.changed_by_user_id, TEST_USER_IDS)),
+            .from(templateVersions)
+            .where(inArray(templateVersions.changed_by_user_id, TEST_USER_IDS)),
         ).toEqual([]);
         expect(
           await db.select({ id: templates.id }).from(templates).where(eq(templates.id, "outsider-team-template")),
         ).toEqual([{ id: "outsider-team-template" }]);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
       });
 
       runLocalData("seed-test");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
       });
     },
     60_000,
@@ -396,32 +408,32 @@ describe("local Drizzle fixture commands", () => {
           .from(templates)
           .where(inArray(templates.id, seededTemplateIds));
         const history = await db
-          .select({ templateId: template_versions.template_id, version: template_versions.version })
-          .from(template_versions)
-          .where(inArray(template_versions.template_id, seededTemplateIds));
+          .select({ templateId: templateVersions.template_id, version: templateVersions.version })
+          .from(templateVersions)
+          .where(inArray(templateVersions.template_id, seededTemplateIds));
         const runs = await db
-          .select({ id: checklist_runs.id, templateId: checklist_runs.template_id, templateVersion: checklist_runs.template_version })
-          .from(checklist_runs)
-          .where(inArray(checklist_runs.id, TEST_RUN_IDS));
+          .select({ id: checklistRuns.id, templateId: checklistRuns.template_id, templateVersion: checklistRuns.template_version })
+          .from(checklistRuns)
+          .where(inArray(checklistRuns.id, TEST_RUN_IDS));
 
         for (const template of seeded) {
           const newestHistory = Math.max(0, ...history.filter((row) => row.templateId === template.id).map((row) => row.version));
-          expect(newestHistory, template.id).toBeLessThanOrEqual(template.version);
+          expect(newestHistory, String(template.id)).toBeLessThanOrEqual(template.version);
         }
         for (const run of runs) {
           const template = seeded.find(({ id }) => id === run.templateId);
-          if (template) expect(run.templateVersion, run.id).toBeLessThanOrEqual(template.contentVersion);
+          if (template) expect(run.templateVersion, String(run.id)).toBeLessThanOrEqual(template.contentVersion);
         }
       });
 
       const platform = await platformProxyOnLocalD1<{ DB: D1Database }>(persistPath);
       try {
-        const env = { DB: platform.env.DB } as unknown as Parameters<typeof handleTemplates>[1];
+        const env = apiEnv({ DB: platform.env.DB });
         const url = "http://localhost/api/templates/team-template-growth-launch";
         const load = async () => {
           const response = await handleTemplates(new Request(url), env);
           expect(response.status).toBe(200);
-          return (await response.json()) as { title: string; version: number };
+          return readJson(response, z.object({ title: z.string(), version: z.number() }).passthrough());
         };
         vi.mocked(getSessionUserId).mockResolvedValue("user-1");
 

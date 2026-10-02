@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { readWranglerToml } from '../../support/wranglerToml';
 
 const stepSchema = z.object({
   id: z.string().optional(),
@@ -51,8 +52,8 @@ describe('the staging deploy', () => {
   });
 
   it('builds as staging, kept out of search engines, with Agent Access shown', () => {
-    expect(deployJob.env.SITE_ENV).toBe('staging');
-    expect(deployJob.env.NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED).toBe('true');
+    expect(deployJob.env['SITE_ENV']).toBe('staging');
+    expect(deployJob.env['NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED']).toBe('true');
     expect(indexOfStepRunning('pnpm run build:worker')).toBeGreaterThan(-1);
   });
 
@@ -60,7 +61,9 @@ describe('the staging deploy', () => {
     const deployStep = steps.find((step) => step.id === 'deploy');
 
     expect(deployStep?.run).toContain('opennextjs-cloudflare deploy --env preview');
-    expect(readFileSync('wrangler.toml', 'utf8')).toMatch(/\[\[env\.preview\.d1_databases\]\][^[]*database_name = "serp-checklists-staging-db"/);
+    expect(readWranglerToml().env.preview.d1_databases).toContainEqual(
+      expect.objectContaining({ binding: 'DB', database_name: 'serp-checklists-staging-db' }),
+    );
   });
 
   it('fails when the deploy prints no workers.dev URL, so an unchecked deployment never passes', () => {
@@ -71,13 +74,11 @@ describe('the staging deploy', () => {
 
   it('checks the new deployment responds and meets the site standards', () => {
     const deployIndex = steps.findIndex((step) => step.id === 'deploy');
-    const probes = ['node scripts/verify-deployment.mjs', 'node scripts/check-site-standards.mjs "$DEPLOY_URL" staging'].map(
-      (command) => steps.find((step) => step.run?.trim() === command),
-    );
-
-    for (const probe of probes) {
-      expect(probe?.env?.DEPLOY_URL).toBe('${{ steps.deploy.outputs.url }}');
-      expect(steps.indexOf(probe!)).toBeGreaterThan(deployIndex);
+    for (const command of ['node --import tsx scripts/verify-deployment.ts', 'node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" staging']) {
+      const probe = steps.find((step) => step.run?.trim() === command);
+      assert.exists(probe, `no step runs ${command}`);
+      expect(probe.env?.['DEPLOY_URL']).toBe('${{ steps.deploy.outputs.url }}');
+      expect(steps.indexOf(probe)).toBeGreaterThan(deployIndex);
     }
   });
 });

@@ -1,13 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
+import { describe, expect, it } from 'vitest';
 
 import { buildConsoleHomePath, DASHBOARD_PATH } from '@/lib/routes';
-
-import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/nextRouting';
-
-vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
-  const { openNextBuildConfig } = await import('../../support/nextRouting');
-  return openNextBuildConfig();
-});
 
 const { redirects } = await loadBuiltRoutes('production');
 

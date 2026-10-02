@@ -1,15 +1,16 @@
 import React from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 import {
   AgentAccessSection,
   AgentAccessSectionView,
   type AgentAccessSectionViewProps,
 } from '@/components/account/AgentAccessSection';
-import type { AgentKey } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { ACTIVE_AGENT_KEY } from '../../fixtures/agentKeys';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -18,16 +19,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 
-const activeKey: AgentKey = {
-  id: 'key-1',
-  name: 'Codex SOP Runner',
-  prefix: 'slrk_demo12',
-  createdAt: '2026-09-19T01:00:00.000Z',
-  lastUsedAt: null,
-  revokedAt: null,
-  permissions: ['templates:read', 'runs:read', 'runs:write'],
-  status: 'active',
-};
+const activeKey = ACTIVE_AGENT_KEY;
 
 const defaultProps: AgentAccessSectionViewProps = {
   createdKey: null,
@@ -59,19 +51,19 @@ const PERMISSION_LABELS = ['Read templates', 'Write templates', 'Read runs', 'Wr
 
 function permissionCheckbox(html: string, label: string): string {
   const title = new RegExp(`<div[^>]*id="([^"]+)"[^>]*>${escapeRegExp(label)}</div>`).exec(html);
-  expect(title, `the title of ${label}`).not.toBeNull();
-  const checkbox = new RegExp(`<button[^>]*aria-labelledby="${title![1]}"[^>]*>`).exec(html);
-  expect(checkbox, `the checkbox of ${label}`).not.toBeNull();
-  expect(checkbox![0]).toContain('role="checkbox"');
-  const id = /\sid="([^"]+)"/.exec(checkbox![0])![1];
+  assert.exists(title, `the title of ${label}`);
+  const checkbox = new RegExp(`<button[^>]*aria-labelledby="${capturedGroup(title, 1)}"[^>]*>`).exec(html);
+  assert.exists(checkbox, `the checkbox of ${label}`);
+  expect(checkbox[0]).toContain('role="checkbox"');
+  const id = capturedGroup(/\sid="([^"]+)"/.exec(checkbox[0]), 1);
   expect(html).toMatch(new RegExp(`<label[^>]*for="${id}"`));
-  return checkbox![0];
+  return checkbox[0];
 }
 
 function permissionBadgesUnderKey(html: string, keyName: string): string[] {
   const list = new RegExp(`<ul aria-label="Permissions for ${escapeRegExp(keyName)}"[^>]*>(.*?)</ul>`).exec(html);
-  expect(list, `the permissions of ${keyName}`).not.toBeNull();
-  return [...list![1].matchAll(/<li[^>]*>([^<]*)<\/li>/g)].map((match) => match[1]);
+  assert.exists(list, `the permissions of ${keyName}`);
+  return [...capturedGroup(list, 1).matchAll(/<li[^>]*>([^<]*)<\/li>/g)].map((match) => capturedGroup(match, 1));
 }
 
 describe('AgentAccessSectionView', () => {

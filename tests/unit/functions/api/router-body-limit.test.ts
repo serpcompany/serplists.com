@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, silenceRequestLog } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
+import { collectGarbageAndRunFinalizers } from '../../../support/garbageCollection';
 
 const MB = 1024 * 1024;
 const HANDLER_MODULES = {
@@ -11,7 +13,7 @@ const HANDLER_MODULES = {
 } as const;
 
 function buildEnv() {
-  return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+  return apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 }
 
 function chunkedBody(totalBytes: number): ReadableStream<Uint8Array> {
@@ -30,30 +32,41 @@ function chunkedBody(totalBytes: number): ReadableStream<Uint8Array> {
   });
 }
 
+function chunkedText(text: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(text);
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
 function request(
   method: string,
   path: string,
   init: { headers?: Record<string, string>; body?: BodyInit } = {},
 ): Request {
-  return new Request(`http://localhost/api/${path}`, {
+  const requestInit: RequestInit & { duplex?: 'half' } = {
     method,
-    headers: init.headers,
-    body: init.body,
+    ...(init.headers === undefined ? {} : { headers: init.headers }),
+    ...(init.body === undefined ? {} : { body: init.body }),
     ...(init.body instanceof ReadableStream ? { duplex: 'half' } : {}),
-  } as RequestInit);
+  };
+  return new Request(`http://localhost/api/${path}`, requestInit);
 }
 
 describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   const handlers = {
     handleTemplates: vi.fn(async () => Response.json({ ok: true })),
-    handleChecklists: vi.fn(async () => Response.json({ ok: true })),
+    handleChecklists: vi.fn(async (_request: Request) => Response.json({ ok: true })),
     handleTeams: vi.fn(async () => Response.json({ ok: true })),
     handleUploads: vi.fn(async () => Response.json({ ok: true })),
     handleStripe: vi.fn(async (req: Request) => Response.json({ received: (await req.text()).length })),
   };
 
   async function send(req: Request) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     return apiWorker.fetch(req, buildEnv());
   }
 
@@ -172,6 +185,19 @@ describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
     expect(response.status).toBe(411);
     expect(await response.json()).toMatchObject({ error: 'Content-Length required' });
     expect(handlers.handleUploads).not.toHaveBeenCalled();
+  });
+
+  it('hands the handler a body sent without a Content-Length that it can still read after an await and a garbage collection', async () => {
+    const payload = JSON.stringify({ sections: [{ id: 's1', items: [] }] });
+    handlers.handleChecklists.mockImplementationOnce(async (req: Request) => {
+      await collectGarbageAndRunFinalizers();
+      return Response.json({ received: await req.text() });
+    });
+
+    const response = await send(request('PUT', 'checklists/shared/anything', { body: chunkedText(payload) }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: payload });
   });
 
   it('keeps small bodies readable for the handler', async () => {

@@ -8,7 +8,7 @@ import { queryKeys } from '@/lib/queryKeys';
 const PERSONAL_CONTEXT_ID = 'personal';
 
 type AfterLeaveDependencies = {
-  activeTeamId?: string;
+  activeTeamId?: string | undefined;
   refreshTeams: () => Promise<TeamSummary[]>;
   selectWorkspace: (workspaceId: string) => void;
 };

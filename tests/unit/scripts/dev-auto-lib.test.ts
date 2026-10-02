@@ -4,6 +4,8 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../support/elements";
+import { listeningPort } from "../../support/listeningPort";
 import {
   buildCorsAllowedOrigins,
   buildDevServerCommand,
@@ -18,8 +20,8 @@ import {
   resolveDevServerPort,
   stopDevSession,
   writeDevSession,
-} from "../../../scripts/dev-auto-lib.mjs";
-import { applyDevBindings, DEV_BINDINGS_VARIABLE, parseDevBindings } from "../../../scripts/lib/dev-bindings.mjs";
+} from "../../../scripts/dev-auto-lib";
+import { applyDevBindings, DEV_BINDINGS_VARIABLE, parseDevBindings } from "../../../scripts/lib/dev-bindings";
 
 describe("buildCorsAllowedOrigins", () => {
   it("adds the dev server's origin and preserves existing allowed origins", () => {
@@ -71,7 +73,7 @@ describe("buildDevServerCommand", () => {
 
     expect(command.command).toBe("node-bin");
     expect(command.args[0]).toMatch(/[\\/]next[\\/]dist[\\/]bin[\\/]next$/);
-    expect(existsSync(command.args[0])).toBe(true);
+    expect(existsSync(firstOf(command.args))).toBe(true);
     expect(command.args.slice(1)).toEqual(["dev", "--port", "3002"]);
     expect(command.options).toEqual({});
   });
@@ -79,8 +81,7 @@ describe("buildDevServerCommand", () => {
   it("hands next dev .dev.vars and the Worker vars for its port, values unchanged", () => {
     const { env } = buildDevServerCommand({ config, baseEnv, execPath: "node-bin" });
 
-    expect(env.NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED).toBe("true");
-    expect(env.PORT).toBe("3002");
+    expect(env).toMatchObject({ NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED: "true", PORT: "3002" });
     expect(parseDevBindings(env[DEV_BINDINGS_VARIABLE])).toEqual({
       FRONTEND_URL: "http://localhost:3002",
       CORS_ALLOWED_ORIGINS: "http://localhost:3002",
@@ -137,17 +138,17 @@ describe("findOpenPort", () => {
   });
 });
 
-describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
-  const HOLDER = `
-    const server = require("node:net").createServer();
-    server.on("error", (error) => { console.log("error:" + error.code); });
-    server.listen({ ...JSON.parse(process.argv[1]), port: 0 }, () => console.log("port:" + server.address().port));
-    process.stdin.on("end", () => process.exit(0));
-    process.stdin.resume();
-  `;
+const PORT_HOLDER_SCRIPT = `
+  const server = require("node:net").createServer();
+  server.on("error", (error) => { console.log("error:" + error.code); });
+  server.listen({ ...JSON.parse(process.argv[1]), port: 0 }, () => console.log("port:" + server.address().port));
+  process.stdin.on("end", () => process.exit(0));
+  process.stdin.resume();
+`;
 
+describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
   async function holdPortFromAnotherProcess(listen: Record<string, unknown>) {
-    const child = spawn(process.execPath, ["-e", HOLDER, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
+    const child = spawn(process.execPath, ["-e", PORT_HOLDER_SCRIPT, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
     const line = await new Promise<string>((resolve) => {
       child.stdout.once("data", (data) => resolve(String(data).trim()));
       child.once("exit", () => resolve("exited"));
@@ -183,7 +184,7 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
   it("calls a port nothing holds free", async () => {
     const port = await new Promise<number>((resolve) => {
       const server = net.createServer().listen({ host: "127.0.0.1", port: 0 }, () => {
-        const { port: freePort } = server.address() as net.AddressInfo;
+        const freePort = listeningPort(server);
         server.close(() => resolve(freePort));
       });
     });
@@ -304,7 +305,7 @@ describe("isProcessAlive", () => {
 });
 
 describe("isOwnedDevProcess", () => {
-  const launcher = { startedAt: 1_000_000, commandLine: "C:\\node\\node.exe scripts/dev-auto.mjs" };
+  const launcher = { startedAt: 1_000_000, commandLine: "C:\\node\\node.exe --import tsx scripts/dev-auto.ts" };
   const alive = () => true;
 
   it("accepts the recorded dev launcher at a start time the OS reports a little apart, as ps gives whole seconds", async () => {

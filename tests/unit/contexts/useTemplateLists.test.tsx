@@ -3,17 +3,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
+
+import type { TemplatesProviderWorkspace } from '../../support/templatesProviderHarness';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
+  useWorkspace: (): TemplatesProviderWorkspace => ({
     activeTeamId: 'team-1',
     isWorkspaceLoading: false,
     workspaceScopeId: 'team-1',
+    workspaceStatus: 'ready',
   }),
 }));
 

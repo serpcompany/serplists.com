@@ -1,28 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
-import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
+import { AVATAR_MIME_TYPES } from '../../../fixtures/avatarTypes';
 
-import { findElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, handlerOf } from '../../../support/elementTree';
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const stubs = {
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [initial, () => undefined],
-  };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+  }),
+);
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    deleteFromR2: vi.fn(),
-    uploadToR2: vi.fn(),
-  },
-}));
+vi.mock('@/lib/api', async () => (await import('../../../support/uploadMocks')).r2UploadApi());
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
@@ -51,20 +44,19 @@ const NEW_KEY = 'avatars/u1/new.png';
 function render(onAvatarUpdate = vi.fn()) {
   const tree = AvatarUpload({ currentAvatarUrl: CURRENT_URL, onAvatarUpdate });
   const input = findElement(tree, (element) => element.props.type === 'file');
-  const removeButton = findElement(
-    tree,
-    (element) => element.props['aria-label'] === 'Remove avatar',
-  );
+  const removeButton = findByAriaLabel(tree, 'Remove avatar');
+  assert.exists(input, 'the file input');
   return {
     onAvatarUpdate,
-    input: input!,
+    input,
     selectFile: (file: File) => {
       const target = { files: [file], value: 'C:\\fakepath\\file' };
-      return (input!.props.onChange as (event: unknown) => Promise<void>)({ target }).then(
-        () => target,
-      );
+      return Promise.resolve(handlerOf(input, 'onChange')({ target })).then(() => target);
     },
-    remove: () => (removeButton!.props.onClick as () => Promise<void>)(),
+    remove: () => {
+      assert.exists(removeButton, 'the Remove avatar button');
+      return handlerOf(removeButton, 'onClick')();
+    },
   };
 }
 
@@ -82,7 +74,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockResolvedValue({
       data: null,
       error: { status: 429, statusText: 'Too Many Requests', message: 'Too many requests' },
-    } as never);
+    });
     const view = render();
 
     await view.selectFile(png());
@@ -110,7 +102,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockImplementation((async () => {
       order.push('updateUser');
       return { data: { status: true }, error: null };
-    }) as never);
+    }));
     vi.mocked(api.deleteFromR2).mockImplementation(async (key: string) => {
       order.push(`delete:${key}`);
       return { success: true };
@@ -130,7 +122,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockResolvedValue({
       data: null,
       error: { status: 500, statusText: 'Internal Server Error' },
-    } as never);
+    });
     const view = render();
 
     await view.remove();
@@ -142,7 +134,7 @@ describe('AvatarUpload', () => {
   });
 
   it('deletes the avatar file after removing it from the account', async () => {
-    vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null } as never);
+    vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
     const view = render();
 
     await view.remove();
@@ -166,7 +158,7 @@ describe('AvatarUpload', () => {
 
   describe('clears the file input after every attempt, since a file input fires no change event for the file it already holds', () => {
     beforeEach(() => {
-      vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null } as never);
+      vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
     });
 
     it('after the upload fails', async () => {
@@ -182,7 +174,7 @@ describe('AvatarUpload', () => {
       vi.mocked(authClient.updateUser).mockResolvedValue({
         data: null,
         error: { status: 500, statusText: 'Internal Server Error' },
-      } as never);
+      });
 
       const target = await render().selectFile(png());
 

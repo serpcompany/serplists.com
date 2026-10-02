@@ -20,7 +20,7 @@ const version = (
   metadataOfItsAuditEvent?: unknown,
 ): TemplateHistoryVersion => ({
   action,
-  actor: { name: 'Alice' },
+  actor: { name: 'Alice', userId: null, username: null, email: null },
   createdAt: at(minute),
   id,
   metadata: metadataOfItsAuditEvent,
@@ -35,7 +35,7 @@ const event = (
   actorName = 'Alice',
 ): TemplateHistoryEvent => ({
   action,
-  actor: { name: actorName },
+  actor: { name: actorName, userId: null, username: null, email: null },
   createdAt: at(minute),
   metadata,
   id,

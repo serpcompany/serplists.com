@@ -4,18 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { createDb } from '@functions/api/db';
 import { selectPublicProfileTemplates } from '@functions/api/handlers/template-reads';
 import { selectAuditEventHistory, selectTemplateVersionHistory } from '@functions/api/utils/history-queries';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { apiEnv, d1ThatRunsNoQuery } from '../../../support/apiEnv';
+import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
 
-const migratedDatabase = (): DatabaseSync => createMigratedD1().sqlite;
+const migratedDatabase = (): DatabaseSync => new SqliteD1().sqlite;
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 
-const drizzleDb = createDb({ DB: {} } as never);
+const drizzleDb = createDb(apiEnv({ DB: d1ThatRunsNoQuery() }));
 
 function explain(db: DatabaseSync, query: BuiltQuery): string {
   const { sql, params } = query.toSQL();
-  const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(params as Array<string | number>)) as Array<{ detail: string }>;
-  return rows.map((row) => row.detail).join('; ');
+  const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params.map(toSqliteValue));
+  return rows.map(({ detail }) => detail).join('; ');
 }
 
 describe('history query plans from the real migrations and Drizzle SQL, which fail when a query sorts every row before LIMIT', () => {
@@ -52,7 +53,7 @@ describe('history query plans from the real migrations and Drizzle SQL, which fa
     }
 
     const { sql, params } = selectTemplateVersionHistory(drizzleDb, 'template-1', 8).toSQL();
-    const rows = db.prepare(sql).all(...(params as Array<string | number>)) as Array<Record<string, unknown>>;
+    const rows = db.prepare(sql).all(...params.map(toSqliteValue));
 
     expect(rows.map((row) => Object.values(row)[1])).toEqual([300, 299, 298, 297, 296, 295, 294, 293]);
   });
@@ -61,7 +62,7 @@ describe('history query plans from the real migrations and Drizzle SQL, which fa
 describe('public profile template query plan', () => {
   it("reads a Creator's public templates from the owner index, not by scanning every public template", () => {
     const db = migratedDatabase();
-    const plan = explain(db, selectPublicProfileTemplates({ DB: {} } as never, 'user-1', true));
+    const plan = explain(db, selectPublicProfileTemplates(apiEnv({ DB: d1ThatRunsNoQuery() }), 'user-1', true));
 
     expect(plan).toContain('idx_templates_owner');
     expect(plan).not.toContain('idx_templates_public_created_at');

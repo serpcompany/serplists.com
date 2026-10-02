@@ -1,6 +1,9 @@
 import { sql, type SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { elementAt } from "../support/elements";
+import { jsonObject, readJson } from "../support/readJson";
 import { activeRunCapacityAvailableSql } from "../../functions/api/utils/active-run-limit";
 import { templateCapacityAvailableSql } from "../../functions/api/utils/template-writes";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
@@ -14,14 +17,23 @@ import { handleChecklists } from "../../functions/api/handlers/checklists";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
 import { getSessionUserId } from "../../functions/api/utils/session";
+import { storedSectionsIn } from "../support/storedJson";
+import type { Env } from "@functions/api/types";
 
 const PARALLEL = 10;
 const now = "2026-09-28T00:00:00.000Z";
 const sections = JSON.stringify([{ id: "s1", title: "S", items: [{ id: "i1", title: "Task" }] }]);
+const startRunAnswer = z
+  .object({
+    result: z
+      .object({ isError: z.boolean().optional(), structuredContent: z.object({ error: z.string().optional() }).passthrough() })
+      .passthrough(),
+  })
+  .passthrough();
 let d1: LocalD1;
 let mcpKey = "";
 
-type Handler = (request: Request, env: never) => Promise<Response>;
+type Handler = (request: Request, env: Env) => Promise<Response>;
 
 async function seed() {
   const db = d1.env.DB;
@@ -66,11 +78,11 @@ async function burst(userIds: string[], handler: Handler, makeRequest: (index: n
   vi.mocked(getSessionUserId).mockImplementation(async (request: Request) => request.headers.get("x-test-user"));
   const responses = await Promise.all(Array.from({ length: PARALLEL }, (_, index) => {
     const request = makeRequest(index);
-    request.headers.set("x-test-user", userIds[index % userIds.length]);
-    return handler(request, d1.env as never);
+    request.headers.set("x-test-user", elementAt(userIds, index % userIds.length));
+    return handler(request, d1.env);
   }));
   const statuses = responses.map((response) => response.status);
-  const bodies = await Promise.all(responses.map((response) => response.json() as Promise<Record<string, unknown>>));
+  const bodies = await Promise.all(responses.map((response) => readJson(response, jsonObject)));
   return { statuses, bodies };
 }
 
@@ -82,7 +94,7 @@ async function scalar(sql: string, ...bindings: unknown[]): Promise<number> {
   return row?.value ?? 0;
 }
 
-function expectOneWinner({ statuses, bodies }: { statuses: number[]; bodies: Record<string, unknown>[] }) {
+function expectOneWinner({ statuses, bodies }: { statuses: number[]; bodies: { code?: unknown }[] }) {
   expect(statuses.filter((status) => status === 200)).toHaveLength(1);
   expect(statuses.filter((status) => status === 403)).toHaveLength(PARALLEL - 1);
   for (const [index, body] of bodies.entries()) {
@@ -101,19 +113,19 @@ describe.sequential("Free plan limits under concurrent requests (local D1), chec
   });
 
   it("creates only one Personal run past two active runs", async () => {
-    expectOneWinner(await burst(["runs"], handleChecklists as Handler, () => post("checklists", { title: "Run", sections: JSON.parse(sections) })));
+    expectOneWinner(await burst(["runs"], handleChecklists, () => post("checklists", { title: "Run", sections: storedSectionsIn(sections) })));
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'runs' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE subject_id = 'runs' AND action = 'checklist_run.created'")).toBe(1);
   });
 
   it("creates only one Organization run when members start runs together", async () => {
-    expectOneWinner(await burst(["org-owner", "org-member"], handleChecklists as Handler, () =>
-      post("checklists", { teamId: "org-free", title: "Run", sections: JSON.parse(sections) })));
+    expectOneWinner(await burst(["org-owner", "org-member"], handleChecklists, () =>
+      post("checklists", { teamId: "org-free", title: "Run", sections: storedSectionsIn(sections) })));
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE team_id = 'org-free' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
   });
 
   it("restores only one archived in-progress run", async () => {
-    const { statuses } = await burst(["restore"], handleChecklists as Handler, (index) => post(`checklists/restore-archived-${index % 5}/restore`));
+    const { statuses } = await burst(["restore"], handleChecklists, (index) => post(`checklists/restore-archived-${index % 5}/restore`));
     expect(statuses.filter((status) => status === 403).length).toBeGreaterThanOrEqual(4);
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'restore' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE subject_id = 'restore' AND action = 'checklist_run.restored'")).toBe(1);
@@ -129,22 +141,22 @@ describe.sequential("Free plan limits under concurrent requests (local D1), chec
         "MCP-Protocol-Version": "2025-06-18",
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: index + 1, method: "tools/call", params: { name: "start_run", arguments: { templateId: "mcp-template" } } }),
-    }), d1.env as never)));
-    const payloads = await Promise.all(responses.map(async (response) => ((await response.json()) as { result: { isError?: boolean; structuredContent: { error?: string } } }).result));
+    }), d1.env)));
+    const payloads = await Promise.all(responses.map(async (response) => (await readJson(response, startRunAnswer)).result));
     expect(payloads.filter((payload) => !payload.isError)).toHaveLength(1);
     expect(payloads.filter((payload) => payload.structuredContent.error === "limit_reached")).toHaveLength(PARALLEL - 1);
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'mcp' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
   });
 
   it("creates only one template, with one version and one audit row", async () => {
-    expectOneWinner(await burst(["tpl"], handleTemplates as Handler, (index) => post("templates", { title: `Template ${index}`, sections: JSON.parse(sections) })));
+    expectOneWinner(await burst(["tpl"], handleTemplates, (index) => post("templates", { title: `Template ${index}`, sections: storedSectionsIn(sections) })));
     expect(await scalar("SELECT count(*) AS value FROM templates WHERE user_id = 'tpl' AND deleted_at IS NULL")).toBe(1);
     expect(await scalar("SELECT count(*) AS value FROM template_versions WHERE changed_by_user_id = 'tpl'")).toBe(1);
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE actor_user_id = 'tpl' AND action = 'template.created'")).toBe(1);
   });
 
   it("clones only one template into a Free Organization, the one copy target a Free template limit applies to", async () => {
-    expectOneWinner(await burst(["org-owner"], handleTemplates as Handler, () => post("templates/public-source/clone", { teamId: "org-free" })));
+    expectOneWinner(await burst(["org-owner"], handleTemplates, () => post("templates/public-source/clone", { teamId: "org-free" })));
     expect(await scalar("SELECT count(*) AS value FROM templates WHERE team_id = 'org-free' AND deleted_at IS NULL")).toBe(1);
     expect(await scalar("SELECT count(*) AS value FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE team_id = 'org-free')")).toBe(1);
   });
@@ -169,7 +181,7 @@ describe.sequential("Free plan limits under concurrent requests (local D1), chec
   });
 
   it("restores only one archived template", async () => {
-    const { statuses } = await burst(["tpl-restore"], handleTemplates as Handler, (index) => post(`templates/archived-template-${index % 5}/restore`));
+    const { statuses } = await burst(["tpl-restore"], handleTemplates, (index) => post(`templates/archived-template-${index % 5}/restore`));
     expect(statuses.filter((status) => status === 403).length).toBeGreaterThanOrEqual(4);
     expect(await scalar("SELECT count(*) AS value FROM templates WHERE user_id = 'tpl-restore' AND deleted_at IS NULL")).toBe(1);
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE actor_user_id = 'tpl-restore' AND action = 'template.restored'")).toBe(1);

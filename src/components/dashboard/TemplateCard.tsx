@@ -10,8 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { MediaCard } from '@/components/layout/MediaCard';
-import { Badge } from '@/components/ui/badge';
+import { MediaCard, MediaCardCategories, MediaCardHoverAction } from '@/components/layout/MediaCard';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { cn } from '@/lib/utils';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -31,9 +31,9 @@ import { Link } from '@/components/navigation/Link';
 interface TemplateCardProps {
   template: ChecklistTemplate;
   canEdit?: boolean;
-  onDelete?: (id: string) => void;
+  onDelete?: ((id: string) => void) | undefined;
   onDuplicate?: (id: string) => void;
-  onStartRun?: (id: string) => void;
+  onStartRun?: ((id: string) => void) | undefined;
 }
 
 export function TemplateCard({
@@ -45,10 +45,7 @@ export function TemplateCard({
 }: TemplateCardProps) {
   const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
-  const taskCount = template.sections.reduce(
-    (total, section) => total + section.items.length,
-    0,
-  );
+  const taskCount = countTemplateItems(template);
   const title = template.title.trim();
   const actionsLabel = title ? `Actions for ${title}` : 'Template actions';
   const categories = template.categories ?? [];
@@ -106,31 +103,17 @@ export function TemplateCard({
       }
       clampDescription
       description={template.description || undefined}
-      eyebrow={
-        categories.length > 0 ? (
-          <span className="flex flex-wrap gap-1">
-            {categories.slice(0, 2).map((category) => (
-              <Badge key={category} variant="secondary">
-                {category}
-              </Badge>
-            ))}
-            {categories.length > 2 ? <Badge variant="secondary">+{categories.length - 2}</Badge> : null}
-          </span>
-        ) : undefined
-      }
+      eyebrow={categories.length > 0 ? <MediaCardCategories categories={categories} countHidden /> : undefined}
       href={buildConsoleTemplatePath(template.id)}
       icon={<TypeIcon />}
       mediaOverlay={
         onStartRun ? (
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden"
-          >
+          <MediaCardHoverAction>
             <Button className="relative z-10" onClick={() => onStartRun(template.id)} tabIndex={-1}>
               <Play data-icon="inline-start" />
               Start Run
             </Button>
-          </div>
+          </MediaCardHoverAction>
         ) : undefined
       }
       title={template.title}

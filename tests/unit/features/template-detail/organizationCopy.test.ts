@@ -3,11 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import {
   saveTemplateToAccount,
-  type TemplateDetailBillingState,
-} from '@/features/template-detail/useTemplateDetailModel';
+} from '@/features/template-detail/templateActionOutcome';
 import { createApiError } from '@/lib/api-errors';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import {
+  apiClientThatClones as buildApiClient,
+  FREE_BILLING as freeOrganizationBilling,
+} from '../../../fixtures/templateDetailApiClient';
 
 const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
@@ -22,36 +26,27 @@ const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTem
   ...overrides,
 });
 
-const freeOrganizationBilling: TemplateDetailBillingState = {
-  billingEnabled: true,
-  isLoading: false,
-  isPro: false,
-};
-
-const buildApiClient = (clonePublicTemplate = vi.fn().mockResolvedValue({ id: 'clone-1' })) => ({
-  clonePublicTemplate,
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate: vi.fn(),
-});
+const copyIntoTheOrganization = (
+  apiClient: ReturnType<typeof buildApiClient>,
+  options: Partial<Parameters<typeof saveTemplateToAccount>[0]> = {},
+) =>
+  saveTemplateToAccount({
+    apiClient,
+    billingState: freeOrganizationBilling,
+    createTemplate: vi.fn(),
+    isAuthenticated: true,
+    teamId: 'team-1',
+    template: buildTemplate(),
+    userId: 'user-1',
+    ...options,
+  });
 
 describe('copying a public template into an Organization', () => {
   it('lets the API decide instead of blocking a Free Organization in the browser', async () => {
     const apiClient = buildApiClient();
     const invalidateTemplates = vi.fn();
 
-    const result = await saveTemplateToAccount({
-      apiClient,
-      billingState: freeOrganizationBilling,
-      createTemplate: vi.fn(),
-      invalidateTemplates,
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const result = await copyIntoTheOrganization(apiClient, { invalidateTemplates });
 
     expect(result).toEqual({ kind: 'ok', templateId: 'clone-1' });
     expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
@@ -64,15 +59,7 @@ describe('copying a public template into an Organization', () => {
   it('does not wait for the plan in an Organization', async () => {
     const apiClient = buildApiClient();
 
-    const result = await saveTemplateToAccount({
-      apiClient,
-      billingState: { ...freeOrganizationBilling, isLoading: true },
-      createTemplate: vi.fn(),
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const result = await copyIntoTheOrganization(apiClient, { billingState: { ...freeOrganizationBilling, isLoading: true } });
 
     expect(result.kind).toBe('ok');
   });
@@ -85,16 +72,7 @@ describe('copying a public template into an Organization', () => {
     );
     const invalidateTemplates = vi.fn();
 
-    const result = await saveTemplateToAccount({
-      apiClient,
-      billingState: freeOrganizationBilling,
-      createTemplate: vi.fn(),
-      invalidateTemplates,
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const result = await copyIntoTheOrganization(apiClient, { invalidateTemplates });
 
     expect(result).toEqual({ kind: 'upgrade_required' });
     expect(invalidateTemplates).not.toHaveBeenCalled();
@@ -105,15 +83,7 @@ describe('copying a public template into an Organization', () => {
       vi.fn().mockRejectedValue(createApiError(403, { error: 'Forbidden' })),
     );
 
-    const result = await saveTemplateToAccount({
-      apiClient,
-      billingState: freeOrganizationBilling,
-      createTemplate: vi.fn(),
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const result = await copyIntoTheOrganization(apiClient);
 
     expect(result).toEqual({ kind: 'error', message: 'Forbidden' });
   });
@@ -121,14 +91,9 @@ describe('copying a public template into an Organization', () => {
   it('copies library templates into a Free Organization too', async () => {
     const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
 
-    const result = await saveTemplateToAccount({
-      apiClient: buildApiClient(),
-      billingState: freeOrganizationBilling,
+    const result = await copyIntoTheOrganization(buildApiClient(), {
       createTemplate,
-      isAuthenticated: true,
-      teamId: 'team-1',
       template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
-      userId: 'user-1',
     });
 
     expect(result).toEqual({ kind: 'ok', templateId: 'created-1' });
@@ -138,15 +103,7 @@ describe('copying a public template into an Organization', () => {
   it('still asks a Free Personal user to upgrade before copying', async () => {
     const apiClient = buildApiClient();
 
-    const result = await saveTemplateToAccount({
-      apiClient,
-      billingState: freeOrganizationBilling,
-      createTemplate: vi.fn(),
-      isAuthenticated: true,
-      teamId: undefined,
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const result = await copyIntoTheOrganization(apiClient, { teamId: undefined });
 
     expect(result).toEqual({ kind: 'upgrade_required' });
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();

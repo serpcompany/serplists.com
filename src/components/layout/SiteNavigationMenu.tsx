@@ -16,8 +16,8 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
-  navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu';
+import { navigationMenuTriggerStyle } from '@/components/ui/navigation-menu-trigger-style';
 import { isPathWithin } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
@@ -63,7 +63,7 @@ function SiteNavigationMenuRoot({
 }: {
   align: 'start' | 'center' | 'end';
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <NavigationMenuPrimitive.Root

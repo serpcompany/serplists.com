@@ -1,10 +1,9 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { createApiError } from '@/lib/api-errors';
-import type { ChecklistRun, ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
+import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const apiMock = vi.hoisted(() => ({
   createChecklist: vi.fn(),
@@ -15,14 +14,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeTeamId: undefined, isWorkspaceLoading: false, workspaceScopeId: 'personal' }),
-}));
-
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { aTemplatesProviderForEachTest, launchChecklist, savePayloadOf } from '../../support/templatesProviderHarness';
 
 const run = (revision: number): ChecklistRun => ({
   id: 'run-1',
@@ -37,60 +29,31 @@ const run = (revision: number): ChecklistRun => ({
   revision,
 });
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Launch Checklist',
-  description: '',
+const template = launchChecklist({
   sections: [],
-  userId: 'user-1',
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-  version: 3,
-};
+});
 
-const clients: QueryClient[] = [];
+const renderProvider = aTemplatesProviderForEachTest();
 
-function renderProvider() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  clients.push(client);
-  let context: TemplatesContextProps | undefined;
-  const Probe = () => {
-    context = useTemplates();
-    return null;
-  };
-  renderToStaticMarkup(
-    <QueryClientProvider client={client}>
-      <TemplatesProvider>
-        <Probe />
-      </TemplatesProvider>
-    </QueryClientProvider>,
-  );
-  if (!context) throw new Error('TemplatesProvider did not render');
-  return { client, context };
-}
-
-async function showRunsPageWhileTheServerHoldsRevision5(client: QueryClient) {
-  const listFetch = vi.fn(async () => [run(4)]);
-  const observer = new QueryObserver(client, {
-    queryKey: ['runs', 'user-1', 'personal'],
-    queryFn: listFetch,
-    staleTime: 5 * 60 * 1000,
-  });
+async function showAListThatWillReadNext<T>(client: QueryClient, queryKey: unknown[], shown: T[], next: T[]) {
+  const listFetch = vi.fn(async () => shown);
+  const observer = new QueryObserver(client, { queryKey, queryFn: listFetch, staleTime: 5 * 60 * 1000 });
   const unsubscribe = observer.subscribe(() => {});
-  await vi.waitFor(() => expect(client.getQueryData(['runs', 'user-1', 'personal'])).toEqual([run(4)]));
+  await vi.waitFor(() => expect(client.getQueryData(queryKey)).toEqual(shown));
   listFetch.mockClear();
-  listFetch.mockResolvedValue([run(5)]);
+  listFetch.mockResolvedValue(next);
   return { listFetch, unsubscribe };
 }
+
+const showRunsPageWhileTheServerHoldsRevision5 = (client: QueryClient) =>
+  showAListThatWillReadNext(client, ['runs', 'user-1', 'personal'], [run(4)], [run(5)]);
 
 const conflict = (code: string) => createApiError(409, { error: 'Checklist run changed since it was loaded.', code });
 
 describe('refresh after a conflict, so a retry sends the current revision or version instead of failing the same way', () => {
   afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
   });
 
@@ -102,7 +65,7 @@ describe('refresh after a conflict, so a retry sends the current revision or ver
     await expect(context.revalidateRun(run(4))).rejects.toMatchObject({ status: 409 });
 
     expect(listFetch).toHaveBeenCalledTimes(1);
-    const [refreshed] = client.getQueryData<ChecklistRun[]>(['runs', 'user-1', 'personal']) ?? [];
+    const refreshed = firstOf(client.getQueryData<ChecklistRun[]>(['runs', 'user-1', 'personal']) ?? []);
     expect(refreshed.revision).toBe(5);
     await context.revalidateRun(refreshed);
     expect(apiMock.revalidateChecklist).toHaveBeenLastCalledWith('run-1', 5);
@@ -141,25 +104,16 @@ describe('refresh after a conflict, so a retry sends the current revision or ver
       createApiError(409, { error: 'Template changed since it was loaded.', code: 'edit_conflict' }),
     );
 
-    await expect(context.updateTemplate({ ...template, isPublic: true })).rejects.toMatchObject({ status: 409 });
+    await expect(context.updateTemplate({ ...savePayloadOf(template), isPublic: true })).rejects.toMatchObject({ status: 409 });
 
     expect(client.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
   });
 });
 
 async function showTemplateListWithTheCatalogCached(client: QueryClient) {
-  const listFetch = vi.fn(async () => [template]);
-  const observer = new QueryObserver(client, {
-    queryKey: ['templates', 'user-1', 'personal'],
-    queryFn: listFetch,
-    staleTime: 5 * 60 * 1000,
-  });
-  const unsubscribe = observer.subscribe(() => {});
-  await vi.waitFor(() => expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([template]));
-  listFetch.mockClear();
-  listFetch.mockResolvedValue([]);
+  const shown = await showAListThatWillReadNext(client, ['templates', 'user-1', 'personal'], [template], []);
   client.setQueryData(['templates', 'catalog'], [template, { ...template, id: 'template-2' }]);
-  return { listFetch, unsubscribe };
+  return shown;
 }
 
 const archivedTemplate = () => createApiError(404, { error: 'Template not found or unauthorized' });
@@ -178,7 +132,6 @@ async function openTemplatePageThatWillFindItGone(client: QueryClient) {
 
 describe('refresh after an action on an item archived elsewhere, which the cached lists can show for up to 5 minutes', () => {
   afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
   });
 

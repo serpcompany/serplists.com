@@ -1,41 +1,22 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { PAST_THE_TEAMS_LIST_STALE_TIME, returnToTabAfter } from './support/navigation';
-
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
+import { ACME_ORG_OWNED, FREE_BILLING_STATUS, fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 async function mockApi(page: Page) {
   const teamsRequests: string[] = [];
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === '/api/auth/get-session') {
-      await fulfillJson(route, {
-        session: {
-          id: 'session-1',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          expiresAt: '2026-07-08T00:00:00.000Z',
-          token: 'session-token',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-          userId: 'user-owner',
-        },
-        user: { id: 'user-owner', email: 'owner@example.com', emailVerified: true, name: 'Owner User', username: 'owner' },
-      });
+      await fulfillJson(route, OWNER_SESSION);
       return;
     }
     if (path === '/api/teams' && request.method() === 'GET') {
       teamsRequests.push(path);
-      await fulfillJson(route, [
-        { id: 'team-1', memberId: 'member-1', membershipStatus: 'active', name: 'Acme Org', role: 'owner', slug: 'acme' },
-      ]);
+      await fulfillJson(route, ACME_ORG_OWNED);
       return;
     }
     if (path === '/api/billing/status') {
-      await fulfillJson(route, { billingEnabled: true, plan: 'free' });
+      await fulfillJson(route, FREE_BILLING_STATUS);
       return;
     }
     await fulfillJson(route, []);

@@ -10,11 +10,11 @@ import type {
   ChecklistTemplateImport,
   PortableChecklistTemplate,
   PortableTemplatePack,
-  TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { toPortableSections } from "@/lib/schemas/portableSections";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { uniqueCategoryNames } from "@/lib/categorySlug";
+import { normalizeStringArray, parseJsonArray } from "@/lib/schemas/jsonArrays";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
 import { withImportedLinkSource } from "@/lib/utils/mediaSource";
@@ -25,15 +25,12 @@ import {
   parseTemplateMarkdown,
   parseTemplateYaml,
 } from "@/lib/templates/templateMarkdown";
+import type { ExportedTemplatePack } from "@/lib/schemas/apiTemplates";
 import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 
-export type TemplateImportWarning = {
+type TemplateImportWarning = {
   templateTitle: string;
   message: string;
-};
-
-export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
-  templates: ChecklistTemplate[];
 };
 
 export type TemplateImportResult = {
@@ -49,32 +46,7 @@ const generateTempId = (prefix: string) => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 };
 
-const parseJsonArray = (value: unknown): unknown[] | null => {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
-const normalizeStringList = (value: unknown): string[] => {
-  const parsed = parseJsonArray(value);
-  if (parsed) {
-    return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return [];
-};
-
-const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
+const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringArray(value));
 
 const sectionHoldingLegacyItems = (items: unknown[]) => ({ id: "1", title: "Checklist", items });
 
@@ -128,7 +100,7 @@ const normalizeImportTemplate = (
     seoDescription: template.seoDescription || "",
     rules: template.rules,
     categories: normalizeCategoryList(template.categories ?? template.category),
-    tags: normalizeStringList(template.tags),
+    tags: normalizeStringArray(template.tags),
   };
 };
 
@@ -157,7 +129,7 @@ const normalizePortableTemplate = (
     seoDescription: template.seoDescription || "",
     rules: template.rules,
     categories: normalizeCategoryList(template.categories),
-    tags: normalizeStringList(template.tags),
+    tags: normalizeStringArray(template.tags),
   };
 };
 
@@ -201,28 +173,6 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
-export const exportTemplatesToJSON = (
-  templates: ChecklistTemplate[], 
-  exportedBy?: string
-): TemplateBackupExport => {
-  const publicTemplates = templates.filter(t => t.isPublic);
-  const privateTemplates = templates.filter(t => !t.isPublic);
-
-  const backup: TemplateBackupExport = {
-    version: "1.0.0",
-    exportedAt: new Date().toISOString(),
-    exportedBy,
-    templates,
-    metadata: {
-      totalTemplates: templates.length,
-      publicTemplates: publicTemplates.length,
-      privateTemplates: privateTemplates.length
-    }
-  };
-
-  return backup;
-};
-
 export const exportPortableTemplatesToJSON = (
   templates: ChecklistTemplate[],
   exportedBy?: string
@@ -237,8 +187,8 @@ export const exportPortableTemplatesToJSON = (
     seoDescription: template.seoDescription || undefined,
     visibility: template.isPublic ? "public" : "private",
     categories: normalizeCategoryList(template.categories),
-    tags: normalizeStringList(template.tags),
-    sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
+    tags: normalizeStringArray(template.tags),
+    sections: toPortableSections(template.sections),
     rules: template.rules,
   }));
   const exported = results.flatMap((result) => (result.success ? [result.data] : []));
@@ -263,18 +213,12 @@ export const exportPortableTemplatesToJSON = (
   };
 };
 
-export const downloadBackupFile = (
-  backup: TemplateBackupExport | PortableTemplatePack,
-  filename?: string
-): void => {
-  const jsonString = JSON.stringify(backup, null, 2);
+export const downloadBackupFile = (pack: ExportedTemplatePack, filename?: string): void => {
+  const jsonString = JSON.stringify(pack, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const defaultFilename =
-    "kind" in backup && backup.kind === "serplists-template-pack"
-      ? `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`
-      : `checklist-templates-backup-${new Date().toISOString().split('T')[0]}.json`;
-  
+  const defaultFilename = `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`;
+
   const link = document.createElement("a");
   link.href = url;
   link.download = filename || defaultFilename;
@@ -282,33 +226,6 @@ export const downloadBackupFile = (
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-};
-
-export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (event) => {
-      try {
-        const jsonString = event.target?.result as string;
-        const data = JSON.parse(jsonString);
-        const validatedBackup = validateBackup(data);
-        resolve(validatedBackup);
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          reject(new Error("Invalid JSON file format"));
-        } else {
-          reject(new Error(`Backup validation failed: ${formatValidationError(error)}`));
-        }
-      }
-    };
-    
-    reader.onerror = () => {
-      reject(new Error("Failed to read file"));
-    };
-    
-    reader.readAsText(file);
-  });
 };
 
 const parsePortablePackTemplates = (
@@ -341,7 +258,7 @@ export const parseTemplatesFromData = (
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
-    } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
+    } else if (data && typeof data === "object" && "kind" in data && data.kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
@@ -354,7 +271,7 @@ export const parseTemplatesFromData = (
         const backup = validateBackup(data);
         rawTemplates = backup.templates;
       } catch {
-        rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
+        rawTemplates = validateTemplateImportArray(data.templates);
       }
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else {
@@ -369,32 +286,19 @@ export const parseTemplatesFromData = (
   }
 };
 
-export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
-  const jsonString = await new Promise<string>((resolve, reject) => {
+const readFileText = (file: File): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event) => resolve(event.target?.result as string);
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Failed to read file"));
+    };
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
-
-  try {
-    const data = JSON.parse(jsonString);
-    return parseTemplatesFromData(data);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error("Invalid JSON file format");
-    }
-    throw error;
-  }
-};
 
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
-  const sourceString = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => resolve(event.target?.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
+  const sourceString = await readFileText(file);
 
   const extension = detectTemplateSourceExtension(file.name);
   if (!extension) {
@@ -410,7 +314,8 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
       return normalizePortableData(parseTemplateYaml(sourceString));
     }
 
-    return parseTemplatesFromData(JSON.parse(sourceString));
+    const data: unknown = JSON.parse(sourceString);
+    return parseTemplatesFromData(data);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
@@ -424,9 +329,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
 
 export {
   countImportPublicTemplates,
-  generateUniqueIds,
   IMPORT_VISIBILITY_LABELS,
   prepareTemplatesForImport,
-  resolveImportIsPublic,
   type ImportVisibility,
 } from "./templateImportPrep";

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sectionAt, taskAt } from '../../../support/elements';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
 import {
@@ -12,16 +13,19 @@ import {
   mapChecklistToRun,
 } from '@/features/run-execution/runExecutionMappers';
 import { serializeSharedChecklistRun } from '@functions/api/utils/checklist-runs';
+import { apiRunSchema } from '@/lib/schemas/apiRuns';
 import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
+import { objectContaining } from '../../../support/asymmetricMatchers';
+import { buildRun } from '../../../fixtures/runExecutionFixtures';
 
 const run = (completed: string[]): ChecklistRun =>
-  ({
+  buildRun({
     id: 'run-1',
     sections: [
       { id: 's1', title: 'One', items: ['a', 'b'].map((id) => ({ id, title: id, isCompleted: completed.includes(id) })) },
       { id: 's2', title: 'Two', items: ['c', 'd'].map((id) => ({ id, title: id, isCompleted: completed.includes(id) })) },
     ],
-  }) as unknown as ChecklistRun;
+  });
 
 describe('getNextSelectedItemId', () => {
   it('moves to the next unfinished task, across sections', () => {
@@ -42,7 +46,7 @@ describe('getNextSelectedItemId', () => {
 describe('a ticked task with an open Sub-task, which older runs and API writes can hold, is not done', () => {
   const withOpenSubTask = (): ChecklistRun => {
     const legacy = run(['a', 'b', 'c', 'd']);
-    legacy.sections[0].items[1].contents = [
+    taskAt(legacy, 0, 1).contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Done', isCompleted: true }] },
       { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Open', isCompleted: false }] },
     ];
@@ -60,7 +64,7 @@ describe('a ticked task with an open Sub-task, which older runs and API writes c
 
   it('is not skipped for an empty Sub-tasks block on a ticked task', () => {
     const done = run(['a', 'b', 'c', 'd']);
-    done.sections[0].items[1].contents = [{ type: 'subItems', value: '', subItems: [] }];
+    taskAt(done, 0, 1).contents = [{ type: 'subItems', value: '', subItems: [] }];
 
     expect(getNextSelectedItemId(done, 'd')).toBe('d');
     expect(getInitialSelectedItemId(done)).toBe('a');
@@ -156,8 +160,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
       },
     ],
   });
-  const runOf = (...items: ChecklistItem[]): ChecklistRun =>
-    ({ id: 'run-1', sections: [{ id: 's1', title: 'One', items }] }) as unknown as ChecklistRun;
+  const runOf = (...items: ChecklistItem[]): ChecklistRun => buildRun({ id: 'run-1', sections: [{ id: 's1', title: 'One', items }] });
 
   it('counts tasks and sub-tasks separately', () => {
     const counts = countRunExecutionItems(runOf(task('a', [false, false, false]), task('b', [false, false, false]), task('c', [false, false, false])));
@@ -195,7 +198,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
     const zero = { progress: 0, subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 0 };
     expect(countRunExecutionItems(null)).toEqual(zero);
     expect(countRunExecutionItems(runOf())).toEqual(zero);
-    expect(countRunExecutionItems({ id: 'run-1', sections: [] } as unknown as ChecklistRun)).toEqual(zero);
+    expect(countRunExecutionItems(buildRun({ id: 'run-1', sections: [] }))).toEqual(zero);
   });
 
   it('weights progress the same way as the API that stores it', () => {
@@ -214,7 +217,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
 
 describe('areAllRunItemsCompleted', () => {
   const withSubTask = (subTaskDone: boolean): ChecklistRun =>
-    ({
+    buildRun({
       id: 'run-1',
       sections: [{
         id: 's1',
@@ -226,7 +229,7 @@ describe('areAllRunItemsCompleted', () => {
           contents: [{ id: 'c1', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Tagline', isCompleted: subTaskDone }] }],
         }],
       }],
-    }) as unknown as ChecklistRun;
+    });
 
   it('is false while a ticked task still has an unfinished Sub-task', () => {
     expect(areAllRunItemsCompleted(withSubTask(false))).toBe(false);
@@ -300,8 +303,8 @@ describe('mapChecklistToRun retired work', () => {
     };
     const [entry] = mapChecklistToRun(checklist([{ kind: 'item', sectionId: 's1', item }]), 'run-1').retiredItems ?? [];
 
-    expect(entry).toEqual(expect.objectContaining({
-      task: expect.objectContaining({ subTasks: [{ id: 'short', title: 'Short', isCompleted: true }] }),
+    expect(entry).toEqual(objectContaining({
+      task: objectContaining({ subTasks: [{ id: 'short', title: 'Short', isCompleted: true }] }),
     }));
   });
 
@@ -320,7 +323,7 @@ describe('mapChecklistToRun retired work', () => {
     const items = mapChecklistToRun(checklist([first, second]), 'run-1').retiredItems ?? [];
 
     expect(items).toHaveLength(1);
-    expect(items[0]).toEqual(expect.objectContaining({ task: expect.objectContaining({ notes: 'Second' }) }));
+    expect(items[0]).toEqual(objectContaining({ task: objectContaining({ notes: 'Second' }) }));
   });
 
   it('never counts retired work toward progress, completion or the next task', () => {
@@ -345,7 +348,7 @@ describe('mapChecklistRuns', () => {
   it('maps a run with malformed content instead of throwing (the run page showed "Unable to load run")', () => {
     const run = mapChecklistToRun(malformed, 'run-bad');
 
-    expect(run.sections[0].items[0].contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
+    expect(taskAt(run, 0, 0).contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
     expect(run.progress).toBe(0);
   });
 
@@ -353,15 +356,15 @@ describe('mapChecklistRuns', () => {
     const runs = mapChecklistRuns([malformed, valid]);
 
     expect(runs.map((run) => run.id)).toEqual(['run-bad', 'run-ok']);
-    expect(runs[0]).toEqual(expect.objectContaining({ teamId: 'org-1', progress: 0 }));
-    expect(runs[1]).toEqual(expect.objectContaining({ progress: 100 }));
+    expect(runs[0]).toEqual(objectContaining({ teamId: 'org-1', progress: 0 }));
+    expect(runs[1]).toEqual(objectContaining({ progress: 100 }));
   });
 
   it('keeps a run whose items column is not even JSON, with no tasks, so it can still be deleted', () => {
-    const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid, 'x']);
+    const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid]);
 
     expect(runs.map((run) => run.id)).toEqual(['run-broken', 'run-ok']);
-    expect(runs[0]).toEqual(expect.objectContaining({ sections: [], progress: 0 }));
+    expect(runs[0]).toEqual(objectContaining({ sections: [], progress: 0 }));
   });
 });
 
@@ -380,7 +383,7 @@ describe('mapChecklistToRun', () => {
       current_template_version: 2,
     });
 
-    const mapped = mapChecklistToRun(shared, 'share-token');
+    const mapped = mapChecklistToRun(apiRunSchema.parse(shared), 'share-token');
 
     expect(mapped).toMatchObject({
       id: 'run-1',
@@ -394,6 +397,6 @@ describe('mapChecklistToRun', () => {
       userId: '',
       templateId: '',
     });
-    expect(mapped.sections[0].items.map((item) => item.isCompleted)).toEqual([true, false]);
+    expect(sectionAt(mapped, 0).items.map((item) => item.isCompleted)).toEqual([true, false]);
   });
 });

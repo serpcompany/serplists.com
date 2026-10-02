@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
+import { lastOf } from '../../support/elements';
 
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import {
   buildCategorySlug,
   buildPublicCategoryPath,
-  findCategoryNameBySlug,
   resolveLegacyTemplatesCategoryRedirectPath,
 } from '@/lib/routes';
 import { generateSlug } from '@/utils/urlHelpers';
 
 import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
-const categorySlugInPath = (path: string) => decodeURIComponent(path.split('/').filter(Boolean).pop()!);
+const categorySlugInPath = (path: string) => decodeURIComponent(lastOf(path.split('/').filter(Boolean)));
 
 describe('buildCategorySlug, which keeps the letters of every script so no two categories share an empty slug', () => {
   it.each([
@@ -62,10 +62,8 @@ describe('buildPublicCategoryPath', () => {
     const named = CATEGORY_SLUG_FIXTURES.filter((name) => buildCategorySlug(name));
     named.forEach((name) => {
       const path = buildPublicCategoryPath(name);
-      expect(path).not.toBeNull();
-      expect(findCategoryNameBySlug(named, categorySlugInPath(path!))).toBe(
-        named.find((candidate) => buildCategorySlug(candidate) === buildCategorySlug(name)),
-      );
+      assert.exists(path);
+      expect(buildCategorySlug(categorySlugInPath(path))).toBe(buildCategorySlug(name));
     });
     expect(buildPublicCategoryPath('日本語')).toBe('/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E/');
   });

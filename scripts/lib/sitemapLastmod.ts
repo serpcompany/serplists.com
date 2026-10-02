@@ -1,15 +1,23 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
-import { normalizeEol } from './line-endings.mjs';
+import { normalizeEol } from './line-endings';
 
-export const templatePackSchema = z
+const templatePackSchema = z
   .object({
     templates: z.array(z.record(z.unknown())).optional(),
   })
   .passthrough();
 
 export type TemplatePack = z.infer<typeof templatePackSchema>;
+
+interface PackTemplate extends Record<string, unknown> {
+  slug?: unknown;
+  visibility?: unknown;
+  categories?: unknown;
+}
+
+const templatesOf = (pack: TemplatePack): PackTemplate[] => pack.templates ?? [];
 
 export type PublicTemplate = { slug: string; categories: string[]; contentHash: string };
 
@@ -38,7 +46,7 @@ export function parseTemplatePack(text: string | null): TemplatePack | null {
 export function listPublicTemplates(packs: TemplatePack[]): PublicTemplate[] {
   const templates: PublicTemplate[] = [];
   for (const pack of packs) {
-    for (const template of pack.templates ?? []) {
+    for (const template of templatesOf(pack)) {
       const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
       if (!slug || template.visibility !== 'public') continue;
       templates.push({
@@ -100,7 +108,7 @@ export function resolveLastmod({
 }: {
   hash: string;
   committed: DatedHash | null | undefined;
-  previous: { hash?: string; lastmod?: string | null } | null | undefined;
+  previous: { hash?: string | undefined; lastmod?: string | null | undefined } | null | undefined;
   now: string;
 }): string {
   if (committed?.hash === hash) return committed.lastmod;

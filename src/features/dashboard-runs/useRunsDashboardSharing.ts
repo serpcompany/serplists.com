@@ -18,9 +18,9 @@ export function useRunsDashboardSharing({
   onStopSharingRun,
 }: {
   runs: Pick<ChecklistRun, 'id' | 'isPublic'>[];
-  onRunShared?: (runId: string) => void;
-  onShareFailed?: (error: unknown) => Promise<void>;
-  onStopSharingRun?: (runId: string) => Promise<void>;
+  onRunShared?: ((runId: string) => void) | undefined;
+  onShareFailed?: ((error: unknown) => Promise<void>) | undefined;
+  onStopSharingRun?: ((runId: string) => Promise<void>) | undefined;
 }) {
   const [sharedLink, setSharedLink] = useState<SharedLink | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);

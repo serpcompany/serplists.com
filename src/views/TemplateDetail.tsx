@@ -32,7 +32,8 @@ import {
 } from '@/components/template/TemplateDetailCards';
 import { TemplateSectionList } from '@/components/template/TemplateSectionList';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
@@ -103,6 +104,7 @@ const TemplateDetail = () => {
     shareTemplate,
     startRun,
     template,
+    totalItems,
     history,
   } = useTemplateDetailModel({
     canEditTemplates,
@@ -138,10 +140,6 @@ const TemplateDetail = () => {
   });
   const startRunRoleUnavailable = Boolean(displayTemplate && !displayTemplate.isPublic) &&
     isRoleUnavailable(displayTemplate?.teamId);
-  const totalTasks = displayTemplate?.sections.reduce(
-    (count, section) => count + section.items.length,
-    0,
-  ) ?? 0;
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
   const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
   const historyEntries = buildTemplateHistoryTimeline(history?.data);
@@ -404,7 +402,7 @@ const TemplateDetail = () => {
         }
         aside={
           <div className="grid grid-cols-2 gap-4">
-            <Stat icon={<ListChecks />} label="Total Tasks" value={totalTasks} />
+            <Stat icon={<ListChecks />} label="Total Tasks" value={totalItems} />
             <Stat icon={<Layers />} label="Sections" value={displayTemplate.sections.length} />
           </div>
         }

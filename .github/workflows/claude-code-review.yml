@@ -1,11 +1,5 @@
 name: Code Review
 
-# Claude reviews every push to a pull request with the repository's pr-review skill
-# (.claude/skills/pr-review/SKILL.md): each new finding as an inline comment, plus one
-# summary comment it updates on every review. Its findings from earlier pushes are passed
-# in, so a re-review raises only what is new. Advisory: it never blocks merging, but the
-# check goes red when Claude posted or updated nothing.
-# Setup and limits: docs/design-docs/agent-workflow.md.
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
@@ -16,14 +10,9 @@ concurrency:
 
 jobs:
   review:
-    # Skip drafts, and bot-opened PRs such as the weekly doc-gardening PR: the action
-    # rejects bot actors, and those PRs are small docs-only changes.
     if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Claude posts with the Claude GitHub App token that the action gets through the
-    # OIDC exchange, so the workflow token only reads: the checkout, and the PR's
-    # comments before and after the review.
     permissions:
       contents: read
       pull-requests: read
@@ -42,13 +31,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Before Claude starts, the action replaces CLAUDE.md, .claude/ and .mcp.json with
-      # the base branch's copies (deleting them when the base has none). So the review
-      # skill always comes from the base branch, and a PR cannot rewrite its own review.
-      # The rules the skill checks against, and the earlier findings below, go outside the
-      # checkout, into the system prompt of Claude and of every subagent it starts.
-      # The rules come from the base branch too: a PR must not weaken the rules it is
-      # reviewed against (say, drop "never log personal data" while logging an email).
       - name: Give the reviewer the repository rules
         if: env.HAS_REVIEW_TOKEN == 'true'
         env:
@@ -73,9 +55,6 @@ jobs:
         if: env.HAS_REVIEW_TOKEN == 'true'
         run: echo "REVIEW_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
-      # What Claude posted on earlier pushes, so the review raises only new findings and
-      # updates its one summary comment. Read with the workflow's read-only token, and
-      # inline for the same reason as the check at the end.
       - name: Give the reviewer its earlier findings
         if: env.HAS_REVIEW_TOKEN == 'true'
         env:
@@ -132,20 +111,11 @@ jobs:
             process.exit(1);
           });
 
-      # claude_args allows every tool in the pr-review skill's allowed-tools frontmatter,
-      # which also brings back the Glob and Grep tools that Claude Code leaves out on
-      # Linux (searches then skip Bash and its ask rules). --strict-mcp-config keeps
-      # .mcp.json servers such as chrome-devtools out of the review; the action's inline
-      # comment server still loads.
       - name: Review with Claude
         id: review
         if: env.HAS_REVIEW_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
         env:
-          # Claude Code runs subagents in the background by default. The review starts
-          # them, Claude ends its turn to wait, the action stops at that first result, and
-          # the run exits green with nothing posted (anthropics/claude-code-action#1646).
-          # This keeps subagents in the foreground.
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -157,9 +127,6 @@ jobs:
             --append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Task,Read,Glob,Grep"
 
-      # The full transcript (Claude's messages, tool calls, denials) is the only record of
-      # what the review did: the action's log shows counts only. The repository is
-      # private, so members can download it for a week.
       - name: Keep the review transcript
         if: always() && env.HAS_REVIEW_TOKEN == 'true' && steps.review.outputs.execution_file != ''
         uses: actions/upload-artifact@v7
@@ -169,8 +136,6 @@ jobs:
           retention-days: 7
           overwrite: true
 
-      # Inline on purpose: this job can mint an OIDC token, so it runs no script from the
-      # PR checkout. tests/unit/workflows/claude-code-review.test.ts runs this code.
       - name: Fail unless Claude posted a review
         if: env.HAS_REVIEW_TOKEN == 'true'
         env:
@@ -181,10 +146,10 @@ jobs:
         shell: node {0}
         run: |
           const fs = require('node:fs');
-          // Workflow commands end at a newline and treat % as an escape.
-          const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const asOneWorkflowCommandLine = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const clockSkewAllowanceMs = 30 * 1000;
           const fail = (message) => {
-            console.log(`::error title=Claude did not post a review::${clean(message, 900)}`);
+            console.log(`::error title=Claude did not post a review::${asOneWorkflowCommandLine(message, 900)}`);
             process.exit(1);
           };
 
@@ -206,9 +171,7 @@ jobs:
             return { messages, result };
           };
 
-          // Every comment and review the bot has on the PR, with when it was last written:
-          // the summary comment is edited in place, so an update counts as posting.
-          const readBotActivity = async (bot) => {
+          const readWhenTheBotLastWroteEachCommentAndReview = async (bot) => {
             const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
             const headers = {
               Accept: 'application/vnd.github+json',
@@ -259,35 +222,33 @@ jobs:
 
             if (result.is_error) fail(`The review ended with ${result.subtype || 'an error'}.`);
 
-            // Subagents still running when the run ended took their findings with them.
             const taskSets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
             const lastSet = taskSets.length > 0 ? taskSets[taskSets.length - 1].tasks : [];
-            const running = (Array.isArray(lastSet) ? lastSet : []).filter((task) => task && !task.ambient);
-            if (running.length > 0) {
-              const names = [...new Set(running.map((task) => clean(task.description || task.task_type, 60)))];
-              fail(`The run ended while ${running.length} background task(s) were still running (${names.join(', ')}), so their findings were never posted. Set CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 on the review step.`);
+            const subagentsWhoseFindingsWereLost = (Array.isArray(lastSet) ? lastSet : []).filter((task) => task && !task.ambient);
+            if (subagentsWhoseFindingsWereLost.length > 0) {
+              const names = [...new Set(subagentsWhoseFindingsWereLost.map((task) => asOneWorkflowCommandLine(task.description || task.task_type, 60)))];
+              fail(`The run ended while ${subagentsWhoseFindingsWereLost.length} background task(s) were still running (${names.join(', ')}), so their findings were never posted. Set CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 on the review step.`);
             }
 
             const denials = Array.isArray(result.permission_denials) ? result.permission_denials : [];
             const denied = [...new Set(denials.map((denial) => {
               const command = denial && denial.tool_input && denial.tool_input.command;
-              return command ? `${denial.tool_name} (${clean(command)})` : String(denial && denial.tool_name);
+              return command ? `${denial.tool_name} (${asOneWorkflowCommandLine(command)})` : String(denial && denial.tool_name);
             }))];
 
             const startedAt = Date.parse(process.env.REVIEW_STARTED_AT || '');
             if (Number.isNaN(startedAt)) fail('REVIEW_STARTED_AT is not set, so the check cannot tell which comments this run posted.');
             let activity;
             try {
-              activity = await readBotActivity(process.env.REVIEW_BOT || 'claude[bot]');
+              activity = await readWhenTheBotLastWroteEachCommentAndReview(process.env.REVIEW_BOT || 'claude[bot]');
             } catch (error) {
               fail(`Could not read the PR's comments to check the review: ${error.message}`);
             }
-            // Allow for clock skew between the runner and GitHub.
-            const posted = activity.filter((item) => Date.parse(item.at) >= startedAt - 30 * 1000).length;
+            const posted = activity.filter((item) => Date.parse(item.at) >= startedAt - clockSkewAllowanceMs).length;
 
             if (posted > 0) {
               if (denied.length > 0) {
-                console.log(`::warning title=Claude review was denied tools::Claude was denied ${clean(denied.join(', '), 600)}. Allow the tool in claude_args if the review needs it.`);
+                console.log(`::warning title=Claude review was denied tools::Claude was denied ${asOneWorkflowCommandLine(denied.join(', '), 600)}. Allow the tool in claude_args if the review needs it.`);
               }
               console.log(`Claude posted or updated ${posted} comment(s) or review(s) on this PR.`);
               return;
@@ -295,7 +256,7 @@ jobs:
             if (denied.length > 0) {
               fail(`Claude was denied ${denied.join(', ')} and posted nothing, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
             }
-            fail(`Claude finished without posting a finding or updating its summary comment. Claude's last message: ${clean(result.result || '(none)', 400)}`);
+            fail(`Claude finished without posting a finding or updating its summary comment. Claude's last message: ${asOneWorkflowCommandLine(result.result || '(none)', 400)}`);
           };
 
           main().catch((error) => fail(`The review check failed: ${error && error.message}`));

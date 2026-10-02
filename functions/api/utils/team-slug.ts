@@ -3,6 +3,7 @@ import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { jsonError } from "./response";
 import { generateSlug, truncateSlug, withSlugSuffix } from "./slug";
+import { isUniqueViolationOn } from "./unique-violation";
 import { TEAM_SLUG_MAX } from "../../../src/lib/schemas/templateLimits";
 
 type Db = ReturnType<typeof createDb>;
@@ -14,12 +15,10 @@ export const teamSlugSchema = z
   .max(TEAM_SLUG_MAX)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only");
 
-const TEAM_SLUG_UNIQUE_VIOLATION = /unique constraint failed:[^:]*\bteams\.slug\b/i;
-
 export async function isTeamSlugTaken(db: Db, slug: string, exceptTeamId?: string): Promise<boolean> {
   const { teams } = schema;
   const [existing] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, slug)).limit(1);
-  return Boolean(existing) && existing.id !== exceptTeamId;
+  return existing !== undefined && existing.id !== exceptTeamId;
 }
 
 export function teamSlugInUseError(): Response {
@@ -27,12 +26,7 @@ export function teamSlugInUseError(): Response {
 }
 
 export function isTeamSlugUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
-    if (TEAM_SLUG_UNIQUE_VIOLATION.test(current.message)) return true;
-    current = current.cause;
-  }
-  return false;
+  return isUniqueViolationOn(error, "teams.slug");
 }
 
 export function teamSlugBase(name: string, teamId: string): string {

@@ -12,33 +12,18 @@ import type {
   ChecklistSubItem,
 } from '@/types/checklist';
 import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
+import type { ApiRun } from '@/lib/schemas/apiRuns';
+import { parseJsonArray } from '@/lib/schemas/jsonArrays';
 
-type ApiRecord = Record<string, unknown>;
+const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
-const parseJsonArray = (value: unknown): unknown[] => {
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value !== 'string' || !value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const normalizeChecklistSections = (checklist: ApiRecord): ChecklistSection[] => {
-  const rawSections = Array.isArray(checklist.sections)
+const normalizeChecklistSections = (checklist: ApiRun): ChecklistSection[] => {
+  const rawSections = isArray(checklist.sections)
     ? checklist.sections
-    : parseJsonArray(checklist.items);
+    : parseJsonArray(checklist.items) ?? [];
 
   if (isSectionsShape(rawSections)) {
     return normalizeSections(rawSections);
@@ -54,7 +39,7 @@ const normalizeChecklistSections = (checklist: ApiRecord): ChecklistSection[] =>
 };
 
 export const mapChecklistToRun = (
-  checklist: ApiRecord,
+  checklist: ApiRun,
   fallbackId: string,
 ): ChecklistRun => {
   const sections = normalizeChecklistSections(checklist);
@@ -85,17 +70,13 @@ export const mapChecklistToRun = (
   };
 };
 
-export const mapChecklistRuns = (checklists: unknown): ChecklistRun[] =>
-  (Array.isArray(checklists) ? checklists : []).flatMap((checklist): ChecklistRun[] => {
-    if (typeof checklist !== 'object' || checklist === null || typeof (checklist as ApiRecord).id !== 'string') {
-      return [];
-    }
-    const record = checklist as ApiRecord;
+export const mapChecklistRuns = (checklists: ApiRun[]): ChecklistRun[] =>
+  checklists.map((checklist) => {
     try {
-      return [mapChecklistToRun(record, record.id as string)];
+      return mapChecklistToRun(checklist, checklist.id);
     } catch (error) {
-      console.error('Unable to read run content', { runId: record.id, error });
-      return [mapChecklistToRun({ ...record, items: '[]', sections: undefined, retired_items: '[]' }, record.id as string)];
+      console.error('Unable to read run content', { runId: checklist.id, error });
+      return mapChecklistToRun({ ...checklist, items: '[]', sections: undefined, retired_items: '[]' }, checklist.id);
     }
   });
 
@@ -205,7 +186,7 @@ export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): bo
 
 export const findRunSubItem = (
   item: ChecklistItem,
-  at: { contentIndex: number; subItemId?: string; subItemIndex: number },
+  at: { contentIndex: number; subItemId?: string | undefined; subItemIndex: number },
 ): ChecklistSubItem | undefined => {
   const content = item.contents?.[at.contentIndex];
   const candidate = content?.type === 'subItems' ? content.subItems?.[at.subItemIndex] : undefined;

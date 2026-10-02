@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { LabeledInput } from "@/components/auth/AuthFields";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { PasswordInput } from "@/components/auth/PasswordInput";
-import { Button } from "@/components/ui/button";
+import { BusyButton } from "@/components/shared/BusyButton";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
 import { buildEmailVerifiedCallbackURL } from "@/lib/auth/loginNotice";
@@ -21,6 +20,7 @@ import {
   getReturnPath,
   withReturnPath,
 } from "@/lib/auth/returnPath";
+import { moveOnAfterAnAccountChange } from "@/lib/navigation/moveOnAfterAnAccountChange";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildLoginPath } from "@/lib/routes";
 import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
@@ -72,7 +72,9 @@ const Register = () => {
         if (requiresEmailVerification) {
           handOffLoginEmail(email);
         }
-        router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath }));
+        moveOnAfterAnAccountChange(() =>
+          router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath })),
+        );
       } else {
         toast.error(result.error ?? "Registration failed.");
       }
@@ -97,29 +99,25 @@ const Register = () => {
     >
       <form onSubmit={handleSubmit}>
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="name">Name</FieldLabel>
-            <Input
-              id="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Your name"
-              maxLength={USER_NAME_MAX_LENGTH}
-              required
-            />
-          </Field>
+          <LabeledInput
+            id="name"
+            label="Name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Your name"
+            maxLength={USER_NAME_MAX_LENGTH}
+            required
+          />
 
-          <Field>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-          </Field>
+          <LabeledInput
+            id="email"
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            required
+          />
 
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
@@ -144,16 +142,9 @@ const Register = () => {
             />
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 data-icon="inline-start" className="animate-spin" />
-                Creating account...
-              </>
-            ) : (
-              "Create account"
-            )}
-          </Button>
+          <BusyButton type="submit" busy={isSubmitting} busyLabel="Creating account...">
+            Create account
+          </BusyButton>
         </FieldGroup>
       </form>
     </AuthPageShell>

@@ -1,43 +1,45 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { assert, beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
+import type { z } from "zod";
+import {
+  callToolWithAFreshRunKey,
+  openAFreshMcpDatabase,
+  refusedToolCallWithAFreshRunKey,
+} from "../../../support/agentMcpOnSqlite";
+import type { SqliteD1 } from "../../../support/sqlite-d1";
 import { LIST_PAGE_ROWS } from "@functions/api/handlers/agentMcpLists";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { authenticateWithAFreshRunKey, mcpToolCall, resultBytes } from "../../../support/agentMcp";
+import { mcpRunsPage, mcpTemplatesPage, resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText } from "../../../support/jsonText";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
 type JsonRecord = Record<string, unknown>;
 
-let d1: MigratedSqliteD1;
-let requestId = 0;
+let d1: SqliteD1;
 
-async function call(name: string, args: JsonRecord = {}): Promise<{ result: JsonRecord; error?: JsonRecord }> {
-  requestId += 1;
-  authenticateWithAFreshRunKey(authenticatePersonalRunKey);
-  const response = await handleAgentMcp(mcpToolCall(name, args, requestId), { DB: d1.binding } as never);
-  const body = await response.json() as JsonRecord;
-  return { result: body.result as JsonRecord, error: body.error as JsonRecord | undefined };
+async function call(name: string, args: JsonRecord = {}) {
+  const { result } = await callToolWithAFreshRunKey(d1, name, args);
+  expect(result.isError).toBeUndefined();
+  return result.structuredContent;
 }
 
-async function everyPageWithinTheBound(name: "list_templates" | "list_runs", args: JsonRecord = {}): Promise<JsonRecord[]> {
-  const pages: JsonRecord[] = [];
+const templatesPage = async (args: JsonRecord = {}) => mcpTemplatesPage.parse(await call("list_templates", args));
+const runsPage = async (args: JsonRecord = {}) => mcpRunsPage.parse(await call("list_runs", args));
+const refusal = async (name: string, args: JsonRecord) => (await refusedToolCallWithAFreshRunKey(d1, name, args)).error;
+
+async function everyPageWithinTheBound<Page extends typeof mcpTemplatesPage | typeof mcpRunsPage>(
+  name: "list_templates" | "list_runs",
+  page: Page,
+  args: JsonRecord = {},
+): Promise<Array<z.output<Page>>> {
+  const pages: Array<z.output<Page>> = [];
   let cursor: string | undefined;
   do {
-    const { result, error } = await call(name, { ...args, ...(cursor ? { cursor } : {}) });
-    expect(error).toBeUndefined();
-    expect(result.isError).toBeUndefined();
-    const page = result.structuredContent as JsonRecord;
-    expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-    pages.push(page);
-    cursor = page.nextCursor as string | undefined;
+    const content = await call(name, { ...args, ...(cursor ? { cursor } : {}) });
+    expect(resultBytes(content)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+    const parsed = page.parse(content);
+    pages.push(parsed);
+    cursor = parsed.nextCursor;
   } while (cursor);
   return pages;
 }
@@ -71,9 +73,7 @@ function insertRun(id: string, fields: { userId?: string; createdAt: string; sta
 
 describe("MCP list tools on the migrated tables", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new MigratedSqliteD1();
+    d1 = openAFreshMcpDatabase();
     seedUsers();
   });
 
@@ -109,18 +109,18 @@ describe("MCP list tools on the migrated tables", () => {
     it("lists every active Personal template once, newest change first, a page within the bound at a time, cutting long titles and descriptions", async () => {
       const expected = seedTemplatesReturningTheListedOrder();
 
-      const pages = await everyPageWithinTheBound("list_templates");
+      const pages = await everyPageWithinTheBound("list_templates", mcpTemplatesPage);
 
-      const listed = pages.flatMap((page) => (page.templates as JsonRecord[]).map(({ id }) => id));
+      const listed = pages.flatMap((page) => page.templates.map(({ id }) => id));
       expect(listed).toEqual(expected);
       expect(pages.length).toBeGreaterThan(3);
       expect(pages.at(-1)).not.toHaveProperty("nextCursor");
       expect(pages.slice(0, -1).every((page) => typeof page.nextCursor === "string")).toBe(true);
-      const costliest = pages.flatMap((page) => page.templates as JsonRecord[]).find(({ id }) => id === "t-000") as JsonRecord;
-      expect(String(costliest.title)).toHaveLength(160);
-      expect(String(costliest.description)).toHaveLength(500);
-      expect(pages[0].templates).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: "checklist", contentVersion: 1, createdAt: expect.any(String) }),
+      const costliest = pages.flatMap((page) => page.templates).find(({ id }) => id === "t-000");
+      expect(String(costliest?.title)).toHaveLength(160);
+      expect(String(costliest?.description)).toHaveLength(500);
+      expect(firstOf(pages).templates).toEqual(arrayContaining([
+        objectContaining({ type: "checklist", contentVersion: 1, createdAt: anyInstanceOf(String) }),
       ]));
     });
 
@@ -131,25 +131,26 @@ describe("MCP list tools on the migrated tables", () => {
       await call("list_templates");
 
       const query = d1.queries.find(({ sql }) => /from "templates"/.test(sql) && /order by/i.test(sql));
-      expect(query?.params.at(-1)).toBe(LIST_PAGE_ROWS + 1);
-      const plan = d1.queryPlan(query as never).join("; ");
+      assert.exists(query);
+      expect(query.params.at(-1)).toBe(LIST_PAGE_ROWS + 1);
+      const plan = d1.queryPlan(query).join("; ");
       expect(plan).toContain("idx_templates_owner");
       expect(plan).not.toMatch(/SCAN templates\b/);
-      expect(query?.sql).not.toMatch(/"items"/);
+      expect(query.sql).not.toMatch(/"items"/);
     });
 
     it("never repeats a template that is edited while the list is read", async () => {
       seedTemplatesReturningTheListedOrder();
-      const first = (await call("list_templates")).result.structuredContent as JsonRecord;
-      const firstIds = (first.templates as JsonRecord[]).map(({ id }) => id);
+      const first = await templatesPage();
+      const firstIds = first.templates.map(({ id }) => id);
       d1.run("UPDATE templates SET updated_at = '2027-06-01T00:00:00.000Z' WHERE id = ?", firstIds[1]);
 
       const rest: unknown[] = [];
-      let cursor = first.nextCursor as string | undefined;
+      let cursor = first.nextCursor;
       while (cursor) {
-        const page = (await call("list_templates", { cursor })).result.structuredContent as JsonRecord;
-        rest.push(...(page.templates as JsonRecord[]).map(({ id }) => id));
-        cursor = page.nextCursor as string | undefined;
+        const page = await templatesPage({ cursor });
+        rest.push(...page.templates.map(({ id }) => id));
+        cursor = page.nextCursor;
       }
       expect(rest).not.toContain(firstIds[1]);
       expect(new Set([...firstIds, ...rest]).size).toBe(firstIds.length + rest.length);
@@ -158,9 +159,9 @@ describe("MCP list tools on the migrated tables", () => {
     it("returns one page without a cursor for a short list", async () => {
       insertTemplate("only", { createdAt: CREATED });
 
-      const pages = await everyPageWithinTheBound("list_templates");
+      const pages = await everyPageWithinTheBound("list_templates", mcpTemplatesPage);
 
-      expect(pages).toEqual([{ templates: [expect.objectContaining({ id: "only", title: "SOP only" })] }]);
+      expect(pages).toEqual([{ templates: [objectContaining({ id: "only", title: "SOP only" })] }]);
     });
   });
 
@@ -188,28 +189,28 @@ describe("MCP list tools on the migrated tables", () => {
     it("lists every active Personal run once, newest first, a page within the bound at a time", async () => {
       const { all } = seedRuns();
 
-      const pages = await everyPageWithinTheBound("list_runs");
+      const pages = await everyPageWithinTheBound("list_runs", mcpRunsPage);
 
-      const runs = pages.flatMap((page) => page.runs as JsonRecord[]);
+      const runs = pages.flatMap((page) => page.runs);
       expect(runs.map(({ id }) => id)).toEqual(all);
       expect(pages.length).toBeGreaterThan(3);
       expect(runs[0]).not.toHaveProperty("sections");
       expect(runs[0]).not.toHaveProperty("retiredItems");
-      expect(runs.find(({ id }) => id === "r-000")).toEqual(expect.objectContaining({ revision: 3, status: "completed", progress: 0 }));
+      expect(runs.find(({ id }) => id === "r-000")).toEqual(objectContaining({ revision: 3, status: "completed", progress: 0 }));
       expect(String(runs.find(({ id }) => id === "r-000")?.title)).toHaveLength(160);
     });
 
     it("keeps the status filter in its cursor, so a continuation may leave it out or repeat it", async () => {
       const { completed } = seedRuns();
 
-      const pages = await everyPageWithinTheBound("list_runs", { status: "completed" });
-      expect(pages.flatMap((page) => (page.runs as JsonRecord[]).map(({ id }) => id))).toEqual(completed);
+      const pages = await everyPageWithinTheBound("list_runs", mcpRunsPage, { status: "completed" });
+      expect(pages.flatMap((page) => page.runs.map(({ id }) => id))).toEqual(completed);
 
-      const first = (await call("list_runs", { status: "completed" })).result.structuredContent as JsonRecord;
-      const continuedWithoutStatus = (await call("list_runs", { cursor: first.nextCursor })).result.structuredContent as JsonRecord;
-      const continuedWithSameStatus = (await call("list_runs", { cursor: first.nextCursor, status: "completed" })).result.structuredContent as JsonRecord;
+      const first = await runsPage({ status: "completed" });
+      const continuedWithoutStatus = await runsPage({ cursor: first.nextCursor });
+      const continuedWithSameStatus = await runsPage({ cursor: first.nextCursor, status: "completed" });
       expect(continuedWithoutStatus).toEqual(continuedWithSameStatus);
-      expect((continuedWithoutStatus.runs as JsonRecord[]).every(({ status }) => status === "completed")).toBe(true);
+      expect(continuedWithoutStatus.runs.every(({ status }) => status === "completed")).toBe(true);
     });
 
     it("reads a page from the user index, stopping at the page's rows and never reading content", async () => {
@@ -219,11 +220,12 @@ describe("MCP list tools on the migrated tables", () => {
       await call("list_runs", { status: "in_progress" });
 
       const query = d1.queries.find(({ sql }) => /from "checklist_runs"/.test(sql) && /order by/i.test(sql));
-      expect(query?.params.at(-1)).toBe(LIST_PAGE_ROWS + 1);
-      const plan = d1.queryPlan(query as never).join("; ");
+      assert.exists(query);
+      expect(query.params.at(-1)).toBe(LIST_PAGE_ROWS + 1);
+      const plan = d1.queryPlan(query).join("; ");
       expect(plan).toContain("idx_checklist_runs_user_id");
       expect(plan).not.toMatch(/SCAN checklist_runs\b/);
-      expect(query?.sql).not.toMatch(/"items"|"retired_items"/);
+      expect(query.sql).not.toMatch(/"items"|"retired_items"/);
     });
   });
 
@@ -237,30 +239,30 @@ describe("MCP list tools on the migrated tables", () => {
 
     it.each([
       ["a value no list returned", "list_templates", () => "bm90LWEtY3Vyc29y"],
-      ["a list_runs cursor", "list_templates", async () => ((await call("list_runs")).result.structuredContent as JsonRecord).nextCursor],
-      ["a list_templates cursor", "list_runs", async () => ((await call("list_templates")).result.structuredContent as JsonRecord).nextCursor],
+      ["a list_runs cursor", "list_templates", async () => (await runsPage()).nextCursor],
+      ["a list_templates cursor", "list_runs", async () => (await templatesPage()).nextCursor],
       ["a get_template cursor shape", "list_runs", () => Buffer.from(JSON.stringify({ t: "x", v: 1, m: "outline", u: 1, o: 0 })).toString("base64url")],
     ])("refuses %s as invalid arguments", async (_label, tool, cursorOf) => {
       const cursor = await cursorOf();
       expect(typeof cursor).toBe("string");
 
-      const { error } = await call(tool, { cursor });
+      const error = await refusal(tool, { cursor });
 
       expect(error).toMatchObject({ code: -32602, data: { code: "invalid_arguments" } });
-      expect(String(error?.message)).toMatch(/^cursor: Not a cursor list_(templates|runs) returned$/);
+      expect(error.message).toMatch(/^cursor: Not a cursor list_(templates|runs) returned$/);
     });
 
     it("refuses a status other than the one its cursor continues", async () => {
-      const first = (await call("list_runs", { status: "completed" })).result.structuredContent as JsonRecord;
+      const first = await runsPage({ status: "completed" });
 
-      const { error } = await call("list_runs", { status: "in_progress", cursor: first.nextCursor });
+      const error = await refusal("list_runs", { status: "in_progress", cursor: first.nextCursor });
 
       expect(error).toMatchObject({ data: { code: "invalid_arguments" } });
-      expect(String(error?.message)).toBe("cursor: It continues a list of runs with another status");
+      expect(error.message).toBe("cursor: It continues a list of runs with another status");
     });
 
     it("refuses arguments list_templates does not take", async () => {
-      const { error } = await call("list_templates", { status: "completed" });
+      const error = await refusal("list_templates", { status: "completed" });
 
       expect(error).toMatchObject({ data: { code: "invalid_arguments" } });
     });

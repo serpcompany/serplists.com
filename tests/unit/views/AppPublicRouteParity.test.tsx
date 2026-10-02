@@ -1,101 +1,34 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
+import { appShell } from '../../support/appShellInPlace';
 import React from 'react';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('server-only', () => ({}));
 vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
 vi.mock('@/server/pageMeta/categoryPage', () => ({ loadCategoryPageSeo: async () => null }));
 
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
-
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-  useAuth: () => ({
-    logout: vi.fn().mockResolvedValue({ ok: true }),
-    user: null,
-  }),
-}));
-
-vi.mock('@/contexts/TemplatesContext', () => ({
-  TemplatesProvider: ({ children }: { children: React.ReactNode }) => children,
-  useTemplates: () => ({
-    templates: [],
-    templatesLoading: false,
-  }),
-}));
-
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
-  useWorkspace: () => ({
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
-
-vi.mock('@/components/ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/components/DevLoginBar', () => ({
-  DevLoginBar: () => null,
-}));
-
-vi.mock('@/components/ui/sonner', () => ({
-  Toaster: () => null,
-}));
-
-vi.mock('@/components/ui/tooltip', () => ({
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/components/RequireAuth', () => ({
-  default: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/lib/analytics', () => ({
-  analytics: {
-    getEvents: vi.fn(() => []),
-    setEnabled: vi.fn(),
-    track: vi.fn(),
-    trackError: vi.fn(),
-    trackPageView: vi.fn(),
-    trackTemplateComplete: vi.fn(),
-    trackTemplateRun: vi.fn(),
-    trackTemplateView: vi.fn(),
-    trackUser: vi.fn(),
-  },
-}));
-
+import AppLayout from '@/app/(app)/layout';
 import SiteLayout from '@/app/(site)/layout';
 import CategoryPage from '@/app/(site)/categories/[categorySlug]/page';
 import CategoriesPage from '@/app/(site)/categories/page';
 import HomePage from '@/app/(site)/page';
 import TemplatesPage from '@/app/(site)/templates/page';
+import RootLayout from '@/app/layout';
 import NotFoundPage from '@/app/not-found';
+import { Layout } from '@/components/Layout';
+import RequireAuth from '@/components/RequireAuth';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import { inThePersonalWorkspace } from '../../fixtures/workspaces';
+import { findElement, findElementOf } from '../../support/elementTree';
+import { withSiteEnv } from '../../support/siteEnv';
+
+appShell.auth = { logout: vi.fn().mockResolvedValue({ ok: true }), user: null };
+appShell.templates = { templates: [], templatesLoading: false };
+appShell.workspace = inThePersonalWorkspace();
 
 const discoveryTemplate: ChecklistTemplate = {
   id: 'website-launch',
@@ -139,6 +72,12 @@ const renderInsideTheSiteLayoutAt = (pathname: string, page: React.ReactNode, pa
   return renderToStaticMarkup(<SiteLayout>{page}</SiteLayout>);
 };
 
+const expectThePublicShellWithOneHeaderAndAFooter = (html: string) => {
+  expect(html).toContain('data-app-shell="public"');
+  expect(html).toContain('<footer');
+  expect((html.match(/<header/g) ?? []).length).toBe(1);
+};
+
 const appFile = (route: string) => new URL(`../../../src/app/${route}`, import.meta.url);
 
 describe('App public route parity', () => {
@@ -180,9 +119,7 @@ describe('App public route parity', () => {
     expect(html).toContain('href="/pricing/"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist/"');
     expect(html).not.toContain('href="/dashboard/runs/');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('renders /categories inside the shared public shell with one global header and footer', async () => {
@@ -191,9 +128,7 @@ describe('App public route parity', () => {
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
     expect(html).toContain('All Categories');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('renders /categories/business inside the shared public shell with one global header and footer', async () => {
@@ -206,14 +141,14 @@ describe('App public route parity', () => {
     expect(html).toContain('Business &amp; Operations');
     expect(html).toContain('All Categories');
     expect(html).toContain('Related Categories');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('keeps a private Run at its one URL behind RequireAuth in the console layout, and shared runs public outside both layouts', () => {
-    const appLayout = readFileSync(appFile('(app)/layout.tsx'), 'utf8');
-    expect(appLayout).toMatch(/<RequireAuth>\s*<Layout>\{children\}<\/Layout>\s*<\/RequireAuth>/);
+    const page = <main>Run page</main>;
+    const signedInOnly = AppLayout({ children: page });
+    expect(signedInOnly.type).toBe(RequireAuth);
+    expect(findElementOf(signedInOnly, Layout)?.props.children).toBe(page);
 
     expect(existsSync(appFile('(app)/dashboard/runs/[id]/page.tsx'))).toBe(true);
     expect(existsSync(appFile('(app)/run'))).toBe(false);
@@ -221,11 +156,11 @@ describe('App public route parity', () => {
     expect(existsSync(appFile('share/[shareToken]/page.tsx'))).toBe(true);
   });
 
-  it('does not force dark mode globally because light mode is the default', () => {
-    for (const file of ['layout.tsx', 'providers.tsx']) {
-      const source = readFileSync(appFile(file), 'utf8');
-      expect(source, file).not.toContain("classList.add('dark')");
-      expect(source, file).not.toContain('classList.add("dark")');
+  it('does not force dark mode globally because light mode is the default', async () => {
+    for (const siteEnv of ['production', 'staging', undefined]) {
+      const html = await withSiteEnv(siteEnv, () => RootLayout({ children: null }));
+      expect(html.type, String(siteEnv)).toBe('html');
+      expect(findElement(html, (element) => element.type === 'html')?.props.className, String(siteEnv)).not.toMatch(/\bdark\b/);
     }
   });
 });

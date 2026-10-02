@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBetterAuth } from '@functions/api/better-auth';
 import apiWorker from '@functions/api/[[route]]';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { silenceLogs } from '../../../support/apiRouter';
+import { captureTheEmailsSent } from '../../../support/betterAuth';
+import { SqliteD1 } from '../../../support/sqlite-d1';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'victim@example.com';
@@ -9,8 +13,8 @@ const FORGED_HOST = 'evil.example';
 const FORGED_HEADERS = { 'X-Forwarded-Host': FORGED_HOST, 'X-Forwarded-Proto': 'https' };
 
 describe('Better Auth base URL, from the host the request reached and never the forwarded headers a client can send', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  let env: any;
+  let database: SqliteD1;
+  let env: Env;
   let sentEmails: string[];
 
   function authPost(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -37,24 +41,15 @@ describe('Better Auth base URL, from the host the request reached and never the 
 
   beforeEach(() => {
     clearTheBaseUrlsBetterAuthWouldReadFromNodesProcessEnv();
-    database = createMigratedD1();
-    env = {
-      DB: database.d1,
+    database = new SqliteD1();
+    env = apiEnv({
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
       RESEND_API_KEY: 're_test_123',
-    };
-    sentEmails = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
-        sentEmails.push(String(JSON.parse(String(init?.body)).text));
-        return new Response('{}', { status: 200 });
-      }),
-    );
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    });
+    sentEmails = captureTheEmailsSent();
+    silenceLogs();
   });
 
   afterEach(() => {

@@ -15,16 +15,28 @@ import {
   scenarios,
   UPDATE_TEMPLATE,
 } from "../../../scripts/d1-profile-lib";
-import type { LocalDb } from "../../../scripts/data/local-d1";
-import { MigratedSqliteD1 } from "../../support/sqlite-d1";
+import { SqliteD1 } from "../../support/sqlite-d1";
 
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn(async () => session.userId) }));
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { apiEnv } from "../../support/apiEnv";
 
 const smallTemplateCount = 100;
+const doubled = (counts: DatasetCounts): DatasetCounts => ({
+  users: counts.users * 2,
+  teams: counts.teams * 2,
+  templates: counts.templates * 2,
+  runs: counts.runs * 2,
+  likes: counts.likes * 2,
+  auditEvents: counts.auditEvents * 2,
+  invites: counts.invites * 2,
+  templateVersions: counts.templateVersions * 2,
+  analytics: counts.analytics * 2,
+});
+
 const small: DatasetCounts = {
   users: 200,
   teams: 10,
@@ -36,11 +48,11 @@ const small: DatasetCounts = {
   templateVersions: smallTemplateCount,
   analytics: 20,
 };
-const env = (d1: MigratedSqliteD1) => ({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
+const env = (d1: SqliteD1) => apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
 async function buildDataset(counts: DatasetCounts) {
-  const d1 = new MigratedSqliteD1();
-  await seedLocalTestData(drizzle(d1.binding, { schema }) as unknown as LocalDb);
+  const d1 = new SqliteD1();
+  await seedLocalTestData(drizzle(d1.binding, { schema }));
   d1.sqlite.exec(buildSyntheticSql(counts));
   return d1;
 }
@@ -56,7 +68,7 @@ describe("d1:profile synthetic dataset", () => {
 
   it.each([
     ["small", small],
-    ["doubled", Object.fromEntries(Object.entries(small).map(([key, count]) => [key, count * 2])) as DatasetCounts],
+    ["doubled", doubled(small)],
   ])("keeps every template's version at its newest history row, since a save writes history at version + 1 (%s)", async (_label, counts) => {
     const d1 = await buildDataset(counts);
 

@@ -1,9 +1,6 @@
+import '../../../support/reactHooksKeptBetweenRenders';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
 vi.mock('sonner', () => ({ toast: vi.fn() }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }));
 
@@ -13,10 +10,10 @@ import {
   keepRunNoteDrafts,
   takeKeptRunNoteDrafts,
   useKeptRunNoteDrafts,
-  type KeptNoteDraftStorage,
 } from '@/features/run-execution/keptNoteDrafts';
 import type { NoteDrafts } from '@/features/run-execution/noteDrafts';
 import type { ChecklistRun } from '@/types/checklist';
+import { memoryStorage as createStorage } from '../../../fixtures/memoryStorage';
 import { forgetKeptState, renderKeepingState, unmountEffects } from '../../../support/hookStateSlots';
 
 const buildRun = (id: string, taskId: string): ChecklistRun => ({
@@ -32,20 +29,6 @@ const buildRun = (id: string, taskId: string): ChecklistRun => ({
 
 const firstRun = buildRun('run-1', 'task-a');
 const secondRun = buildRun('run-2', 'task-b');
-
-const createStorage = (): KeptNoteDraftStorage & { items: Map<string, string> } => {
-  const items = new Map<string, string>();
-  return {
-    items,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
 
 let storage: ReturnType<typeof createStorage>;
 

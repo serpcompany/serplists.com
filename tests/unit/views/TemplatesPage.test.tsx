@@ -1,25 +1,17 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import {
+  dashboardTemplates,
+  NO_TEMPLATES,
+  showTheTemplatesModel,
+  websiteLaunchTemplate as template,
+} from '../../support/mockedDashboardTemplatesModel';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import Templates from '@/views/Templates';
-import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const mockUseDashboardTemplatesModel = vi.fn();
-
-vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/dashboard-templates/useDashboardTemplatesModel')
-  >()),
-  useDashboardTemplatesModel: (...args: unknown[]) =>
-    mockUseDashboardTemplatesModel(...args),
-}));
-
-const viewModeState = vi.hoisted(() => ({ mode: 'grid' as 'grid' | 'list' }));
+import { handlerIn } from '../../support/elementTree';
 
 const runDialog = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 vi.mock('@/components/ui/run-name-dialog', () => ({
@@ -29,63 +21,16 @@ vi.mock('@/components/ui/run-name-dialog', () => ({
   },
 }));
 
-vi.mock('@/hooks/useViewModePreference', () => ({
-  useViewModePreference: () => [viewModeState.mode, vi.fn()],
-}));
-
-const template = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Complete checklist for launching a new website.',
-  type: 'checklist',
-  sections: [
-    {
-      id: 'section-1',
-      title: 'Launch prep',
-      items: [
-        { id: 'item-1', title: 'Freeze content', description: '', contents: [] },
-        { id: 'item-2', title: 'Check redirects', description: '', contents: [] },
-      ],
-    },
-  ],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: true,
-  categories: ['Web Development', 'Launch'],
-  tags: [],
-  ...overrides,
-});
+const renderTemplatesAt = (path: string) => {
+  navigation.reset(path);
+  return renderToStaticMarkup(<Templates />);
+};
 
 describe('Templates page', () => {
   it('renders the exact dashboard-templates lane instead of the local beta workspace copy', () => {
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates: [template()],
-      loading: false,
-      isEmpty: false,
-      canCreateRun: true,
-      canCreateTemplate: true,
-      canEditTemplate: true,
-      canRunTemplate: true,
-      totalTemplateItems: 2,
-      selectedTemplate: template(),
-      selectedTemplateId: 'template-1',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-    });
+    showTheTemplatesModel({ selectedTemplate: template(), selectedTemplateId: 'template-1' });
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
 
     expect(html).toContain('My Templates');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -101,33 +46,9 @@ describe('Templates page', () => {
   });
 
   it('renders the reference empty state instead of the generic local fallback copy', () => {
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates: [],
-      loading: false,
-      isEmpty: true,
-      canCreateRun: false,
-      canCreateTemplate: true,
-      canEditTemplate: true,
-      canRunTemplate: true,
-      totalTemplateItems: 0,
-      selectedTemplate: null,
-      selectedTemplateId: '',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-    });
+    showTheTemplatesModel(NO_TEMPLATES);
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
 
     expect(html).toContain('No templates found');
     expect(html).toContain('Create Template');
@@ -135,32 +56,9 @@ describe('Templates page', () => {
   });
 
   it('shows a load error with Retry instead of the empty state when the list failed to load', () => {
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates: [],
-      loading: false,
-      isEmpty: true,
-      loadError: new Error('HTTP 500'),
-      retryLoad: vi.fn(),
-      canCreateRun: false,
-      totalTemplateItems: 0,
-      selectedTemplate: null,
-      selectedTemplateId: '',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-    });
+    showTheTemplatesModel({ ...NO_TEMPLATES, loadError: new Error('HTTP 500') });
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
 
     expect(html).toContain('Couldn&#x27;t load your templates');
     expect(html).toContain('Retry');
@@ -175,30 +73,9 @@ describe('Templates page', () => {
       template({ id: 'n2', title: 'Imported Recently', createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '' }),
       template({ id: 'b', title: 'Twentieth Of September Edit', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-09-20T00:00:00.000Z' }),
     ];
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates,
-      loading: false,
-      isEmpty: false,
-      canCreateRun: true,
-      totalTemplateItems: 8,
-      selectedTemplate: templates[0],
-      selectedTemplateId: 'n1',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-    });
+    showTheTemplatesModel({ templates, totalTemplateItems: 8, selectedTemplate: firstOf(templates), selectedTemplateId: 'n1' });
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
     const order = ['Twentieth Of September Edit', 'Imported Recently', 'Second Of September Edit', 'Untouched Plan'].map(
       (title) => html.indexOf(title),
     );
@@ -208,35 +85,16 @@ describe('Templates page', () => {
   });
 
   it.each(['grid', 'list'] as const)('offers an Organization viewer no create, run, edit or delete actions (%s view)', (viewMode) => {
-    viewModeState.mode = viewMode;
-    mockUseDashboardTemplatesModel.mockReturnValue({
+    dashboardTemplates.viewMode = viewMode;
+    showTheTemplatesModel({
       templates: [template({ teamId: 'team-1' })],
-      loading: false,
-      isEmpty: false,
       canCreateRun: false,
       canCreateTemplate: false,
       canEditTemplate: false,
       canRunTemplate: false,
-      totalTemplateItems: 2,
-      selectedTemplate: null,
-      selectedTemplateId: '',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-      preferenceOwnerId: 'user-1',
     });
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
 
     expect(html).toContain('Website Launch Checklist');
     expect(html).not.toContain('New Template');
@@ -246,33 +104,9 @@ describe('Templates page', () => {
   });
 
   it('hides Create Template in the empty state for members who cannot create Templates', () => {
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates: [],
-      loading: false,
-      isEmpty: true,
-      canCreateRun: false,
-      canCreateTemplate: false,
-      canEditTemplate: false,
-      canRunTemplate: true,
-      totalTemplateItems: 0,
-      selectedTemplate: null,
-      selectedTemplateId: '',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openPublicLibrary: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      selectRunTemplate: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-    });
+    showTheTemplatesModel({ ...NO_TEMPLATES, canCreateTemplate: false, canEditTemplate: false });
 
-    navigation.reset('/');
-    const html = renderToStaticMarkup(
-      <Templates />,
-    );
+    const html = renderTemplatesAt('/');
 
     expect(html).toContain('No templates found');
     expect(html).not.toContain('Create Template');
@@ -282,66 +116,30 @@ describe('Templates page', () => {
 describe('Templates page Start Run', () => {
   it('asks for the name in the Start a Run dialog the other pages use, with no template picker since the card chose the template', async () => {
     const createRunFromTemplate = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
-    mockUseDashboardTemplatesModel.mockReturnValue({
+    showTheTemplatesModel({
       templates: [template(), template({ id: 'template-2', title: 'Vendor onboarding' })],
-      loading: false,
-      isEmpty: false,
-      canCreateRun: true,
-      canCreateTemplate: true,
-      canEditTemplate: true,
-      canRunTemplate: true,
       totalTemplateItems: 4,
       selectedTemplate: template({ id: 'template-2', title: 'Vendor onboarding' }),
       selectedTemplateId: 'template-2',
       runLauncherOpen: true,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
       createRunFromTemplate,
     });
 
-    navigation.reset('/dashboard/templates/');
-    const html = renderToStaticMarkup(<Templates />);
+    const html = renderTemplatesAt('/dashboard/templates/');
 
     expect(html).not.toContain('Select a template');
     expect(runDialog.props).toEqual(
       expect.objectContaining({ loading: false, open: true, templateTitle: 'Vendor onboarding' }),
     );
-    await (runDialog.props?.onConfirm as (name: string) => Promise<void>)('Q3 vendor onboarding');
+    await handlerIn(runDialog.props, 'onConfirm')('Q3 vendor onboarding');
     expect(createRunFromTemplate).toHaveBeenCalledWith('Q3 vendor onboarding');
   });
 });
 
 describe('Templates page count', () => {
-  const renderWith = (overrides: Record<string, unknown>) => {
-    mockUseDashboardTemplatesModel.mockReturnValue({
-      templates: [template()],
-      loading: false,
-      loadError: null,
-      isEmpty: false,
-      canCreateRun: true,
-      canCreateTemplate: true,
-      canEditTemplate: true,
-      canRunTemplate: true,
-      totalTemplateItems: 2,
-      selectedTemplate: null,
-      selectedTemplateId: '',
-      runLauncherOpen: false,
-      isCreatingRun: false,
-      openCreateTemplate: vi.fn(),
-      openRunLauncher: vi.fn(),
-      openTemplate: vi.fn(),
-      removeTemplate: vi.fn(),
-      closeRunLauncher: vi.fn(),
-      createRunFromTemplate: vi.fn(),
-      retryLoad: vi.fn(),
-      ...overrides,
-    });
-    navigation.reset('/dashboard/templates/');
-    return renderToStaticMarkup(<Templates />);
+  const renderWith = (overrides: Parameters<typeof showTheTemplatesModel>[0]) => {
+    showTheTemplatesModel(overrides);
+    return renderTemplatesAt('/dashboard/templates/');
   };
 
   it('counts one template in the singular and more in the plural', () => {

@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { checklist_runs } from '../../db/schema/index';
+import { checklistRuns } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 
@@ -10,13 +10,13 @@ export async function loadSharedRunTitle(env: Env, shareToken: string): Promise<
   const token = shareToken.trim();
   if (!token) return null;
   const [row] = await createDb(env)
-    .select({ title: checklist_runs.title })
-    .from(checklist_runs)
+    .select({ title: checklistRuns.title })
+    .from(checklistRuns)
     .where(
       and(
-        eq(checklist_runs.share_token, token),
-        eq(checklist_runs.is_public, true),
-        isNull(checklist_runs.deleted_at),
+        eq(checklistRuns.share_token, token),
+        eq(checklistRuns.is_public, true),
+        isNull(checklistRuns.deleted_at),
       ),
     )
     .limit(1);

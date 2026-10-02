@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { sitemap_revisions, sitemap_shard_revisions } from '../../db/schema/index';
+import { sitemapRevisions, sitemapShardRevisions } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { defaultEdgeCache } from '../api/utils/edge-cache';
@@ -13,13 +13,13 @@ import {
   xmlResponse,
 } from './shared';
 
-export type SitemapRevisionKind = (typeof sitemap_revisions.$inferSelect)['kind'];
+type SitemapRevisionKind = (typeof sitemapRevisions.$inferSelect)['kind'];
 export type SitemapRevisions = Map<SitemapRevisionKind, string>;
 
-export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
+async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
   const rows = await createDb(env)
-    .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
-    .from(sitemap_revisions);
+    .select({ kind: sitemapRevisions.kind, revised_at: sitemapRevisions.revised_at })
+    .from(sitemapRevisions);
   return new Map(rows.map((row) => [row.kind, row.revised_at]));
 }
 
@@ -48,9 +48,9 @@ async function publishedShardPage(env: Env, shard: SitemapShard): Promise<number
   if (page === null) return null;
   if (page === 1) return page;
   const rows = await createDb(env)
-    .select({ page: sitemap_shard_revisions.page })
-    .from(sitemap_shard_revisions)
-    .where(and(eq(sitemap_shard_revisions.kind, shard.kind), eq(sitemap_shard_revisions.page, page)))
+    .select({ page: sitemapShardRevisions.page })
+    .from(sitemapShardRevisions)
+    .where(and(eq(sitemapShardRevisions.kind, shard.kind), eq(sitemapShardRevisions.page, page)))
     .limit(1);
   return rows.length > 0 ? page : null;
 }

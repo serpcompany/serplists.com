@@ -1,11 +1,8 @@
+import { navigation } from '../../../tests/support/mockedNextNavigation';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CategoryChips, SortButtons } from '@/components/checklist-library/SearchAndFilters';
-import { navigation } from '../../../tests/support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../tests/support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../tests/support/nextNavigation')).nextLinkMock);
 
 beforeEach(() => {
   navigation.reset('/templates/');

@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { signJWT } from "better-auth/crypto";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 
 import { createBetterAuth } from "@functions/api/better-auth";
 import {
@@ -10,16 +11,16 @@ import {
   getLoginNotice,
 } from "@/lib/auth/loginNotice";
 import { getReturnPath } from "@/lib/auth/returnPath";
+import { apiEnv } from "../../../support/apiEnv";
 
 const SECRET = "better-auth-secret-with-32-characters!!";
 
 function buildEnv() {
-  return {
+  return apiEnv({
     BETTER_AUTH_SECRET: SECRET,
     AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
     RESEND_API_KEY: "re_test_123",
-    DB: {},
-  } as any;
+  });
 }
 
 async function visitVerificationLink(token: string) {
@@ -38,7 +39,8 @@ describe("verify-email failure redirect, in the shape Login reads its notice fro
 
     expect(status).toBe(302);
     expect(location).toBe("/login/?verified=1&error=token_expired");
-    expect(getLoginNotice(new URL(location!, "http://x").search)).toMatchObject({
+    assert.exists(location);
+    expect(getLoginNotice(new URL(location, "http://x").search)).toMatchObject({
       kind: "verification_failed",
       reason: "token_expired",
     });
@@ -51,7 +53,8 @@ describe("verify-email failure redirect, in the shape Login reads its notice fro
 
     expect(status).toBe(302);
     expect(location).toBe("/login/?verified=1&error=invalid_token");
-    expect(getLoginNotice(new URL(location!, "http://x").search)?.kind).toBe("verification_failed");
+    assert.exists(location);
+    expect(getLoginNotice(new URL(location, "http://x").search)?.kind).toBe("verification_failed");
   });
 });
 
@@ -87,7 +90,7 @@ describe("verification return path round trip, which brings an invitee who signs
     expect(signUp.status).toBe(200);
     expect(sentLinks).toHaveLength(1);
 
-    const verify = await auth.handler(new Request(sentLinks[0]!));
+    const verify = await auth.handler(new Request(firstOf(sentLinks)));
     return { status: verify.status, location: verify.headers.get("location") };
   }
 
@@ -99,7 +102,8 @@ describe("verification return path round trip, which brings an invitee who signs
     const { status, location } = await signUpAndOpenVerificationLink(returnPath);
 
     expect(status).toBe(302);
-    const search = new URL(location!, "http://x").search;
+    assert.exists(location);
+    const search = new URL(location, "http://x").search;
     expect(getLoginNotice(search)?.kind).toBe("verified");
     expect(getReturnPath(search)).toBe(returnPath);
   });

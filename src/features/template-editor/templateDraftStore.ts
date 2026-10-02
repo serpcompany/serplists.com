@@ -11,7 +11,7 @@ const DRAFT_KEY_PREFIX = "serplists:template-draft";
 const EDIT_DRAFT_KEY_PREFIX = "serplists:template-edit-draft";
 const DRAFT_FORMAT = 1;
 
-export type TemplateDraftOwner = { userId: string; teamId?: string | null };
+export type TemplateDraftOwner = { userId: string; teamId?: string | null | undefined };
 export type TemplateEditDraftOwner = { userId: string; templateId: string };
 export type TemplateDraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 export type TemplateDraftListStorage = Pick<Storage, "getItem" | "key" | "length">;
@@ -48,7 +48,7 @@ export const getTemplateDraftKey = ({ userId, teamId }: TemplateDraftOwner): str
 export const getTemplateEditDraftKey = ({ userId, templateId }: TemplateEditDraftOwner): string =>
   `${EDIT_DRAFT_KEY_PREFIX}:${userId}:${templateId}`;
 
-export const getSessionDraftStorage = (): TemplateDraftStorage | null => getSessionStorage() ?? null;
+const getSessionDraftStorage = (): TemplateDraftStorage | null => getSessionStorage() ?? null;
 
 const writeDraft = (
   key: string,
@@ -146,7 +146,7 @@ export const clearTemplateDraft = (
 
 export const saveTemplateEditDraft = (
   owner: TemplateEditDraftOwner,
-  draft: { values: TemplateEditorFormValues; baseVersion?: number },
+  draft: { values: TemplateEditorFormValues; baseVersion?: number | undefined },
   storage: TemplateDraftStorage | null = getSessionDraftStorage(),
 ): boolean =>
   writeDraft(
@@ -161,7 +161,11 @@ export const readTemplateEditDraft = (
 ): StoredTemplateDraft | null => {
   const draft = readDraft(getTemplateEditDraftKey(owner), storedEditDraftSchema, storage);
   return draft
-    ? { savedAt: draft.savedAt, values: draft.values, baseVersion: draft.baseVersion ?? undefined }
+    ? {
+        savedAt: draft.savedAt,
+        values: draft.values,
+        ...(draft.baseVersion === null ? {} : { baseVersion: draft.baseVersion }),
+      }
     : null;
 };
 

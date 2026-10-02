@@ -4,10 +4,8 @@ import { log } from "./logger";
 
 function describeSessionLookupFailure(error: unknown): { errorName: string; status?: string | number } {
   const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
-  return {
-    errorName: error instanceof Error ? error.name : typeof error,
-    status: typeof status === "string" || typeof status === "number" ? status : undefined,
-  };
+  const errorName = error instanceof Error ? error.name : typeof error;
+  return typeof status === "string" || typeof status === "number" ? { errorName, status } : { errorName };
 }
 
 export async function getSessionUserId(request: Request, env: Env): Promise<string | null> {

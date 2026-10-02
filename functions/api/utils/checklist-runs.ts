@@ -1,25 +1,38 @@
-import { and, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, isNull, sql, type SQL } from 'drizzle-orm';
 import { schema, type createDb } from '../db';
+import type { Env } from '../types';
 import type { AuditSubject } from './audit';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { jsonError } from './response';
+import { canUpdateRun, canViewRun } from './run-access';
 import { runSourceTemplateUsableSql } from './template-access';
 
 const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
 
+type RunRow = typeof schema.checklistRuns.$inferSelect;
+export type RunUpdates = Partial<RunRow>;
+type ShareSecretColumn = (typeof SHARE_SECRET_COLUMNS)[number];
+type TemplateVersionFields = { template_version: number; current_template_version: number | null };
+export type RunResponseRow = Omit<RunRow, ShareSecretColumn> & TemplateVersionFields;
+export type SharedRunRow = Pick<
+  RunRow,
+  'id' | 'title' | 'items' | 'status' | 'progress' | 'started_at' | 'completed_at' | 'revision'
+> & TemplateVersionFields;
+
 function runResponseColumns() {
   const {
-    share_token: _token,
-    share_expires_at: _expires,
-    share_used_at: _used,
+    share_token,
+    share_expires_at,
+    share_used_at,
     ...columns
-  } = getTableColumns(schema.checklist_runs);
+  } = getTableColumns(schema.checklistRuns);
   return columns;
 }
 
 function currentTemplateVersionSql(callerUserId: string | null) {
   return sql<number | null>`(
     SELECT content_version FROM templates
-    WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(callerUserId)}
+    WHERE templates.id = ${schema.checklistRuns.template_id} AND ${runSourceTemplateUsableSql(callerUserId)}
   )`;
 }
 
@@ -30,11 +43,9 @@ export function checklistRunSelectFor(callerUserId: string | null) {
   };
 }
 
-function templateVersions(row: Record<string, unknown>) {
-  const templateVersion = typeof row.template_version === 'number' ? row.template_version : 1;
-  const currentTemplateVersion = typeof row.current_template_version === 'number'
-    ? row.current_template_version
-    : templateVersion;
+function templateVersions(row: TemplateVersionFields) {
+  const templateVersion = row.template_version;
+  const currentTemplateVersion = row.current_template_version ?? templateVersion;
 
   return {
     template_version: templateVersion,
@@ -43,8 +54,8 @@ function templateVersions(row: Record<string, unknown>) {
   };
 }
 
-export function serializeChecklistRun(row: Record<string, unknown>) {
-  const run = { ...row };
+export function serializeChecklistRun(row: RunResponseRow) {
+  const run: RunResponseRow & Partial<Record<ShareSecretColumn, unknown>> = { ...row };
   for (const column of SHARE_SECRET_COLUMNS) delete run[column];
   const { current_template_version, is_stale } = templateVersions(run);
 
@@ -52,22 +63,22 @@ export function serializeChecklistRun(row: Record<string, unknown>) {
 }
 
 export function sharedChecklistRunSelect() {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   return {
-    id: checklist_runs.id,
-    title: checklist_runs.title,
-    items: checklist_runs.items,
-    status: checklist_runs.status,
-    progress: checklist_runs.progress,
-    started_at: checklist_runs.started_at,
-    completed_at: checklist_runs.completed_at,
-    template_version: checklist_runs.template_version,
-    revision: checklist_runs.revision,
+    id: checklistRuns.id,
+    title: checklistRuns.title,
+    items: checklistRuns.items,
+    status: checklistRuns.status,
+    progress: checklistRuns.progress,
+    started_at: checklistRuns.started_at,
+    completed_at: checklistRuns.completed_at,
+    template_version: checklistRuns.template_version,
+    revision: checklistRuns.revision,
     current_template_version: currentTemplateVersionSql(null),
   };
 }
 
-export function serializeSharedChecklistRun(row: Record<string, unknown>) {
+export function serializeSharedChecklistRun(row: SharedRunRow) {
   return {
     id: row.id,
     title: row.title,
@@ -76,20 +87,33 @@ export function serializeSharedChecklistRun(row: Record<string, unknown>) {
     progress: row.progress,
     started_at: row.started_at,
     completed_at: row.completed_at ?? null,
-    revision: typeof row.revision === 'number' ? row.revision : 1,
+    revision: row.revision,
     ...templateVersions(row),
     is_public: true,
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+export async function findRunToUpdate(
+  env: Env,
+  db: ReturnType<typeof createDb>,
+  runId: string,
+  userId: string,
+  notFoundMessage: string,
+): Promise<{ run: RunRow } | { response: Response }> {
+  const { checklistRuns } = schema;
+  const [run] = await db
+    .select()
+    .from(checklistRuns)
+    .where(and(eq(checklistRuns.id, runId), isNull(checklistRuns.deleted_at)))
+    .limit(1);
 
-export function batchUpdateMissed(result: unknown): boolean {
-  if (!isRecord(result)) return false;
-  const meta = result.meta;
-  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
+  if (!run || !(await canViewRun(env, run, userId))) {
+    return { response: jsonError(notFoundMessage, 404) };
+  }
+  if (!(await canUpdateRun(env, run, userId))) {
+    return { response: jsonError('Forbidden', 403) };
+  }
+  return { run };
 }
 
 export function auditedRunUpdate(
@@ -97,22 +121,19 @@ export function auditedRunUpdate(
   runId: string,
   guard: SQL | undefined,
   updates: Record<string, unknown>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
+  auditEvent: typeof schema.auditEvents.$inferInsert,
 ) {
-  const { audit_events, checklist_runs } = schema;
+  const { auditEvents, checklistRuns } = schema;
   return [
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, runId, guard)),
-    db.update(checklist_runs).set(updates).where(and(eq(checklist_runs.id, runId), guard)),
+    insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(checklistRuns.id, runId, guard)),
+    db.update(checklistRuns).set(updates).where(and(eq(checklistRuns.id, runId), guard)),
   ] as const;
 }
 
-export function getRunSubject(run: Record<string, unknown>, fallbackUserId: string): AuditSubject {
-  if (typeof run.team_id === 'string' && run.team_id) {
+export function getRunSubject(run: Pick<RunRow, 'team_id' | 'user_id'>, fallbackUserId: string): AuditSubject {
+  if (run.team_id) {
     return { type: 'team', id: run.team_id };
   }
 
-  return {
-    type: 'user',
-    id: typeof run.user_id === 'string' && run.user_id ? run.user_id : fallbackUserId,
-  };
+  return { type: 'user', id: run.user_id || fallbackUserId };
 }

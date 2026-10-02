@@ -1,20 +1,11 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import { inviteeAuth, PENDING_INVITE_PREVIEW } from '../../support/teamInvitePage';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
-import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const authState = vi.hoisted(() => ({
-  isAuthenticated: true,
-  isLoading: false,
-  logout: vi.fn(async () => ({ ok: true })),
-  user: { id: 'user-personal', email: 'personal@example.com' } as { id: string; email: string } | null,
-}));
 
 type InviteLinkState = {
   preview: unknown;
@@ -27,10 +18,6 @@ const inviteLinkState = vi.hoisted(
   (): InviteLinkState => ({ preview: undefined, previewError: null, acceptError: null, declineError: null }),
 );
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => authState,
-}));
-
 vi.mock('@/features/teams/useTeamInviteLink', () => ({
   useTeamInviteLink: () => ({
     ...inviteLinkState,
@@ -42,10 +29,6 @@ vi.mock('@/features/teams/useTeamInviteLink', () => ({
     isResponding: false,
     switchToOrganization: vi.fn(),
   }),
-}));
-
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 const emailMismatch = () =>
@@ -65,7 +48,8 @@ function renderInvitePage() {
 describe('Organization invite page for another account', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authState.user = { id: 'user-personal', email: 'personal@example.com' };
+    inviteeAuth.reset();
+    inviteeAuth.set({ user: { id: 'user-personal', email: 'personal@example.com' } });
     Object.assign(inviteLinkState, {
       preview: undefined,
       previewError: null,
@@ -83,20 +67,11 @@ describe('Organization invite page for another account', () => {
     expect(html).toContain('This invite was sent to a different email address.');
     expect(html).toContain('Sign out and continue');
     expect(html).not.toContain('Open settings');
-    expect(authState.logout).not.toHaveBeenCalled();
+    expect(inviteeAuth.get().logout).not.toHaveBeenCalled();
   });
 
   it('offers the same way out when accepting finds the account changed', () => {
-    inviteLinkState.preview = {
-      status: 'pending',
-      teamId: 'team-1',
-      teamName: 'Acme Corp',
-      teamSlug: 'acme-corp',
-      role: 'editor',
-      expiresAt: '2026-10-05T00:00:00.000Z',
-      inviterName: 'Owner User',
-      inviterEmail: 'owner@example.com',
-    };
+    inviteLinkState.preview = PENDING_INVITE_PREVIEW;
     inviteLinkState.acceptError = emailMismatch();
 
     const html = renderInvitePage();

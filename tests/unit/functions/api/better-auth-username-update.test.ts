@@ -2,11 +2,13 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { BetterAuthOptions } from 'better-auth';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { StoredRow } from '../../../support/d1Doubles';
 
-type Row = Record<string, any>;
-const memory = vi.hoisted(() => ({
-  db: {} as Record<string, Row[]>,
-  claimBetweenCheckAndWrite: null as null | { id: string; username: string },
+type Row = StoredRow;
+type MemoryTables = { users: Row[]; session: Row[]; account: Row[]; verification: Row[] };
+const memory = vi.hoisted((): { db: MemoryTables; claimBetweenCheckAndWrite: null | { id: string; username: string } } => ({
+  db: { users: [], session: [], account: [], verification: [] },
+  claimBetweenCheckAndWrite: null,
 }));
 
 function uniqueUsernameErrorAsDrizzleWrapsD1s(): Error {
@@ -55,11 +57,13 @@ vi.mock('@functions/api/db', () => ({
 
 import { isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
 import { postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { betterAuthErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-} as any;
+});
 
 const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 
@@ -77,7 +81,7 @@ function userRow(email: string) {
 
 async function expectUsernameTaken(response: Response) {
   expect(response.status).toBe(422);
-  const body = await response.json();
+  const body = await readJson(response, betterAuthErrorBody);
   expect(body.code).toBe('USERNAME_IS_ALREADY_TAKEN');
   expect(body.message).toMatch(/already taken/i);
 }

@@ -35,7 +35,7 @@ import {
   DashboardLoadingState,
 } from "@/components/dashboard/DashboardContentShell";
 import { PageContainer } from "@/components/layout/page-shell";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import {
   cloneTemplateEditorFormValues,
   rebaseTemplateEditorFormAfterSave,
@@ -78,7 +78,7 @@ const showTemplateSaveToasts = (feedback: TemplateSaveFeedback) => {
 };
 
 type TemplateEditorFormProps = {
-  id?: string;
+  id: string | undefined;
   model: TemplateEditorModel;
 };
 
@@ -116,7 +116,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const hasPendingUploads = pendingCount > 0;
   const shouldBlockNavigation = shouldBlockTemplateEditorNavigation({
     isDirty: templateForm.formState.isDirty,
-    isSaving: model.isSaving,
     loading: model.loading,
     hasPendingUploads,
   });

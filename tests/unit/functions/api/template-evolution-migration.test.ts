@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { storedSectionsIn } from '../../../support/storedJson';
+import { contentAt, firstOf, present, subTaskAt, taskIn } from '../../../support/elements';
+import type { StoredRow } from '../../../support/d1Doubles';
 
 const migration = readFileSync(
   new URL('../../../../db/migrations/0024_safe_template_evolution.sql', import.meta.url),
@@ -57,27 +60,22 @@ describe('safe template evolution migration', () => {
 
     db.exec(migration);
 
-    const template = db.prepare('SELECT items, version, content_version FROM templates').get() as {
-      items: string;
-      version: number;
-      content_version: number;
-    };
-    const templateStructure = JSON.parse(template.items);
+    const template: StoredRow = present(db.prepare('SELECT items, version, content_version FROM templates').get(), 'the template');
+    const templateStructure = storedSectionsIn(template.items);
+    const templateTask = taskIn(templateStructure, 0, 0);
     expect(template.content_version).toBe(5);
     expect(template.version).toBe(5);
-    expect(templateStructure[0].id).toBe('legacy-section-1');
-    expect(templateStructure[0].items[0].id).toBe('legacy-item-1-1');
-    expect(templateStructure[0].items[0].subItems[0].id).toBe('legacy-subitem-1-1-1');
-    expect(templateStructure[0].items[0].contents[0].subItems[0].id).toBe('legacy-subitem-1-1-2');
+    expect(firstOf(templateStructure).id).toBe('legacy-section-1');
+    expect(templateTask.id).toBe('legacy-item-1-1');
+    expect(subTaskAt(templateTask, 0).id).toBe('legacy-subitem-1-1-1');
+    expect(subTaskAt(contentAt(templateTask, 0), 0).id).toBe('legacy-subitem-1-1-2');
 
-    const runs = db.prepare(
-      'SELECT id, items, template_version FROM checklist_runs ORDER BY id',
-    ).all() as Array<{ id: string; items: string; template_version: number }>;
+    const runs: StoredRow[] = db.prepare('SELECT id, items, template_version FROM checklist_runs ORDER BY id').all();
     for (const run of runs.filter((candidate) => candidate.id !== 'orphan')) {
-      const structure = JSON.parse(run.items);
+      const structure = storedSectionsIn(run.items);
       expect(run.template_version).toBe(0);
-      expect(structure[0].id).toBe('legacy-section-1');
-      expect(structure[0].items[0]).toMatchObject({
+      expect(firstOf(structure).id).toBe('legacy-section-1');
+      expect(taskIn(structure, 0, 0)).toMatchObject({
         id: 'legacy-item-1-1',
         isCompleted: true,
         notes: 'Keep this state',
@@ -124,13 +122,10 @@ describe('safe template evolution migration', () => {
 
     db.exec(migration);
 
-    const template = db.prepare("SELECT items FROM templates WHERE id = 'flat-template'").get() as { items: string };
-    const run = db.prepare("SELECT items, template_version FROM checklist_runs WHERE id = 'flat-run'").get() as {
-      items: string;
-      template_version: number;
-    };
-    const templateSections = JSON.parse(template.items);
-    const runSections = JSON.parse(run.items);
+    const template: StoredRow = present(db.prepare("SELECT items FROM templates WHERE id = 'flat-template'").get(), 'the template');
+    const run: StoredRow = present(db.prepare("SELECT items, template_version FROM checklist_runs WHERE id = 'flat-run'").get(), 'the run');
+    const templateSections = storedSectionsIn(template.items);
+    const runSections = storedSectionsIn(run.items);
 
     expect(templateSections).toEqual([
       expect.objectContaining({

@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { firstOf } from "../../../support/elements";
 import {
   getStripeBillingConfig,
   isMissingStripeCustomer,
@@ -6,9 +7,11 @@ import {
   shortDigest,
   StripeApiError,
   stripeGet,
+  stripeObjectSchema,
   stripePostForm,
   verifyStripeWebhookSignature,
 } from "@functions/api/utils/stripe";
+import { apiEnv } from "../../../support/apiEnv";
 import { hmacSha256Hex } from "./support/stripe-webhook";
 
 afterEach(() => {
@@ -36,16 +39,17 @@ describe("verifyStripeWebhookSignature", () => {
     expect(result.ok).toBe(false);
   });
 
+  function signedHeader(payload: string, timestamp: number) {
+    return `t=${timestamp},v1=${hmacSha256Hex("whsec_test", `${timestamp}.${payload}`)}`;
+  }
+
   it("accepts valid signature", async () => {
     const payload = '{"id":"evt_123","type":"customer.subscription.updated"}';
-    const timestamp = Math.floor(Date.now() / 1000);
-    const secret = "whsec_test";
-    const sig = await hmacSha256Hex(secret, `${timestamp}.${payload}`);
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: `t=${timestamp},v1=${sig}`,
-      webhookSecret: secret,
+      signatureHeader: signedHeader(payload, Math.floor(Date.now() / 1000)),
+      webhookSecret: "whsec_test",
     });
 
     expect(result.ok).toBe(true);
@@ -53,14 +57,11 @@ describe("verifyStripeWebhookSignature", () => {
 
   it("rejects when timestamp outside tolerance", async () => {
     const payload = '{"id":"evt_123"}';
-    const timestamp = Math.floor(Date.now() / 1000) - 1000;
-    const secret = "whsec_test";
-    const sig = await hmacSha256Hex(secret, `${timestamp}.${payload}`);
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: `t=${timestamp},v1=${sig}`,
-      webhookSecret: secret,
+      signatureHeader: signedHeader(payload, Math.floor(Date.now() / 1000) - 1000),
+      webhookSecret: "whsec_test",
       toleranceSeconds: 10,
     });
 
@@ -70,7 +71,7 @@ describe("verifyStripeWebhookSignature", () => {
 
 describe("stripePostForm", () => {
   it("forwards an idempotency key without putting it in the request body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ id: "cs_test" }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -78,27 +79,37 @@ describe("stripePostForm", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await stripePostForm("sk_test_example", "/v1/checkout/sessions", { mode: "subscription" }, {
+    await stripePostForm("sk_test_example", "/v1/checkout/sessions", { mode: "subscription" }, stripeObjectSchema, {
       idempotencyKey: "checkout-user-1-window",
     });
 
-    const [, options] = fetchMock.mock.calls[0];
-    expect(options.headers["Idempotency-Key"]).toBe("checkout-user-1-window");
-    expect(options.body).toBe("mode=subscription");
+    const [, options] = firstOf(fetchMock.mock.calls);
+    expect(new Headers(options?.headers).get("Idempotency-Key")).toBe("checkout-user-1-window");
+    expect(options?.body).toBe("mode=subscription");
+  });
+
+  it("returns the reply its schema parsed, and refuses a reply the schema does not describe", async () => {
+    const replyWith = (body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+
+    vi.stubGlobal("fetch", replyWith({ id: "cus_1", email: "kept-out@example.com" }));
+    await expect(stripePostForm("sk_test_example", "/v1/customers", {}, stripeObjectSchema)).resolves.toEqual({ id: "cus_1" });
+
+    vi.stubGlobal("fetch", replyWith({ object: "customer" }));
+    await expect(stripePostForm("sk_test_example", "/v1/customers", {}, stripeObjectSchema)).rejects.toThrow(/id/);
   });
 });
 
 describe("stripeGet", () => {
   it("sends an authorized GET and returns the parsed body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "sub_1" }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ id: "sub_1" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(stripeGet("sk_test_example", "/v1/subscriptions/sub_1")).resolves.toEqual({ id: "sub_1" });
 
-    const [url, options] = fetchMock.mock.calls[0];
+    const [url, options] = firstOf(fetchMock.mock.calls);
     expect(url).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
-    expect(options.method).toBe("GET");
-    expect(options.headers.Authorization).toBe("Bearer sk_test_example");
+    expect(options?.method).toBe("GET");
+    expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer sk_test_example");
   });
 
   it("parses Stripe's error type, code, and param, and keeps its message text out of logs", async () => {
@@ -116,7 +127,7 @@ describe("stripeGet", () => {
 
     expect(error).toMatchObject({ status: 400, type: "invalid_request_error", code: "resource_missing", param: "customer" });
     expect(isMissingStripeCustomer(error)).toBe(true);
-    expect((error as Error).message).toBe("Stripe API error (400): invalid_request_error resource_missing (customer)");
+    expect(error).toHaveProperty("message", "Stripe API error (400): invalid_request_error resource_missing (customer)");
   });
 
   it("throws a StripeApiError with only the status for a body that is not JSON", async () => {
@@ -135,19 +146,17 @@ describe("stripeGet", () => {
     const error = await stripeGet("sk_test_example", "/v1/subscriptions/sub_missing").catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(StripeApiError);
-    expect((error as StripeApiError).status).toBe(404);
+    expect(error).toHaveProperty("status", 404);
   });
 });
 
 describe("getStripeBillingConfig", () => {
   const config = (legacy?: string) =>
-    getStripeBillingConfig({
-      DB: {} as D1Database,
-      R2_UPLOADS: {} as R2Bucket,
+    getStripeBillingConfig(apiEnv({
       STRIPE_SECRET_KEY: "sk_test_example",
       STRIPE_PRO_PRICE_ID: "price_new",
-      STRIPE_PRO_LEGACY_PRICE_IDS: legacy,
-    });
+      ...(legacy === undefined ? {} : { STRIPE_PRO_LEGACY_PRICE_IDS: legacy }),
+    }));
 
   it("grants Pro for the checkout price alone when no legacy prices are set", () => {
     expect(config()?.proPriceIds).toEqual(["price_new"]);

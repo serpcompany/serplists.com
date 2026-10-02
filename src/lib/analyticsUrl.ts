@@ -29,7 +29,8 @@ export function isSensitiveAnalyticsLocation(pathname: string, search: string): 
 }
 
 const splitReturnPath = (returnPath: string): { pathname: string; search: string } => {
-  const [withoutHash] = returnPath.split('#');
+  const hashStart = returnPath.indexOf('#');
+  const withoutHash = hashStart === -1 ? returnPath : returnPath.slice(0, hashStart);
   const queryStart = withoutHash.indexOf('?');
   return queryStart === -1
     ? { pathname: withoutHash, search: '' }
@@ -42,7 +43,7 @@ function isSensitiveReturnPath(value: string): boolean {
 }
 
 const isTagManagerStartEvent = (entry: unknown): boolean =>
-  typeof entry === 'object' && entry !== null && (entry as { event?: unknown }).event === 'gtm.js';
+  typeof entry === 'object' && entry !== null && 'event' in entry && entry.event === 'gtm.js';
 
 export function isTagManagerLoaded(win: object): boolean {
   const dataLayer: unknown = Reflect.get(win, 'dataLayer');

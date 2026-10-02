@@ -1,17 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => sessionMocks);
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { sessionMocks } from "../../../support/mockedSession";
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
+import { apiEnvOn } from "../../../support/apiEnv";
+import type { StoredRow } from "../../../support/d1Doubles";
+import { present } from "../../../support/elements";
+import { readJson } from "../../../support/readJson";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+
+const revalidateBody = z.object({ error: z.unknown(), code: z.unknown() }).passthrough();
 
 const NOW = "2026-09-28T00:00:00.000Z";
 const RUN_ITEMS = JSON.stringify([{ id: "s1", title: "Public", items: [{ id: "i1", title: "Public step", isCompleted: true }] }]);
 const TEMPLATE_ITEMS = JSON.stringify([{ id: "s1", title: "Private", items: [{ id: "i1", title: "Confidential step" }] }]);
 
 describe("revalidate refusals on the migrated tables, which tell a gone run from a source the caller may no longer use", () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   const exec = (query: string, ...params: Array<string | number | null>) =>
     database.sqlite.prepare(query).run(...params);
@@ -42,16 +47,18 @@ describe("revalidate refusals on the migrated tables, which tell a gone run from
         method: "POST",
         body: JSON.stringify({ expected_revision: 1 }),
       }),
-      { DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" } as never,
+      apiEnvOn(database),
     );
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return { status: response.status, body: await readJson(response, revalidateBody) };
   };
 
-  const storedItems = (runId: string) =>
-    (database.sqlite.prepare("SELECT items FROM checklist_runs WHERE id = ?").get(runId) as { items: string }).items;
+  const storedItems = (runId: string) => {
+    const row: StoredRow = present(database.sqlite.prepare("SELECT items FROM checklist_runs WHERE id = ?").get(runId), runId);
+    return row.items;
+  };
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     for (const id of ["user-a", "user-b"]) {
       exec("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)", id, `${id}@example.test`, id, NOW);
     }

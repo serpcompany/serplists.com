@@ -3,9 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
-import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings.mjs';
-import { buildToolInvocation } from '../../../scripts/lib/run-tool.mjs';
+const commandOutput = z.object({ stdout: z.string().optional(), stderr: z.string().optional() }).passthrough();
+
+import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
 const repoRoot = process.cwd();
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
@@ -60,7 +63,7 @@ describe('.gitattributes', () => {
 
   it('marks every tracked binary file as binary and stores no CRLF in the index', () => {
     const entries = git(['ls-files', '--eol']).trim().split('\n').map((line) => {
-      const [info, file] = line.split('\t');
+      const [info = '', file] = line.split('\t');
       return { index: info.split(/\s+/)[0], attributes: info.split(/\s+/)[2] ?? '', file };
     });
 
@@ -83,17 +86,17 @@ describe('generated artifact checks on a CRLF checkout', () => {
       mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
       writeFileSync(path.join(cwd, file), toCrlf(edit(file, readFileSync(path.join(repoRoot, file), 'utf8'))));
     }
-    const invocation = buildToolInvocation('tsx', [
-      '--tsconfig',
-      path.join(repoRoot, 'tsconfig.json'),
-      path.join(repoRoot, script),
-      '--check',
-    ]);
+    const invocation = buildScriptInvocation(path.join(repoRoot, script), ['--check']);
     try {
-      execFileSync(invocation.command, invocation.args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+      execFileSync(invocation.command, invocation.args, {
+        cwd,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        env: { ...process.env, TSX_TSCONFIG_PATH: path.join(repoRoot, 'tsconfig.json') },
+      });
       return { ok: true, output: '' };
     } catch (error) {
-      const failure = error as { stdout?: string; stderr?: string };
+      const failure = commandOutput.parse(error);
       return { ok: false, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` };
     }
   };

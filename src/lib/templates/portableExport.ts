@@ -6,9 +6,9 @@ import { exportPortableTemplatesToJSON } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 export type ExportContext = {
-  userId?: string;
-  teamId?: string | null;
-  ownedTemplateIds?: Iterable<string>;
+  userId?: string | undefined;
+  teamId?: string | null | undefined;
+  ownedTemplateIds?: Iterable<string> | undefined;
   exportedSlugs?: Iterable<string>;
 };
 

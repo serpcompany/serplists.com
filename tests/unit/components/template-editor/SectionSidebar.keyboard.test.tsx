@@ -1,62 +1,74 @@
+import '../../../support/sectionSidebarHooks';
 import React from 'react';
-import { get } from 'react-hook-form';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { assert, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
 
-import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
-import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import {
+  createFormControlMountedLikeUseForm,
+  editorFormOf,
+  editorItemsIn,
+  editorSectionsIn,
+  type EditorForm,
+} from '../../../support/editorFormControl';
+import { findAllElements, findDomElement, handlerOf, withComponentsRenderedOneLevel } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted(() => ({
-  form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
-  setValue: null as unknown as (...args: unknown[]) => void,
+const harness = vi.hoisted((): { form: EditorForm | null; setValue: Mock<EditorForm['setValue']> } => ({
+  form: null,
+  setValue: vi.fn(),
 }));
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
-  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'outline' };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+function editorForm(): EditorForm {
+  return editorFormOf(harness);
+}
 
-vi.mock('react-hook-form', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-hook-form')>();
-  const watchedValueSnapshot = ({ name }: { name: string }) =>
-    structuredClone(actual.get(harness.form.getValues(), name));
-  return {
-    ...actual,
-    useFormContext: () => ({
-      control: {},
-      getValues: (name?: string) =>
-        name ? actual.get(harness.form.getValues(), name) : harness.form.getValues(),
-      setValue: harness.setValue,
+
+vi.mock('react-hook-form', async (importOriginal) =>
+  (await import('../../../support/reactHookFormMock')).reactHookFormWatching(
+    importOriginal,
+    harness,
+    ({ valueAt }) => ({
+      useFormContext: () => ({
+        control: {},
+        getValues: (name?: string) =>
+          name ? valueAt(name) : editorForm().getValues(),
+        setValue: harness.setValue,
+      }),
+      useFieldArray: ({ name }: { name: string }) => {
+        const values = z.array(z.object({ id: z.string() }).passthrough()).parse(valueAt(name) ?? []);
+        return {
+          fields: values.map((value) => ({ ...value, fieldId: `field-${value.id}` })),
+          append: vi.fn(),
+          remove: vi.fn(),
+          move: (from: number, to: number) => {
+            const next = [...values];
+            next.splice(to, 0, ...next.splice(from, 1));
+            moveTheFieldArray(name, next);
+          },
+        };
+      },
     }),
-    useFieldArray: ({ name }: { name: string }) => {
-      const values = (actual.get(harness.form.getValues(), name) ?? []) as Array<{ id: string }>;
-      return {
-        fields: values.map((value) => ({ ...value, fieldId: `field-${value.id}` })),
-        append: vi.fn(),
-        remove: vi.fn(),
-        move: (from: number, to: number) => {
-          const next = [...values];
-          const [moved] = next.splice(from, 1);
-          next.splice(to, 0, moved);
-          harness.form.setValue(name as 'sections', next as never, { shouldDirty: true });
-        },
-      };
-    },
-    useWatch: watchedValueSnapshot,
-  };
-});
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+  ),
+);
 
 const selection = {
   onSelectSection: vi.fn(),
   onSelectItem: vi.fn(),
 };
+
+function moveTheFieldArray(name: string, next: unknown[]) {
+  if (name === 'sections') {
+    editorForm().setValue('sections', editorSectionsIn(next), { shouldDirty: true });
+    return;
+  }
+  const sectionIndex = /^sections\.(\d+)\.items$/.exec(name)?.[1];
+  if (sectionIndex === undefined) throw new Error(`The test moves the sections and their tasks, not ${name}.`);
+  editorForm().setValue(`sections.${Number(sectionIndex)}.items`, editorItemsIn(next), { shouldDirty: true });
+}
 
 function createForm(): void {
   harness.form = createFormControlMountedLikeUseForm({
@@ -71,9 +83,8 @@ function createForm(): void {
       },
       { id: 's2', title: 'Second section', items: [{ id: 'c', title: 'Task C', contents: [] }] },
     ],
-  }) as unknown as typeof harness.form;
-  const setValue = harness.form.setValue as (...args: unknown[]) => void;
-  harness.setValue = vi.fn((...args: unknown[]) => setValue(...args));
+  });
+  harness.setValue = vi.fn(editorForm().setValue);
 }
 
 function render(props: { selectedSectionIndex?: number; selectedItemIndex?: number | null } = {}): React.ReactNode {
@@ -87,27 +98,12 @@ function render(props: { selectedSectionIndex?: number; selectedItemIndex?: numb
   );
 }
 
-function withChildComponentsRenderedOneLevel(tree: React.ReactNode): React.ReactNode[] {
-  const outputs = findAllElements(tree, (element) => typeof element.type === 'function').flatMap((element) => {
-    try {
-      return [(element.type as (props: unknown) => React.ReactNode)(element.props)];
-    } catch {
-      return [];
-    }
-  });
-  return [tree, ...outputs];
-}
-
-function findDomElementNamed(tree: React.ReactNode, name: string): AnyElement | undefined {
-  return findAllElements(
-    withChildComponentsRenderedOneLevel(tree),
-    (element) => typeof element.type === 'string' && element.props['aria-label'] === name,
-  )[0];
-}
+const findDomElementNamed = (tree: React.ReactNode, name: string) =>
+  findDomElement(tree, (element) => element.props['aria-label'] === name);
 
 function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
   const handle = findDomElementNamed(tree, name);
-  expect(handle).toBeDefined();
+  assert.exists(handle);
   const event = {
     key,
     altKey: false,
@@ -116,22 +112,15 @@ function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
     shiftKey: false,
     preventDefault: vi.fn(),
   };
-  const onKeyDown = handle.props.onKeyDown as ((event: unknown) => void) | undefined;
-  expect(onKeyDown).toBeTypeOf('function');
-  onKeyDown?.(event);
+  handlerOf(handle, 'onKeyDown')(event);
   return event;
 }
 
-const sectionTitles = () =>
-  (harness.form.getValues('sections') as Array<{ title: string }>).map((section) => section.title);
-const taskIds = (sectionIndex: number) =>
-  (get(harness.form.getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
+const sectionTitles = () => editorForm().getValues('sections').map((section) => section.title);
+const taskIds = (sectionIndex: number) => editorForm().getValues(`sections.${sectionIndex}.items`).map((item) => item.id);
 
 function liveRegionText(tree: React.ReactNode): string {
-  const [region] = findAllElements(
-    withChildComponentsRenderedOneLevel(tree),
-    (element) => typeof element.type === 'string' && element.props['aria-live'] === 'polite',
-  );
+  const region = findDomElement(tree, (element) => element.props['aria-live'] === 'polite');
   return region ? String(region.props.children ?? '') : '';
 }
 
@@ -147,7 +136,7 @@ describe('SectionSidebar keyboard reordering', () => {
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(sectionTitles()).toEqual(['Second section', 'First section']);
-    expect((harness.form.getValues('sections') as Array<{ id: string }>).map((section) => section.id)).toEqual(['s2', 's1']);
+    expect((editorForm().getValues('sections') as Array<{ id: string }>).map((section) => section.id)).toEqual(['s2', 's1']);
     expect(selection.onSelectSection).toHaveBeenCalledWith(0);
     expect(liveRegionText(render())).toBe('Moved Second section to position 1 of 2');
   });
@@ -185,7 +174,7 @@ describe('SectionSidebar keyboard reordering', () => {
   });
 
   it('points every handle at the keyboard hint', () => {
-    const rendered = withChildComponentsRenderedOneLevel(render());
+    const rendered = withComponentsRenderedOneLevel(render());
     const handles = findAllElements(
       rendered,
       (element) => typeof element.type === 'string' && /^Drag /.test(String(element.props['aria-label'] ?? '')),
@@ -209,23 +198,20 @@ describe('SectionSidebar title rename in place', () => {
   });
 
   const doubleClickTitle = (title: string) => {
-    const [button] = findAllElements(
+    const button = firstOf(findAllElements(
       render(),
       (element) => element.type === 'button' && element.props.children === title,
-    );
-    expect(button, title).toBeDefined();
-    (button.props.onDoubleClick as () => void)();
+    ));
+    handlerOf(button, 'onDoubleClick')();
   };
 
   const titleField = () => {
-    const [field] = findAllElements(render(), (element) => element.type === Input);
-    expect(field).toBeDefined();
-    return field;
+    return firstOf(findAllElements(render(), (element) => element.type === Input));
   };
 
   const typeAndPress = (text: string, key: string) => {
-    (titleField().props.onChange as (event: { target: { value: string } }) => void)({ target: { value: text } });
-    (titleField().props.onKeyDown as (event: { key: string }) => void)({ key });
+    handlerOf(titleField(), 'onChange')({ target: { value: text } });
+    handlerOf(titleField(), 'onKeyDown')({ key });
   };
 
   it("opens a field with the section's title on a double click and keeps the typed title on Enter", () => {
@@ -248,6 +234,6 @@ describe('SectionSidebar title rename in place', () => {
     doubleClickTitle('Task B');
     typeAndPress('Ship it', 'Enter');
 
-    expect(get(harness.form.getValues(), 'sections.0.items.1.title')).toBe('Ship it');
+    expect(editorForm().getValues('sections.0.items.1.title')).toBe('Ship it');
   });
 });

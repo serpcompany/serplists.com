@@ -6,6 +6,7 @@ import {
 } from "../../../src/lib/schemas/templateFields";
 import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
 import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
+import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -26,7 +27,7 @@ const templateRuleSchema = z.object({
 
 const limits = TEMPLATE_FIELD_LIMITS;
 
-export const templateSlugSchema = z
+const templateSlugSchema = z
   .string()
   .trim()
   .min(1)
@@ -96,32 +97,7 @@ export function describePayloadError(
   if (!issue) return { message: fallback, details: {} };
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
-  return { message, details: { field } };
-}
-
-export function parseJsonArray(value: unknown): unknown[] | null {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-export function normalizeStringArray(value: unknown): string[] {
-  const parsed = parseJsonArray(value);
-  if (parsed) {
-    return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return [];
+  return { message, details: field === undefined ? {} : { field } };
 }
 
 export function parseSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {
@@ -154,4 +130,11 @@ export function normalizeSectionsPayload(input: unknown): { sections: unknown[];
       },
     ],
   };
+}
+
+export function getRequestedTeamId(
+  parsed: { teamId?: string | undefined; team_id?: string | undefined },
+  url: URL,
+): string | null {
+  return parsed.teamId ?? parsed.team_id ?? url.searchParams.get("teamId");
 }

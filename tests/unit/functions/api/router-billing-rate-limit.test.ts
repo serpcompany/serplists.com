@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
 const BILLING_LIMIT_PER_MINUTE = 10;
 let ipCounter = 0;
 
 function buildEnv() {
-  return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+  return apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 }
 
 async function loadRouter() {
@@ -15,7 +17,7 @@ async function loadRouter() {
   vi.doMock('../../../../functions/api/handlers/billing', () => ({ handleBilling }));
   vi.doMock('../../../../functions/api/handlers/stripe', () => ({ handleStripe }));
   vi.doMock('../../../../functions/api/handlers/templates', () => ({ handleTemplates }));
-  const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+  const apiWorker = await freshApiWorker();
   const send = (ip: string, method: string, path: string, host?: string) =>
     apiWorker.fetch(requestFromIp(ip, method, path, host), buildEnv());
   return { send, handleBilling, handleStripe };
@@ -48,7 +50,7 @@ describe('API router billing rate limit on a deployed host', { timeout: FRESH_RO
     const blocked = await send(ip, 'POST', path);
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get('Retry-After'))).toBeGreaterThan(0);
-    expect((await blocked.json()).error).toMatch(/try again/i);
+    expect((await readJson(blocked, apiErrorBody)).error).toMatch(/try again/i);
     expect(handleBilling).toHaveBeenCalledTimes(BILLING_LIMIT_PER_MINUTE);
   });
 

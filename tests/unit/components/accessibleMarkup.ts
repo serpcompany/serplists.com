@@ -1,3 +1,5 @@
+import { capturedGroup } from '../../support/elements';
+
 export type MarkupElement = {
   tag: string;
   attrs: Record<string, string>;
@@ -36,7 +38,7 @@ const textOf = (inner: string): string => decode(inner.replace(/<[^>]+>/g, ' '))
 const parseAttributes = (source: string): Record<string, string> => {
   const attrs: Record<string, string> = {};
   for (const match of source.matchAll(ATTRIBUTE)) {
-    attrs[match[1]] = decode(match[2] ?? '');
+    attrs[capturedGroup(match, 1)] = decode(match[2] ?? '');
   }
   return attrs;
 };
@@ -48,14 +50,14 @@ const collect = (html: string, pattern: RegExp, tag: (match: RegExpMatchArray) =
     text: textOf(match[3] ?? ''),
   }));
 
-export const findLabels = (html: string): MarkupElement[] =>
+const findLabels = (html: string): MarkupElement[] =>
   collect(html, /<(label)\b([^>]*)>([\s\S]*?)<\/label>/g, () => 'label');
 
 const findButtons = (html: string): MarkupElement[] =>
   collect(html, /<(button)\b([^>]*)>([\s\S]*?)<\/button>/g, () => 'button');
 
 const findFields = (html: string): MarkupElement[] =>
-  collect(html, /<(input|textarea|select)\b([^>]*?)\/?>()/g, (match) => match[1]);
+  collect(html, /<(input|textarea|select)\b([^>]*?)\/?>()/g, (match) => capturedGroup(match, 1));
 
 const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
   collect(
@@ -64,14 +66,14 @@ const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
       `<((?!(?:button|input|textarea|select)\\b)[a-zA-Z][\\w-]*)\\b([^>]*\\brole="(?:${WIDGET_ROLES.join('|')})"[^>]*)>()`,
       'g',
     ),
-    (match) => match[1],
+    (match) => capturedGroup(match, 1),
   );
 
 const isHidden = ({ attrs }: MarkupElement): boolean =>
   attrs['aria-hidden'] === 'true' ||
-  attrs.type === 'hidden' ||
+  attrs['type'] === 'hidden' ||
   'hidden' in attrs ||
-  /(^|\s)hidden(\s|$)/.test(attrs.class ?? '');
+  /(^|\s)hidden(\s|$)/.test(attrs['class'] ?? '');
 
 export const findControls = (html: string): MarkupElement[] =>
   [...findFields(html), ...findButtons(html), ...findOtherElementsWithWidgetRole(html)].filter(
@@ -81,7 +83,7 @@ export const findControls = (html: string): MarkupElement[] =>
 const textOfId = (html: string, id: string): string => {
   const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = html.match(new RegExp(`<(\\w+)\\b[^>]*\\bid="${escaped}"[^>]*>([\\s\\S]*?)</\\1>`));
-  return match ? textOf(match[2]) : '';
+  return match ? textOf(capturedGroup(match, 2)) : '';
 };
 
 export const accessibleName = (html: string, element: MarkupElement): string => {
@@ -90,8 +92,8 @@ export const accessibleName = (html: string, element: MarkupElement): string => 
     return labelledBy.split(/\s+/).map((id) => textOfId(html, id)).join(' ').trim();
   }
   if (element.attrs['aria-label']?.trim()) return element.attrs['aria-label'].trim();
-  const id = element.attrs.id;
-  const label = id ? findLabels(html).find((candidate) => candidate.attrs.for === id) : undefined;
+  const id = element.attrs['id'];
+  const label = id ? findLabels(html).find((candidate) => candidate.attrs['for'] === id) : undefined;
   if (label?.text) return label.text;
   return element.tag === 'button' ? element.text : '';
 };
@@ -118,7 +120,7 @@ export const findUnnamedControls = (html: string): string[] =>
 export const findLabelsNotBoundToOneElement = (html: string): string[] =>
   findLabels(html)
     .filter((label) => {
-      const target = label.attrs.for;
+      const target = label.attrs['for'];
       if (!target) return true;
       return [...html.matchAll(/\bid="([^"]*)"/g)].filter((match) => match[1] === target).length !== 1;
     })
@@ -128,6 +130,6 @@ export const getByAccessibleName = (html: string, name: string): MarkupElement |
   findControls(html).find((element) => accessibleName(html, element) === name);
 
 export const findDuplicateIds = (html: string): string[] => {
-  const ids = [...html.matchAll(/\bid="([^"]*)"/g)].map((match) => match[1]);
+  const ids = [...html.matchAll(/\bid="([^"]*)"/g)].map((match) => capturedGroup(match, 1));
   return ids.filter((id, index) => ids.indexOf(id) !== index);
 };

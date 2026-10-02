@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   createBrowser,
   findRoute,
+  objectInheriting,
   ReadonlyURLSearchParams,
   type DocumentLoad,
   type NavigationRecord,
@@ -39,12 +40,12 @@ export const navigation = {
   window: browser.window,
   installWindow(extraWindowProperties: object = {}): () => void {
     const globals = globalThis as Record<string, unknown>;
-    const saved = globals.window;
-    const installed = Object.create(browser.window);
+    const saved = globals['window'];
+    const installed = objectInheriting(browser.window);
     Object.defineProperties(installed, Object.getOwnPropertyDescriptors(extraWindowProperties));
-    globals.window = installed;
+    globals['window'] = installed;
     return () => {
-      globals.window = saved;
+      globals['window'] = saved;
     };
   },
   settle: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
@@ -64,8 +65,8 @@ function useSearchParams(): ReadonlyURLSearchParams {
   return browser.searchParamsFor(useSnapshot().href);
 }
 
-function useParams<T extends RouteParams = RouteParams>(): T {
-  return useSnapshot().params as T;
+function useParams(): RouteParams {
+  return useSnapshot().params;
 }
 
 class NextNavigationError extends Error {
@@ -160,11 +161,11 @@ const Link = forwardRef<HTMLAnchorElement, MockLinkProps>(function Link(props, r
   const {
     href,
     replace,
-    scroll: _scroll,
+    scroll,
     prefetch,
-    shallow: _shallow,
-    passHref: _passHref,
-    legacyBehavior: _legacyBehavior,
+    shallow,
+    passHref,
+    legacyBehavior,
     onNavigate,
     onClick,
     children,

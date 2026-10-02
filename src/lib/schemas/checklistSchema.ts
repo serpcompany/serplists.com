@@ -40,56 +40,47 @@ export const portableTemplateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).default("error"),
 });
 
-export const checklistTemplateSchema = z.object({
-  id: z.string(),
-  title: z.string(),
+const templateDescriptionFields = {
   description: z.string().optional(),
   type: z.enum(["checklist", "recipe"]).optional(),
-  sections: z.array(checklistSectionSchema),
-  userId: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  isPublic: z.boolean(),
+};
+
+const templatePublishingFields = {
   version: z.number().int().optional(),
   slug: z.string().optional(),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   rules: z.array(portableTemplateRuleSchema).optional(),
+};
+
+export const checklistTemplateSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  ...templateDescriptionFields,
+  sections: z.array(checklistSectionSchema),
+  userId: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  isPublic: z.boolean(),
+  ...templatePublishingFields,
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
 });
 
-export const checklistTemplateImportSchema = z.object({
+const checklistTemplateImportSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
-  description: z.string().optional(),
-  type: z.enum(["checklist", "recipe"]).optional(),
+  ...templateDescriptionFields,
   sections: z.union([z.array(z.unknown()), z.string()]).optional(),
   items: z.union([z.array(z.unknown()), z.string()]).optional(),
   userId: z.string().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
   isPublic: z.boolean().optional(),
-  version: z.number().int().optional(),
-  slug: z.string().optional(),
-  seoTitle: z.string().optional(),
-  seoDescription: z.string().optional(),
-  rules: z.array(portableTemplateRuleSchema).optional(),
+  ...templatePublishingFields,
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),
   tags: z.union([z.array(z.string()), z.string()]).optional()
-});
-
-export const checklistRunSchema = z.object({
-  id: z.string(),
-  templateId: z.string(),
-  title: z.string(),
-  status: z.enum(["in_progress", "completed"]),
-  progress: z.number(),
-  sections: z.array(checklistSectionSchema),
-  startedAt: z.string(),
-  completedAt: z.string().optional(),
-  userId: z.string()
 });
 
 export const templateBackupSchema = z.object({
@@ -104,7 +95,7 @@ export const templateBackupSchema = z.object({
   }).optional()
 });
 
-export const portableChecklistSubItemSchema = z.object({
+const portableChecklistSubItemSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1),
 });
@@ -176,7 +167,7 @@ export const portableChecklistTemplateSchema = z.object({
   rules: z.array(portableTemplateRuleSchema).optional(),
 });
 
-export const portableTemplatePackEnvelopeSchema = z.object({
+const portableTemplatePackEnvelopeSchema = z.object({
   kind: z.literal("serplists-template-pack"),
   schemaVersion: z.string(),
   exportedAt: z.string(),
@@ -200,29 +191,15 @@ export const portableTemplatePackLooseEnvelopeSchema = portableTemplatePackEnvel
   templates: z.array(z.unknown()),
 });
 
-export type ChecklistSubItem = z.infer<typeof checklistSubItemSchema>;
-export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
-export type ChecklistItem = z.infer<typeof checklistItemSchema>;
-export type ChecklistSection = z.infer<typeof checklistSectionSchema>;
-export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
 export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
-export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
 export type PortableTemplateRule = z.infer<typeof portableTemplateRuleSchema>;
 export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplateSchema>;
 export type PortableTemplatePackLooseEnvelope = z.infer<typeof portableTemplatePackLooseEnvelopeSchema>;
 export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
-export const validateTemplate = (data: unknown): ChecklistTemplate => {
-  return checklistTemplateSchema.parse(data);
-};
-
 export const validateBackup = (data: unknown): TemplateBackup => {
   return templateBackupSchema.parse(data);
-};
-
-export const validateTemplateArray = (data: unknown): ChecklistTemplate[] => {
-  return z.array(checklistTemplateSchema).parse(data);
 };
 
 export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImport[] => {
@@ -231,8 +208,4 @@ export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImp
 
 export const validatePortableTemplatePackEnvelope = (data: unknown): PortableTemplatePackLooseEnvelope => {
   return portableTemplatePackLooseEnvelopeSchema.parse(data);
-};
-
-export const validatePortableTemplatePack = (data: unknown): PortableTemplatePack => {
-  return portableTemplatePackSchema.parse(data);
 };

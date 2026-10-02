@@ -16,7 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
+import { SidebarMenuButton } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/use-sidebar';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { signOutAndLeave } from '@/features/auth/signOut';
 import { leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
@@ -25,6 +26,7 @@ import {
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
+  buildHomePath,
   buildPublicProfilePath,
 } from '@/lib/routes';
 
@@ -45,7 +47,7 @@ function AccountMenuContent({
       try {
         return await signOutAndLeave({
           logout,
-          onSignedOut: () => router.push('/'),
+          onSignedOut: () => router.push(buildHomePath()),
           onError: (message) => toast.error(message),
         });
       } finally {

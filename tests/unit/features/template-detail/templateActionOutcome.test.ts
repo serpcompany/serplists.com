@@ -8,7 +8,7 @@ import {
   followTemplateActionResult,
   saveTemplateToAccount,
 } from '@/features/template-detail/templateActionOutcome';
-import type { TemplateDetailActionResult } from '@/features/template-detail/useTemplateDetailModel';
+import type { TemplateDetailActionResult } from '@/features/template-detail/templateDetailApi';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';

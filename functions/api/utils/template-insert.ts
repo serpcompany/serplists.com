@@ -4,6 +4,7 @@ import type { Env } from '../types';
 import { json, jsonError } from './response';
 import { isReservedTemplateSlug } from './reserved-template-slugs';
 import { generateSlug, truncateSlug, withSlugSuffix } from './slug';
+import { isUniqueViolationOn } from './unique-violation';
 import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 import {
   countTemplates,
@@ -17,16 +18,10 @@ import {
 
 type Db = ReturnType<typeof createDb>;
 
-export const TEMPLATE_SLUG_ATTEMPTS = 3;
+const TEMPLATE_SLUG_ATTEMPTS = 3;
 
 export function isTemplateSlugUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    const message = current instanceof Error ? current.message : String(current);
-    if (/unique constraint failed:[^\n]*\btemplates\.slug\b/i.test(message)) return true;
-    current = current instanceof Error ? current.cause : undefined;
-  }
-  return false;
+  return isUniqueViolationOn(error, 'templates.slug');
 }
 
 export function templateSlugBase(title: string): string {
@@ -65,7 +60,7 @@ export async function findFreeSuffixedSlug(db: Db, slug: string, templateId: str
   return null;
 }
 
-export function templateSlugTakenResponse(): Response {
+function templateSlugTakenResponse(): Response {
   return jsonError('Could not reserve a URL for this template. Try again.', 409, { code: 'slug_taken' });
 }
 
@@ -83,7 +78,7 @@ export async function insertTemplateWithUniqueSlug(
     title: string;
     slug: string;
     buildRows: (slug: string) => Promise<NewTemplateRows>;
-    capacity?: TemplateCapacity;
+    capacity?: TemplateCapacity | undefined;
   },
 ): Promise<NewTemplateInsertResult> {
   let slug = params.slug;

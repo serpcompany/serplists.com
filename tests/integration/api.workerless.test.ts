@@ -1,19 +1,64 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import apiWorker from '../../functions/api/[[route]].ts';
-import { varFromWranglerToml } from '../support/wranglerToml';
+import { apiErrorBody, readJson } from '../support/readJson';
+import { wranglerEnvVars } from '../support/wranglerToml';
+import { apiEnv, withoutVars } from '../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
-function buildEnv(overrides?: Record<string, unknown>) {
-  return {
+const healthBody = z.object({ status: z.string() }).passthrough();
+const authStatusBody = z
+  .object({
+    emailAuthAvailable: z.boolean(),
+    emailVerificationRequired: z.boolean(),
+    accountRegistrationAvailable: z.boolean(),
+  })
+  .passthrough();
+
+function buildEnv(overrides: Partial<Env> = {}) {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
-  } as any;
+  });
 }
 
-function productionEnv(overrides?: Record<string, unknown>) {
+function productionEnv(overrides: Partial<Env> = {}) {
   return buildEnv({
-    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+    AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
     ...overrides,
   });
+}
+
+const NO_AUTH_EMAIL_PROVIDER = ['RESEND_API_KEY', 'USESEND_API_KEY'] as const;
+
+const postJson = (url: string, body: Record<string, unknown>) =>
+  new Request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+async function expectTheAuthStatus(
+  url: string,
+  env: ReturnType<typeof buildEnv>,
+  expected: { emailAuthAvailable: boolean; emailVerificationRequired: boolean; accountRegistrationAvailable: boolean },
+) {
+  const response = await apiWorker.fetch(new Request(url), env);
+
+  expect(response.status).toBe(200);
+  const data = await readJson(response, authStatusBody);
+  expect(data.emailAuthAvailable).toBe(expected.emailAuthAvailable);
+  expect(data.emailVerificationRequired).toBe(expected.emailVerificationRequired);
+  expect(data.accountRegistrationAvailable).toBe(expected.accountRegistrationAvailable);
+}
+
+async function expectTestAccountsRefused(response: Response) {
+  expect(response.status).toBe(403);
+  const data = await readJson(response, apiErrorBody);
+  expect(data.error).toBe('Test accounts are disabled in production');
+}
+
+async function expectAuthEmailUnavailable(response: Response) {
+  expect(response.status).toBe(503);
+  const data = await readJson(response, apiErrorBody);
+  expect(data.error).toBe('Auth email is temporarily unavailable. Please contact support.');
+  expect(data.code).toBe('auth_email_unavailable');
 }
 
 describe('API Worker (no-wrangler integration)', () => {
@@ -24,21 +69,18 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
     expect(response.headers.get('X-Request-Id')).toBeTruthy();
 
-    const data = await response.json();
+    const data = await readJson(response, healthBody);
     expect(data.status).toBe('ok');
   });
 
   it('GET /api/health works with legacy JWT_SECRET when BETTER_AUTH_SECRET is missing', async () => {
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/health'),
-      buildEnv({
-        BETTER_AUTH_SECRET: undefined,
-        JWT_SECRET: 'legacy-fallback-secret-32-chars-minimum!!',
-      })
+      withoutVars(buildEnv({ JWT_SECRET: 'legacy-fallback-secret-32-chars-minimum!!' }), ['BETTER_AUTH_SECRET'])
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, healthBody);
     expect(data.status).toBe('ok');
   });
 
@@ -49,7 +91,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe('Server configuration error');
   });
 
@@ -65,7 +107,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    expect((await response.json()).error).toBe('Server configuration error');
+    expect((await readJson(response, apiErrorBody)).error).toBe('Server configuration error');
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
 
@@ -85,7 +127,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe('Server configuration error');
   });
 
@@ -119,193 +161,94 @@ describe('API Worker (no-wrangler integration)', () => {
 
   it('blocks test emails for production sign-up endpoint', async () => {
     const response = await apiWorker.fetch(
-      new Request("https://serplists.com/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "test-user@serplists.dev",
-          password: "password123456",
-          name: "Blocked User",
-        }),
-      }),
+      postJson("https://serplists.com/api/auth/sign-up/email", { email: "test-user@serplists.dev", password: "password123456", name: "Blocked User" }),
       productionEnv()
     );
 
-    expect(response.status).toBe(403);
-    const data = await response.json();
-    expect(data.error).toBe("Test accounts are disabled in production");
+    await expectTestAccountsRefused(response);
   });
 
   it('blocks test emails for production sign-in endpoint', async () => {
     const response = await apiWorker.fetch(
-      new Request("https://serplists.com/api/auth/sign-in/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "test-user@serplists.dev",
-          password: "password123456",
-        }),
-      }),
+      postJson("https://serplists.com/api/auth/sign-in/email", { email: "test-user@serplists.dev", password: "password123456" }),
       productionEnv()
     );
 
-    expect(response.status).toBe(403);
-    const data = await response.json();
-    expect(data.error).toBe("Test accounts are disabled in production");
+    await expectTestAccountsRefused(response);
   });
 
   it('fails production sign-up email flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
-      new Request("https://serplists.com/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "new-user@example.com",
-          password: "password123456",
-          name: "New User",
-        }),
-      }),
-      productionEnv({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
+      postJson("https://serplists.com/api/auth/sign-up/email", { email: "new-user@example.com", password: "password123456", name: "New User" }),
+      withoutVars(productionEnv(), NO_AUTH_EMAIL_PROVIDER)
     );
 
-    expect(response.status).toBe(503);
-    const data = await response.json();
-    expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
-    expect(data.code).toBe("auth_email_unavailable");
+    await expectAuthEmailUnavailable(response);
   });
 
   it('refuses sign-up before Better Auth creates an account when verification is required but email cannot be sent', async () => {
-    const envWithNoDatabaseForBetterAuthToReach = buildEnv({
-      AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
-      RESEND_API_KEY: undefined,
-      USESEND_API_KEY: undefined,
-    });
+    const envWithNoDatabaseForBetterAuthToReach = withoutVars(buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "true" }), NO_AUTH_EMAIL_PROVIDER);
 
     const response = await apiWorker.fetch(
-      new Request("http://localhost/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "new-user@example.com",
-          password: "password123456",
-          name: "New User",
-        }),
-      }),
+      postJson("http://localhost/api/auth/sign-up/email", { email: "new-user@example.com", password: "password123456", name: "New User" }),
       envWithNoDatabaseForBetterAuthToReach
     );
 
     expect(response.status).toBe(503);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.code).toBe("auth_email_unavailable");
   });
 
   it('fails password reset flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
-      new Request("http://localhost/api/auth/request-password-reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "existing-user@example.com",
-          redirectTo: "http://localhost:8080/reset-password",
-        }),
-      }),
-      buildEnv({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
+      postJson("http://localhost/api/auth/request-password-reset", { email: "existing-user@example.com", redirectTo: "http://localhost:8080/reset-password" }),
+      withoutVars(buildEnv(), NO_AUTH_EMAIL_PROVIDER)
     );
 
-    expect(response.status).toBe(503);
-    const data = await response.json();
-    expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
-    expect(data.code).toBe("auth_email_unavailable");
+    await expectAuthEmailUnavailable(response);
   });
 
   it('reports auth email unavailable in auth status when no provider is configured', async () => {
-    const response = await apiWorker.fetch(
-      new Request('http://localhost/api/auth/status'),
-      buildEnv({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.emailAuthAvailable).toBe(false);
-    expect(data.emailVerificationRequired).toBe(false);
-    expect(data.accountRegistrationAvailable).toBe(true);
+    await expectTheAuthStatus('http://localhost/api/auth/status', withoutVars(buildEnv(), NO_AUTH_EMAIL_PROVIDER), {
+      emailAuthAvailable: false,
+      emailVerificationRequired: false,
+      accountRegistrationAvailable: true,
+    });
   });
 
   it('reports auth email available in auth status when a provider is configured', async () => {
-    const response = await apiWorker.fetch(
-      new Request('http://localhost/api/auth/status'),
-      buildEnv({
-        RESEND_API_KEY: 're_test_123',
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.emailAuthAvailable).toBe(true);
-    expect(data.emailVerificationRequired).toBe(true);
-    expect(data.accountRegistrationAvailable).toBe(true);
+    await expectTheAuthStatus('http://localhost/api/auth/status', buildEnv({ RESEND_API_KEY: 're_test_123' }), {
+      emailAuthAvailable: true,
+      emailVerificationRequired: true,
+      accountRegistrationAvailable: true,
+    });
   });
 
   it('reports account registration unavailable on production when no auth email provider is configured', async () => {
-    const response = await apiWorker.fetch(
-      new Request('https://serplists.com/api/auth/status'),
-      productionEnv({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.emailAuthAvailable).toBe(false);
-    expect(data.emailVerificationRequired).toBe(true);
-    expect(data.accountRegistrationAvailable).toBe(false);
+    await expectTheAuthStatus('https://serplists.com/api/auth/status', withoutVars(productionEnv(), NO_AUTH_EMAIL_PROVIDER), {
+      emailAuthAvailable: false,
+      emailVerificationRequired: true,
+      accountRegistrationAvailable: false,
+    });
   });
 
   it.each([
     'https://staging.serp-checklists.pages.dev',
     'https://staging.serplists.com',
   ])('uses the explicit preview auth policy on %s', async (origin) => {
-    const response = await apiWorker.fetch(
-      new Request(`${origin}/api/auth/status`),
-      buildEnv({
-        AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.emailAuthAvailable).toBe(false);
-    expect(data.emailVerificationRequired).toBe(false);
-    expect(data.accountRegistrationAvailable).toBe(true);
+    await expectTheAuthStatus(`${origin}/api/auth/status`, buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'false', ...NO_AUTH_EMAIL_PROVIDER }), {
+      emailAuthAvailable: false,
+      emailVerificationRequired: false,
+      accountRegistrationAvailable: true,
+    });
   });
 
   it('uses the explicit production auth policy independently of hostname', async () => {
-    const response = await apiWorker.fetch(
-      new Request('https://serp-checklists.pages.dev/api/auth/status'),
-      buildEnv({
-        AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.emailAuthAvailable).toBe(false);
-    expect(data.emailVerificationRequired).toBe(true);
-    expect(data.accountRegistrationAvailable).toBe(false);
+    await expectTheAuthStatus('https://serp-checklists.pages.dev/api/auth/status', buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', ...NO_AUTH_EMAIL_PROVIDER }), {
+      emailAuthAvailable: false,
+      emailVerificationRequired: true,
+      accountRegistrationAvailable: false,
+    });
   });
 
   it('enforces CORS allowlist when configured', async () => {

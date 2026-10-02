@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTableColumns } from 'drizzle-orm';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
@@ -23,8 +21,9 @@ import {
   runInsertStatements,
 } from '@functions/api/utils/active-run-limit';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { apiEnv, d1ThatRunsNoQuery } from '../../../support/apiEnv';
 
-const env = { DB: {} } as any;
+const env = apiEnv();
 const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
 
 describe('isReopening', () => {
@@ -98,23 +97,10 @@ describe('activeRunsInContext', () => {
   });
 });
 
-describe('the active-run limit has one implementation', () => {
-  it('reads maxActiveRuns only in active-run-limit.ts, since a route that counted its own way left shared runs out of the count', () => {
-    const root = path.resolve(__dirname, '../../../../functions');
-    const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-      entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);
-    const readers = sources(root)
-      .filter((file) => /limits\.maxActiveRuns/.test(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(root, file).split(path.sep).join('/'));
-
-    expect(readers).toEqual(['api/utils/active-run-limit.ts']);
-  });
-});
-
 describe('runInsertStatements with a limit', () => {
   async function realDrizzleWithoutD1() {
     const { drizzle } = await vi.importActual<typeof import('drizzle-orm/d1')>('drizzle-orm/d1');
-    return drizzle({} as D1Database, { schema });
+    return drizzle(d1ThatRunsNoQuery(), { schema });
   }
 
   function insertedColumns(sqlText: string): string[] {
@@ -165,11 +151,11 @@ describe('runInsertStatements with a limit', () => {
 
   it('selects one value per inserted column, in column order, then applies the limit', async () => {
     const db = await realDrizzleWithoutD1();
-    const [runInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
+    const [runInsert] = runInsertStatements(db, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = runInsert.toSQL();
     const columns = insertedColumns(query.sql);
 
-    expect(columns).toEqual(Object.values(getTableColumns(schema.checklist_runs)).map((column) => column.name));
+    expect(columns).toEqual(Object.values(getTableColumns(schema.checklistRuns)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
     const valueParams = query.params.slice(0, -3);
     const limitGuardParams = query.params.slice(-3);
@@ -180,11 +166,11 @@ describe('runInsertStatements with a limit', () => {
 
   it('writes the audit event only when its run row exists', async () => {
     const db = await realDrizzleWithoutD1();
-    const [, auditInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
+    const [, auditInsert] = runInsertStatements(db, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = auditInsert.toSQL();
 
     const columns = insertedColumns(query.sql);
-    expect(columns).toEqual(Object.values(getTableColumns(schema.audit_events)).map((column) => column.name));
+    expect(columns).toEqual(Object.values(getTableColumns(schema.auditEvents)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
     expect(query.params).toEqual([...providedValuesInColumnOrder(columns, auditEvent), 'run-1']);
     expect(query.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);

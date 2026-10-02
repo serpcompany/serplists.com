@@ -1,14 +1,15 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 import { OutlineSidebar } from '@/components/template-editor/OutlineSidebar';
 import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
 import { findControls } from './accessibleMarkup';
 
-function SidebarHarness(): JSX.Element {
+function SidebarHarness(): React.JSX.Element {
   const form = useForm<TemplateEditorFormValues>({
     defaultValues: buildTemplateEditorFormValues({
       sections: [
@@ -60,16 +61,15 @@ describe('OutlineSidebar row actions', () => {
     const html = renderToStaticMarkup(<SidebarHarness />);
     const reveal = ['group-focus-within:opacity-100', '[@media(hover:none)]:opacity-100'];
 
-    const sectionActions = html.match(/<div class="([^"]*)"><button[^>]*aria-label="Add task to Before Day One"/);
-    expect(sectionActions).not.toBeNull();
-    for (const className of reveal) expect(sectionActions![1]).toContain(className);
+    const sectionActions = capturedGroup(html.match(/<div class="([^"]*)"><button[^>]*aria-label="Add task to Before Day One"/), 1);
+    for (const className of reveal) expect(sectionActions).toContain(className);
 
     const taskRemove = findControls(html).find(
       (element) => element.attrs['aria-label'] === 'Remove Send welcome email',
     );
-    expect(taskRemove).toBeDefined();
+    assert.exists(taskRemove, 'the Remove Send welcome email button');
     for (const className of [...reveal, 'focus-visible:opacity-100']) {
-      expect(taskRemove!.attrs.class).toContain(className);
+      expect(taskRemove.attrs['class']).toContain(className);
     }
   });
 });

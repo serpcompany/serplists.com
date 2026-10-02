@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { elementAt, sectionAt, taskAt } from "../../support/elements";
 
 import { validateStableTemplateIdentities } from "@functions/api/utils/template-reconciliation";
 import { applyTemplateSaveDefaults as applyDefaults } from "@/hooks/useTemplateValidation";
@@ -28,9 +29,9 @@ describe("applyTemplateSaveDefaults", () => {
     vi.setSystemTime(new Date("2026-09-28T10:05:00.000Z"));
     const second = applyDefaults("Moving", [emptySection("section-2")]);
 
-    expect(first.sections[0].items).toHaveLength(1);
-    expect(first.sections[0].items[0].title).toBe("New task");
-    expect(second.sections[0].items[0].id).toBe(first.sections[0].items[0].id);
+    expect(sectionAt(first, 0).items).toHaveLength(1);
+    expect(taskAt(first, 0, 0).title).toBe("New task");
+    expect(taskAt(second, 0, 0).id).toBe(taskAt(first, 0, 0).id);
   });
 
   it("gives each empty section its own placeholder id, unused by any other task", () => {
@@ -50,7 +51,7 @@ describe("applyTemplateSaveDefaults", () => {
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain(placeholderIdOfSectionA);
-    expect(result.sections[2].items[0].title).toBe("Real task");
+    expect(taskAt(result, 2, 0).title).toBe("Real task");
     expect(validateStableTemplateIdentities(result.sections)).toBeNull();
   });
 
@@ -62,7 +63,7 @@ describe("applyTemplateSaveDefaults", () => {
 
     expect(applyDefaults(once.title, once.sections)).toEqual(once);
     expect(once.title).toBe("Untitled Template");
-    expect(once.sections[1].items[0].title).toBe("Task 1");
+    expect(taskAt(once, 1, 0).title).toBe("Task 1");
   });
 
   it("uses fixed ids for the starter section of a template with none", () => {
@@ -73,7 +74,7 @@ describe("applyTemplateSaveDefaults", () => {
     const second = applyDefaults("Moving", []);
 
     expect(second).toEqual(first);
-    expect(first.sections[0].items).toHaveLength(1);
+    expect(sectionAt(first, 0).items).toHaveLength(1);
   });
 
   it("titles a blank or whitespace-only section by its position, the label the outline showed the author, keeping its id", () => {
@@ -98,8 +99,8 @@ describe("applyTemplateSaveDefaults", () => {
   it("titles a blank empty section too", () => {
     const result = applyDefaults("Moving", [emptySection("section-1", "")]);
 
-    expect(result.sections[0].title).toBe("Section 1");
-    expect(result.sections[0].items[0].title).toBe("New task");
+    expect(sectionAt(result, 0).title).toBe("Section 1");
+    expect(taskAt(result, 0, 0).title).toBe("New task");
   });
 
   it("drops blank sub-tasks, which runs would show as unlabeled boxes the task waits on, and keeps the others with their ids", () => {
@@ -119,7 +120,7 @@ describe("applyTemplateSaveDefaults", () => {
       { id: "section-1", title: "Prep", items: [{ id: "item-1", title: "Audit", contents: [subItemsBlock] }] },
     ]);
 
-    expect(result.sections[0].items[0].contents).toEqual([
+    expect(taskAt(result, 0, 0).contents).toEqual([
       {
         id: "content-1",
         type: "subItems",
@@ -153,10 +154,10 @@ describe("applyTemplateSaveDefaults", () => {
       },
     ]);
 
-    expect(result.sections[0].items[0].contents).toEqual([
+    expect(taskAt(result, 0, 0).contents).toEqual([
       { id: "content-2", type: "text", value: "Read the brief" },
     ]);
-    expect(result.sections[0].items[1]).not.toHaveProperty("contents");
+    expect(taskAt(result, 0, 1)).not.toHaveProperty("contents");
   });
 
   it("does not change the sections it was given", () => {
@@ -204,8 +205,8 @@ describe("applyTemplateSaveDefaults", () => {
     for (const section of result.sections) {
       expect(portableChecklistSectionSchema.safeParse(section).error).toBeUndefined();
     }
-    const blocks = result.sections[0].items[0].contents ?? [];
+    const blocks = taskAt(result, 0, 0).contents ?? [];
     expect(blocks.map((content) => content.type)).toEqual(["text", "subItems"]);
-    expect(blocks[1].subItems).toEqual([{ id: "sub-a", title: "Check title" }]);
+    expect(elementAt(blocks, 1).subItems).toEqual([{ id: "sub-a", title: "Check title" }]);
   });
 });

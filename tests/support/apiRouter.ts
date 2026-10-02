@@ -26,3 +26,23 @@ export function captureLogLines(levels: ReadonlyArray<'debug' | 'info' | 'warn' 
   }
   return lines;
 }
+
+export function silenceLogs() {
+  captureLogLines(['info', 'warn', 'error']);
+}
+
+export async function freshApiWorker() {
+  return (await import('../../functions/api/[[route]].ts')).default;
+}
+
+let freshIps = 0;
+
+export function aFreshIp(prefix = '203.0.113') {
+  freshIps += 1;
+  return { ip: `${prefix}.${freshIps}`, count: freshIps };
+}
+
+export async function sendToAFreshApiWorker(request: Request, env: Parameters<Awaited<ReturnType<typeof freshApiWorker>>['fetch']>[1]) {
+  const apiWorker = await freshApiWorker();
+  return apiWorker.fetch(request, env);
+}

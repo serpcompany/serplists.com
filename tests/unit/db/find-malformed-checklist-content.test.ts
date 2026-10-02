@@ -1,15 +1,16 @@
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { malformedSectionsStoredBeforeValidation } from '../../fixtures/malformedSections';
-import { createMigratedD1 } from '../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 const query = readFileSync(new URL('../../../db/maintenance/find-malformed-checklist-content.sql', import.meta.url), 'utf8');
 
 function migratedDatabase(): DatabaseSync {
-  const db = createMigratedD1().sqlite;
+  const db = new SqliteD1().sqlite;
   db.exec(`INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');`);
   return db;
@@ -25,8 +26,11 @@ function insertRun(db: DatabaseSync, id: string, items: string) {
     VALUES (?, 'user-1', NULL, 'Run', ?, 'in_progress', '2026-01-01', '2026-01-01', '2026-01-01')`).run(id, items);
 }
 
-const findings = (db: DatabaseSync) =>
-  db.prepare(query.replace(/^--.*$/gm, '')).all() as Array<{ source: string; id: string; path: string; problem: string }>;
+const findingRows = z.array(
+  z.object({ source: z.string(), id: z.string(), path: z.string(), problem: z.string() }).passthrough(),
+);
+
+const findings = (db: DatabaseSync) => findingRows.parse(db.prepare(query.replace(/^--.*$/gm, '')).all());
 
 const validSections = [
   {

@@ -1,19 +1,17 @@
+import { isContentRecord, isSectionRecord, isTaskRecord } from "./jsonRecords";
 import type { PortableChecklistTemplate } from "./checklistSchema";
 
 export type PortableSkippedTemplate = { title: string; reason: string };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-export function countReferencedUploads(sections: unknown[]): number {
+function countReferencedUploads(sections: unknown[]): number {
   let count = 0;
 
   for (const section of sections) {
-    if (!isRecord(section) || !Array.isArray(section.items)) continue;
+    if (!isSectionRecord(section) || !Array.isArray(section.items)) continue;
     for (const item of section.items) {
-      if (!isRecord(item) || !Array.isArray(item.contents)) continue;
+      if (!isTaskRecord(item) || !Array.isArray(item.contents)) continue;
       for (const content of item.contents) {
-        if (!isRecord(content)) continue;
+        if (!isContentRecord(content)) continue;
         const type = content.type;
         const value = typeof content.value === "string" ? content.value : "";
         const isUpload = content.uploadType === "upload" || value.includes("/api/uploads/file") || value.includes("uploads/file?key=");

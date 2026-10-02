@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf, present, sectionAt, taskAt } from '../../../support/elements';
 
 import { applyTemplateSaveDefaults as applyTemplateDefaults } from '@/hooks/useTemplateValidation';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/lib/schemas/checklistSchema';
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import { objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 
 const everyContentTypeTheEditorCanAdd = templateEditorFormSchema.shape.sections.element.shape.items.element.shape.contents
   .unwrap().element.shape.type.options as TemplateEditorContentType[];
@@ -24,10 +26,10 @@ const templateTheEditorSavedWithEveryContentTypeBlank = (): ChecklistTemplate =>
   const item = createTemplateEditorItem();
   item.title = 'Write copy';
   item.contents = everyContentTypeTheEditorCanAdd.map((type) => createTemplateEditorContent(type));
-  const subItems = item.contents.find((content) => content.type === 'subItems');
+  const subItems = present(item.contents.find((content) => content.type === 'subItems'), 'a Sub-tasks block');
   const trailingBlankSubTask = createTemplateEditorSubItem();
-  subItems!.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, trailingBlankSubTask];
-  form.sections[0].items = [item];
+  subItems.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, trailingBlankSubTask];
+  sectionAt(form, 0).items = [item];
   const { title, sections } = applyTemplateDefaults(form.title, form.sections as ChecklistSection[]);
 
   return {
@@ -54,12 +56,12 @@ describe('portable template round trip', () => {
     const pack = exportPortableTemplatesToJSON([template]);
 
     expect(portableTemplatePackSchema.safeParse(pack).success).toBe(true);
-    expect(pack.templates[0].sections[0].title).toBe('Section 1');
-    expect(pack.templates[0].sections[0].id).toBe(template.sections[0].id);
+    expect(sectionAt(firstOf(pack.templates), 0).title).toBe('Section 1');
+    expect(sectionAt(firstOf(pack.templates), 0).id).toBe(sectionAt(template, 0).id);
 
     const parsed = parseTemplatesFromData(JSON.parse(JSON.stringify(pack)));
     expect(parsed.templates).toHaveLength(1);
-    const contents = parsed.templates[0].sections[0].items[0].contents ?? [];
+    const contents = taskAt(firstOf(parsed.templates), 0, 0).contents ?? [];
     expect(contents.map((content) => content.type).sort()).toEqual(['subItems', 'text']);
     expect(contents.find((content) => content.type === 'subItems')?.subItems?.map((subItem) => subItem.title))
       .toEqual(['Short']);
@@ -89,8 +91,8 @@ describe('portable template round trip', () => {
     ]));
 
     expect(parsed.templates).toHaveLength(1);
-    expect(parsed.templates[0].sections[0].title).toBe('Section 1');
-    expect(parsed.templates[0].sections[0].items[0].contents).toEqual([]);
+    expect(sectionAt(firstOf(parsed.templates), 0).title).toBe('Section 1');
+    expect(taskAt(firstOf(parsed.templates), 0, 0).contents).toEqual([]);
   });
 
   it('skips an invalid template with a warning instead of rejecting the file', () => {
@@ -101,7 +103,7 @@ describe('portable template round trip', () => {
 
     expect(parsed.templates.map((template) => template.title)).toEqual(['Valid']);
     expect(parsed.warnings).toEqual([
-      expect.objectContaining({ templateTitle: 'No tasks', message: expect.stringMatching(/skipped/i) }),
+      objectContaining({ templateTitle: 'No tasks', message: stringMatching(/skipped/i) }),
     ]);
   });
 

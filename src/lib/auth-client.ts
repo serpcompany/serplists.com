@@ -2,6 +2,7 @@ import { env } from "@/env";
 import { createAuthClient } from "better-auth/react";
 import { usernameClient } from "better-auth/client/plugins";
 import { AuthStatusError, parseRetryAfterSeconds } from "@/lib/auth/authErrors";
+import { authStatusSchema, type AuthStatus } from "@/lib/schemas/authStatus";
 
 import { resolveApiBaseUrl, resolveApiServerOrigin } from "@/lib/apiBaseUrl";
 
@@ -23,11 +24,7 @@ export const authClient = createAuthClient({
   },
 });
 
-export async function getAuthStatus(): Promise<{
-  accountRegistrationAvailable?: boolean;
-  emailAuthAvailable: boolean;
-  emailVerificationRequired?: boolean;
-}> {
+export async function getAuthStatus(): Promise<AuthStatus> {
   const response = await fetch(`${API_BASE_URL}/auth/status`, {
     credentials: "include",
   });
@@ -36,7 +33,6 @@ export async function getAuthStatus(): Promise<{
     throw new AuthStatusError(response.status, parseRetryAfterSeconds(response.headers.get("Retry-After")));
   }
 
-  return (await response.json()) as { emailAuthAvailable: boolean };
+  const body: unknown = await response.json();
+  return authStatusSchema.parse(body);
 }
-
-export type Session = typeof authClient.$Infer.Session;

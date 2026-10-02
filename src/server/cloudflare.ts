@@ -7,12 +7,7 @@ import type { Env } from '@functions/api/types';
 
 export async function getWorkerEnv(): Promise<Env> {
   const { env } = await getCloudflareContext({ async: true });
-  return env as unknown as Env;
-}
-
-export async function getWaitUntil(): Promise<(promise: Promise<unknown>) => void> {
-  const { ctx } = await getCloudflareContext({ async: true });
-  return (promise) => ctx.waitUntil(promise);
+  return env;
 }
 
 export async function getRequestOrigin(): Promise<string> {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { createApiError } from '@/lib/api-errors';
 import { addPublicTemplatesToPack } from '@/lib/templates/portableExport';
@@ -67,7 +68,7 @@ describe('formatImportSummaryMessage', () => {
 
 describe('formatImportFailure', () => {
   it('shows the title and reason, naming an untitled template by its position', () => {
-    expect(formatImportFailure(allFailed.failed[0])).toBe('A: Duplicate item id: x');
+    expect(formatImportFailure(firstOf(allFailed.failed))).toBe('A: Duplicate item id: x');
     expect(formatImportFailure({ index: 2, title: '', reason: 'Bad', code: 'invalid_fields' })).toBe('Template 3: Bad');
   });
 });
@@ -79,7 +80,7 @@ describe('export summary', () => {
   });
   const valid = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Check DNS' }] }];
   const noTasks = 'Template has no sections with tasks';
-  const packAsTheApiSendsIt = (templates: ReturnType<typeof source>[]) =>
+  const packAsTheApiSendsIt = (templates: ReturnType<typeof source>[]): unknown =>
     JSON.parse(JSON.stringify(buildPortableTemplatePack(templates, 'me@example.com')));
 
   it('reads the templates written and those left out from the pack manifest', () => {

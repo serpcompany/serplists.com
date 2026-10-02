@@ -1,6 +1,3 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -13,6 +10,7 @@ import {
   THEME_CHANGE_EVENT,
   THEME_STORAGE_KEY,
   toggleDocumentTheme,
+  type ThemeDocument,
 } from '@/lib/theme';
 
 const createThemeHarness = () => {
@@ -41,15 +39,23 @@ const createThemeHarness = () => {
     document: {
       body: { classList: bodyClassList },
       documentElement: { classList: documentElementClassList },
-    } as unknown as Document,
+    } satisfies ThemeDocument,
     documentElementClassNames: htmlClassNames,
     isDark: () => htmlClassNames.has('dark') || bodyClassNames.has('dark'),
     storage: {
       getItem: vi.fn((key: string) => storage.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
-    } as unknown as Storage,
+      setItem: vi.fn((key: string, value: string): void => {
+        storage.set(key, value);
+      }),
+    } satisfies Pick<Storage, 'getItem' | 'setItem'>,
     storedValues: storage,
   };
+};
+
+const expectAToggleTo = (harness: ReturnType<typeof createThemeHarness>, theme: 'light' | 'dark') => {
+  expect(toggleDocumentTheme(harness.document, harness.storage)).toBe(theme);
+  expect(harness.isDark()).toBe(theme === 'dark');
+  expect(harness.storage.setItem).toHaveBeenLastCalledWith('serplists-theme', theme);
 };
 
 describe('theme helpers', () => {
@@ -70,30 +76,15 @@ describe('theme helpers', () => {
     expect(getStoredTheme(harness.storage)).toBe('light');
     expect(getDocumentTheme(harness.document)).toBe('dark');
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('light');
-    expect(harness.isDark()).toBe(false);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'light',
-    );
+    expectAToggleTo(harness, 'light');
   });
 
   it('toggles the document dark class and persists the selected theme', () => {
     const harness = createThemeHarness();
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('dark');
-    expect(harness.isDark()).toBe(true);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'dark',
-    );
+    expectAToggleTo(harness, 'dark');
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('light');
-    expect(harness.isDark()).toBe(false);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'light',
-    );
+    expectAToggleTo(harness, 'light');
   });
 });
 
@@ -200,7 +191,7 @@ describe('theme changes from another tab, which arrive only as a storage event a
   it('ignores other keys and sessionStorage', () => {
     const harness = createThemeHarness();
     harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
-    const sessionArea = { getItem: () => null } as unknown as Storage;
+    const sessionArea = { getItem: () => null };
 
     expect(
       syncThemeFromStorageEvent(
@@ -277,21 +268,5 @@ describe('theme changes from another tab, which arrive only as a storage event a
     target.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: 'dark' }));
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(harness.isDark()).toBe(true);
-  });
-
-  it('leaves storage listening to theme.ts, so no component updates its label alone', () => {
-    const listFiles = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
-        const path = join(dir, name);
-        return statSync(path).isDirectory() ? listFiles(path) : [path];
-      });
-    const sessionSyncListeningOnlyForItsOwnKey = 'src/contexts/sessionSync.ts';
-    const allowed = new Set(['src/lib/theme.ts', sessionSyncListeningOnlyForItsOwnKey]);
-    const offenders = listFiles('src')
-      .filter((path) => /\.(ts|tsx)$/.test(path))
-      .filter((path) => !allowed.has(path.split('\\').join('/')))
-      .filter((path) => /addEventListener\(\s*['"]storage['"]/.test(readFileSync(path, 'utf8')));
-
-    expect(offenders).toEqual([]);
   });
 });

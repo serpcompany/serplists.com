@@ -15,6 +15,7 @@ import {
   MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse, readJsonOrNull } from "../utils/request-json";
 import { getSessionUserId } from "../utils/session";
 
 const CONNECTION_SEGMENT = "connection";
@@ -25,23 +26,15 @@ const createKeyBodySchema = z.object({
   permissions: z.array(runKeyPermissionSchema).min(1, "Choose at least one permission").max(8).optional(),
 }).strict();
 
-const safeKeySelection = (personal_run_keys: typeof schema.personal_run_keys) => ({
-  id: personal_run_keys.id,
-  name: personal_run_keys.name,
-  prefix: personal_run_keys.key_prefix,
-  createdAt: personal_run_keys.created_at,
-  lastUsedAt: personal_run_keys.last_used_at,
-  revokedAt: personal_run_keys.revoked_at,
-  permissions: personal_run_keys.permissions,
+const safeKeySelection = (personalRunKeys: typeof schema.personalRunKeys) => ({
+  id: personalRunKeys.id,
+  name: personalRunKeys.name,
+  prefix: personalRunKeys.key_prefix,
+  createdAt: personalRunKeys.created_at,
+  lastUsedAt: personalRunKeys.last_used_at,
+  revokedAt: personalRunKeys.revoked_at,
+  permissions: personalRunKeys.permissions,
 });
-
-async function readJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 export async function handleAgentKeys(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
@@ -60,14 +53,14 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   const db = createDb(env);
-  const { personal_run_keys } = schema;
+  const { personalRunKeys } = schema;
 
   if (request.method === "GET" && !keyId) {
     const keys = await db
-      .select(safeKeySelection(personal_run_keys))
-      .from(personal_run_keys)
-      .where(eq(personal_run_keys.user_id, userId))
-      .orderBy(sql`${personal_run_keys.revoked_at} is not null`, desc(personal_run_keys.created_at))
+      .select(safeKeySelection(personalRunKeys))
+      .from(personalRunKeys)
+      .where(eq(personalRunKeys.user_id, userId))
+      .orderBy(sql`${personalRunKeys.revoked_at} is not null`, desc(personalRunKeys.created_at))
       .limit(MAX_LISTED_KEYS);
     return json(keys.map((key) => ({
       ...key,
@@ -77,9 +70,9 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   if (request.method === "POST" && !keyId) {
-    const parsed = createKeyBodySchema.safeParse(await readJson(request));
+    const parsed = createKeyBodySchema.safeParse(await readJsonOrNull(request));
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "Invalid key payload", 400);
+      return invalidPayloadResponse(parsed.error, "Invalid key payload");
     }
 
     let secret: Awaited<ReturnType<typeof createPersonalRunKeySecret>>;
@@ -123,17 +116,17 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   if (request.method === "DELETE" && keyId) {
-    const ownedKey = and(eq(personal_run_keys.id, keyId), eq(personal_run_keys.user_id, userId));
+    const ownedKey = and(eq(personalRunKeys.id, keyId), eq(personalRunKeys.user_id, userId));
     const [revoked] = await db
-      .update(personal_run_keys)
+      .update(personalRunKeys)
       .set({ revoked_at: new Date().toISOString() })
-      .where(and(ownedKey, isNull(personal_run_keys.revoked_at)))
-      .returning({ revokedAt: personal_run_keys.revoked_at });
+      .where(and(ownedKey, isNull(personalRunKeys.revoked_at)))
+      .returning({ revokedAt: personalRunKeys.revoked_at });
     if (revoked?.revokedAt) return json({ id: keyId, revokedAt: revoked.revokedAt });
 
     const [existing] = await db
-      .select({ revokedAt: personal_run_keys.revoked_at })
-      .from(personal_run_keys)
+      .select({ revokedAt: personalRunKeys.revoked_at })
+      .from(personalRunKeys)
       .where(ownedKey)
       .limit(1);
     if (!existing?.revokedAt) return jsonError("Personal run key not found", 404);

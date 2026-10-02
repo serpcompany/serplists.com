@@ -1,28 +1,14 @@
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../../support/nextNavigation';
 import { findAll, findHiddenFocusables, parseMarkup, type MarkupNode } from '../focusVisibility';
+import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
 
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
-
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Launch workflow',
-  type: 'checklist',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-};
+const template = PRIVATE_LAUNCH_TEMPLATE;
 
 const findTags = (root: MarkupNode, tag: string): MarkupNode[] => findAll(root, (node) => node.tag === tag);
 
@@ -52,7 +38,7 @@ const renderCard = (overrides: Partial<ChecklistTemplate> = {}) => parseMarkup(r
 
 function keyboardButtons(root: MarkupNode) {
   return findTags(root, 'button').filter(
-    (button) => button.attrs.tabindex !== '-1' && !('disabled' in button.attrs),
+    (button) => button.attrs['tabindex'] !== '-1' && !('disabled' in button.attrs),
   );
 }
 
@@ -93,7 +79,7 @@ describe('TemplateCard (My Templates grid)', () => {
     );
 
     expect(overlayButton).toBeDefined();
-    expect(overlayButton?.attrs.tabindex).toBe('-1');
+    expect(overlayButton?.attrs['tabindex']).toBe('-1');
     expect(overlayButton?.parent?.attrs['aria-hidden']).toBe('true');
   });
 });

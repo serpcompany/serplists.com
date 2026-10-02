@@ -1,12 +1,9 @@
+import '../../../support/reactHooksKeptBetweenRenders';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
 
 import { useOutlineDrag, type OutlineDragState } from '@/components/template-editor/useOutlineDrag';
 
+import { handlerIn } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
 const moves = { moveSection: vi.fn(), moveTask: vi.fn() };
@@ -19,25 +16,23 @@ const dragEvent = () => ({
   dataTransfer: { setData: vi.fn(), effectAllowed: '', dropEffect: '' },
 });
 
-type DragHandler = (event: unknown, ...indexes: number[]) => void;
-
 const startDragging = (drag: OutlineDragState) => {
   const start = dragEvent();
-  (outline().startDrag as (event: unknown, drag: OutlineDragState) => void)(start, drag);
+  handlerIn(outline(), 'startDrag')(start, drag);
   return start;
 };
 
 const dragOverTask = (sectionIndex: number, itemIndex: number) => {
   const over = dragEvent();
-  (outline().handleTaskDragOver as DragHandler)(over, sectionIndex, itemIndex);
+  handlerIn(outline(), 'handleTaskDragOver')(over, sectionIndex, itemIndex);
   return over;
 };
 
 const dropOnTask = (sectionIndex: number, itemIndex: number) =>
-  (outline().handleTaskDrop as DragHandler)(dragEvent(), sectionIndex, itemIndex);
+  handlerIn(outline(), 'handleTaskDrop')(dragEvent(), sectionIndex, itemIndex);
 
 const dropOnSection = (sectionIndex: number) =>
-  (outline().handleSectionDrop as DragHandler)(dragEvent(), sectionIndex);
+  handlerIn(outline(), 'handleSectionDrop')(dragEvent(), sectionIndex);
 
 beforeEach(() => {
   forgetKeptState();

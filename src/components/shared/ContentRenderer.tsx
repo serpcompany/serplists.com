@@ -5,29 +5,41 @@ import { TaskImage } from './TaskImage';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { isContentRecord, isSubTaskRecord, type ContentRecord, type SubTaskRecord } from '@/lib/schemas/jsonRecords';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { hasCurrentFileInfo } from '@/lib/utils/mediaSource';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
-const fileLabel = (content: ChecklistItemContent): string | undefined =>
+type RenderableContent = {
+  type: unknown;
+  value: string;
+  uploadType: unknown;
+  fileName: string | undefined;
+  subItems: ChecklistSubItem[] | undefined;
+};
+
+const fileLabel = (content: RenderableContent): string | undefined =>
   hasCurrentFileInfo(content) ? content.fileName : undefined;
 
-type LooseRecord = Record<string, unknown>;
-
-const toRenderableContent = (content: unknown): ChecklistItemContent => {
-  const record: LooseRecord = typeof content === 'object' && content !== null ? (content as LooseRecord) : {};
+const toRenderableSubItem = (subItem: unknown): ChecklistSubItem => {
+  const entry: SubTaskRecord = isSubTaskRecord(subItem) ? subItem : {};
   return {
-    ...record,
+    id: typeof entry.id === 'string' ? entry.id : undefined,
+    title: typeof entry.title === 'string' ? entry.title : '',
+    isCompleted: Boolean(entry.isCompleted),
+  };
+};
+
+const toRenderableContent = (content: unknown): RenderableContent => {
+  const record: ContentRecord = isContentRecord(content) ? content : {};
+  return {
+    type: record.type,
     value: typeof record.value === 'string' ? record.value : '',
+    uploadType: record.uploadType,
     fileName: typeof record.fileName === 'string' ? record.fileName : undefined,
-    subItems: Array.isArray(record.subItems)
-      ? record.subItems.map((subItem: unknown) => {
-          const entry: LooseRecord = typeof subItem === 'object' && subItem !== null ? (subItem as LooseRecord) : {};
-          return { ...entry, title: typeof entry.title === 'string' ? entry.title : '' } as ChecklistSubItem;
-        })
-      : undefined,
-  } as ChecklistItemContent;
+    subItems: Array.isArray(record.subItems) ? record.subItems.map(toRenderableSubItem) : undefined,
+  };
 };
 
 interface ContentRendererProps {

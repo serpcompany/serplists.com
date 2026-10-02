@@ -1,45 +1,25 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { loginAsAdmin } from './support/sign-in';
+import { ACME_ORG_OWNED, FREE_BILLING_STATUS, fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 const CONSOLE_HOME_PATH = '/dashboard/templates/';
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
-
-const sessionBody = {
-  session: {
-    id: 'session-1',
-    createdAt: '2026-07-01T00:00:00.000Z',
-    expiresAt: '2026-07-08T00:00:00.000Z',
-    token: 'session-token',
-    updatedAt: '2026-07-01T00:00:00.000Z',
-    userId: 'user-owner',
-  },
-  user: { id: 'user-owner', email: 'owner@example.com', emailVerified: true, name: 'Owner User', username: 'owner' },
-};
-
 async function mockApi(page: Page, sessionAvailable: { value: boolean }) {
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === '/api/auth/get-session') {
       if (sessionAvailable.value) {
-        await fulfillJson(route, sessionBody);
+        await fulfillJson(route, OWNER_SESSION);
       } else {
         await fulfillJson(route, { error: 'Service unavailable' }, 503);
       }
       return;
     }
     if (path === '/api/teams' && request.method() === 'GET') {
-      await fulfillJson(route, [
-        { id: 'team-1', memberId: 'member-1', membershipStatus: 'active', name: 'Acme Org', role: 'owner', slug: 'acme' },
-      ]);
+      await fulfillJson(route, ACME_ORG_OWNED);
       return;
     }
     if (path === '/api/billing/status') {
-      await fulfillJson(route, { billingEnabled: true, plan: 'free' });
+      await fulfillJson(route, FREE_BILLING_STATUS);
       return;
     }
     await fulfillJson(route, []);
@@ -94,7 +74,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
     }
   });
 
-  await page.goto('/dashboard');
+  await page.goto(CONSOLE_HOME_PATH);
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   expect(rejected).toBe(1);
   expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);
@@ -113,7 +93,7 @@ test('a session check that keeps failing offers a retry instead of the login pag
     await route.continue();
   });
 
-  await page.goto('/dashboard');
+  await page.goto(CONSOLE_HOME_PATH);
   const retry = page.getByRole('button', { name: 'Retry' });
   await expect(retry).toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);

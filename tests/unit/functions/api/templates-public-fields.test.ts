@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
+import { dbMocks } from '../../../support/mockedDrizzleD1';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -13,6 +10,9 @@ vi.mock('@functions/api/utils/session', () => ({
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
+import { readJson } from '../../../support/readJson';
+import type { ResponseSchema } from '@/lib/api/request';
 
 const EVERY_ALLOWLISTED_PUBLIC_FIELD = [
   'categories',
@@ -55,7 +55,7 @@ const organizationTemplateAnotherMemberEdited = (overrides: Record<string, unkno
   team_id: 'org-1',
   created_by_user_id: 'creator-1',
   updated_by_user_id: 'editor-2',
-  is_public: 1,
+  is_public: true,
   category: '["ops"]',
   tags: '["launch"]',
   slug: 'launch-plan',
@@ -91,9 +91,12 @@ const expectPublicShape = (template: Record<string, unknown>) => {
   expect(template).not.toHaveProperty('deleted_at');
 };
 
-async function get(path: string) {
-  const response = await handleTemplates(new Request(`http://localhost${path}`), { DB: {} } as never);
-  return { status: response.status, body: await response.json() };
+const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown() }).passthrough();
+const templateRows = z.array(templateRow);
+
+async function get<Output>(path: string, schema: ResponseSchema<Output>) {
+  const response = await handleTemplates(new Request(`http://localhost${path}`), apiEnv());
+  return { status: response.status, body: await readJson(response, schema) };
 }
 
 describe('public template responses, which never say who in an Organization created or edited a template, or which Organization owns it', () => {
@@ -111,12 +114,12 @@ describe('public template responses, which never say who in an Organization crea
   ])('%s sends only public fields for an Organization template', async (_label, path) => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited()]);
 
-    const { status, body } = await get(path);
+    const { status, body } = await get(path, templateRows);
 
     expect(status).toBe(200);
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
     expect(body[0]).toMatchObject({ id: 'template-1', user_id: 'creator-1', owner_type: 'team', version: 4 });
-    expect(body[0].sections).toEqual(sections);
+    expect(firstOf(body).sections).toEqual(sections);
   });
 
   it.each([
@@ -125,7 +128,7 @@ describe('public template responses, which never say who in an Organization crea
   ])('an anonymous read %s sends only public fields', async (_label, path) => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited()]);
 
-    const { status, body } = await get(path);
+    const { status, body } = await get(path, templateRow);
 
     expect(status).toBe(200);
     expectPublicShape(body);
@@ -136,7 +139,7 @@ describe('public template responses, which never say who in an Organization crea
     vi.mocked(getSessionUserId).mockResolvedValue('visitor-3');
     dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited()]).mockResolvedValueOnce([]);
 
-    const { status, body } = await get('/api/templates/template-1');
+    const { status, body } = await get('/api/templates/template-1', templateRow);
 
     expect(status).toBe(200);
     expectPublicShape(body);
@@ -146,35 +149,35 @@ describe('public template responses, which never say who in an Organization crea
     vi.mocked(getSessionUserId).mockResolvedValue('user-9');
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow()]);
 
-    const { body } = await get('/api/templates?scope=public');
+    const { body } = await get('/api/templates?scope=public', templateRows);
 
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
   });
 
   it('a Public Profile sends only public fields', async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow()]);
 
-    const { status, body } = await get('/api/templates/public?userId=user-9');
+    const { status, body } = await get('/api/templates/public?userId=user-9', templateRows);
 
     expect(status).toBe(200);
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
   });
 
   it('the signed-in unscoped list keeps full rows for the user\'s own templates only', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-9');
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow({ is_public: 0 }), organizationTemplateAnotherMemberEdited()]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow({ is_public: false }), organizationTemplateAnotherMemberEdited()]);
 
-    const { body } = await get('/api/templates');
+    const { body } = await get('/api/templates', templateRows);
 
     expect(body[0]).toMatchObject({ id: 'template-2', updated_by_user_id: 'user-9', owner_type: 'user' });
-    expectPublicShape(body[1]);
+    expectPublicShape(elementAt(body, 1));
   });
 
   it('an Organization member reading by slug still gets the full row', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('member-7');
     dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited()]).mockResolvedValueOnce([activeMembership]);
 
-    const { status, body } = await get('/api/templates/slug/launch-plan');
+    const { status, body } = await get('/api/templates/slug/launch-plan', templateRow);
 
     expect(status).toBe(200);
     expect(body).toMatchObject({ team_id: 'org-1', created_by_user_id: 'creator-1', updated_by_user_id: 'editor-2' });
@@ -184,7 +187,7 @@ describe('public template responses, which never say who in an Organization crea
     vi.mocked(getSessionUserId).mockResolvedValue('user-9');
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRow()]);
 
-    const { body } = await get('/api/templates/template-2');
+    const { body } = await get('/api/templates/template-2', templateRow);
 
     expect(body).toMatchObject({ id: 'template-2', updated_by_user_id: 'user-9', content_version: 2 });
   });
@@ -194,16 +197,16 @@ describe('public template responses, which never say who in an Organization crea
     dbMocks.selectChain.limit.mockResolvedValueOnce([activeMembership]);
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited()]);
 
-    const { body } = await get('/api/templates?teamId=org-1');
+    const { body } = await get('/api/templates?teamId=org-1', templateRows);
 
     expect(body[0]).toMatchObject({ team_id: 'org-1', updated_by_user_id: 'editor-2' });
   });
 
   it('a private Organization template is still not found for a non-member', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('visitor-3');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited({ is_public: 0 })]).mockResolvedValueOnce([]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited({ is_public: false })]).mockResolvedValueOnce([]);
 
-    const { status } = await get('/api/templates/template-1');
+    const { status } = await get('/api/templates/template-1', templateRow);
 
     expect(status).toBe(404);
   });

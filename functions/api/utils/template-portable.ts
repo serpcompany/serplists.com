@@ -1,5 +1,6 @@
 import { log } from './logger';
 import { jsonError } from './response';
+import { invalidPayloadResponse } from './request-json';
 import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackLooseEnvelopeSchema,
@@ -16,7 +17,7 @@ export type PortableExportSource = {
   type: unknown;
   seoTitle: unknown;
   seoDescription: unknown;
-  rules?: unknown[];
+  rules?: unknown[] | undefined;
   sections: unknown[];
   categories: unknown[];
   tags: unknown[];
@@ -67,7 +68,7 @@ export function parsePortableTemplatePackImport(body: unknown):
   | { templates: PortableChecklistTemplate[]; sourceIndexes: number[]; failures: PortableImportFailure[] } {
   const envelope = portableTemplatePackLooseEnvelopeSchema.safeParse(body);
   if (!envelope.success) {
-    return { response: jsonError(envelope.error.issues[0]?.message || 'Invalid portable template pack payload', 400) };
+    return { response: invalidPayloadResponse(envelope.error, 'Invalid portable template pack payload') };
   }
   if (envelope.data.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
     return {

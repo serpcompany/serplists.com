@@ -1,3 +1,4 @@
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,41 +9,11 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import { createTestQueryClient } from '../../fixtures/queryClient';
 
 vi.mock('@/lib/api', () => ({ api: {} }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' }, isLoading: false }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: undefined,
-    activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
-    isTeamWorkspace: false,
-    isWorkspaceLoading: false,
-    workspaceScopeId: 'personal',
-    workspaceStatus: 'ready',
-  }),
-}));
-
-import { TemplatesProvider } from '@/contexts/TemplatesContext';
+import { launchChecklist } from '../../support/templatesProviderHarness';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 import Templates from '@/views/Templates';
-import { navigation } from '../../support/nextNavigation';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-const template = (overrides: Partial<ChecklistTemplate>): ChecklistTemplate => ({
-  id: 'template-1',
-  title: 'Template',
-  description: '',
-  sections: [{ id: 'section-1', title: 'Prep', items: [{ id: 'item-1', title: 'Check' }] }],
-  userId: 'user-1',
-  createdAt: '2026-07-03T12:00:00.000Z',
-  updatedAt: '2026-07-03T12:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-  version: 1,
-  ...overrides,
-});
+const template = (overrides: Partial<ChecklistTemplate>) => launchChecklist({ version: 1, ...overrides });
 
 const myPublicTemplate = template({ id: 'mine-public', title: 'My Public Launch Checklist', isPublic: true });
 const myPrivateTemplate = template({ id: 'mine-private', title: 'My Private Audit Checklist' });

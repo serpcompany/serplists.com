@@ -1,14 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 
 const NEW_TEMPLATE_VERSION = 1;
-
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
 
 async function loadPublicCatalogIntoMemory(page: Page) {
   await page.goto('/templates/');
@@ -18,13 +15,13 @@ async function loadPublicCatalogIntoMemory(page: Page) {
 test('shows edits and unpublishing on a public template page after the catalog loaded', async ({ page }) => {
   await loginAsAdmin(page);
   const stamp = Date.now();
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Freshness Original ${stamp}`,
     slug: `freshness-check-${stamp}`,
     is_public: true,
     sections: [{ id: 'fresh-section', title: 'Original section', items: [{ id: 'fresh-item', title: 'Task' }] }],
   });
-  const templateId = String(created.id);
+  const templateId = created.id;
   const publicPath = `/profile/admin/${String(created.slug)}/`;
 
   try {

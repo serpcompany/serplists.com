@@ -1,28 +1,38 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { apiTemplateSchema, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try again.';
 
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
-
 async function createPublicTemplate(page: Page, label: string) {
   const stamp = Date.now();
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Share stale ${label} ${stamp}`,
     is_public: true,
     sections: [{ id: `share-stale-section-${stamp}`, title: 'Section', items: [{ id: `share-stale-item-${stamp}`, title: 'Task' }] }],
   });
-  return String(created.id);
+  return created.id;
 }
 
 async function openPublicDetail(page: Page, templateId: string) {
   await page.goto(`/dashboard/templates/${templateId}/`);
   await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
-  return callApi(page, 'GET', `/templates/${templateId}`);
+  return apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
+}
+
+async function expectShareToReportTheConflict(page: Page) {
+  await page.getByRole('button', { name: 'Share' }).click();
+  await expect(page.getByText(CONFLICT_MESSAGE)).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Share Template' })).toHaveCount(0);
+}
+
+async function shareAndOpenTheLink(page: Page) {
+  await page.getByRole('button', { name: 'Share' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share Template' });
+  await expect(dialog).toBeVisible();
+  return { dialog, link: dialog.getByRole('textbox', { name: 'Share link' }) };
 }
 
 test('Share gives no link after the template was made private elsewhere, and publishes it again on the next try', async ({ page, browser }) => {
@@ -36,20 +46,15 @@ test('Share gives no link after the template was made private elsewhere, and pub
       expected_version: loaded.version,
     });
 
-    await page.getByRole('button', { name: 'Share' }).click();
-    await expect(page.getByText(CONFLICT_MESSAGE)).toBeVisible();
-    await expect(page.getByRole('dialog', { name: 'Share Template' })).toHaveCount(0);
+    await expectShareToReportTheConflict(page);
     await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-    const stored = await callApi(page, 'GET', `/templates/${templateId}`);
+    const stored = await apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
     expect(Boolean(stored.is_public)).toBe(false);
 
-    await page.getByRole('button', { name: 'Share' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Share Template' });
-    await expect(dialog).toBeVisible();
-    const link = dialog.getByRole('textbox', { name: 'Share link' });
+    const { dialog, link } = await shareAndOpenTheLink(page);
     await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${String(loaded.slug)}/$`));
     const shareUrl = await link.inputValue();
-    const republished = await callApi(page, 'GET', `/templates/${templateId}`);
+    const republished = await apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
     expect(Boolean(republished.is_public)).toBe(true);
 
     await dialog.getByRole('button', { name: 'Close' }).first().click();
@@ -82,14 +87,9 @@ test('Share builds the link from the slug set elsewhere', async ({ page }) => {
       expected_version: loaded.version,
     });
 
-    await page.getByRole('button', { name: 'Share' }).click();
-    await expect(page.getByText(CONFLICT_MESSAGE)).toBeVisible();
-    await expect(page.getByRole('dialog', { name: 'Share Template' })).toHaveCount(0);
+    await expectShareToReportTheConflict(page);
 
-    await page.getByRole('button', { name: 'Share' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Share Template' });
-    await expect(dialog).toBeVisible();
-    const link = dialog.getByRole('textbox', { name: 'Share link' });
+    const { link } = await shareAndOpenTheLink(page);
     await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${newSlug}/$`));
     await expect(link).not.toHaveValue(new RegExp(`/${oldSlug}/$`));
   } finally {
