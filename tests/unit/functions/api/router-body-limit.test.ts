@@ -36,12 +36,13 @@ function request(
   path: string,
   init: { headers?: Record<string, string>; body?: BodyInit } = {},
 ): Request {
-  return new Request(`http://localhost/api/${path}`, {
+  const requestInit: RequestInit & { duplex?: 'half' } = {
     method,
-    headers: init.headers,
-    body: init.body,
+    ...(init.headers === undefined ? {} : { headers: init.headers }),
+    ...(init.body === undefined ? {} : { body: init.body }),
     ...(init.body instanceof ReadableStream ? { duplex: 'half' } : {}),
-  } as RequestInit);
+  };
+  return new Request(`http://localhost/api/${path}`, requestInit);
 }
 
 describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {

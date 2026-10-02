@@ -1,6 +1,6 @@
 import '../../support/mockedNextNavigation';
 import type { Metadata } from 'next';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { metadata as categoriesMetadata } from '@/app/(site)/categories/page';
 import { metadata as templatesMetadata } from '@/app/(site)/templates/page';
@@ -52,7 +52,9 @@ describe('page metadata', () => {
       expect(typeof metadata.description).toBe('string');
       expect(images(metadata.openGraph?.images)).toHaveLength(1);
       expect(images(metadata.twitter?.images)).toHaveLength(1);
-      expect(metadata.openGraph?.title).toBe((metadata.title as { absolute: string }).absolute);
+      const { title } = metadata;
+      assert(typeof title === 'object' && title !== null && 'absolute' in title, 'the page title is absolute');
+      expect(metadata.openGraph?.title).toBe(title.absolute);
     },
   );
 

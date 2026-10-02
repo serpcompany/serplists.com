@@ -25,6 +25,18 @@ import { handleTemplates } from "@functions/api/handlers/templates";
 import { apiEnv } from "../../support/apiEnv";
 
 const smallTemplateCount = 100;
+const doubled = (counts: DatasetCounts): DatasetCounts => ({
+  users: counts.users * 2,
+  teams: counts.teams * 2,
+  templates: counts.templates * 2,
+  runs: counts.runs * 2,
+  likes: counts.likes * 2,
+  auditEvents: counts.auditEvents * 2,
+  invites: counts.invites * 2,
+  templateVersions: counts.templateVersions * 2,
+  analytics: counts.analytics * 2,
+});
+
 const small: DatasetCounts = {
   users: 200,
   teams: 10,
@@ -56,7 +68,7 @@ describe("d1:profile synthetic dataset", () => {
 
   it.each([
     ["small", small],
-    ["doubled", Object.fromEntries(Object.entries(small).map(([key, count]) => [key, count * 2])) as DatasetCounts],
+    ["doubled", doubled(small)],
   ])("keeps every template's version at its newest history row, since a save writes history at version + 1 (%s)", async (_label, counts) => {
     const d1 = await buildDataset(counts);
 

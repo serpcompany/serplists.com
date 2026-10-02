@@ -11,9 +11,10 @@ import { requestHostIsSafe, resolveAgentMcpConnection } from "@functions/api/uti
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import type { Env } from "@functions/api/types";
 import { wranglerEnvVars } from "../../../support/wranglerToml";
+import { apiEnv } from "../../../support/apiEnv";
 import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
-const baseEnv = { DB: {} } as Env;
+const baseEnv = apiEnv();
 const previewEnv: Env = { ...baseEnv, CORS_ALLOWED_ORIGINS: wranglerEnvVars("preview").CORS_ALLOWED_ORIGINS };
 const productionEnv: Env = {
   ...baseEnv,

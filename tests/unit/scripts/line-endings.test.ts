@@ -3,6 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+const commandOutput = z.object({ stdout: z.string().optional(), stderr: z.string().optional() }).passthrough();
 
 import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings.mjs';
 import { buildToolInvocation } from '../../../scripts/lib/run-tool.mjs';
@@ -93,7 +96,7 @@ describe('generated artifact checks on a CRLF checkout', () => {
       execFileSync(invocation.command, invocation.args, { cwd, encoding: 'utf8', stdio: 'pipe' });
       return { ok: true, output: '' };
     } catch (error) {
-      const failure = error as { stdout?: string; stderr?: string };
+      const failure = commandOutput.parse(error);
       return { ok: false, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` };
     }
   };

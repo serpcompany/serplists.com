@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { elementAt, firstOf } from '../../../support/elements';
+import { d1ThatRunsNoQuery } from '../../../support/apiEnv';
 import { drizzle } from 'drizzle-orm/d1';
 import { schema } from '@functions/api/db';
 import { insertTemplateWithHistoryFallback, isMissingRulesColumnError } from '@functions/api/utils/template-writes';
@@ -37,7 +38,7 @@ const auditValues = {
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 
 function databaseWithoutRulesColumn() {
-  const db = drizzle({} as D1Database, { schema });
+  const db = drizzle(d1ThatRunsNoQuery(), { schema });
   const batches: Array<Array<{ sql: string; params: unknown[] }>> = [];
   const batch = vi.fn(async (statements: BuiltQuery[]) => {
     const built = statements.map((statement) => statement.toSQL());
@@ -47,7 +48,7 @@ function databaseWithoutRulesColumn() {
     }
     return built.map(() => ({ meta: { changes: 1 } }));
   });
-  return { db: Object.assign(db, { batch }) as never, batches };
+  return { db: Object.assign(db, { batch }), batches };
 }
 
 describe('insertTemplateWithHistoryFallback without the rules column', () => {
@@ -80,11 +81,11 @@ describe('insertTemplateWithHistoryFallback without the rules column', () => {
   });
 
   it('writes rules on the first attempt when the column exists', async () => {
-    const db = drizzle({} as D1Database, { schema });
+    const db = drizzle(d1ThatRunsNoQuery(), { schema });
     const batch = vi.fn(async (statements: BuiltQuery[]) => statements.map(() => ({ meta: { changes: 1 } })));
     Object.assign(db, { batch });
 
-    await insertTemplateWithHistoryFallback(db as never, values, versionValues, auditValues);
+    await insertTemplateWithHistoryFallback(db, values, versionValues, auditValues);
 
     expect(batch).toHaveBeenCalledTimes(1);
     expect(firstOf(firstOf(batch.mock.calls)[0]).toSQL().sql).toContain('"rules"');

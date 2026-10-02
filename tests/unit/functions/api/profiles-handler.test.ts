@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQL } from 'drizzle-orm';
+import { sqlExpression } from '../../../support/drizzleSql';
 import { handleProfileById, handleProfileByUsername } from '@functions/api/handlers/auth';
 import { readJson } from '../../../support/readJson';
 import { apiEnv } from '../../../support/apiEnv';
@@ -13,7 +13,7 @@ import type { Env } from '@functions/api/types';
 
 const profileBody = z.object({ id: z.string(), username: z.string() }).passthrough();
 
-const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(firstOf(dbMocks.selectChain.where.mock.calls)[0] as SQL).sql;
+const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(sqlExpression(firstOf(dbMocks.selectChain.where.mock.calls)[0])).sql;
 
 describe('Profiles Handlers', () => {
   let mockEnv: Env;

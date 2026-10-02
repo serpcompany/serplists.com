@@ -145,21 +145,29 @@ describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes',
   });
 });
 
+const endpointOptions = z.object({ body: z.object({ shape: z.record(z.unknown()) }).passthrough().optional() }).passthrough();
+
+const pathOf = (endpoint: unknown): string | undefined =>
+  typeof endpoint === 'function' && 'path' in endpoint && typeof endpoint.path === 'string' ? endpoint.path : undefined;
+
+const bodyFieldsOf = (endpoint: unknown): string[] => {
+  const options = typeof endpoint === 'function' && 'options' in endpoint ? endpoint.options : undefined;
+  return Object.keys(endpointOptions.safeParse(options).data?.body?.shape ?? {});
+};
+
 const ENDPOINTS_THAT_ONLY_CHECK_A_PASSWORD_ALREADY_SET = ['/sign-in/email', '/sign-in/username', '/delete-user'];
 
 describe('NEW_PASSWORD_BODY_FIELDS', () => {
   it('covers every configured Better Auth endpoint that takes a new password', () => {
     const request = new Request(`${BASE_URL}/api/auth/sign-up/email`, { method: 'POST' });
-    const endpoints = Object.values(createBetterAuth(env, request).api) as Array<{
-      path: string;
-      options?: { body?: { shape?: Record<string, unknown> } };
-    }>;
+    const endpoints = Object.values(createBetterAuth(env, request).api);
 
-    const passwordFields = endpoints.flatMap((endpoint) =>
-      Object.keys(endpoint.options?.body?.shape ?? {})
+    const passwordFields = endpoints.flatMap((endpoint) => {
+      const path = pathOf(endpoint);
+      return bodyFieldsOf(endpoint)
         .filter((field) => /password/i.test(field) && field !== 'currentPassword')
-        .map((field) => ({ path: endpoint.path, field })),
-    );
+        .map((field) => ({ path: String(path), field }));
+    });
     expect(passwordFields.length).toBeGreaterThan(0);
 
     for (const { path, field } of passwordFields) {

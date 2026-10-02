@@ -12,7 +12,7 @@ import {
 import Ajv from 'ajv';
 
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQL } from 'drizzle-orm';
+import { sqlExpression } from '../../../support/drizzleSql';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { activeMember, templateRowToExport } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
@@ -98,7 +98,7 @@ describe('portable template import/export API', () => {
       expect(data.templates.map((template) => template.title)).toEqual(['Owned']);
       const dialect = new SQLiteSyncDialect();
       const templateQueries = dbMocks.selectChain.where.mock.calls
-        .map(([where]) => dialect.sqlToQuery(where as SQL).sql)
+        .map(([where]) => dialect.sqlToQuery(sqlExpression(where)).sql)
         .filter((whereSql) => whereSql.includes('"templates".'));
       expect(templateQueries).toHaveLength(1);
       expect(templateQueries[0]).toContain('"templates"."owner_type" = ?');

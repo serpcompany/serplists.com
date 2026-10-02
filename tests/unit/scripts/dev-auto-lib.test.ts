@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { firstOf } from "../../support/elements";
+import { listeningPort } from "../../support/listeningPort";
 import {
   buildCorsAllowedOrigins,
   buildDevServerCommand,
@@ -183,7 +184,7 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
   it("calls a port nothing holds free", async () => {
     const port = await new Promise<number>((resolve) => {
       const server = net.createServer().listen({ host: "127.0.0.1", port: 0 }, () => {
-        const { port: freePort } = server.address() as net.AddressInfo;
+        const freePort = listeningPort(server);
         server.close(() => resolve(freePort));
       });
     });

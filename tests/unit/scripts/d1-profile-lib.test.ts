@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { sectionRecordsIn } from '@/lib/schemas/jsonRecords';
 
 import {
   assignMissingStableTemplateIdentities,
@@ -48,7 +49,7 @@ describe('buildUpdateTemplateBody', () => {
     const leftover = [...syntheticSections, { id: 's-profiled', title: 'Added', items: [{ id: 'i-profiled', title: 'New task' }] }];
     const body = buildUpdateTemplateBody({ sections: leftover, version: 4 }, 'n1');
 
-    expect(body.sections.map((section) => (section as { id: string }).id)).toEqual(['s1', 's-profiled-n1']);
+    expect(sectionRecordsIn(body.sections).map((section) => section.id)).toEqual(['s1', 's-profiled-n1']);
     expect(body.expected_version).toBe(4);
     expect(validateStableTemplateIdentities(assignMissingStableTemplateIdentities(body.sections, leftover))).toBeNull();
   });

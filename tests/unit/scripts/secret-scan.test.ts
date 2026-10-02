@@ -5,6 +5,11 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 import { valueAt } from '../../support/elements';
+import { z } from 'zod';
+
+const lefthookCommands = z
+  .object({ 'pre-commit': z.object({ commands: z.record(z.object({ run: z.string() }).passthrough()) }).passthrough() })
+  .passthrough();
 
 import { selectScanTargets } from '../../../scripts/secret-scan-lib.mjs';
 
@@ -105,9 +110,7 @@ describe('selectScanTargets', () => {
 
 describe('pre-commit secret scan', () => {
   it('runs the repository scan script on staged files instead of bare secretlint', () => {
-    const config = yaml.load(readFileSync(path.join(repoRoot, 'lefthook.yml'), 'utf8')) as {
-      'pre-commit': { commands: Record<string, { run: string }> };
-    };
+    const config = lefthookCommands.parse(yaml.load(readFileSync(path.join(repoRoot, 'lefthook.yml'), 'utf8')));
 
     expect(valueAt(config['pre-commit'].commands, 'secret-scan').run).toBe('node scripts/secret-scan.mjs {staged_files}');
   });

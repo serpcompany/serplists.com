@@ -27,7 +27,9 @@ async function loadRoute(): Promise<RouteModule> {
 
 async function callTheHandlerExportedForItsMethod(request: Request): Promise<Response> {
   const route = await loadRoute();
-  return route[request.method as (typeof METHODS)[number]](request);
+  const method = METHODS.find((name) => name === request.method);
+  if (method === undefined) throw new Error(`The route exports no handler for ${request.method}`);
+  return route[method](request);
 }
 
 describe('API route handler methods, which send every /api/* request to the API router instead of a page', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { malformedSectionsStoredBeforeValidation } from '../../fixtures/malformedSections';
@@ -25,8 +26,11 @@ function insertRun(db: DatabaseSync, id: string, items: string) {
     VALUES (?, 'user-1', NULL, 'Run', ?, 'in_progress', '2026-01-01', '2026-01-01', '2026-01-01')`).run(id, items);
 }
 
-const findings = (db: DatabaseSync) =>
-  db.prepare(query.replace(/^--.*$/gm, '')).all() as Array<{ source: string; id: string; path: string; problem: string }>;
+const findingRows = z.array(
+  z.object({ source: z.string(), id: z.string(), path: z.string(), problem: z.string() }).passthrough(),
+);
+
+const findings = (db: DatabaseSync) => findingRows.parse(db.prepare(query.replace(/^--.*$/gm, '')).all());
 
 const validSections = [
   {

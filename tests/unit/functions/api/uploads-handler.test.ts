@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
-import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
+import { AVATAR_MIME_TYPES, UPLOAD_BUCKETS } from '@/lib/schemas/uploadTypes';
 import { UPLOAD_MAX_BYTES, type UploadBucket } from '@/lib/schemas/uploadLimits';
 
 vi.mock('@functions/api/utils/session', () => ({
@@ -174,7 +174,7 @@ describe('Uploads Handler size and type limits', () => {
     expect(env.R2_UPLOADS.put).toHaveBeenCalledTimes(2);
   });
 
-  it.each(Object.entries(UPLOAD_MAX_BYTES) as Array<[UploadBucket, number]>)(
+  it.each(UPLOAD_BUCKETS.map((bucket): [UploadBucket, number] => [bucket, UPLOAD_MAX_BYTES[bucket]]))(
     'rejects a %s upload one byte over its %d-byte limit before reading or storing it',
     async (bucket, limit) => {
       vi.mocked(getSessionUserId).mockResolvedValue('user-123');

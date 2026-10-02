@@ -1,7 +1,7 @@
-import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { elementAt, firstOf, taskIn } from "../../../support/elements";
+import { sqlExpression } from "../../../support/drizzleSql";
 import { storedSectionsIn } from "../../../support/storedJson";
 import {
   callTool,
@@ -69,7 +69,7 @@ describe("personal run MCP handler", () => {
   });
 
   describe("Free plan active run limit", () => {
-    const renderSql = (query: unknown) => new SQLiteSyncDialect().sqlToQuery(query as SQL);
+    const renderSql = (query: unknown) => new SQLiteSyncDialect().sqlToQuery(sqlExpression(query));
 
     beforeEach(() => {
       vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);

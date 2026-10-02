@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { z } from 'zod';
 import { readJson } from '../../../support/readJson';
+import { firstOf } from '../../../support/elements';
 import { getTableColumns } from 'drizzle-orm';
 
 import { schema } from '@functions/api/db';
@@ -69,7 +70,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('?teamId=team-1');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets((data as unknown[])[0]);
+    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
     expect(text).not.toContain(SECRET);
     expectSelectOmitsShareColumns();
   });
@@ -94,7 +95,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('/archived?teamId=team-1');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets((data as unknown[])[0]);
+    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
     expect(text).not.toContain(SECRET);
   });
 
@@ -105,7 +106,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets((data as unknown[])[0]);
+    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
     expect(text).not.toContain(SECRET);
   });
 

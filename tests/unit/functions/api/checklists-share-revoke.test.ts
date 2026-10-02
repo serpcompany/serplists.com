@@ -6,7 +6,7 @@ import { personalRunRow } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQL } from 'drizzle-orm';
+import { sqlExpression } from '../../../support/drizzleSql';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 
@@ -42,7 +42,7 @@ async function expectStoppedPrivately() {
 }
 
 function sqlText(condition: unknown): string {
-  return dialect.sqlToQuery(condition as SQL).sql;
+  return dialect.sqlToQuery(sqlExpression(condition)).sql;
 }
 
 describe('stopping a run share, which makes the run private and ends its old link', () => {

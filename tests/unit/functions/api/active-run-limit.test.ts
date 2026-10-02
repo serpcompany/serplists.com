@@ -21,7 +21,7 @@ import {
   runInsertStatements,
 } from '@functions/api/utils/active-run-limit';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { apiEnv } from '../../../support/apiEnv';
+import { apiEnv, d1ThatRunsNoQuery } from '../../../support/apiEnv';
 
 const env = apiEnv();
 const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
@@ -100,7 +100,7 @@ describe('activeRunsInContext', () => {
 describe('runInsertStatements with a limit', () => {
   async function realDrizzleWithoutD1() {
     const { drizzle } = await vi.importActual<typeof import('drizzle-orm/d1')>('drizzle-orm/d1');
-    return drizzle({} as D1Database, { schema });
+    return drizzle(d1ThatRunsNoQuery(), { schema });
   }
 
   function insertedColumns(sqlText: string): string[] {
@@ -151,7 +151,7 @@ describe('runInsertStatements with a limit', () => {
 
   it('selects one value per inserted column, in column order, then applies the limit', async () => {
     const db = await realDrizzleWithoutD1();
-    const [runInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
+    const [runInsert] = runInsertStatements(db, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = runInsert.toSQL();
     const columns = insertedColumns(query.sql);
 
@@ -166,7 +166,7 @@ describe('runInsertStatements with a limit', () => {
 
   it('writes the audit event only when its run row exists', async () => {
     const db = await realDrizzleWithoutD1();
-    const [, auditInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
+    const [, auditInsert] = runInsertStatements(db, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = auditInsert.toSQL();
 
     const columns = insertedColumns(query.sql);

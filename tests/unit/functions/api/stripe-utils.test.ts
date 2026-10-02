@@ -127,7 +127,7 @@ describe("stripeGet", () => {
 
     expect(error).toMatchObject({ status: 400, type: "invalid_request_error", code: "resource_missing", param: "customer" });
     expect(isMissingStripeCustomer(error)).toBe(true);
-    expect((error as Error).message).toBe("Stripe API error (400): invalid_request_error resource_missing (customer)");
+    expect(error).toHaveProperty("message", "Stripe API error (400): invalid_request_error resource_missing (customer)");
   });
 
   it("throws a StripeApiError with only the status for a body that is not JSON", async () => {
@@ -146,7 +146,7 @@ describe("stripeGet", () => {
     const error = await stripeGet("sk_test_example", "/v1/subscriptions/sub_missing").catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(StripeApiError);
-    expect((error as StripeApiError).status).toBe(404);
+    expect(error).toHaveProperty("status", 404);
   });
 });
 

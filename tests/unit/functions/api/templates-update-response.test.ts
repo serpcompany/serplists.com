@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dbMocks } from '../../../support/mockedDrizzleD1';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { resetChainsToEmptyResults } from '../../../support/drizzleChainMocks';
+import { apiEnv, TEST_AUTH_SECRET } from '../../../support/apiEnv';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -10,10 +11,7 @@ vi.mock('@functions/api/utils/session', () => ({
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const mockEnv = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET });
 
 const existingTemplate = {
   id: 'template-1',
@@ -32,7 +30,7 @@ const existingTemplate = {
 const put = async (body: Record<string, unknown>) => {
   const response = await handleTemplates(
     new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }),
-    mockEnv as never,
+    mockEnv,
   );
   return { status: response.status, data: await readJson(response, jsonObject) };
 };

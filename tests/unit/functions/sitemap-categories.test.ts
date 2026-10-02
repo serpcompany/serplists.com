@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { assert, beforeEach, describe, expect, it } from 'vitest';
-import { capturedGroup, lastOf } from '../../support/elements';
+import { capturedGroup, lastOf, present } from '../../support/elements';
+import type { StoredRow } from '../../support/d1Doubles';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
@@ -34,9 +35,9 @@ async function buildBoth() {
   const indexLastmod = capturedGroup(index.match(
     /<loc>https:\/\/serplists\.com\/sitemaps\/categories\/1\.xml<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
   ), 1);
-  const stored = db.prepare(
+  const stored: StoredRow = present(db.prepare(
     `SELECT content_hash FROM sitemap_shard_revisions WHERE kind = 'categories' AND page = 1`,
-  ).get() as { content_hash: string };
+  ).get(), 'the stored categories shard');
   const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => capturedGroup(match, 1)).sort();
   const landingLastmod = shard.match(
     /<loc>https:\/\/serplists\.com\/categories\/<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,

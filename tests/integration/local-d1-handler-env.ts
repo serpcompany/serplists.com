@@ -18,7 +18,7 @@ export function runToolInRepo(tool: "tsx" | "wrangler", args: string[]): string 
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-  }) as string;
+  }).toString();
 }
 
 export function platformProxyOnLocalD1<Env>(persistPath: string): Promise<PlatformProxy<Env>> {

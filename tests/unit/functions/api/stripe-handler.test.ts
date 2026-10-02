@@ -3,6 +3,7 @@ import { z } from "zod";
 import { handleStripe } from "@functions/api/handlers/stripe";
 import { billingSchemaSql, seedBillingUser } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
+import { apiEnv, TEST_AUTH_SECRET } from "../../../support/apiEnv";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 
@@ -13,12 +14,12 @@ const WEBHOOK_SECRET = "whsec_test";
 let d1: SqliteD1;
 
 function env() {
-  return {
+  return apiEnv({
     DB: d1.binding,
-    BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
+    BETTER_AUTH_SECRET: TEST_AUTH_SECRET,
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     STRIPE_SECRET_KEY: "sk_test_handler",
-  } as never;
+  });
 }
 
 function subscriptionObject() {

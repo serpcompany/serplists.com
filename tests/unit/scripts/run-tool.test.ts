@@ -1,3 +1,4 @@
+import { ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { firstOf } from '../../support/elements';
@@ -68,14 +69,17 @@ describe('buildPnpmInvocation', () => {
 describe('killProcessTree', () => {
   const pidNoProcessHolds = 2 ** 22 + 1;
 
+  const childThat = (ended: { exitCode: number | null; signalCode: NodeJS.Signals | null }) =>
+    Object.assign(new ChildProcess(), { pid: pidNoProcessHolds, ...ended });
+
   it('signals nothing once the child has exited', () => {
-    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: 0, signalCode: null } as never)).toBe(false);
-    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: 'SIGTERM' } as never)).toBe(false);
+    expect(killProcessTree(childThat({ exitCode: 0, signalCode: null }))).toBe(false);
+    expect(killProcessTree(childThat({ exitCode: null, signalCode: 'SIGTERM' }))).toBe(false);
   });
 
   it('reports a failed taskkill on Windows instead of throwing, as when the child exits just before it', () => {
     expect(
-      killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: null } as never, 'SIGTERM', { platform: 'win32' }),
+      killProcessTree(childThat({ exitCode: null, signalCode: null }), 'SIGTERM', { platform: 'win32' }),
     ).toBe(false);
   });
 });

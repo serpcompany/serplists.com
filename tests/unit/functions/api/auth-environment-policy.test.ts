@@ -5,6 +5,7 @@ import { SqliteD1 } from '../../../support/sqlite-d1';
 import { wranglerEnvVars } from '../../../support/wranglerToml';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 import { apiEnv } from '../../../support/apiEnv';
+import { present } from '../../../support/elements';
 import type { Env } from '@functions/api/types';
 
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
@@ -42,7 +43,10 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
     );
   }
 
-  const userCount = () => (database.sqlite.prepare('SELECT count(*) AS count FROM users').get() as { count: number }).count;
+  const userCount = () => {
+    const { count } = present(database.sqlite.prepare('SELECT count(*) AS count FROM users').get(), 'the user count');
+    return count;
+  };
 
   beforeEach(() => {
     database = new SqliteD1();

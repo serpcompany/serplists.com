@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { getAuthEmailPolicy, isProductionAuthPolicy } from '@functions/api/utils/auth-policy';
 import type { Env } from '@functions/api/types';
+import { apiEnv } from '../../../support/apiEnv';
 
 function envWith(settings: Partial<Env>): Env {
-  return { BETTER_AUTH_SECRET: 'better-auth-secret-with-32-characters!!', ...settings } as Env;
+  return apiEnv({ BETTER_AUTH_SECRET: 'better-auth-secret-with-32-characters!!', ...settings });
 }
 
 describe('getAuthEmailPolicy', () => {
