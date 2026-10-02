@@ -15,7 +15,7 @@ changes are risky or slow. D = needs attention before building on it.
 | --- | --- | --- | --- | --- | --- |
 | Identity and sessions | B | B | B | A | Session checks read D1 (no Better Auth cookie cache), so re-checks must stay throttled |
 | Personal and Organization ownership | B | B | B | B | Legacy team/workspace naming in code identifiers (TD-5) |
-| Templates | A | B | B | A | `TemplatesContext.tsx` and `TemplateDetail.tsx` are close to the 500-line limit |
+| Templates | A | B | B | A | `TemplateDetail.tsx` (474 lines) is close to the 500-line limit |
 | Runs | B | C | B | B | Completed runs are frozen only in the web app (TD-21); reopening checks the active-run limit outside the write (TD-17) |
 | Billing and entitlements | B | B | B | A | Only 3 e2e specs exercise paid flows |
 | Agent access (Run Keys, MCP) | B | B | B | D | No module doc for Run Keys and MCP |

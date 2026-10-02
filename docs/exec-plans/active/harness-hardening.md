@@ -88,7 +88,7 @@ Measured in report mode, with nothing enforced. Phases 3 and 4 work from these n
   `functions/`, 5 in `scripts/` and `db/`, 489 in `tests/`, and 10 in `db/migrations`.
   `sre:dup` ends in `|| true`, so it never fails.
 - **Dead code** (knip 6, with the entry points tools load by convention configured):
-  - 13 unused files: `db/types/*` and `src/components/ui/scroll-area.tsx`.
+  - 13 unused files: `db/types/*` and the UI kit's scroll area (deleted in round 5).
   - Unused packages: 2 dependencies (`@uiw/react-md-editor`, `jszip`) and 4 devDependencies.
   - 2 unlisted packages: `@opennextjs/aws` and `yaml`.
   - 185 unused exports and 49 unused types.
@@ -260,6 +260,27 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, app side of round 5 done (41956020..a380a868). TD-30 to TD-32 are
+  closed.
+  - `duplicates:check` runs over `src`, `functions`, `scripts`, `db` and `tests`. The 37
+    clones in app code are gone. The guard fails if a folder drops out.
+  - Rule overrides:
+    - `no-img-element`: `UserContentImage` is the only `<img>`, as an owned convention,
+      and the per-file override is gone.
+    - react-refresh: an error on every `src/**/*.tsx`, with 14 files split so that
+      components and other exports live apart.
+    - The reachability exemptions are gone. `scroll-area.tsx` and `use-mobile.tsx` were
+      deleted, and `next.config.ts` is an entry point.
+    - `no-unused-vars` lost `varsIgnorePattern` and `caughtErrors: "none"`.
+    - The app's `allowJs` is `false`, with a guard.
+  - Bug fixed: `deps:check` never saw npm packages. Its `exclude` dropped every path with
+    `node_modules/` or `dist/`, so the rule against production code importing
+    devDependencies never fired. It had hidden one such import (a380a868).
+  - New tracker rows:
+    - TD-70: two API Template mappers with different defaults;
+    - TD-71: two access helpers;
+    - TD-72: the repository's own declaration files are not type-checked under
+      `skipLibCheck`.
 - 2026-10-01: phase 4, the boundary rules reach the tests (69dea124..df9d9686). TD-61 is
   closed.
   - Test files are held to `serplists/no-external-data-casts`, to the type-aware
@@ -452,6 +473,19 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: rule override audit decisions.
+  - `argsIgnorePattern: "^_"` stays. Some parameters exist only for their type:
+    TanStack infers `mutate()`'s variables from `mutationFn`'s parameter, and test doubles
+    declare the signature they stand in for. The `_` prefix says so at the parameter,
+    and every other unused binding is refused.
+  - `skipLibCheck` stays. Without it, `tsc` reports over 1,300 errors in third-party and
+    generated declaration files the repository cannot edit. TD-72 checks the repository's
+    own declaration files.
+  - `@next/next/no-img-element` is off everywhere. It only warned. The owned
+    `UserContentImage` convention refuses `<img>` as an error: user images come from R2
+    under any key with unknown sizes, and Workers has no image optimizer.
+  - The dependency-cruiser exclusions of declaration files, tests and route files define
+    what its rules are about. They are not exemptions.
 - 2026-10-01: TD-34 and TD-36 decisions.
   - A host is local when it resolves to this machine: `localhost`, `*.localhost`,
     `127.0.0.0/8` and `::1`.
