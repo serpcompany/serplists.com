@@ -614,8 +614,9 @@ Common failures:
     - Components called without a DOM: `reactHookStubs.ts`, `reactHooksKeptBetweenRenders.ts`,
       `reactHookFormMock.ts`, `hookStateSlots.ts` and `elementTree.ts`.
     - Components in the DOM: `renderInTheDom.ts` (`renderSettled()`, the in-memory browser
-      as the page's window, `typeInto()`, `inputNamed()` and `theButtonOrMenuItemNamed()`),
-      `overlaysInPlace.tsx`, `confirmDialogInPlace.ts` and `queryClientsPerTest.ts`; and the
+      as the page's window, `typeInto()`, `inputNamed()`, `theButtonOrMenuItemNamed()` and
+      `openTheMenu()`), `confirmDialogs.ts` (open a dialog, answer it and wait for it to
+      close) and `queryClientsPerTest.ts`; and the
       providers, hook probes and pages ready to mount (`authProviderHarness.tsx`,
       `queryHookProbe.tsx`, `templatesProviderHarness.tsx`, `checklistRunPage.tsx`,
       `templateDetailPage.tsx`, `publicTemplatePage.tsx`, `categoryPage.tsx`,
@@ -1078,10 +1079,17 @@ Common failures:
     answer takes to reach the observers and render.
 
   Base UI's overlays render nothing until they open, and their portals render nothing in a
-  static render, so component tests replace dialogs, alert dialogs, menus and select popups
-  with the in-place versions in `tests/support/overlaysInPlace.tsx`. DOM tests use them too:
-  happy-dom opens a real Base UI alert dialog, but it closes after its exit transition, and a
-  check that it closed passed or failed with the machine's load.
+  static render, so a test of what a dialog, alert dialog, menu or select shows renders it in
+  the DOM, the real component: it opens it as a user does (a click on its trigger;
+  `openTheMenu(label)` for a menu, which first waits for any menu still closing), finds it by
+  role (`dialog`, `alertdialog`, `menu`, `menuitem`), and answers it with a click
+  (`openAndConfirm()` and `clickInTheDialog()` in `tests/support/confirmDialogs.ts`). Base UI
+  unmounts an overlay only after its exit transition, a few frames after it closes, so a test
+  waits for that with `waitFor` or `waitForElementToBeRemoved` (`theDialogsToClose()`); a
+  check made at once passed or failed with the machine's load. A dialog the page left open
+  is checked at once. Testing Library unmounts the portals with the rest of the tree after
+  each test. The template detail page's static tests (`tests/support/templateDetailPage.tsx`)
+  render its More menu's items in place, to read the props the page gives them.
 
   A test that renders a failed query statically seeds the failure with `seedQueryError()` on
   `createTestQueryClient()` (`tests/fixtures/queryClient.ts`), which does not retry on mount,

@@ -63,16 +63,6 @@ vi.mock('@/components/template-editor/GenerateFromClipy', () => ({ GenerateFromC
 vi.mock('@/components/template-editor/TemplateEditorAccessNotices', () => ({
   TemplateEditorAccessNotices: () => null,
 }));
-vi.mock('@/components/ui/dialog', () => {
-  const Nothing = () => null;
-  return {
-    Dialog: Nothing,
-    DialogContent: Nothing,
-    DialogDescription: Nothing,
-    DialogHeader: Nothing,
-    DialogTitle: Nothing,
-  };
-});
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 theInMemoryBrowserAsTheWindow();

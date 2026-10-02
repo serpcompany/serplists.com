@@ -2,7 +2,7 @@ import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
 import TemplateDetail from '@/views/TemplateDetail';
 
@@ -64,7 +64,6 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
     }),
   };
 });
-vi.mock('@/components/ui/dropdown-menu', async () => (await import('../../support/overlaysInPlace')).dropdownMenuItemsAsButtons);
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({ checked }: { checked?: boolean }) => <button type="button" role="switch" aria-checked={Boolean(checked)} />,
 }));
@@ -95,12 +94,15 @@ describe('TemplateDetail Duplicate while a copy is being made, which a repeated 
     createTemplate.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     await renderTemplateDetail();
 
+    await openTheMenu('Template actions');
+    const duplicate = duplicateOrDuplicatingItem();
     await act(async () => {
-      fireEvent.click(duplicateOrDuplicatingItem());
-      fireEvent.click(duplicateOrDuplicatingItem());
+      fireEvent.click(duplicate);
+      fireEvent.click(duplicate);
     });
 
     expect(createTemplate).toHaveBeenCalledTimes(1);
+    await openTheMenu('Template actions');
     expect(duplicateOrDuplicatingItem().textContent).toBe('Duplicating...');
     expect(duplicateOrDuplicatingItem().getAttribute('aria-disabled')).toBe('true');
 
@@ -120,9 +122,11 @@ describe('TemplateDetail Duplicate while a copy is being made, which a repeated 
     createTemplate.mockReturnValueOnce(new Promise(() => {}));
     await renderTemplateDetail();
 
+    await openTheMenu('Template actions');
     await act(async () => {
       fireEvent.click(duplicateOrDuplicatingItem());
     });
+    await openTheMenu('Template actions');
     expect(duplicateOrDuplicatingItem().textContent).toBe('Duplicate');
     expect(duplicateOrDuplicatingItem().getAttribute('aria-disabled')).toBeNull();
 

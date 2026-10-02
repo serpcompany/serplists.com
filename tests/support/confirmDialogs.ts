@@ -1,21 +1,20 @@
 import { act } from 'react';
-import { fireEvent, screen, within } from '@testing-library/react';
-import { expect, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { expect } from 'vitest';
 
 import { theButtonOrMenuItemNamed } from './renderInTheDom';
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/ui/alert-dialog', async () => (await import('./overlaysInPlace')).alertDialogInPlace);
-
-export const openDialogs = () => screen.queryAllByRole('dialog');
+export const openDialogs = () => [...screen.queryAllByRole('alertdialog'), ...screen.queryAllByRole('dialog')];
 
 async function openTheDialog(openLabel: string): Promise<HTMLElement> {
   await act(async () => {
     fireEvent.click(theButtonOrMenuItemNamed(openLabel));
   });
-  const [dialog] = openDialogs();
-  if (!dialog) throw new Error(`${openLabel} opened no dialog`);
-  return dialog;
+  return waitFor(() => {
+    const [dialog] = openDialogs();
+    if (!dialog) throw new Error(`${openLabel} opened no dialog`);
+    return dialog;
+  });
 }
 
 export async function clickInTheDialog(dialog: HTMLElement, label: string) {
@@ -27,6 +26,11 @@ export async function clickInTheDialog(dialog: HTMLElement, label: string) {
 export async function openAndConfirm(openLabel: string, confirmLabel = openLabel) {
   await clickInTheDialog(await openTheDialog(openLabel), confirmLabel);
 }
+
+export const theDialogsToClose = () =>
+  waitFor(() => {
+    expect(openDialogs()).toHaveLength(0);
+  });
 
 const titleAndDescriptionOf = (dialog: HTMLElement) => ({
   title: within(dialog).queryByRole('heading')?.textContent,

@@ -9,7 +9,8 @@ import {
   openAndConfirm,
   openDialogs,
   openTheDeleteDialogWithNoneOpenBefore,
-} from '../../support/confirmDialogInPlace';
+  theDialogsToClose,
+} from '../../support/confirmDialogs';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSettled } from '../../support/renderInTheDom';
@@ -18,8 +19,7 @@ import { toast } from 'sonner';
 import { createApiError } from '@/lib/api-errors';
 import Templates from '@/views/Templates';
 
-
-vi.mock('@/components/ui/select', async () => (await import('../../support/overlaysInPlace')).selectWithoutPopup);
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 dashboardTemplates.viewMode = 'list';
 
@@ -48,7 +48,7 @@ describe('My Templates delete', () => {
 
     expect(removeTemplate).toHaveBeenCalledWith('template-1');
     expect(toast.success).toHaveBeenCalledWith('Template deleted');
-    expect(openDialogs()).toHaveLength(0);
+    await theDialogsToClose();
   });
 
   it('says the Template could not be deleted when the request fails without a message', async () => {
@@ -67,6 +67,6 @@ describe('My Templates delete', () => {
     await openAndConfirm('Delete');
 
     expect(toast.error).toHaveBeenCalledWith('Template not found or unauthorized');
-    expect(openDialogs()).toHaveLength(0);
+    await theDialogsToClose();
   });
 });

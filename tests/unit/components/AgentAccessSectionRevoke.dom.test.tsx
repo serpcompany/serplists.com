@@ -1,4 +1,4 @@
-import { openAndConfirm } from '../../support/confirmDialogInPlace';
+import { openAndConfirm, theDialogsToClose } from '../../support/confirmDialogs';
 import React, { act } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
@@ -20,6 +20,7 @@ const apiMocks = vi.hoisted(() => ({
   revokeAgentKey: vi.fn(),
 }));
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
 }));
@@ -63,6 +64,7 @@ const buttonsNamed = (name: string) => screen.queryAllByRole('button', { name })
 
 async function revokeAndConfirm() {
   await openAndConfirm('Revoke', 'Revoke key');
+  await theDialogsToClose();
   await settle();
 }
 

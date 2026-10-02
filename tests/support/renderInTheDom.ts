@@ -1,5 +1,5 @@
 import { act, type ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen, within, type RenderResult } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within, type RenderResult } from '@testing-library/react';
 import { afterAll, beforeAll } from 'vitest';
 
 import { navigation } from './nextNavigation';
@@ -27,6 +27,20 @@ export const theButtonOrMenuItemNamed = (name: string): HTMLElement => {
   if (!control) throw new Error(`No button or menu item named ${name}`);
   return control;
 };
+
+export async function openTheMenu(triggerLabel: string): Promise<HTMLElement[]> {
+  await waitFor(() => {
+    if (screen.queryAllByRole('menu').length > 0) throw new Error('A menu is still closing');
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: triggerLabel }));
+  });
+  return waitFor(() => {
+    const items = screen.queryAllByRole('menuitem');
+    if (items.length === 0) throw new Error(`${triggerLabel} opened no menu`);
+    return items;
+  });
+}
 
 export const typeInto = (field: HTMLElement, value: string) =>
   act(async () => {

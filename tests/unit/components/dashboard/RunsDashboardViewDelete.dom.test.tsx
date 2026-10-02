@@ -4,11 +4,11 @@ import {
   openAndConfirm,
   openDialogs,
   openTheDeleteDialogWithNoneOpenBefore,
-} from '../../../support/confirmDialogInPlace';
+  theDialogsToClose,
+} from '../../../support/confirmDialogs';
 import React from 'react';
-import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSettled } from '../../../support/renderInTheDom';
+import { openTheMenu, renderSettled } from '../../../support/renderInTheDom';
 import { toast } from 'sonner';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
@@ -16,8 +16,7 @@ import { createApiError } from '@/lib/api-errors';
 import { PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
 
-vi.mock('@/components/ui/dropdown-menu', async () => (await import('../../../support/overlaysInPlace')).dropdownMenuItemsAsButtons);
-vi.mock('@/components/ui/select', async () => (await import('../../../support/overlaysInPlace')).selectWithoutPopup);
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const run: ChecklistRun = {
   id: 'run-1',
@@ -46,7 +45,7 @@ describe('RunsDashboardView delete', () => {
     const onDeleteRun = vi.fn(async () => undefined);
     await renderRuns(onDeleteRun);
 
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toContain('Delete');
+    expect((await openTheMenu('Run options')).map((item) => item.textContent)).toContain('Delete');
 
     const { dialog, title, description } = await openTheDeleteDialogWithNoneOpenBefore();
     expect(dialog).toBeDefined();
@@ -58,12 +57,13 @@ describe('RunsDashboardView delete', () => {
 
     expect(onDeleteRun).toHaveBeenCalledWith('run-1');
     expect(toast.success).toHaveBeenCalledWith('Run deleted');
-    expect(openDialogs()).toHaveLength(0);
+    await theDialogsToClose();
   });
 
   it('says the run could not be deleted when the request fails without a message', async () => {
     await renderRuns(vi.fn(async () => Promise.reject('offline')));
 
+    await openTheMenu('Run options');
     await openAndConfirm('Delete');
 
     expect(toast.error).toHaveBeenCalledWith('Failed to delete run.');
@@ -74,9 +74,10 @@ describe('RunsDashboardView delete', () => {
     const error = createApiError(404, { error: 'Checklist not found or unauthorized' });
     await renderRuns(vi.fn(async () => Promise.reject(error)));
 
+    await openTheMenu('Run options');
     await openAndConfirm('Delete');
 
     expect(toast.error).toHaveBeenCalledWith('Checklist not found or unauthorized');
-    expect(openDialogs()).toHaveLength(0);
+    await theDialogsToClose();
   });
 });

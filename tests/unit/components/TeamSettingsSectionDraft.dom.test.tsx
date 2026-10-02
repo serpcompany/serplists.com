@@ -64,7 +64,6 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
-vi.mock('@/components/ui/select', async () => (await import('../../support/overlaysInPlace')).selectWithoutPopup);
 vi.mock('@/components/account/TeamInvitesPanel', () => ({ TeamInvitesPanel: () => null }));
 vi.mock('@/components/account/TeamActivityList', () => ({ TeamActivityList: () => null }));
 

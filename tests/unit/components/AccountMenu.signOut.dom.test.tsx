@@ -11,14 +11,9 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/components/ui/dropdown-menu')>()),
-  ...(await import('../../support/overlaysInPlace')).dropdownMenuItemsAsButtons,
-}));
-
 import { AccountMenu } from '@/components/layout/AccountMenu';
 
-import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 import { aSignOutTheServerAnswersLater, expectTheControlToLeaveOnlyOnceSignedOut } from '../../support/signOutControl';
 
 theInMemoryBrowserAsTheWindow();
@@ -29,6 +24,7 @@ describe('AccountMenu Sign out', () => {
     signedIn.logout = () => signingOut.promise;
     navigation.reset('/dashboard/templates/');
     await renderSettled(<AccountMenu />);
+    await openTheMenu('Account menu');
 
     await expectTheControlToLeaveOnlyOnceSignedOut('Sign out', signingOut);
   });

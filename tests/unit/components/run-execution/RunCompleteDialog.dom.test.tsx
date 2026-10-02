@@ -1,44 +1,48 @@
 import React from 'react';
-import { fireEvent, screen } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { renderSettled } from '../../../support/renderInTheDom';
 
-vi.mock('@/components/ui/dialog', async () => (await import('../../../support/overlaysInPlace')).dialogInPlace);
-
 type Props = React.ComponentProps<typeof RunCompleteDialog>;
 
 describe('RunCompleteDialog', () => {
-  const render = (props: Partial<Props> = {}) =>
-    renderToStaticMarkup(
-      <RunCompleteDialog onComplete={vi.fn()} onOpenChange={vi.fn()} open {...props} />,
-    );
+  const openDialog = async (props: Partial<Props> = {}) => {
+    await renderSettled(<RunCompleteDialog onComplete={vi.fn()} onOpenChange={vi.fn()} open {...props} />);
+    return screen.getByRole('dialog');
+  };
 
-  it('asks first, says every task is done and that completing freezes the tasks, with buttons that say what they do', () => {
-    const html = render();
+  const buttonNamed = (dialog: HTMLElement, name: string) => {
+    const button = within(dialog).getByRole('button', { name });
+    if (!(button instanceof HTMLButtonElement)) throw new Error(`${name} is not a button`);
+    return button;
+  };
 
-    expect(html).toContain('<h2>Complete this Run?</h2>');
-    expect(html).toContain(
-      '<p>Every task is done. Completing the Run freezes its tasks: they can no longer be ticked or unticked.</p>',
+  it('asks first, says every task is done and that completing freezes the tasks, with buttons that say what they do', async () => {
+    const dialog = await openDialog();
+
+    expect(within(dialog).getByRole('heading').textContent).toBe('Complete this Run?');
+    expect(within(dialog).getByRole('paragraph').textContent).toBe(
+      'Every task is done. Completing the Run freezes its tasks: they can no longer be ticked or unticked.',
     );
-    expect([...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((match) => match[1])).toEqual([
+    expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Not yet',
       'Complete Run',
+      'Close',
     ]);
-    expect(html).not.toMatch(/Return to|Public Runs|Congratulations/);
+    expect(dialog.textContent).not.toMatch(/Return to|Public Runs|Congratulations/);
   });
 
-  it('uses theme components and colors only', () => {
-    expect(render()).not.toMatch(/green-\d/);
+  it('uses theme components and colors only', async () => {
+    expect((await openDialog()).outerHTML).not.toMatch(/green-\d/);
   });
 
-  it('holds both buttons while the completion saves', () => {
-    const buttons = render({ completing: true }).match(/<button[^>]*>/g) ?? [];
+  it('holds both answers while the completion saves', async () => {
+    const dialog = await openDialog({ completing: true });
 
-    expect(buttons).toHaveLength(2);
-    for (const button of buttons) expect(button).toContain('disabled=""');
+    expect(buttonNamed(dialog, 'Not yet').disabled).toBe(true);
+    expect(buttonNamed(dialog, 'Complete Run').disabled).toBe(true);
   });
 });
 
