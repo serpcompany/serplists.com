@@ -45,12 +45,12 @@ partial write. `insertRowWhere` (`functions/api/utils/guarded-insert.ts`) writes
 `db.insert(table).values(values)` would write, each missing value filled the way Drizzle
 fills it, but only while the condition holds. Plan limits put their count there, and a
 companion row (a version, an audit event) is guarded on the new row existing
-(`rowExistsSql`). `insertAuditEventWhere` and `insertAuditEventWhen` guard an audit row on
+(`rowExistsSql`). An audit row is an `insertRowWhere` into `audit_events` too, guarded on
 the condition of the write it records, batched before it, or on that write's effect,
 batched after it (such as `updated_at` equal to this request's time), so a write that
 did not happen records nothing. A guarded statement whose condition is false writes
-nothing and the batch still commits; its result reports `meta.changes === 0`
-(`batchWriteMissed`, `batchUpdateMissed`).
+nothing and the batch still commits; its result reports `meta.changes === 0`, which
+`batchWriteMissed` (`functions/api/utils/guarded-writes.ts`) reads.
 
 Drizzle names every column of a table in an `INSERT`, filling missing values with
 defaults or `NULL`, so leaving a value out does not help when the database lacks the

@@ -528,8 +528,10 @@ the page says otherwise. Next.js merges a page's metadata into the layout's shal
 page's `openGraph` or `twitter` replaces the layout's whole object: `buildPageMetadata` names
 the shared image in both again. The route also renders the same text as JSON-LD (`JsonLd` and
 `PageJsonLd` in `src/components/seo/`); a page whose text waits for a lookup gives
-`PageJsonLd` the lookup still in flight, inside `<Suspense>`, so the rest of the page
-streams without waiting for it. A build that is not production also sends
+`PageJsonLd` the lookup still in flight, inside `<Suspense>` (`WithPageJsonLd`), so the rest
+of the page streams without waiting for it. A route whose metadata and JSON-LD come from one
+lookup of its params is built by `seoPage(loadSeo, View)` (`src/components/seo/seoPage.tsx`),
+which gives the route both its `generateMetadata` and its page. A build that is not production also sends
 `X-Robots-Tag: noindex, nofollow`, which wins over the tag (below).
 
 ### Production and other environments

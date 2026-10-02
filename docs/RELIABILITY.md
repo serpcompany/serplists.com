@@ -167,27 +167,30 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     them. The test fails once a listed workflow has no comments left, so the list only
     shrinks.
 - **Duplicated code.** `pnpm run duplicates:check` (part of `check:repo`) runs jscpd over
-  `tests/` with the settings in `.jscpd.json`: jscpd's defaults of 50 tokens and 5 lines, a
-  threshold of 0, and exit code 1, so any clone fails. The threshold alone would not do: jscpd
-  compares it with a percentage rounded to two decimals, and a small clone in a large folder
-  rounds to 0%. A clone is fixed by moving the code into a shared helper (the
-  [testing conventions](#testing-conventions) say where they live), never by a higher token
-  count or an ignore.
+  `src/`, `functions/`, `scripts/`, `db/` and `tests/` together, with the settings in
+  `.jscpd.json`: jscpd's defaults of 50 tokens and 5 lines, a threshold of 0, and exit code
+  1, so any clone fails, a clone between app code and a test included. The threshold alone
+  would not do: jscpd compares it with a percentage rounded to two decimals, and a small
+  clone in a large folder rounds to 0%. A clone is fixed by moving the code into a shared
+  helper where both callers may import it (the layer rules in
+  [ARCHITECTURE.md](../ARCHITECTURE.md), and for tests the
+  [testing conventions](#testing-conventions)), never by a higher token count or an ignore.
+  Where two blocks look alike but serve different purposes, the shared part becomes one
+  function whose parameters name what differs.
   - jscpd reads every file whatever its size (`maxLines` and `maxSize` are far above any
     file) and skips only what git ignores, build output, `db/migrations` and the files in
     `GENERATED_FILES`. It has no tokenizer for XML Schema, so the two sitemaps.org schemas in
     `tests/fixtures/` go unread, and a file under 5 lines cannot hold a clone.
-  - The script names the folders (`jscpd tests`) because jscpd turns a `path` in
-    `.jscpd.json` into an absolute path and globs it, and on Windows its backslashes make that
-    glob match nothing: the check would pass having read no file.
+  - The script names the folders (`jscpd src functions scripts db tests`) because jscpd turns
+    a `path` in `.jscpd.json` into an absolute path and globs it, and on Windows its
+    backslashes make that glob match nothing: the check would pass having read no file.
   - `tests/unit/config/duplicate-check.test.ts` fails if the threshold, exit code, token or
-    line count loosens, if `check:repo` stops running the check or the script gains a flag,
-    if `.jscpd.json` gains a setting or an ignore beyond those, and if jscpd skips a file in
-    the checked folders for any reason but a missing tokenizer or fewer than 5 lines.
-  - `src/`, `functions/`, `scripts/` and `db/` join once their clones are fixed
-    ([harness hardening plan](exec-plans/active/harness-hardening.md)). `db/migrations` stays
-    out for good: applied migrations are append-only history, and a migration that rebuilds a
-    table restates all of it.
+    line count loosens, if `check:repo` stops running the check, the script gains a flag or
+    drops one of the five folders, if `.jscpd.json` gains a setting or an ignore beyond
+    those, and if jscpd skips a file in the checked folders for any reason but
+    `db/migrations`, `GENERATED_FILES`, a missing tokenizer or fewer than 5 lines.
+  - `db/migrations` stays out for good: applied migrations are append-only history, and a
+    migration that rebuilds a table restates all of it.
 - **Tests check what code does, not how it is written.** A test that matches the text of the
   code breaks on a harmless refactor and passes when the behavior breaks, so ESLint's
   `serplists/no-source-text-reads` (`scripts/eslint-rules/no-source-text-reads.mjs`) refuses,

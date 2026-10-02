@@ -12,6 +12,7 @@ const readJson = (file: string): unknown => JSON.parse(readFileSync(path.join(re
 
 const JSCPD_DEFAULT_MIN_TOKENS = 50;
 const JSCPD_DEFAULT_MIN_LINES = 5;
+const AUTHORED_CODE_FOLDERS = ['src', 'functions', 'scripts', 'db', 'tests'];
 const MIGRATIONS = '**/db/migrations/**';
 const BUILD_OUTPUT = [
   '**/node_modules/**',
@@ -65,6 +66,8 @@ const filesJscpdLists = () => {
   return { read: new Set(lines.filter(isUnder)), skipped };
 };
 
+const isLeftOutByDesign = (file: string) => file.startsWith('db/migrations/') || GENERATED_FILES.includes(file);
+
 const holdsNoClone = (reason: string) => {
   const lineCount = /^Code lines=(\d+) not in limits/.exec(reason)?.[1];
   return reason === NO_TOKENIZER || (lineCount !== undefined && Number(lineCount) < settings.minLines);
@@ -88,7 +91,7 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
     ).toBeLessThanOrEqual(JSCPD_DEFAULT_MIN_LINES);
   });
 
-  it('runs in check:repo as plain jscpd over the folders it checks, tests/ among them', () => {
+  it('runs in check:repo as plain jscpd over every folder that holds authored code', () => {
     expect(packageJson.scripts['check:repo'].split('&&').map((command) => command.trim())).toContain(
       'pnpm run duplicates:check',
     );
@@ -97,7 +100,10 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
       'duplicates:check must be "jscpd" followed by the folders it checks, with no flags and no "|| true": the ' +
         'settings live in .jscpd.json, and the check fails on the first clone.',
     ).toEqual({ checkTool: 'jscpd', notFolders: [] });
-    expect(checkedFolders).toContain('tests');
+    expect(
+      AUTHORED_CODE_FOLDERS.filter((folder) => !checkedFolders.includes(folder)),
+      'duplicates:check must name every folder that holds authored code: a clone in a folder it skips passes.',
+    ).toEqual([]);
     expect(
       Object.keys(packageJson),
       'Remove the "jscpd" key from package.json: jscpd merges it under .jscpd.json, so it can add settings no test reads.',
@@ -125,10 +131,11 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
     ).toContain(MIGRATIONS);
   });
 
-  it('reads every file in the folders it checks but those in a format jscpd has no tokenizer for or too short for a clone', () => {
+  it('reads every file in the folders it checks but applied migrations, generated files, and those in a format jscpd has no tokenizer for or too short for a clone', () => {
     const { read, skipped } = filesJscpdLists();
     const unread = filesGitTracksOrWouldTrack()
       .filter((file: string) => isUnder(file) && existsSync(path.join(repoRoot, file)) && !read.has(file))
+      .filter((file: string) => !isLeftOutByDesign(file))
       .filter((file: string) => !holdsNoClone(skipped.get(file) ?? ''))
       .map((file: string) => `${file}: ${skipped.get(file) ?? 'not listed'}`);
 
