@@ -78,10 +78,8 @@ const textIdField = (id: unknown): { id?: string } => {
   return textId === undefined ? {} : { id: textId };
 };
 
-const shownSubItem = ({ id, ...shown }: z.infer<typeof shownSubItemSchema>): ChecklistSubItem => ({
-  ...shown,
-  ...textIdField(id),
-});
+const shownSubItem = ({ id, ...shown }: z.infer<typeof shownSubItemSchema>): ChecklistSubItem =>
+  typeof id === "string" ? { ...shown, id } : shown;
 
 const shownContents = (contents: unknown[]): ChecklistItemContent[] =>
   contents.flatMap((content) => {

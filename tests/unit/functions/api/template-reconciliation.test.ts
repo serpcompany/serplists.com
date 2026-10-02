@@ -9,6 +9,7 @@ import {
 import { sectionsOf } from '../../../support/reconciledSections';
 import { objectContaining } from '../../../support/asymmetricMatchers';
 import type { StoredTask } from '../../../support/storedJson';
+import { normalizeSections } from '@/lib/utils/checklistSections';
 
 const originalRun = [
   {
@@ -240,6 +241,50 @@ describe('template run reconciliation', () => {
       id: 'legacy-item-1-2',
       isCompleted: false,
     });
+  });
+
+  it('keeps the progress of Sub-tasks stored with legacy numeric ids through a template edit after the run page saved the run', () => {
+    const legacyRun = [{
+      id: 's1',
+      title: 'Content',
+      items: [{
+        id: 'i1',
+        title: 'Write copy',
+        isCompleted: false,
+        contents: [{
+          type: 'subItems',
+          value: '',
+          subItems: [{ id: 7, title: 'Short copy', isCompleted: true }, { id: 8, title: 'Long copy', isCompleted: false }],
+        }],
+      }],
+    }];
+    const templateWithReadIds = [{
+      id: 's1',
+      title: 'Content',
+      items: [{
+        id: 'i1',
+        title: 'Write copy',
+        contents: [{
+          type: 'subItems',
+          value: '',
+          subItems: [
+            { id: 'legacy-subitem-1-1-1', title: 'Short copy' },
+            { id: 'legacy-subitem-1-1-2', title: 'Long copy' },
+            { id: 'sub-new', title: 'Proofread' },
+          ],
+        }],
+      }],
+    }];
+    const savedFromTheRunPage = normalizeSections(structuredClone(legacyRun));
+
+    const result = reconcileRunSections(savedFromTheRunPage, templateWithReadIds, []);
+
+    expect(result.newlyRetired).toEqual([]);
+    expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
+      objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
+      objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
+      objectContaining({ id: 'sub-new', isCompleted: false }),
+    ]);
   });
 
   it('normalizes a legacy flat run before reconciling its first sectioned template edit', () => {

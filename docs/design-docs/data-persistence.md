@@ -242,8 +242,8 @@ stored sections, matched by the ids the share page uses (the stored ids, or posi
 such as `1` and `1-1` where an id is missing). A stored entry the payload leaves out
 keeps its state, and an unknown id is ignored. A Sub-task matches by its id when that id
 is unique within the task, and otherwise by its position in the same list, only when the
-guest's entry carries the same id or none. Sub-task ids compare as text, as the share page
-shows them, so a legacy run's stored `7` matches the page's `"7"` and keeps its stored value.
+guest's entry carries the same id or none. A Sub-task id that is not text, such as a legacy
+run's numeric `7`, counts as none on both sides, since the share page leaves it out.
 Positions count only what the share page shows:
 it leaves out legacy entries (a `null` content block or Sub-task, a content block of an
 unknown type, a blank text Sub-task), so the merge skips those too and a Sub-task after

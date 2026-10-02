@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { elementAt, firstOf, taskIn } from '../../../support/elements';
+import { contentAt, elementAt, firstOf, taskIn } from '../../../support/elements';
 
 import {
   calculateSectionsProgress,
@@ -12,7 +12,6 @@ import {
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { normalizePortableSections } from '@/lib/schemas/portableTemplateNormalize';
-import { toPortableSections } from '@/lib/schemas/portableSections';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import {
   MALFORMED_CONTENTS_A_TEMPLATE_STORED,
@@ -147,7 +146,7 @@ describe('normalizeSections on stored content', () => {
     expect(keptEditorContentIds(stored)).toEqual(['7', 'c3']);
   });
 
-  it('reads a stored numeric Sub-task id as text, as the editor and the portable export do, and leaves out any other id that is not text', () => {
+  it('leaves out a stored Sub-task id that is not text, a legacy numeric one included, which template reads, reconciliation and the shared-run merge count as missing', () => {
     const stored: unknown = [{
       id: 's1',
       title: 'Launch',
@@ -167,22 +166,12 @@ describe('normalizeSections on stored content', () => {
         }],
       }],
     }];
-    const shownSubItems = (sections: ReturnType<typeof normalizeSections>) =>
-      (taskIn(sections, 0, 0).contents ?? []).flatMap((content) => content.subItems ?? []);
 
-    expect(shownSubItems(normalizeSections(stored))).toEqual([
-      { id: '7', title: 'Numeric id', isCompleted: true },
+    expect(contentAt(taskIn(normalizeSections(stored), 0, 0), 0).subItems).toEqual([
+      { title: 'Numeric id', isCompleted: true },
       { title: 'Object id', isCompleted: false },
       { id: 's3', title: 'Text id', isCompleted: false },
     ]);
-    const exported = (sections: unknown) => normalizePortableSections(toPortableSections(sections));
-    expect(exported(normalizeSections(stored))).toEqual(exported(stored));
-    const keptEditorSubItemIds = (sections: unknown) => buildTemplateEditorFormValues({ sections }).sections
-      .flatMap((section) => section.items.flatMap((item) => (item.contents ?? []).flatMap((content) => content.subItems ?? [])))
-      .map((subItem) => subItem.id)
-      .filter((id) => !id.startsWith('subitem_'));
-    expect(keptEditorSubItemIds(normalizeSections(stored))).toEqual(['7', 's3']);
-    expect(keptEditorSubItemIds(stored)).toEqual(['7', 's3']);
   });
 
   it('keeps valid content and legacy completion as before', () => {

@@ -500,11 +500,13 @@ How the editor's models load, save, keep drafts and decide who may edit:
   "Section N" and "Sub-task N"; a blank sub-task is labeled, never hidden, because
   it still counts toward progress.
 - The display mapper (`normalizeSections` in `src/lib/utils/checklistSections.ts`) reads a
-  content block's or Sub-task's id as text, as the editor and the portable export do: a
-  numeric id becomes a string, and an id of any other type is left out. Runs and pages then
-  hold the id their type says, and a run saved from the page stores the text id. A share
-  link save of a legacy run still sends the text id for a stored numeric Sub-task id, so the
-  shared-run merge reads stored ids the same way.
+  content block's id as text, as the editor and the portable export do: a numeric id
+  becomes a string, and an id of any other type is left out. Runs and pages then hold the
+  id their type says, and a run saved from the page stores the text id.
+- It leaves out a Sub-task id that is not text, a legacy numeric one included. Template
+  reads, run reconciliation and the shared-run merge count such an id as missing and pair
+  the Sub-task by its position, so a legacy run saved from the run page or a share link
+  keeps its Sub-task progress through later Template edits.
 - Plan limits (`useTemplateEditorAccess`): the new-template editor warns up front
   when billing status shows the context's template limit is reached, and a save
   refused as a plan gate or for an ended session shows a notice with its action
