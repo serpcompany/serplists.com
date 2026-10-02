@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { isError, rulesFor } from '../../support/eslintConfig';
 
 const UNSAFE_ANY_RULES = [
   '@typescript-eslint/no-unsafe-argument',
@@ -12,6 +13,7 @@ const UNSAFE_ANY_RULES = [
 ];
 const CAST_RULE = 'serplists/no-external-data-casts';
 const ASSERTION_RULE = '@typescript-eslint/no-unsafe-type-assertion';
+const RULES_TESTS_ONCE_TURNED_OFF = ['@typescript-eslint/no-explicit-any', '@typescript-eslint/no-this-alias'];
 const TYPE_AWARE_CONFIG = 'eslint.type-aware.config.js';
 
 const TYPE_CHECKED_FILES = [
@@ -22,16 +24,26 @@ const TYPE_CHECKED_FILES = [
   'db/schema/templates.ts',
 ];
 
-const isError = (setting: unknown) => Array.isArray(setting) && setting[0] === 2;
+const TYPE_CHECKED_TEST_FILES = [
+  'tests/unit/functions/api/uploads-handler.test.ts',
+  'tests/unit/views/TemplateEditor.test.tsx',
+  'tests/integration/api.workerless.test.ts',
+  'tests/e2e/run-share.spec.ts',
+  'tests/e2e/support/api-requests.ts',
+  'tests/support/readJson.ts',
+  'tests/fixtures/fakeDom.ts',
+  'tests/setup.ts',
+];
 
-const rulesFor = async (eslint: ESLint, file: string): Promise<Record<string, unknown>> =>
-  z.object({ rules: z.record(z.unknown()) }).parse(await eslint.calculateConfigForFile(file)).rules;
+const CO_LOCATED_TEST_FILE = 'src/lib/routes.test.ts';
+
+const JAVASCRIPT_TEST_FILE = 'tests/unit/functions/api/log-path-from-javascript.test.mjs';
 
 const lintScript = z
   .object({ scripts: z.object({ lint: z.string() }) })
   .parse(JSON.parse(readFileSync('package.json', 'utf8'))).scripts.lint;
 
-describe('external data is parsed at the boundary, not cast', { timeout: 30_000 }, () => {
+describe('external data is parsed at the boundary, not cast', { timeout: 60_000 }, () => {
   const typeAware = new ESLint({ cwd: process.cwd(), overrideConfigFile: TYPE_AWARE_CONFIG });
   const everyCommit = new ESLint({ cwd: process.cwd() });
 
@@ -39,15 +51,29 @@ describe('external data is parsed at the boundary, not cast', { timeout: 30_000 
     expect(lintScript).toBe(`eslint --config ${TYPE_AWARE_CONFIG} .`);
   });
 
-  it.each(TYPE_CHECKED_FILES)('refuses unsafe any, external data casts and narrowing type assertions in %s', async (file) => {
+  const rulesTurnedOff = async (file: string, names: readonly string[]) => {
     const rules = await rulesFor(typeAware, file);
+    return names.filter((rule) => !isError(rules[rule]));
+  };
 
-    expect(UNSAFE_ANY_RULES.filter((rule) => !isError(rules[rule]))).toEqual([]);
-    expect(isError(rules[CAST_RULE])).toBe(true);
-    expect(isError(rules[ASSERTION_RULE])).toBe(true);
+  it.each(TYPE_CHECKED_FILES)('refuses unsafe any, external data casts and narrowing type assertions in %s', async (file) => {
+    expect(await rulesTurnedOff(file, [...UNSAFE_ANY_RULES, CAST_RULE, ASSERTION_RULE])).toEqual([]);
   });
 
-  it.each([...TYPE_CHECKED_FILES, 'scripts/lib/run-tool.mjs'])('refuses external data casts in %s on every commit', async (file) => {
-    expect(isError((await rulesFor(everyCommit, file))[CAST_RULE])).toBe(true);
+  it.each([...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])('refuses unsafe any and external data casts in the test file %s', async (file) => {
+    expect(await rulesTurnedOff(file, [...UNSAFE_ANY_RULES, CAST_RULE])).toEqual([]);
+  });
+
+  it.each([...TYPE_CHECKED_FILES, 'scripts/lib/run-tool.mjs', ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
+    'refuses external data casts in %s on every commit',
+    async (file) => {
+      expect(isError((await rulesFor(everyCommit, file))[CAST_RULE])).toBe(true);
+    },
+  );
+
+  it.each([...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])('refuses any and aliases of this in the test file %s, as in app code', async (file) => {
+    const rules = await rulesFor(everyCommit, file);
+
+    expect(RULES_TESTS_ONCE_TURNED_OFF.filter((rule) => !isError(rules[rule]))).toEqual([]);
   });
 });

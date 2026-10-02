@@ -275,7 +275,7 @@ export default tseslint.config(
     rules: { "serplists/restricted-code": ["error", SCRIPT_CONVENTIONS] },
   },
   {
-    files: APP_API_SCRIPT_AND_DATABASE_CODE,
+    files: [...APP_API_SCRIPT_AND_DATABASE_CODE, ...TEST_FILES],
     rules: { "serplists/no-external-data-casts": "error" },
   },
   {
@@ -285,13 +285,6 @@ export default tseslint.config(
   {
     files: ["tests/integration/**/*.{ts,mjs,js}"],
     rules: { "serplists/restricted-code": ["error", INTEGRATION_TEST_CONVENTIONS] },
-  },
-  {
-    files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**/*.{ts,tsx}"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-this-alias": "off",
-    },
   },
   {
     files: TEST_FILES,
