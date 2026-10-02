@@ -5,6 +5,7 @@ import {
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
+  readTextId,
   type SubTaskRecord,
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
@@ -52,8 +53,10 @@ const pairWithShown = (stored: unknown[], guest: unknown[], isShown: (value: unk
   return stored.map((entry) => (isShown(entry) ? unpaired.shift() : undefined));
 };
 
-const stringId = (value: unknown): string | null =>
-  isChecklistNodeRecord(value) && typeof value.id === 'string' && value.id !== '' ? value.id : null;
+const stringId = (value: unknown): string | null => {
+  const id = isChecklistNodeRecord(value) ? readTextId(value.id) : undefined;
+  return id === undefined || id === '' ? null : id;
+};
 
 function readCompletion(state: { isCompleted?: boolean | undefined; completed?: boolean | undefined }): boolean | undefined {
   return state.isCompleted ?? state.completed;

@@ -5,6 +5,7 @@ import {
   isContentRecord,
   isSectionRecord,
   isTaskRecord,
+  readTextId,
   type ContentRecord,
   type JsonRecord,
   type SubTaskRecord,
@@ -72,15 +73,22 @@ const shownContentSchema = z.object({
   subItems: z.array(shownSubItemSchema).optional(),
 }).passthrough();
 
-const textIdOf = (id: unknown): { id?: string } =>
-  typeof id === "string" ? { id } : typeof id === "number" && Number.isFinite(id) ? { id: String(id) } : {};
+const textIdField = (id: unknown): { id?: string } => {
+  const textId = readTextId(id);
+  return textId === undefined ? {} : { id: textId };
+};
+
+const shownSubItem = ({ id, ...shown }: z.infer<typeof shownSubItemSchema>): ChecklistSubItem => ({
+  ...shown,
+  ...textIdField(id),
+});
 
 const shownContents = (contents: unknown[]): ChecklistItemContent[] =>
   contents.flatMap((content) => {
     const parsed = shownContentSchema.safeParse(content);
     if (!parsed.success) return [];
-    const { id, ...shown } = parsed.data;
-    return [{ ...shown, ...textIdOf(id) }];
+    const { id, subItems, ...shown } = parsed.data;
+    return [{ ...shown, ...textIdField(id), ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}) }];
   });
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {

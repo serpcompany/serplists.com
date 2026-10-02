@@ -126,6 +126,27 @@ describe('mergeSharedRunState', () => {
       .toEqual({ sections: [{ id: 's1', title: 'Section', items: [{ ...legacyTask(true), isCompleted: false }] }] });
   });
 
+  it('matches the text id the share page shows for a legacy numeric Sub-task id, and keeps the stored id', () => {
+    const legacyTask = (secondDone: boolean) => ({
+      id: 'i1',
+      title: 'Task',
+      isCompleted: false,
+      contents: [{
+        type: 'subItems',
+        value: '',
+        subItems: [{ id: 7, title: 'First', isCompleted: false }, { id: 8, title: 'Second', isCompleted: secondDone }],
+      }],
+    });
+    const storedLegacyRun = [{ id: 's1', title: 'Section', items: [legacyTask(false)] }];
+    const shown = normalizeSections(structuredClone(storedLegacyRun));
+    const ticked = subTaskAt(contentAt(taskIn(shown, 0, 0), 0), 1);
+    expect(ticked.id).toBe('8');
+    ticked.isCompleted = true;
+
+    expect(mergeSharedRunState(copy(storedLegacyRun), guest(shown)))
+      .toEqual({ sections: [{ id: 's1', title: 'Section', items: [legacyTask(true)] }] });
+  });
+
   it('falls back to position for duplicate sub-item ids', () => {
     const storedDuplicates = [{
       id: 's1',

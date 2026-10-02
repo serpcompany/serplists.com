@@ -38,6 +38,9 @@ export interface SectionRecord extends ChecklistNodeRecord {
   items?: unknown;
 }
 
+export const readTextId = (id: unknown): string | undefined =>
+  typeof id === "string" ? id : typeof id === "number" && Number.isFinite(id) ? String(id) : undefined;
+
 export const isChecklistNodeRecord = (value: unknown): value is ChecklistNodeRecord => isRecord(value);
 export const isSectionRecord = (value: unknown): value is SectionRecord => isRecord(value);
 export const isTaskRecord = (value: unknown): value is TaskRecord => isRecord(value);

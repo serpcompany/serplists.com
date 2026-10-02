@@ -12,6 +12,7 @@ import {
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { normalizePortableSections } from '@/lib/schemas/portableTemplateNormalize';
+import { toPortableSections } from '@/lib/schemas/portableSections';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import {
   MALFORMED_CONTENTS_A_TEMPLATE_STORED,
@@ -144,6 +145,44 @@ describe('normalizeSections on stored content', () => {
       .filter((id) => !id.startsWith('content_'));
     expect(keptEditorContentIds(normalizeSections(stored))).toEqual(['7', 'c3']);
     expect(keptEditorContentIds(stored)).toEqual(['7', 'c3']);
+  });
+
+  it('reads a stored numeric Sub-task id as text, as the editor and the portable export do, and leaves out any other id that is not text', () => {
+    const stored: unknown = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{
+        id: 'i1',
+        title: 'Task',
+        isCompleted: false,
+        contents: [{
+          id: 'c1',
+          type: 'subItems',
+          value: '',
+          subItems: [
+            { id: 7, title: 'Numeric id', isCompleted: true },
+            { id: { legacy: true }, title: 'Object id' },
+            { id: 's3', title: 'Text id' },
+          ],
+        }],
+      }],
+    }];
+    const shownSubItems = (sections: ReturnType<typeof normalizeSections>) =>
+      (taskIn(sections, 0, 0).contents ?? []).flatMap((content) => content.subItems ?? []);
+
+    expect(shownSubItems(normalizeSections(stored))).toEqual([
+      { id: '7', title: 'Numeric id', isCompleted: true },
+      { title: 'Object id', isCompleted: false },
+      { id: 's3', title: 'Text id', isCompleted: false },
+    ]);
+    const exported = (sections: unknown) => normalizePortableSections(toPortableSections(sections));
+    expect(exported(normalizeSections(stored))).toEqual(exported(stored));
+    const keptEditorSubItemIds = (sections: unknown) => buildTemplateEditorFormValues({ sections }).sections
+      .flatMap((section) => section.items.flatMap((item) => (item.contents ?? []).flatMap((content) => content.subItems ?? [])))
+      .map((subItem) => subItem.id)
+      .filter((id) => !id.startsWith('subitem_'));
+    expect(keptEditorSubItemIds(normalizeSections(stored))).toEqual(['7', 's3']);
+    expect(keptEditorSubItemIds(stored)).toEqual(['7', 's3']);
   });
 
   it('keeps valid content and legacy completion as before', () => {
