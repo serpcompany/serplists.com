@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { elementAt, firstOf, sectionAt } from "../../../support/elements";
+import { contentAt, elementAt, firstOf, present, sectionAt, subTaskAt, taskIn } from "../../../support/elements";
 
 import { applyTemplateOperation } from "@functions/api/handlers/agentMcpTemplateEdits";
 import { templateOperationArgs } from "@functions/api/handlers/agentMcpTemplateTools";
 import { parseToolArguments } from "@functions/api/handlers/agentMcpTools";
 import { toolErrorOf } from "../../../support/agentMcp";
+import { recordsIn } from "../../../support/mcpResponses";
+import { storedSections } from "../../../support/storedJson";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -27,8 +29,10 @@ const sectionsAsRead = (): JsonRecord[] => [
 const applyParsed = (args: JsonRecord, sections = sectionsAsRead()) =>
   applyTemplateOperation(sections, parseToolArguments(templateOperationArgs, { templateId: "tpl-1", expectedVersion: 4, ...args }));
 
+const sectionsIn = (result: { sections: unknown }) => storedSections.parse(result.sections);
+
 const outline = (sections: JsonRecord[]) =>
-  sections.map((section) => [section.id, (section.items as JsonRecord[]).map((item) => item.id)]);
+  storedSections.parse(sections).map((section) => [section.id, section.items.map((item) => item.id)]);
 
 const SECTION_ID = /^section_[0-9a-f-]{36}$/;
 const ITEM_ID = /^item_[0-9a-f-]{36}$/;
@@ -45,13 +49,13 @@ describe("update_template operations", () => {
       sectionId: "s1",
       section: { id: "s1", items: [{ id: "t2", title: "Kept task" }, { title: "New task", contents: [{ type: "subItems", subItems: [{ title: "New check" }] }] }] },
     });
-    const replacedTasks = sectionAt(replaced, 0).items as JsonRecord[];
+    const replacedTasks = firstOf(sectionsIn(replaced)).items;
     const kept = firstOf(replacedTasks);
     const added = elementAt(replacedTasks, 1);
     expect(replaced.sections[0]).toMatchObject({ id: "s1", title: "Prepare", ...KEY_THE_APP_DOES_NOT_KNOW });
     expect(kept).toEqual({ id: "t2", title: "Kept task" });
     expect(added.id).toMatch(ITEM_ID);
-    expect(firstOf(firstOf(added.contents as JsonRecord[]).subItems as JsonRecord[]).id).toMatch(SUBITEM_ID);
+    expect(subTaskAt(contentAt(added, 0), 0).id).toMatch(SUBITEM_ID);
     expect(outline(replaced.sections).slice(1)).toEqual(outline(sectionsAsRead()).slice(1));
   });
 
@@ -59,7 +63,7 @@ describe("update_template operations", () => {
     const atEnd = applyParsed({ operation: "insert_section", section: { title: "Retro", items: [{ title: "Notes" }] } });
     const added = elementAt(atEnd.sections, 3);
     expect(added.id).toMatch(SECTION_ID);
-    expect(firstOf(added.items as JsonRecord[]).id).toMatch(ITEM_ID);
+    expect(firstOf(recordsIn(added.items)).id).toMatch(ITEM_ID);
     expect(atEnd.sectionId).toBe(added.id);
 
     const before = applyParsed({
@@ -90,7 +94,7 @@ describe("update_template operations", () => {
 
   it("replace_task changes the fields it is given and keeps the rest, notes and ids included", () => {
     const retitled = applyParsed({ operation: "replace_task", taskId: "t5", task: { title: "Smoke test" } });
-    expect((sectionAt(retitled, 2).items as JsonRecord[])[1]).toEqual(task("t5", { notes: "kept", title: "Smoke test" }));
+    expect(taskIn(sectionsIn(retitled), 2, 1)).toEqual(task("t5", { notes: "kept", title: "Smoke test" }));
     expect(retitled.taskId).toBe("t5");
 
     const recontented = applyParsed({
@@ -98,10 +102,10 @@ describe("update_template operations", () => {
       taskId: "t1",
       task: { id: "t1", contents: [{ type: "subItems", subItems: [{ id: "t1-sub", title: "Check" }, { title: "Double-check" }] }] },
     });
-    const subItems = firstOf(firstOf(sectionAt(recontented, 0).items as JsonRecord[]).contents as JsonRecord[]).subItems as JsonRecord[];
+    const subItems = present(contentAt(taskIn(sectionsIn(recontented), 0, 0), 0).subItems, "the sub-tasks");
     expect(subItems[0]).toEqual({ id: "t1-sub", title: "Check" });
     expect(elementAt(subItems, 1).id).toMatch(SUBITEM_ID);
-    expect((sectionAt(recontented, 0).items as JsonRecord[])[0]).toMatchObject({ title: "Task t1", description: "About t1" });
+    expect(taskIn(sectionsIn(recontented), 0, 0)).toMatchObject({ title: "Task t1", description: "About t1" });
   });
 
   it("insert_task adds a task before another or at the end of a section", () => {
@@ -121,7 +125,7 @@ describe("update_template operations", () => {
   it("move_task moves a task within or across sections, keeping its id and content", () => {
     const across = applyParsed({ operation: "move_task", taskId: "t1", beforeTaskId: "t5" });
     expect(outline(across.sections)).toEqual([["s1", ["t2"]], ["s2", ["t3"]], ["s3", ["t4", "t1", "t5"]]]);
-    expect((sectionAt(across, 2).items as JsonRecord[])[1]).toEqual(task("t1"));
+    expect(taskIn(sectionsIn(across), 2, 1)).toEqual(task("t1"));
 
     const toEnd = applyParsed({ operation: "move_task", taskId: "t4", sectionId: "s3" });
     expect(elementAt(outline(toEnd.sections), 2)[1]).toEqual(["t5", "t4"]);

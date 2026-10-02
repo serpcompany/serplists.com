@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { firstOf, present, valueAt } from "../../../support/elements";
-import { storedSectionsIn } from "../../../support/storedJson";
+import { contentAt, firstOf, present, taskIn, valueAt } from "../../../support/elements";
+import { storedSections, storedSectionsIn } from "../../../support/storedJson";
 import { z } from "zod";
 import {
   byteLength,
@@ -61,9 +61,9 @@ describe("personal run MCP handler", () => {
   });
 
   describe("run size bounds", () => {
-    const templateSectionsPaddedWithDescriptions = (targetBytes: number) => sectionsOfAtLeast(targetBytes).map((section) => ({
+    const templateSectionsPaddedWithDescriptions = (targetBytes: number) => storedSections.parse(sectionsOfAtLeast(targetBytes)).map((section) => ({
       ...section,
-      items: (section.items as JsonRecord[]).map(({ notes, ...task }) => ({ ...task, description: notes })),
+      items: section.items.map(({ notes, ...task }) => ({ ...task, description: notes })),
     }));
 
     it("rejects start_run on a template whose run would be too large to save, before writing anything", async () => {
@@ -144,10 +144,10 @@ describe("personal run MCP handler", () => {
       ["set_task_completed", { taskId: "task-1", completed: false }],
       ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: false }],
     ])("allows unchecking with %s on a run already over the content limit, which counts every task as unticked", async (operation, fields) => {
-      const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024);
-      const task1 = firstOf(firstOf(sections).items as JsonRecord[]);
+      const sections = storedSections.parse(sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024));
+      const task1 = taskIn(sections, 0, 0);
       task1.isCompleted = true;
-      for (const subtask of firstOf(task1.contents as JsonRecord[]).subItems as JsonRecord[]) subtask.isCompleted = true;
+      for (const subtask of present(contentAt(task1, 0).subItems, "the sub-tasks")) subtask.isCompleted = true;
       expect(contentSaveBytes(sections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
         items: JSON.stringify(sections),

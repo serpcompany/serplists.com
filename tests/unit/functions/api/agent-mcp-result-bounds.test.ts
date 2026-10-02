@@ -39,14 +39,17 @@ const task = (id: string, textLength: number) => ({
   ],
 });
 
-function maximumTemplateSections(): JsonRecord[] {
-  const taskTooLargeForOneResult = task("big", 100_000);
-  const sections: JsonRecord[] = [{ id: "s0", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: [taskTooLargeForOneResult] }];
+type TemplateSection = { id: string; title: string; items: Array<ReturnType<typeof task>> };
+
+function maximumTemplateSections(): TemplateSection[] {
+  let lastTasks = [task("big", 100_000)];
+  const sections: TemplateSection[] = [{ id: "s0", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: lastTasks }];
   for (let index = 1; contentSaveBytes(sections) < TEMPLATE_CONTENT_MAX_BYTES - 16_000; index += 1) {
-    sections.push({ id: `s${index}`, title: `Section ${index}`, items: Array.from({ length: 10 }, (_, t) => task(`s${index}-t${t}`, 500)) });
+    lastTasks = Array.from({ length: 10 }, (_, t) => task(`s${index}-t${t}`, 500));
+    sections.push({ id: `s${index}`, title: `Section ${index}`, items: lastTasks });
   }
   expect(sections.length).toBeLessThanOrEqual(CREATE_TEMPLATE_MAX_SECTIONS);
-  const last = firstOf(firstOf(sections.at(-1)?.items as JsonRecord[]).contents as JsonRecord[]);
+  const last = firstOf(firstOf(lastTasks).contents);
   const bytesLeft = TEMPLATE_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   last.value = multibyteProse(String(last.value).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
@@ -77,21 +80,25 @@ function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fie
 
 const runTask = (id: string, notes: number) => ({ ...task(id, 200), isCompleted: false, notes: multibyteProse(notes) });
 
-function liveContentJustUnderTheRunLimit(): JsonRecord[] {
-  const sections: JsonRecord[] = [
+type RunSection = { id: string; title: string; items: Array<ReturnType<typeof runTask>> };
+
+function liveContentJustUnderTheRunLimit(): RunSection[] {
+  let lastTasks: Array<ReturnType<typeof runTask>> = [];
+  const sections: RunSection[] = [
     { id: "notes", title: costliestJsonText(TEMPLATE_TITLE_MAX), items: Array.from({ length: 12 }, (_, index) => runTask(`note-${index}`, MAX_TASK_NOTES_LENGTH)) },
     { id: "huge", title: "Huge", items: [runTask("huge-note", NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES)] },
   ];
   for (let index = 0; contentSaveBytes(sections) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
-    sections.push({ id: `area-${index}`, title: `Area ${index}`, items: Array.from({ length: 12 }, (_, t) => runTask(`area-${index}-${t}`, 500)) });
+    lastTasks = Array.from({ length: 12 }, (_, t) => runTask(`area-${index}-${t}`, 500));
+    sections.push({ id: `area-${index}`, title: `Area ${index}`, items: lastTasks });
   }
-  const filler = firstOf(sections.at(-1)?.items as JsonRecord[]);
+  const filler = firstOf(lastTasks);
   const bytesLeft = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   filler.notes = multibyteProse(String(filler.notes).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   return sections;
 }
 
-function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
+function maximumRun(): { sections: RunSection[]; retired: JsonRecord[] } {
   const sections = liveContentJustUnderTheRunLimit();
   const aboutOneMegabyteOfRetiredWork: JsonRecord[] = [
     ...Array.from({ length: 20 }, (_, index) => ({
@@ -110,8 +117,8 @@ function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
   return { sections, retired: aboutOneMegabyteOfRetiredWork };
 }
 
-function withRoomForTheLongestNotes(run: { sections: JsonRecord[]; retired: JsonRecord[] }) {
-  (sectionAt(run, 0).items as JsonRecord[]).splice(0, 2);
+function withRoomForTheLongestNotes(run: { sections: RunSection[]; retired: JsonRecord[] }) {
+  sectionAt(run, 0).items.splice(0, 2);
   return run;
 }
 
