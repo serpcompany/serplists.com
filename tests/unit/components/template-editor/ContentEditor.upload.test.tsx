@@ -12,7 +12,7 @@ import {
 import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
 import { deferred } from '../../../support/deferred';
-import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
 import { findByAriaLabel, findElement, findElementOf, findFileInput } from '../../../support/elementTree';
 
 const harness = vi.hoisted(
@@ -23,11 +23,8 @@ const harness = vi.hoisted(
   }),
 );
 
-type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
-
 function editorForm(): EditorForm {
-  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
-  return harness.form;
+  return editorFormOf(harness);
 }
 
 

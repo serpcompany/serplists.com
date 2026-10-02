@@ -6,7 +6,7 @@ import { ContentEditor } from '@/components/template-editor/ContentEditor';
 import { SubItemsEditor } from '@/components/template-editor/content-types/SubItemsEditor';
 import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
-import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
 import { findAllElements, findDomElement, type AnyElement } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
@@ -15,11 +15,8 @@ const harness = vi.hoisted((): { form: EditorForm | null; move: (from: number, t
   move: () => {},
 }));
 
-type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
-
 function editorForm(): EditorForm {
-  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
-  return harness.form;
+  return editorFormOf(harness);
 }
 
 

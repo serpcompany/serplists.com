@@ -7,7 +7,7 @@ import { firstOf } from '../../../support/elements';
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
 
-import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
 import { findAllElements, findDomElement, withComponentsRenderedOneLevel } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
@@ -16,11 +16,8 @@ const harness = vi.hoisted((): { form: EditorForm | null; setValue: Mock<(...arg
   setValue: vi.fn(),
 }));
 
-type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
-
 function editorForm(): EditorForm {
-  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
-  return harness.form;
+  return editorFormOf(harness);
 }
 
 

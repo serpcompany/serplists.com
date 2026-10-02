@@ -46,6 +46,9 @@ const buildDependencies = <Overrides extends Partial<SaveDependencies>>(override
   ...overrides,
 });
 
+const dependenciesWhoseUpdateSavesVersion = (version: number) =>
+  buildDependencies({ updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version }) });
+
 describe("persistTemplateSave", () => {
   it("returns success after create without owning navigation", async () => {
     let createResolved = false;
@@ -106,9 +109,7 @@ describe("persistTemplateSave", () => {
   });
 
   it("returns the version the server saved so the next save can send it", async () => {
-    const dependencies = buildDependencies({
-      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 6 }),
-    });
+    const dependencies = dependenciesWhoseUpdateSavesVersion(6);
 
     const result = await persistTemplateSave(
       dependencies,
@@ -246,9 +247,7 @@ describe("persistTemplateSave", () => {
   });
 
   it("leaves visibility out of an update the editor's switch did not change, and returns the saved version", async () => {
-    const dependencies = buildDependencies({
-      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 6 }),
-    });
+    const dependencies = dependenciesWhoseUpdateSavesVersion(6);
 
     const result = await persistTemplateSave(
       dependencies,
