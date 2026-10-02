@@ -509,10 +509,14 @@ Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`)
 only module that imports `react-markdown`. It disables raw HTML and passes links through
 `safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
 
-User images (uploads, and images linked from any host, of any size) render as they are with
-`<img>`, not `next/image`, which would need an image loader for every host. ESLint's
-`@next/next/no-img-element` is off only for the components that show them
-(`USER_CONTENT_IMAGES` in `eslint.config.js`).
+User images (uploads from R2 under any key, and images linked from any host) render with
+`UserContentImage` (`src/components/shared/UserContentImage.tsx`), the one module that renders
+`<img>`. They are served as stored: their size is unknown, so `next/image` would need invented
+dimensions or a fixed box, and its optimizer would need an image binding on Workers and a
+`remotePatterns` entry for every host. The app's own images use `next/image`. A
+`serplists/restricted-code` convention refuses `<img>` anywhere else in `src/`, so Next's
+warn-only `@next/next/no-img-element` is off: the convention errors where it warned
+([repository checks](RELIABILITY.md#repository-checks)).
 
 ## Page titles and meta tags
 

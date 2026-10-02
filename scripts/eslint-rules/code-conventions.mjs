@@ -88,6 +88,14 @@ export const APP_CONVENTIONS = [
       "out, with the new session's cookie. Use invalidateQueries(), or refetchQueries({ ..., type: 'active' }).",
   },
   {
+    selector: "JSXOpeningElement[name.name='img']",
+    message:
+      "Render a user's image, an upload or a URL a Template names, with <UserContentImage> from " +
+      "src/components/shared/UserContentImage.tsx, the one module that renders <img>: it is served as stored, since " +
+      "its size is unknown and Next.js has no image optimizer on Workers here. Use next/image for the app's own images.",
+    owners: ["src/components/shared/UserContentImage.tsx"],
+  },
+  {
     selector: "JSXAttribute[name.name='onError'] AssignmentExpression[left.type='MemberExpression'][left.property.name='src']",
     message:
       "An onError handler that sets the image's src again loops when that source fails too. Record the failure in " +

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { formatUploadLimit, UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 import { UPLOAD_BUCKET_BY_TYPE, uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
@@ -40,7 +41,7 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
   }
 
   return (
-    <img
+    <UserContentImage
       src={src}
       alt="Preview"
       className="mx-auto max-h-32 rounded-md"

@@ -245,8 +245,8 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the
     conventions in `scripts/eslint-rules/code-conventions.mjs`: each an esquery selector, the
     message saying what to use instead, and the modules that own that code, if any (the one
-    module that may import `react-markdown`, read `maxActiveRuns`, listen for storage events
-    or touch the clipboard). It runs with `APP_CONVENTIONS` on `src/`, `API_CONVENTIONS` on
+    module that may import `react-markdown`, read `maxActiveRuns`, listen for storage events,
+    touch the clipboard or render `<img>`). It runs with `APP_CONVENTIONS` on `src/`, `API_CONVENTIONS` on
     `functions/`, `SCRIPT_CONVENTIONS` on `scripts/`, `BROWSER_TEST_CONVENTIONS` on
     `tests/e2e/` and `INTEGRATION_TEST_CONVENTIONS` on `tests/integration/`, one rule name per
     folder, so no block overrides another. The browser specs' conventions are the tool-spawn

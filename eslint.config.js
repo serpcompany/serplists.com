@@ -108,11 +108,6 @@ const FILES_THAT_EXPORT_MORE_THAN_COMPONENTS = [
   "tests/**/*.{ts,tsx}",
   "**/*.test.{ts,tsx}",
 ];
-const USER_CONTENT_IMAGES = [
-  "src/components/shared/TaskImage.tsx",
-  "src/components/template/PublicTemplateContent.tsx",
-  "src/components/ui/file-upload.tsx",
-];
 
 const STORAGE_MESSAGE =
   "Reading window.localStorage throws when a browser blocks site data, which crashes the app. " +
@@ -165,6 +160,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
+      "@next/next/no-img-element": "off",
     },
   },
   {
@@ -180,12 +176,6 @@ export default tseslint.config(
     files: FILES_THAT_EXPORT_MORE_THAN_COMPONENTS,
     rules: {
       "react-refresh/only-export-components": "off",
-    },
-  },
-  {
-    files: USER_CONTENT_IMAGES,
-    rules: {
-      "@next/next/no-img-element": "off",
     },
   },
   {

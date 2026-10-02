@@ -4,6 +4,7 @@ import { assert, describe, expect, it, vi } from 'vitest';
 
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { findElement } from '../../support/elementTree';
 
 describe('TaskImageView', () => {
@@ -11,7 +12,7 @@ describe('TaskImageView', () => {
     const onFail = vi.fn();
     const img = findElement(
       TaskImageView({ alt: 'Task content', onFail, src: 'https://cdn.example.com/missing.png' }),
-      (element) => element.type === 'img',
+      (element) => element.type === UserContentImage,
     );
     assert.exists(img);
 
@@ -53,4 +54,15 @@ describe('resolveTaskImageSource', () => {
       expect(resolveTaskImageSource(value, null)).toBeNull();
     },
   );
+});
+
+describe('UserContentImage', () => {
+  it('renders the stored image as given, with no size, srcset or optimizer url', () => {
+    const markup = renderToStaticMarkup(
+      <UserContentImage alt="Diagram" className="w-full" src="https://cdn.example.com/diagram.png" />,
+    );
+
+    expect(markup).toContain('<img alt="Diagram" class="w-full" src="https://cdn.example.com/diagram.png"/>');
+    expect(markup).not.toMatch(/srcset|width=|height=|\/_next\/image/);
+  });
 });

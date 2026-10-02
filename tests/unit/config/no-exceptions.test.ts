@@ -14,6 +14,7 @@ const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
 
 const MAX_LINES = 500;
+const USER_CONTENT_IMAGE = 'src/components/shared/UserContentImage.tsx';
 
 const packageScripts = z
   .object({ scripts: z.object({ 'test:run': z.string(), 'test:local-d1': z.string() }).catchall(z.string()) })
@@ -108,6 +109,27 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
       'A test file excluded from pnpm run test:run must run in pnpm run test:local-d1, or no suite runs it. ' +
         'Add it to test:local-d1, or stop excluding it.',
     ).toEqual(testFileArguments(packageScripts['test:local-d1']));
+  });
+
+  it('lets only UserContentImage render <img> in src/, with no file exempt from the convention', async () => {
+    const eslint = new ESLint({ cwd: repoRoot });
+    const refusesImg = async (filePath: string) => {
+      const result = onlyElement(await eslint.lintText('<img alt="" src={src} />;', { filePath }));
+      return result.messages.some(
+        (message) => message.ruleId === 'serplists/restricted-code' && message.message.includes('<UserContentImage>'),
+      );
+    };
+    const exempt: string[] = [];
+    for (const file of authoredCodeFiles.filter((name: string) => /^src\/.*\.tsx$/.test(name) && name !== USER_CONTENT_IMAGE)) {
+      if (!(await refusesImg(file))) exempt.push(file);
+    }
+
+    expect(
+      exempt,
+      `<img> belongs only in ${USER_CONTENT_IMAGE}. Render <UserContentImage> in these files, and remove any ` +
+        'override or owner that lets them render <img>.',
+    ).toEqual([]);
+    expect(await refusesImg(USER_CONTENT_IMAGE)).toBe(false);
   });
 
   it('refuses skipped, todo, fixme and focused tests in Vitest and Playwright files', async () => {
