@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import type { Env } from "../types";
 import { requestHostIsSafe, requestOriginIsAllowed } from "../utils/agent-mcp-host";
 import { describeErrorForLog, log } from "../utils/logger";
@@ -9,19 +10,17 @@ import {
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
 import { describeList, listRuns, listTemplates } from "./agentMcpLists";
-import { boundedText, byteSize, fits, resultTooLarge, toJson } from "./agentMcpPages";
+import { boundedText, byteSize, fits, resultTooLarge, titleOf, toJson, type ToolResult } from "./agentMcpPages";
 import { describeRunRead } from "./agentMcpRunPages";
 import { getRun, startRun, updateRun } from "./agentMcpRunTools";
 import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
   isReadOnlyTool,
-  isRecord,
   keyAllowsTool,
   ToolError,
   toolDefinitions,
   toolPermission,
-  type JsonRecord,
 } from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -29,6 +28,21 @@ export const MCP_SERVER_VERSION = "0.3.0";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 
 type JsonRpcId = string | number | null;
+
+interface JsonRpcRequest extends JsonRecord {
+  jsonrpc?: unknown;
+  id?: unknown;
+  method?: unknown;
+  params?: unknown;
+}
+
+interface ToolCallParams extends JsonRecord {
+  name?: unknown;
+  arguments?: unknown;
+}
+
+const isJsonRpcRequest: (value: unknown) => value is JsonRpcRequest = isRecord;
+const isToolCallParams: (value: unknown) => value is ToolCallParams = isRecord;
 
 const isValidRequestId = (value: unknown): value is string | number =>
   typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value));
@@ -109,7 +123,7 @@ async function callTool(
   identity: PersonalRunKeyIdentity,
   name: string,
   rawArguments: unknown,
-): Promise<{ data: JsonRecord; text: string }> {
+): Promise<{ data: ToolResult; text: string }> {
   if (!keyAllowsTool(identity.permissions, name)) {
     const permission = toolPermission(name);
     if (!permission) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -126,17 +140,17 @@ async function callTool(
       return { data, text: describeTemplateRead(data) };
     }
     case "create_template": {
-      const data = await createTemplate(request, env, identity, rawArguments);
-      return { data, text: `Created template "${boundedText((data.template as JsonRecord).title)}".` };
+      const data: ToolResult = await createTemplate(request, env, identity, rawArguments);
+      return { data, text: `Created template "${boundedText(titleOf(data.template))}".` };
     }
     case "update_template": {
-      const data = await updateTemplate(request, env, identity, rawArguments);
-      return { data, text: `Updated template "${boundedText((data.template as JsonRecord).title)}".` };
+      const data: ToolResult = await updateTemplate(request, env, identity, rawArguments);
+      return { data, text: `Updated template "${boundedText(titleOf(data.template))}".` };
     }
     case "start_run": {
-      const data = await startRun(request, env, identity, rawArguments);
+      const data: ToolResult = await startRun(request, env, identity, rawArguments);
       const omitted = data.sectionsOmitted === true ? " It is too large for one result; read it with get_run." : "";
-      return { data, text: `Started run "${boundedText((data.run as JsonRecord).title)}".${omitted}` };
+      return { data, text: `Started run "${boundedText(titleOf(data.run))}".${omitted}` };
     }
     case "list_runs": {
       const data = await listRuns(env, identity, rawArguments);
@@ -147,9 +161,9 @@ async function callTool(
       return { data, text: describeRunRead(data) };
     }
     case "update_run": {
-      const data = await updateRun(request, env, identity, rawArguments);
+      const data: ToolResult = await updateRun(request, env, identity, rawArguments);
       const omitted = data.taskOmitted === true ? " The task is too large for one result; read it with get_run and taskId." : "";
-      return { data, text: `Updated run "${boundedText((data.run as JsonRecord).title)}".${omitted}` };
+      return { data, text: `Updated run "${boundedText(titleOf(data.run))}".${omitted}` };
     }
     default:
       throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -221,8 +235,8 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   } catch {
     return rpcError(null, -32700, "Parse error");
   }
-  if (!isRecord(payload) || payload.jsonrpc !== "2.0" || typeof payload.method !== "string") {
-    return rpcError(isRecord(payload) && isValidRequestId(payload.id) ? payload.id : null, -32600, "Invalid Request");
+  if (!isJsonRpcRequest(payload) || payload.jsonrpc !== "2.0" || typeof payload.method !== "string") {
+    return rpcError(isJsonRpcRequest(payload) && isValidRequestId(payload.id) ? payload.id : null, -32600, "Invalid Request");
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, "id")) {
@@ -262,7 +276,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   }
 
   if (payload.method === "tools/call") {
-    const params = isRecord(payload.params) ? payload.params : {};
+    const params: ToolCallParams = isToolCallParams(payload.params) ? payload.params : {};
     if (typeof params.name !== "string") return rpcError(id, -32602, "Tool name is required");
     log("info", "mcp_tool_call", { requestId, keyId: identity.keyId, toolName: toolNameForLog(params.name) });
     try {

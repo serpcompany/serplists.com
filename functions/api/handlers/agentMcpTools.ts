@@ -1,8 +1,7 @@
 import { z } from "zod";
+import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcpTemplateTools";
-
-export type JsonRecord = Record<string, unknown>;
 
 export type SectionAndTaskIds = { sectionId?: string | undefined; taskId?: string | undefined };
 
@@ -15,9 +14,6 @@ export class ToolError extends Error {
     super(message);
   }
 }
-
-export const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const MAX_TASK_NOTES_LENGTH = 20_000;
 export const MAX_TASK_NOTES_BYTES = 30 * 1024;
@@ -242,7 +238,8 @@ const toolPermissions: Record<ToolName, RunKeyPermission> = {
 };
 
 export function toolPermission(name: string): RunKeyPermission | undefined {
-  return Object.prototype.hasOwnProperty.call(toolPermissions, name) ? toolPermissions[name as ToolName] : undefined;
+  const tool = toolDefinitions.find((definition) => definition.name === name);
+  return tool ? toolPermissions[tool.name] : undefined;
 }
 
 export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {

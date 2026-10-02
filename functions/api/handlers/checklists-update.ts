@@ -5,7 +5,7 @@ import { checklistPayloadSchema, parseJsonArray, parseSectionsPayload } from '..
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
 import { canUpdateRun, canViewRun } from '../utils/run-access';
-import { auditedRunUpdate, batchUpdateMissed, getRunSubject } from '../utils/checklist-runs';
+import { auditedRunUpdate, batchUpdateMissed, getRunSubject, type RunUpdates } from '../utils/checklist-runs';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
@@ -32,15 +32,13 @@ export async function updateChecklistRun(
   }
 
   const { title, items, sections, status, progress, completed_at, expected_revision } = parsed.data;
-  const rawBody = body as Record<string, unknown>;
-
-  const updates: Record<string, unknown> = {};
+  const updates: RunUpdates = {};
   let nextSections: unknown[] | null = null;
 
   if (title !== undefined) {
     updates.title = title;
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'sections') || Object.prototype.hasOwnProperty.call(body, 'items')) {
     const normalizedSections = parseSectionsPayload(sections ?? items);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);

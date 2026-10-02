@@ -1,46 +1,91 @@
+import type { schema } from "../db";
 import {
   contentSaveBytes,
   RUN_CONTENT_MAX_BYTES,
   RUN_CONTENT_TOO_LARGE_MESSAGE,
 } from "../../../src/lib/schemas/contentLimits";
+import {
+  isChecklistNodeRecord,
+  isContentRecord,
+  isRecord,
+  isSectionRecord,
+  isTaskRecord,
+  taskRecordsIn,
+  type ChecklistNodeRecord,
+  type ContentRecord,
+  type JsonRecord,
+  type SectionRecord,
+  type TaskRecord,
+} from "../../../src/lib/schemas/jsonRecords";
 import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import type { RunUpdates } from "../utils/checklist-runs";
 import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { findRunCompletionRefusal } from "../utils/run-completion";
-import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
+import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
-export function parseStoredSections(value: unknown): JsonRecord[] {
+type RunRow = typeof schema.checklist_runs.$inferSelect;
+
+export type RunSummaryFields = Partial<Pick<
+  RunRow,
+  | "id"
+  | "template_id"
+  | "title"
+  | "status"
+  | "progress"
+  | "revision"
+  | "template_version"
+  | "started_at"
+  | "completed_at"
+  | "created_at"
+  | "updated_at"
+>>;
+
+export interface RetiredEntryRecord extends JsonRecord {
+  kind?: unknown;
+  section?: unknown;
+  item?: unknown;
+  subItem?: unknown;
+  sectionId?: unknown;
+  itemId?: unknown;
+}
+
+const isRetiredEntryRecord: (value: unknown) => value is RetiredEntryRecord = isRecord;
+
+export function parseStoredSections(value: unknown): SectionRecord[] {
   const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
   return sanitizeStoredSections(normalized.sections);
 }
 
-export function parseRetiredItems(run: JsonRecord): JsonRecord[] {
-  return (parseJsonArray(run.retired_items) ?? []).filter(isRecord);
+export function parseRetiredItems(run: Partial<Pick<RunRow, "retired_items">>): RetiredEntryRecord[] {
+  return (parseJsonArray(run.retired_items) ?? []).filter(isRetiredEntryRecord);
 }
 
-const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: JsonRecord): JsonRecord => rest;
+const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: TaskRecord | ContentRecord): JsonRecord => rest;
 
-export function agentTaskView(task: JsonRecord): JsonRecord {
-  const view = withoutSubItems(task);
+export function agentTaskView(task: TaskRecord): TaskRecord {
+  const view: TaskRecord = withoutSubItems(task);
   if (Array.isArray(task.contents)) {
     view.contents = task.contents.map((content: unknown) =>
-      isRecord(content) && !isSubTasksBlock(content) ? withoutSubItems(content) : content);
+      isContentRecord(content) && !isSubTasksBlock(content) ? withoutSubItems(content) : content);
   }
   return view;
 }
 
-export function agentSectionView(section: JsonRecord): JsonRecord {
+export function agentSectionView(section: SectionRecord): SectionRecord {
   if (!Array.isArray(section.items)) return { ...section, items: [] };
-  return { ...section, items: section.items.map((task: unknown) => (isRecord(task) ? agentTaskView(task) : task)) };
+  return { ...section, items: section.items.map((task: unknown) => (isTaskRecord(task) ? agentTaskView(task) : task)) };
 }
 
-export function agentRetiredView(entry: JsonRecord): JsonRecord {
-  if (entry.kind === "section" && isRecord(entry.section)) return { ...entry, section: agentSectionView(entry.section) };
-  if (entry.kind === "item" && isRecord(entry.item)) return { ...entry, item: agentTaskView(entry.item) };
+export function agentRetiredView(entry: RetiredEntryRecord): RetiredEntryRecord {
+  if (entry.kind === "section" && isSectionRecord(entry.section)) return { ...entry, section: agentSectionView(entry.section) };
+  if (entry.kind === "item" && isTaskRecord(entry.item)) return { ...entry, item: agentTaskView(entry.item) };
   return entry;
 }
 
-export function summarizeRun(run: JsonRecord): JsonRecord {
+export type RunFields = RunSummaryFields & Partial<Pick<RunRow, "items" | "retired_items">>;
+
+export function summarizeRun(run: RunSummaryFields) {
   return {
     id: run.id,
     templateId: run.template_id,
@@ -66,7 +111,7 @@ export function assertRunContentFits(sections: unknown, contentItReplaces?: unkn
 
 const MAX_REPORTED_OPEN_TASKS = 20;
 
-export function assertRunCanBeCompleted(sections: JsonRecord[]): void {
+export function assertRunCanBeCompleted(sections: SectionRecord[]): void {
   const refusal = findRunCompletionRefusal(sections);
   if (!refusal) return;
   const open = refusal.openTaskIds;
@@ -76,19 +121,15 @@ export function assertRunCanBeCompleted(sections: JsonRecord[]): void {
   });
 }
 
-function sectionTasks(section: JsonRecord): JsonRecord[] {
-  return Array.isArray(section.items) ? section.items.filter(isRecord) : [];
-}
-
-function findTask(sections: JsonRecord[], taskId: string): JsonRecord | null {
+function findTask(sections: SectionRecord[], taskId: string): TaskRecord | null {
   for (const section of sections) {
-    const task = sectionTasks(section).find((item) => item.id === taskId);
+    const task = taskRecordsIn(section.items).find((item) => item.id === taskId);
     if (task) return task;
   }
   return null;
 }
 
-export function applyRunOperation(sections: JsonRecord[], operation: UpdateRunArgs): void {
+export function applyRunOperation(sections: SectionRecord[], operation: UpdateRunArgs): void {
   if (operation.operation === "set_run_status") return;
 
   const task = findTask(sections, operation.taskId);
@@ -129,13 +170,23 @@ const AUDITED_RUN_FIELDS = [
   "deleted_at",
 ] as const;
 
-export function summarizeRunForAudit(run: JsonRecord): JsonRecord {
+export function summarizeRunForAudit(run: Partial<RunRow>): JsonRecord {
   return Object.fromEntries(AUDITED_RUN_FIELDS.filter((field) => field in run).map((field) => [field, run[field]]));
 }
 
-export function updateRunAuditDiff(args: UpdateRunArgs, existing: JsonRecord, updates: JsonRecord): JsonRecord {
+interface RunAuditDiff extends JsonRecord {
+  notes?: unknown;
+  notesLength?: unknown;
+  completedAt?: unknown;
+}
+
+export function updateRunAuditDiff(
+  args: UpdateRunArgs,
+  existing: Pick<RunRow, "progress" | "revision">,
+  updates: RunUpdates,
+): RunAuditDiff {
   const { runId: _runId, expectedRevision: _expectedRevision, ...change } = args;
-  const diff: JsonRecord = {
+  const diff: RunAuditDiff = {
     ...change,
     progress: { from: typeof existing.progress === "number" ? existing.progress : 0, to: updates.progress },
     revision: { from: typeof existing.revision === "number" ? existing.revision : 1, to: updates.revision },
@@ -148,26 +199,26 @@ export function updateRunAuditDiff(args: UpdateRunArgs, existing: JsonRecord, up
   return diff;
 }
 
-function retiredRecord(entry: JsonRecord): JsonRecord | null {
+function retiredRecord(entry: RetiredEntryRecord): ChecklistNodeRecord | null {
   const record = entry.kind === "section" ? entry.section : entry.kind === "item" ? entry.item : entry.subItem;
-  return isRecord(record) ? record : null;
+  return isChecklistNodeRecord(record) ? record : null;
 }
 
-function retiredSectionId(entry: JsonRecord): unknown {
+function retiredSectionId(entry: RetiredEntryRecord): unknown {
   return entry.kind === "section" ? retiredRecord(entry)?.id : entry.sectionId;
 }
 
-function retiredEntriesForTask(entries: JsonRecord[], taskId: string): JsonRecord[] {
+function retiredEntriesForTask(entries: RetiredEntryRecord[], taskId: string): RetiredEntryRecord[] {
   return entries.flatMap((entry) => {
     if (entry.kind === "item") return retiredRecord(entry)?.id === taskId ? [entry] : [];
     if (entry.kind === "subItem") return entry.itemId === taskId ? [entry] : [];
-    const section = entry.kind === "section" ? retiredRecord(entry) : null;
-    const task = section ? sectionTasks(section).find((item) => item.id === taskId) : undefined;
+    const section = entry.kind === "section" && isSectionRecord(entry.section) ? entry.section : null;
+    const task = section ? taskRecordsIn(section.items).find((item) => item.id === taskId) : undefined;
     return section && task ? [{ ...entry, section: { ...section, items: [task] } }] : [];
   });
 }
 
-export function retiredWorkOf(entries: JsonRecord[], scope: SectionAndTaskIds): JsonRecord[] {
+export function retiredWorkOf(entries: RetiredEntryRecord[], scope: SectionAndTaskIds): RetiredEntryRecord[] {
   const inSection = scope.sectionId === undefined
     ? entries
     : entries.filter((entry) => retiredSectionId(entry) === scope.sectionId);

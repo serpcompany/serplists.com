@@ -1,19 +1,20 @@
+import { isSubTaskRecord, type SectionRecord, type TaskRecord } from "../../../src/lib/schemas/jsonRecords";
 import { isSubTasksBlock } from "../../../src/lib/schemas/storedSections";
 import { getId } from "../utils/template-identities";
 import { findSection, findTask, sectionAt, tasksOf } from "./agentMcpPages";
 import type { TemplateOperationArgs } from "./agentMcpTemplateTools";
-import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
+import { ToolError } from "./agentMcpTools";
 
-export type TemplateEdit = { sections: JsonRecord[]; sectionId?: string; taskId?: string };
+export type TemplateEdit = { sections: SectionRecord[]; sectionId?: string; taskId?: string };
 
 const newEditorId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 
-function withTaskIds(task: JsonRecord): JsonRecord {
+function withTaskIds(task: TaskRecord): TaskRecord & { id: string } {
   const withSubTaskIds = (content: unknown) => (isSubTasksBlock(content) && Array.isArray(content.subItems)
     ? {
       ...content,
       subItems: content.subItems.map((subItem: unknown) =>
-        (isRecord(subItem) && !getId(subItem) ? { ...subItem, id: newEditorId("subitem") } : subItem)),
+        (isSubTaskRecord(subItem) && !getId(subItem) ? { ...subItem, id: newEditorId("subitem") } : subItem)),
     }
     : content);
   return {
@@ -23,15 +24,15 @@ function withTaskIds(task: JsonRecord): JsonRecord {
   };
 }
 
-type Section = JsonRecord & { items: JsonRecord[] };
+type Section = SectionRecord & { items: TaskRecord[] };
 
-function withSectionIds(section: JsonRecord): Section & { id: string } {
+function withSectionIds(section: SectionRecord): Section & { id: string } {
   return { ...section, id: getId(section) ?? newEditorId("section"), items: tasksOf(section).map(withTaskIds) };
 }
 
 const needsATask = () => new ToolError("A section needs at least one task; remove the section instead", "invalid_template");
 
-function taskInsertionPoint(sections: Section[], sectionId?: string, beforeTaskId?: string): { tasks: JsonRecord[]; at: number } {
+function taskInsertionPoint(sections: Section[], sectionId?: string, beforeTaskId?: string): { tasks: TaskRecord[]; at: number } {
   if (beforeTaskId !== undefined) {
     const { sectionIndex, taskIndex } = findTask(sections, beforeTaskId, sectionId, "beforeTaskId");
     return { tasks: sectionAt(sections, sectionIndex).items, at: taskIndex };
@@ -41,9 +42,9 @@ function taskInsertionPoint(sections: Section[], sectionId?: string, beforeTaskI
   return { tasks, at: tasks.length };
 }
 
-const spliceableCopy = (section: JsonRecord): Section => ({ ...section, items: [...tasksOf(section)] });
+const spliceableCopy = (section: SectionRecord): Section => ({ ...section, items: [...tasksOf(section)] });
 
-export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOperationArgs): TemplateEdit {
+export function applyTemplateOperation(stored: SectionRecord[], args: TemplateOperationArgs): TemplateEdit {
   const sections: Section[] = stored.map(spliceableCopy);
   const tasksAt = (index: number) => sectionAt(sections, index).items;
 
@@ -89,7 +90,7 @@ export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOpera
       const task = withTaskIds(args.task);
       const { tasks, at } = taskInsertionPoint(sections, args.sectionId, args.beforeTaskId);
       tasks.splice(at, 0, task);
-      return { sections, taskId: task.id as string };
+      return { sections, taskId: task.id };
     }
     case "move_task": {
       if (args.beforeTaskId === args.taskId) {

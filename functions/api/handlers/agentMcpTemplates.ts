@@ -1,4 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
+import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { describeErrorForLog, log } from "../utils/logger";
@@ -6,7 +8,7 @@ import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import { applyTemplateOperation } from "./agentMcpTemplateEdits";
 import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
-import { isRecord, parseToolArguments, ToolError, type JsonRecord, type SectionAndTaskIds } from "./agentMcpTools";
+import { parseToolArguments, ToolError, type SectionAndTaskIds } from "./agentMcpTools";
 import { createTemplateForUser } from "./template-create";
 import { updateTemplateForUser } from "./template-update";
 
@@ -50,16 +52,33 @@ function mcpAuditMetadata(identity: PersonalRunKeyIdentity, operation?: string):
   };
 }
 
-async function readTemplateWrite(response: Response): Promise<JsonRecord> {
-  const body: unknown = await response.json().catch(() => null);
-  if (response.ok && isRecord(body)) return body;
-  if (response.status >= 500 || !isRecord(body)) throw new Error("Template write failed");
+const templateWriteBodySchema = z.object({
+  id: z.unknown(),
+  version: z.unknown(),
+  error: z.unknown(),
+  code: z.unknown(),
+  details: z.unknown(),
+}).passthrough();
+
+type TemplateWriteBody = z.infer<typeof templateWriteBodySchema>;
+
+async function readTemplateWrite(response: Response): Promise<TemplateWriteBody> {
+  const parsed = templateWriteBodySchema.safeParse(await response.json().catch(() => null));
+  if (response.ok && parsed.success) return parsed.data;
+  if (response.status >= 500 || !parsed.success) throw new Error("Template write failed");
+  const body = parsed.data;
   throw new ToolError(
     typeof body.error === "string" ? body.error : "Unable to save the template",
     typeof body.code === "string" ? body.code : templateWriteErrorCodes[response.status] ?? "template_write_failed",
     isRecord(body.details) ? body.details : undefined,
   );
 }
+
+interface UpdateTemplateArguments extends JsonRecord {
+  operation?: unknown;
+}
+
+const isUpdateTemplateArguments: (value: unknown) => value is UpdateTemplateArguments = isRecord;
 
 async function loadWrittenTemplate(
   request: Request,
@@ -156,7 +175,7 @@ export async function updateTemplate(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  if (isRecord(rawArguments) && rawArguments.operation !== undefined && rawArguments.operation !== null) {
+  if (isUpdateTemplateArguments(rawArguments) && rawArguments.operation !== undefined && rawArguments.operation !== null) {
     return updateTemplatePart(request, env, identity, rawArguments);
   }
   const { templateId, expectedVersion, ...changes } = parseToolArguments(updateTemplateArgs, rawArguments);

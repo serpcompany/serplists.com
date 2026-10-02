@@ -1,4 +1,5 @@
 import { and, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import { schema, type createDb } from '../db';
 import type { AuditSubject } from './audit';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
@@ -7,6 +8,7 @@ import { runSourceTemplateUsableSql } from './template-access';
 const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
 
 type RunRow = typeof schema.checklist_runs.$inferSelect;
+export type RunUpdates = Partial<RunRow>;
 type ShareSecretColumn = (typeof SHARE_SECRET_COLUMNS)[number];
 type TemplateVersionFields = { template_version: number; current_template_version: number | null };
 export type RunResponseRow = Omit<RunRow, ShareSecretColumn> & TemplateVersionFields;
@@ -89,14 +91,15 @@ export function serializeSharedChecklistRun(row: SharedRunRow) {
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+const batchResultSchema = z.object({ meta: z.object({ changes: z.number() }) });
+
+export function batchChanges(result: unknown): number | null {
+  const parsed = batchResultSchema.safeParse(result);
+  return parsed.success ? parsed.data.meta.changes : null;
 }
 
 export function batchUpdateMissed(result: unknown): boolean {
-  if (!isRecord(result)) return false;
-  const meta = result.meta;
-  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
+  return batchChanges(result) === 0;
 }
 
 export function auditedRunUpdate(

@@ -10,6 +10,7 @@ import {
   getRunSubject,
   serializeSharedChecklistRun,
   sharedChecklistRunSelect,
+  type RunUpdates,
 } from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
@@ -90,7 +91,7 @@ export async function handleSharedChecklist(
   const actorUserId = userId && (await canViewRun(env, existingSharedRun, userId)) ? userId : null;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {};
+  const updates: RunUpdates = {};
   let nextSections = storedSections;
   if (sections !== undefined) {
     const merged = mergeSharedRunState(storedSections, sections);

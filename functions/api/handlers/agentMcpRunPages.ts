@@ -18,11 +18,14 @@ import {
   roomForUnits,
   START,
   tasksOf,
+  titleOf,
   unitOf,
   type Paged,
   type Position,
   type ReadScope,
+  type ToolResult,
 } from "./agentMcpPages";
+import type { JsonRecord, SectionRecord } from "../../../src/lib/schemas/jsonRecords";
 import {
   agentRetiredView,
   agentSectionView,
@@ -31,12 +34,16 @@ import {
   parseStoredSections,
   retiredWorkOf,
   summarizeRun,
+  type RetiredEntryRecord,
+  type RunFields,
 } from "./agentMcpRuns";
-import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
+import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
-export type RunView = { header: JsonRecord; sections: JsonRecord[]; retired: JsonRecord[] };
+type RunHeader = ReturnType<typeof summarizeRun>;
 
-export function runView(row: JsonRecord): RunView {
+export type RunView = { header: RunHeader; sections: SectionRecord[]; retired: RetiredEntryRecord[] };
+
+export function runView(row: RunFields): RunView {
   return {
     header: summarizeRun(row),
     sections: parseStoredSections(row.items).map(agentSectionView),
@@ -46,7 +53,7 @@ export function runView(row: JsonRecord): RunView {
 
 const wholeRun = ({ header, sections, retired }: RunView): JsonRecord => ({ run: { ...header, sections, retiredItems: retired } });
 
-function pagedRun(header: JsonRecord): Paged {
+function pagedRun(header: RunHeader): Paged {
   return { key: "run", ref: { id: header.id, revision: header.revision }, id: String(header.id), version: Number(header.revision) };
 }
 
@@ -58,7 +65,7 @@ const idsInCursor = (scope: SectionAndTaskIds): ReadScope => ({
   ...(scope.taskId === undefined ? {} : { rt: scope.taskId }),
 });
 
-function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: JsonRecord[], start: Position): JsonRecord {
+function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: RetiredEntryRecord[], start: Position): JsonRecord {
   const paged = pagedRun(view.header);
   const cursorScope = idsInCursor(scope);
   const longestCursor = encodeCursor({ t: paged.id, v: paged.version, ...cursorScope, u: entries.length, o: Number.MAX_SAFE_INTEGER });
@@ -133,15 +140,14 @@ export type RunReadArgs = SectionAndTaskIds & { retired?: boolean | undefined; c
 export function readRun(view: RunView, args: RunReadArgs): JsonRecord {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
   if (args.retired === true) return readRetired(view, { sectionId: args.sectionId, taskId: args.taskId });
-  if (args.taskId !== undefined || args.sectionId !== undefined) {
-    refuseRetiredOnlyIds(view, args);
-    return readSectionOrTask(pagedRun(view.header), view.sections, args);
-  }
+  refuseRetiredOnlyIds(view, args);
+  const sectionOrTask = readSectionOrTask(pagedRun(view.header), view.sections, args);
+  if (sectionOrTask) return sectionOrTask;
   const whole = wholeRun(view);
   return fits(whole) ? whole : outlinePage(pagedRun(view.header), view.header, view.sections, START, retiredStats(view));
 }
 
-export function describeRunRead(result: JsonRecord): string {
+export function describeRunRead(result: ToolResult): string {
   const page = describePage(result, "get_run", "Run");
   if (page) return page;
   if (Array.isArray(result.retiredItems)) {
@@ -153,11 +159,10 @@ export function describeRunRead(result: JsonRecord): string {
     const entries = count === 0 ? "none" : `${result.firstRetired + 1}-${result.firstRetired + count}`;
     return `Loaded retired entries ${entries} of the ${result.retiredCount}, too many for one result.${more}`;
   }
-  const run = isRecord(result.run) ? result.run : {};
-  return `Loaded run "${boundedText(run.title)}".`;
+  return `Loaded run "${boundedText(titleOf(result.run))}".`;
 }
 
-const minimalRun = (header: JsonRecord): JsonRecord => ({
+const minimalRun = (header: RunHeader): JsonRecord => ({
   id: header.id,
   title: boundedText(header.title),
   status: header.status,
@@ -174,7 +179,7 @@ export function startedRunResult(view: RunView): JsonRecord {
   ]);
 }
 
-function locateTask(sections: JsonRecord[], taskId: string) {
+function locateTask(sections: SectionRecord[], taskId: string) {
   try {
     return findTask(sections, taskId);
   } catch {
@@ -182,7 +187,7 @@ function locateTask(sections: JsonRecord[], taskId: string) {
   }
 }
 
-export function updatedRunResult(header: JsonRecord, sections: JsonRecord[], operation: UpdateRunArgs): JsonRecord {
+export function updatedRunResult(header: RunHeader, sections: SectionRecord[], operation: UpdateRunArgs): JsonRecord {
   const run = fits({ run: header }) ? header : minimalRun(header);
   if (operation.operation === "set_run_status") return { run };
   const at = locateTask(sections, operation.taskId);

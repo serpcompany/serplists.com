@@ -1,3 +1,5 @@
+import type { schema } from "../db";
+import type { JsonRecord, SectionRecord } from "../../../src/lib/schemas/jsonRecords";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray } from "../utils/payloads";
 import { withStableTemplateIdentities } from "../utils/template-identities";
@@ -15,39 +17,51 @@ import {
   readSectionOrTask,
   START,
   tasksOf,
+  titleOf,
   type Paged,
+  type ToolResult,
 } from "./agentMcpPages";
-import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds } from "./agentMcpTools";
+import { ToolError, type SectionAndTaskIds } from "./agentMcpTools";
 
-export type TemplateView = { header: JsonRecord; sections: JsonRecord[] };
+type TemplateRow = typeof schema.templates.$inferSelect;
 
-export function templateSections(items: unknown): JsonRecord[] {
+type TemplateViewFields = Partial<Pick<
+  TemplateRow,
+  "id" | "title" | "description" | "type" | "category" | "tags" | "version" | "content_version" | "created_at" | "updated_at" | "items"
+>>;
+
+type TemplateHeader = ReturnType<typeof templateHeader>;
+
+export type TemplateView = { header: TemplateHeader; sections: SectionRecord[] };
+
+export function templateSections(items: unknown): SectionRecord[] {
   const { sections } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
   return sanitizeStoredSections(withStableTemplateIdentities(sections))
     .map((section) => (Array.isArray(section.items) ? section : { ...section, items: [] }));
 }
 
-export function templateView(row: JsonRecord): TemplateView {
+function templateHeader(row: TemplateViewFields) {
   return {
-    header: {
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      type: row.type,
-      categories: normalizeStringArray(row.category),
-      tags: normalizeStringArray(row.tags),
-      version: typeof row.version === "number" ? row.version : 1,
-      contentVersion: row.content_version,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    },
-    sections: templateSections(row.items),
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    type: row.type,
+    categories: normalizeStringArray(row.category),
+    tags: normalizeStringArray(row.tags),
+    version: typeof row.version === "number" ? row.version : 1,
+    contentVersion: row.content_version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
+}
+
+export function templateView(row: TemplateViewFields): TemplateView {
+  return { header: templateHeader(row), sections: templateSections(row.items) };
 }
 
 const wholeTemplate = ({ header, sections }: TemplateView): JsonRecord => ({ template: { ...header, sections } });
 
-function pagedTemplate(header: JsonRecord): Paged {
+function pagedTemplate(header: TemplateHeader): Paged {
   return {
     key: "template",
     ref: { id: header.id, version: header.version, contentVersion: header.contentVersion },
@@ -71,19 +85,17 @@ function continueRead(view: TemplateView, value: string, args: SectionAndTaskIds
 
 export function readTemplate(view: TemplateView, args: SectionAndTaskIds & { cursor?: string | undefined }): JsonRecord {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
-  if (args.taskId !== undefined || args.sectionId !== undefined) {
-    return readSectionOrTask(pagedTemplate(view.header), view.sections, args);
-  }
+  const sectionOrTask = readSectionOrTask(pagedTemplate(view.header), view.sections, args);
+  if (sectionOrTask) return sectionOrTask;
   const whole = wholeTemplate(view);
   return fits(whole) ? whole : outlinePage(pagedTemplate(view.header), view.header, view.sections, START);
 }
 
-export function describeTemplateRead(result: JsonRecord): string {
-  const template = isRecord(result.template) ? result.template : {};
-  return describePage(result, "get_template", "Template") ?? `Loaded template "${boundedText(template.title)}".`;
+export function describeTemplateRead(result: ToolResult): string {
+  return describePage(result, "get_template", "Template") ?? `Loaded template "${boundedText(titleOf(result.template))}".`;
 }
 
-function locateTask(sections: JsonRecord[], taskId: string | undefined) {
+function locateTask(sections: SectionRecord[], taskId: string | undefined) {
   if (taskId === undefined) return undefined;
   try {
     return findTask(sections, taskId);

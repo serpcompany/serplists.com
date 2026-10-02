@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import type { JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
@@ -9,6 +10,7 @@ import {
   type RunOwnerContext,
 } from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
+import { batchChanges, type RunUpdates } from "../utils/checklist-runs";
 import { log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
@@ -29,12 +31,10 @@ import {
 import { getOwnedTemplate } from "./agentMcpTemplates";
 import {
   getRunArgs,
-  isRecord,
   parseToolArguments,
   startRunArgs,
   ToolError,
   updateRunArgs,
-  type JsonRecord,
 } from "./agentMcpTools";
 
 export async function startRun(
@@ -127,11 +127,6 @@ export async function getRun(
   return readRun(runView(run), read);
 }
 
-function batchChanges(result: unknown): number | null {
-  if (!isRecord(result) || !isRecord(result.meta)) return null;
-  return typeof result.meta.changes === "number" ? result.meta.changes : null;
-}
-
 function runRevisionExistsSql(runId: string, userId: string, revision: number) {
   const { checklist_runs } = schema;
   return sql`exists (
@@ -199,7 +194,7 @@ export async function updateRun(
   }
 
   const now = new Date().toISOString();
-  const updates: JsonRecord = { revision: currentRevision + 1, updated_at: now };
+  const updates: RunUpdates = { revision: currentRevision + 1, updated_at: now };
   if (args.operation === "set_run_status") {
     updates.status = args.status;
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
