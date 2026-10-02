@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
 import { walkFiles } from '../../../scripts/lib/repo-files.mjs';
+import { NAMING_CONVENTIONS } from '../../../scripts/eslint-rules/naming-conventions.mjs';
 import { onlyElement } from '../../support/elements';
 import { isError, rulesFor } from '../../support/eslintConfig';
 
@@ -34,7 +35,7 @@ const fastRefreshOptions = z.tuple([
   z.object({ allowConstantExport: z.boolean().optional(), allowExportNames: z.array(z.string()).optional() }).passthrough(),
 ]);
 const UNUSED_VARS_OPTIONS = { argsIgnorePattern: '^_', ignoreRestSiblings: true };
-const unusedVarsOptions = z.tuple([z.unknown(), z.record(z.unknown())]);
+const ruleOptions = z.tuple([z.unknown()]).rest(z.unknown());
 const sameNames = (left: string[], right: string[]) => [...left].sort().join() === [...right].sort().join();
 
 const packageScripts = z
@@ -61,6 +62,22 @@ const AUTHORED_CODE = /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/;
 const authoredCodeFiles = filesGitTracksOrWouldTrack().filter(
   (file: string) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)),
 );
+const typeScriptFiles = authoredCodeFiles.filter((file: string) => /\.(ts|tsx|mts|cts)$/.test(file));
+const ESLINT_CONFIGS = ['eslint.config.js', 'eslint.type-aware.config.js'];
+
+async function typeScriptFilesNotHeldTo(rule: string, options: unknown[]): Promise<string[]> {
+  const relaxed: string[] = [];
+  for (const configFile of ESLINT_CONFIGS) {
+    const eslint = new ESLint({ cwd: repoRoot, overrideConfigFile: configFile });
+    for (const file of typeScriptFiles) {
+      const setting = (await rulesFor(eslint, file))[rule];
+      const held = isError(setting) && JSON.stringify(ruleOptions.safeParse(setting).data?.slice(1)) === JSON.stringify(options);
+      const found = setting === undefined ? 'not linted' : isError(setting) ? 'other options' : 'not an error';
+      if (!held) relaxed.push(`${configFile} ${file}: ${found}`);
+    }
+  }
+  return relaxed;
+}
 
 const pathPattern = z.union([z.string(), z.array(z.string())]).optional();
 const dependencyRules = z
@@ -185,20 +202,19 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   });
 
   it('holds every TypeScript file to no-unused-vars, marking only an argument kept for its type with _', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
-    const relaxed: string[] = [];
-    for (const file of authoredCodeFiles.filter((name: string) => /\.(ts|tsx|mts|cts)$/.test(name))) {
-      const setting = (await rulesFor(eslint, file))['@typescript-eslint/no-unused-vars'];
-      const options = unusedVarsOptions.safeParse(setting).data?.[1];
-      if (!isError(setting) || JSON.stringify(options) !== JSON.stringify(UNUSED_VARS_OPTIONS)) {
-        relaxed.push(`${file}: ${JSON.stringify(setting ?? 'not linted')}`);
-      }
-    }
-
     expect(
-      relaxed,
+      await typeScriptFilesNotHeldTo('@typescript-eslint/no-unused-vars', [UNUSED_VARS_OPTIONS]),
       `Unused variables, imports and caught errors fail the lint everywhere: keep no-unused-vars at ${JSON.stringify(UNUSED_VARS_OPTIONS)}. ` +
         'Delete what is unused, and write catch {} for an error the code does not read.',
+    ).toEqual([]);
+  });
+
+  it('holds every TypeScript file to the same naming conventions, with no per-file override', async () => {
+    expect(
+      await typeScriptFilesNotHeldTo('@typescript-eslint/naming-convention', NAMING_CONVENTIONS),
+      'Every TypeScript file, tests included, is held to @typescript-eslint/naming-convention with NAMING_CONVENTIONS ' +
+        '(scripts/eslint-rules/naming-conventions.mjs) in both ESLint configs. Rename the code the rule reports instead of ' +
+        'overriding or ignoring the rule for a file.',
     ).toEqual([]);
   });
 

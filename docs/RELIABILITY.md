@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.js`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -269,6 +269,35 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   - Each rule has RuleTester tests in `tests/unit/scripts/`, and
     `tests/unit/config/code-conventions.test.ts` lints a sample of every convention with the
     real config, in the folder it covers and in the module that owns it.
+- **Naming conventions.** `@typescript-eslint/naming-convention` holds every TypeScript file,
+  tests included, to `NAMING_CONVENTIONS` (`scripts/eslint-rules/naming-conventions.mjs`). It
+  is set once in `eslint.config.js` for `**/*.{ts,tsx,mts,cts}` and needs no type information,
+  so the pre-commit hook runs it too. A name's case says what it holds:
+  - variables, functions, parameters and default or namespace imports are camelCase, or
+    PascalCase when they hold a React component, a context or a class (`const Icon = ...`,
+    `({ as: Heading })`). Types, interfaces, classes, enums and type parameters are PascalCase;
+  - UPPER_CASE is only for a `const` at module scope. A name all in capitals counts as
+    UPPER_CASE, not PascalCase, so `SELF` inside a function fails like `MAX_ROWS` does: move
+    a true constant to module scope, or name a local value in camelCase;
+  - a leading underscore marks only a parameter kept for its type, as no-unused-vars'
+    `argsIgnorePattern` does. A field left out of a rest object keeps its own name
+    (`const { items, ...fields } = section`), since `ignoreRestSiblings` already accepts it,
+    or a camelCase one where that name is taken or the key is computed. No name ends in `_`;
+  - names that mirror external data are not checked: object literal properties and methods,
+    type properties and methods, enum members and destructured names. They carry D1 columns,
+    JSON fields, HTTP headers, env vars and MCP tool and field names. Named imports keep the
+    exporter's names, and the rule does not read them;
+  - names another module gives are matched by name, never by file: the HTTP method functions
+    a Next.js route module exports (`GET`, `POST` and the rest), and React DOM's
+    `DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS`, which the fake DOM
+    in `tests/fixtures/fakeDom.ts` augments. A stand-in for another module declares camelCase
+    values and exports them under that module's names (`export { geistMono as Geist_Mono }` in
+    `tests/support/nextFontGoogle.ts`);
+  - Drizzle tables are camelCase exports that hold their SQL names
+    ([database operations](design-docs/database-operations.md#schema-ownership)).
+  - `tests/unit/config/naming-conventions.test.ts` lints a sample of each case with the real
+    config, and `tests/unit/config/no-exceptions.test.ts` fails if a TypeScript file is held to
+    other options in `eslint.config.js` or `eslint.type-aware.config.js`.
 
 ## Deploy pipeline
 

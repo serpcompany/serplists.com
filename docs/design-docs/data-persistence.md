@@ -36,6 +36,10 @@ generated into [generated/db-schema.md](../generated/db-schema.md).
 
 `functions/api/db.ts` wraps the binding: `createDb(env)` returns
 `drizzle(env.DB, { schema })` from `drizzle-orm/d1`, using `db/schema/index.ts`.
+Code reaches a table through its camelCase export (`schema.checklistRuns`, or
+`const { teamMembers } = schema`), whose columns keep their SQL names
+(`teamMembers.team_id`); the SQL and the [generated reference](../generated/db-schema.md)
+use the snake_case table names ([database operations](database-operations.md#schema-ownership)).
 API responses stay snake_case to match the current frontend mapping, and JSON
 columns are stored as text and parsed in handlers.
 

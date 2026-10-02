@@ -10,6 +10,7 @@ import {
   INTEGRATION_TEST_CONVENTIONS,
   SCRIPT_CONVENTIONS,
 } from "./scripts/eslint-rules/code-conventions.mjs";
+import { NAMING_CONVENTIONS } from "./scripts/eslint-rules/naming-conventions.mjs";
 import { navigateWhileVisitIsCurrent } from "./scripts/eslint-rules/navigate-while-visit-is-current.mjs";
 import { noComments } from "./scripts/eslint-rules/no-comments.mjs";
 import { noExternalDataCasts } from "./scripts/eslint-rules/no-external-data-casts.mjs";
@@ -160,6 +161,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", ignoreRestSiblings: true },
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/naming-convention": ["error", ...NAMING_CONVENTIONS],
       "@next/next/no-img-element": "off",
     },
   },

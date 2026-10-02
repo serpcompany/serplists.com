@@ -29,6 +29,12 @@ binding with `--preview`; do not change them to use the database name directly.
 - `db/schema/` (Drizzle) owns every object Drizzle can represent: tables, columns,
   defaults, constraints, foreign keys, and indexes. The generated reference is
   [generated/db-schema.md](../generated/db-schema.md).
+  - Each table is a camelCase export that takes its SQL name as the first argument:
+    `export const checklistRuns = sqliteTable("checklist_runs", { ... })`. Columns are
+    property keys named as in SQL (`user_id: text("user_id")`), so code reads
+    `checklistRuns.user_id`.
+  - Renaming an export changes no SQL. ESLint's naming convention
+    ([repository checks](../RELIABILITY.md#repository-checks)) refuses a snake_case export.
 - `db/migrations/` owns the ordered D1 migration history; D1 records applied
   migrations in `d1_migrations`.
 - SQL-only objects Drizzle cannot represent (currently the sitemap triggers) are

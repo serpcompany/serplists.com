@@ -97,9 +97,10 @@ below still matches.
 ### Drizzle
 
 A new schema module (`uploads.ts`), exported from `db/schema/index.ts` with
-`export { uploads, user_upload_usage, upload_references } from "./uploads";`. Leave
-out `owner_type`, `team_id`, `idx_uploads_team_id`, `uploads_owner_type_check` and
-`upload_references` until migration B lands.
+`export { uploads, userUploadUsage, uploadReferences } from "./uploads";` (camelCase exports,
+SQL names as the first argument, per [database operations](../../design-docs/database-operations.md#schema-ownership)).
+Leave out `owner_type`, `team_id`, `idx_uploads_team_id`, `uploads_owner_type_check` and
+`uploadReferences` until migration B lands.
 
 ```ts
 import { sql } from "drizzle-orm";
@@ -140,7 +141,7 @@ export const uploads = sqliteTable(
 );
 
 // Running totals per uploader, reserved atomically before each R2 put.
-export const user_upload_usage = sqliteTable(
+export const userUploadUsage = sqliteTable(
   "user_upload_usage",
   {
     user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -156,7 +157,7 @@ export const user_upload_usage = sqliteTable(
 );
 
 // Which Templates, template versions, Runs and avatars point at each upload.
-export const upload_references = sqliteTable(
+export const uploadReferences = sqliteTable(
   "upload_references",
   {
     upload_key: text("upload_key").notNull().references(() => uploads.key, { onDelete: "cascade" }),
