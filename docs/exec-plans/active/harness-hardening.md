@@ -260,6 +260,15 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-02: TD-78 to TD-80 closed (624c187a..62f08e8c).
+  - `downloadBackupFile` takes only the portable pack.
+  - `normalizeSections` leaves out a legacy numeric Sub-task id instead of turning it into
+    text. Run reconciliation pairs a numeric id by position. A run saved with `"7"` would
+    stop pairing, and its ticked Sub-task would come back unticked after the next
+    Template edit. A test now covers that path.
+  - Bug fixed: MCP `set_subtask_completed` compared a stored numeric id with the string it
+    was given, so it never found a legacy Sub-task (49bace1b).
+  - `pnpm run verify` passed on a clean copy at 9f40df4f: 5,979 tests.
 - 2026-10-01: phase 4, the last small items (c1cf8a0d..e04d8855). TD-29, TD-70 to TD-75 and
   TD-77 are closed.
   - Bugs fixed:
@@ -556,6 +565,13 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-02: `cloudflare-env.d.ts` is not type-checked with `skipLibCheck` off. It is a
+  generated file, already among the allowed exceptions, and it references OpenNext's
+  `.open-next/worker.js`, which OpenNext ships without a declaration.
+  - Every way to check it strictly needs an exception of its own: `allowJs` over the 11 MB
+    bundle, `noImplicitAny: false`, OpenNext's declarations that clash with the workerd
+    types, or a hand-kept declaration under the deprecated `node10` resolution.
+  - The app still compiles against it under `skipLibCheck`.
 - 2026-10-01: knip counts tests as users of an export.
   - 174 exports are used by their own module and also imported by a unit test of that
     helper. They stay exported.
