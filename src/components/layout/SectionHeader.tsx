@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 
 import { Link } from '@/components/navigation/Link';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { cn } from '@/lib/utils';
 
 type SectionHeaderProps = {

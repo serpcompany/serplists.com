@@ -13,7 +13,8 @@ import { settle } from '../../support/queryHookProbe';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({ api: {} }));
 import { providerWorkspace } from '../../support/templatesProviderHarness';
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 import { markRunShared, queryKeys } from '@/lib/queryCache';
 
 afterEach(() => {

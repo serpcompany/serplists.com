@@ -13,7 +13,8 @@ import {
 
 import { IconTile } from '@/components/layout/IconTile';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   DropdownMenu,
   DropdownMenuContent,

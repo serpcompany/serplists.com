@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
 import { createTestQueryClient } from '../../fixtures/queryClient';

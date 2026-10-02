@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { useRef } from "react";
 
-import { EDITOR_PANEL_HEADING_ID, EDITOR_PANEL_ID } from "@/components/template-editor/EditorPanels";
+import { EDITOR_PANEL_HEADING_ID, EDITOR_PANEL_ID } from "@/components/template-editor/editorPanelIds";
 import {
   OutlineSidebar,
   type OutlineSidebarProps,

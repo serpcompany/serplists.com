@@ -29,7 +29,8 @@ vi.mock('@/contexts/sessionSync', async (importOriginal) =>
   })),
 );
 
-import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { AuthProvider } from '@/contexts/AuthProvider';
 
 type AuthContextValue = ReturnType<typeof useAuth>;
 

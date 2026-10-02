@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 
 import { AuthCard } from '@/components/auth/AuthCard';
 import { Alert, AlertTitle } from '@/components/ui/alert';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import {

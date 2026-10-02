@@ -18,8 +18,10 @@ The persistence layer uses Cloudflare D1 for transactional data, the API in the 
 - `db/seeds/` - local and official seed data.
 - `db/maintenance/` - one-off maintenance SQL that is not schema history.
 - `src/lib/api.ts` - Client API wrapper.
-- `src/contexts/WorkspaceContext.tsx` - Personal/Organization context state; filename is legacy.
-- `src/contexts/TemplatesContext.tsx` - Templates and runs with React Query.
+- `src/contexts/WorkspaceProvider.tsx` - Personal/Organization context state, read with
+  `useWorkspace` (`src/contexts/WorkspaceContext.tsx`; the filename is legacy).
+- `src/contexts/TemplatesProvider.tsx` - Templates and runs with React Query, read with
+  `useTemplates` and `useTemplateLists` (`src/contexts/TemplatesContext.tsx`).
 - `src/lib/utils/templateBackup.ts` - Import/export helpers.
 - `src/lib/repoTemplateCatalog.ts` - Repo-backed portable template catalog.
 - `src/data/public-template-packs/*.json` - Repo-backed public template packs.

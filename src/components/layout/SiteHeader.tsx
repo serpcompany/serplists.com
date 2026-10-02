@@ -7,7 +7,7 @@ import { PublicMobileNav } from '@/components/layout/PublicMobileNav';
 import { SiteNavigationMenu } from '@/components/layout/SiteNavigationMenu';
 import { Link } from '@/components/navigation/Link';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildLoginPath, buildRegisterPath } from '@/lib/routes';
 import { cn } from '@/lib/utils';

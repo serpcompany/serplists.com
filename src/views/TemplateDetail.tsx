@@ -32,7 +32,8 @@ import {
 } from '@/components/template/TemplateDetailCards';
 import { TemplateSectionList } from '@/components/template/TemplateSectionList';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';

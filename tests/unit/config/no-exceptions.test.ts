@@ -15,6 +15,25 @@ const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8
 
 const MAX_LINES = 500;
 const USER_CONTENT_IMAGE = 'src/components/shared/UserContentImage.tsx';
+const NEXT_ROUTE_MODULE_EXPORTS = [
+  'metadata',
+  'generateMetadata',
+  'viewport',
+  'generateViewport',
+  'generateStaticParams',
+  'dynamic',
+  'dynamicParams',
+  'revalidate',
+  'fetchCache',
+  'runtime',
+  'preferredRegion',
+  'maxDuration',
+];
+const fastRefreshOptions = z.tuple([
+  z.unknown(),
+  z.object({ allowConstantExport: z.boolean().optional(), allowExportNames: z.array(z.string()).optional() }).passthrough(),
+]);
+const sameNames = (left: string[], right: string[]) => [...left].sort().join() === [...right].sort().join();
 
 const packageScripts = z
   .object({ scripts: z.object({ 'test:run': z.string(), 'test:local-d1': z.string() }).catchall(z.string()) })
@@ -142,6 +161,25 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
       'A test file excluded from pnpm run test:run must run in pnpm run test:local-d1, or no suite runs it. ' +
         'Add it to test:local-d1, or stop excluding it.',
     ).toEqual(testFileArguments(packageScripts['test:local-d1']));
+  });
+
+  it('holds every TSX file in src/ to the fast-refresh rule as an error, allowing only the exports Next.js reads from a route module', async () => {
+    const eslint = new ESLint({ cwd: repoRoot });
+    const relaxed: string[] = [];
+    for (const file of authoredCodeFiles.filter((name: string) => /^src\/.*\.tsx$/.test(name))) {
+      const setting = (await rulesFor(eslint, file))['react-refresh/only-export-components'];
+      const options = fastRefreshOptions.safeParse(setting).data?.[1];
+      if (!isError(setting) || options?.allowConstantExport === true || !sameNames(options?.allowExportNames ?? [], NEXT_ROUTE_MODULE_EXPORTS)) {
+        relaxed.push(`${file}: ${JSON.stringify(setting ?? 'not linted')}`);
+      }
+    }
+
+    expect(
+      relaxed,
+      'A module that exports a component and anything else is not a Fast Refresh boundary in Next.js, so editing it ' +
+        'reloads its importers and drops their state. Move the other exports to a module of their own instead of ' +
+        'relaxing react-refresh/only-export-components.',
+    ).toEqual([]);
   });
 
   it('lets only UserContentImage render <img> in src/, with no file exempt from the convention', async () => {

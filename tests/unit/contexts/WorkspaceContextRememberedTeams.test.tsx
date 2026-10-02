@@ -16,7 +16,8 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: signedIn.userId } }),
 }));
 
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 
 const organization = (id: string): TeamSummary => ({
   id,

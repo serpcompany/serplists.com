@@ -1,7 +1,8 @@
 import { FileText, List, Pencil, Play, Trash2 } from 'lucide-react';
 
 import { IconTile } from '@/components/layout/IconTile';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Item,
   ItemActions,

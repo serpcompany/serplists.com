@@ -3,7 +3,7 @@ import { Eye, FileText, List, Play } from 'lucide-react';
 
 import { MediaCard, MediaCardCategories, MediaCardHoverAction } from '@/components/layout/MediaCard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,

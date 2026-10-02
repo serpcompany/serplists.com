@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 
 import { DashboardContentShell } from "@/components/dashboard/DashboardContentShell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';

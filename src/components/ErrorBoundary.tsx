@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button, buttonVariants } from './ui/button';
+import { Button } from './ui/button';
+import { buttonVariants } from './ui/button-variants';
 import { Link } from './navigation/Link';
 import { buildHomePath } from '@/lib/routes';
 import { AlertTriangle, RefreshCw } from 'lucide-react';

@@ -13,7 +13,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 import { SESSION_RECHECK_INTERVAL_MS } from '@/contexts/sessionSync';
-import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 
 const fakeDom = aFakeDomForEachTest();
 

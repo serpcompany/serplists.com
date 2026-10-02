@@ -29,11 +29,16 @@ module must be reachable from a route file in `src/app` or from `next.config.ts`
 primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. Remaining legacy call sites are
 tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 
-Some modules export more than components, which ESLint's fast-refresh check
-(`react-refresh/only-export-components`) would warn about: route files export metadata,
-route segment config and handlers, as Next.js expects, `components/ui/` primitives export
-their variants, and contexts their hooks. The check skips them and tests
-(`FILES_THAT_EXPORT_MORE_THAN_COMPONENTS` in `eslint.config.js`).
+A TSX module in `src/` that exports a component exports nothing else. Next.js treats a
+module as a Fast Refresh boundary only when every export is a component, so an edit to a
+mixed module reloads the modules that import it and drops their state. ESLint's
+`react-refresh/only-export-components` refuses the mix in every TSX file in `src/`; the only
+other exports it allows are the ones Next.js reads from a route module (`metadata`,
+`generateMetadata`, `viewport`, route segment config). So a context's hook and its provider
+live apart (`useAuth` in `CloudflareAuthContext.tsx`, `AuthProvider` in `AuthProvider.tsx`;
+likewise `TemplatesProvider` and `WorkspaceProvider`), a primitive's variants have their
+own module (`button-variants.ts`, `navigation-menu-trigger-style.ts`), and shared text or
+ids sit beside the component in a `.ts` file.
 
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
@@ -47,7 +52,7 @@ same HTML on the server and in the browser's first render, or hydration fails: n
 `useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
 visitor's data in module-level state, which the server would share with the next visitor
 (so `Providers` creates the QueryClient in its state, one per tab, with the defaults
-`createQueryClient` in `src/app/providers.tsx` sets). A date in the viewer's time zone
+`createQueryClient` in `src/lib/queryClient.ts` sets). A date in the viewer's time zone
 (`formatLocalDate`) differs between the two as well, so only data the browser loads after
 mounting shows one: the public template page's "Updated" date can, since the page loads its
 template in an effect and the server never renders it.

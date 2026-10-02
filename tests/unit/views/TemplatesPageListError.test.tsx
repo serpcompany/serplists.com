@@ -10,7 +10,7 @@ import { createTestQueryClient } from '../../fixtures/queryClient';
 
 vi.mock('@/lib/api', () => ({ api: {} }));
 import { launchChecklist } from '../../support/templatesProviderHarness';
-import { TemplatesProvider } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 import Templates from '@/views/Templates';
 
 const template = (overrides: Partial<ChecklistTemplate>) => launchChecklist({ version: 1, ...overrides });

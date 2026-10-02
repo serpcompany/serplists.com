@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { BillingStatusState } from "@/lib/billing";
 
-export const ORGANIZATION_BACKUP_UPGRADE_MESSAGE =
-  "Template import/export requires a paid Organization plan.";
+import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE } from "./templateBackupUpgradeMessage";
 
 type TemplateBackupPlanNoticeProps = {
   billing: BillingStatusState;

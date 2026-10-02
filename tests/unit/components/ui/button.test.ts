@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 
 describe('buttonVariants', () => {
   it("gives a link styled as an outline button the outline's border, since unmerged the base's border-transparent would win", () => {

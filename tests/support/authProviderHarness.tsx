@@ -1,7 +1,8 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { AuthProvider } from '@/contexts/AuthProvider';
 
 import { aFakeDomForEachTest } from './fakeDomRoots';
 import { settle } from './queryHookProbe';

@@ -28,7 +28,8 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 import { safeLocalStorage } from '@/lib/browserStorage';
 
 const STORED_CONTEXT_KEY = 'serplists.activeWorkspaceId';

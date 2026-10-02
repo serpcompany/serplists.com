@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildConsoleTemplatesPath } from '@/lib/routes';
 

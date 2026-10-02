@@ -22,7 +22,7 @@ import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
 import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';

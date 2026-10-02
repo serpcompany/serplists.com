@@ -1,6 +1,7 @@
 import { Copy, Download, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2 } from 'lucide-react';
 
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   DropdownMenu,
   DropdownMenuContent,

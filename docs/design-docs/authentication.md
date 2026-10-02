@@ -13,7 +13,8 @@ Security rules and required secrets are in [SECURITY.md](../SECURITY.md).
   email addresses (its default logger prints them to the console)
 - `functions/api/handlers/auth.ts`: profile endpoints
 - `src/lib/auth-client.ts`: client (`credentials: "include"` plus the username plugin)
-- `src/contexts/CloudflareAuthContext.tsx`: auth state, login, and registration
+- `src/contexts/AuthProvider.tsx`: auth state, login, and registration; `useAuth` reads them
+  (`src/contexts/CloudflareAuthContext.tsx`)
 - `src/components/RequireAuth.tsx`: wraps authenticated `/dashboard/*` routes
 - `src/views/Login.tsx` (dev quick-fill buttons), `Register.tsx`, `ResetPassword.tsx`,
   `DashboardSettings.tsx`; `src/components/DevLoginBar.tsx` (dev only)

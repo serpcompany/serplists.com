@@ -6,7 +6,7 @@ import { CardGrid } from '@/components/layout/CardGrid';
 import { ListCard } from '@/components/layout/ListCard';
 import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 
 const Contact = () => {
   return (

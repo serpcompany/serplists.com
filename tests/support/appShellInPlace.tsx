@@ -9,13 +9,15 @@ export const appShell = {
   workspace: {} as object,
 };
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({ AuthProvider: PassThrough, useAuth: () => appShell.auth }));
+vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => appShell.auth }));
+vi.mock('@/contexts/AuthProvider', () => ({ AuthProvider: PassThrough }));
 vi.mock('@/contexts/TemplatesContext', () => ({
-  TemplatesProvider: PassThrough,
   useTemplateLists: () => appShell.templates,
   useTemplates: () => appShell.templates,
 }));
-vi.mock('@/contexts/WorkspaceContext', () => ({ WorkspaceProvider: PassThrough, useWorkspace: () => appShell.workspace }));
+vi.mock('@/contexts/TemplatesProvider', () => ({ TemplatesProvider: PassThrough }));
+vi.mock('@/contexts/WorkspaceContext', () => ({ useWorkspace: () => appShell.workspace }));
+vi.mock('@/contexts/WorkspaceProvider', () => ({ WorkspaceProvider: PassThrough }));
 vi.mock('@/components/ErrorBoundary', () => ({ ErrorBoundary: PassThrough }));
 vi.mock('@/components/RequireAuth', () => ({ default: PassThrough }));
 vi.mock('@/components/DevLoginBar', () => ({ DevLoginBar: () => null }));

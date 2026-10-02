@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { firstOf } from '../../support/elements';
 
-import { buildCreateRunRequest, mapApiTemplate } from '@/contexts/TemplatesContext';
+import { buildCreateRunRequest } from '@/contexts/TemplatesContext';
+import { mapApiTemplate } from '@/contexts/templateListFetchers';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 

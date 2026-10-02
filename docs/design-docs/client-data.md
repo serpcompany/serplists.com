@@ -118,7 +118,8 @@ mark them stale, so they load when a page next shows them.
 
 Which page loads which list, and how pages read them, is in
 [FRONTEND.md](../FRONTEND.md#data-and-state). `TemplatesProvider`
-(`src/contexts/TemplatesContext.tsx`) builds the list queries (`buildTemplateListQueries`) and
+(`src/contexts/TemplatesProvider.tsx`) builds the list queries (`buildTemplateListQueries` in
+`src/contexts/TemplatesContext.tsx`, beside the hooks) and
 watches them without fetching; a page's `useTemplateLists` turns on the lists it asked for.
 Its loading and error flags come from that page's own observers
 (`resolveTemplateListObservers` and `listLoadError` in `src/contexts/templateListObservers.ts`),

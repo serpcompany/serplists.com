@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
 import type { TeamSummary } from '@/lib/api';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';

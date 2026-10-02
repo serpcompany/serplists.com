@@ -13,8 +13,9 @@ import {
 import { SearchField } from '@/components/layout/SearchField';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
-import { buttonVariants } from '@/components/ui/button';
+import { RUN_SHARE_LINK_DESCRIPTION } from '@/components/shared/runShareLinkDescription';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Item, ItemContent, ItemGroup } from '@/components/ui/item';
 import {

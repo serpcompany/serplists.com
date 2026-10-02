@@ -1,7 +1,8 @@
 import React from 'react';
 import { Clock, Star, TrendingUp } from 'lucide-react';
 
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { cn } from '@/lib/utils';
 import type {
   DiscoveryCategory,

@@ -16,7 +16,8 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: 'user-1' } }),
 }));
 
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
 import { safeLocalStorage } from '@/lib/browserStorage';
 

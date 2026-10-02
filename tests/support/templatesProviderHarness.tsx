@@ -27,7 +27,8 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({ activeWorkspace: PERSONAL_WORKSPACE, isTeamWorkspace: false, ...providerWorkspace }),
 }));
 
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { TemplatesProvider } from '@/contexts/TemplatesProvider';
 
 export const launchChecklist = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',

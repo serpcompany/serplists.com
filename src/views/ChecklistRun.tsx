@@ -12,7 +12,8 @@ import {
   DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 import { PageContainer } from '@/components/layout/page-shell';
-import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { RUN_SHARE_LINK_DESCRIPTION } from '@/components/shared/runShareLinkDescription';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { Button } from '@/components/ui/button';
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';

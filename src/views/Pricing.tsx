@@ -9,7 +9,8 @@ import { CardGrid } from '@/components/layout/CardGrid';
 import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
 import { QueryErrorNotice } from '@/components/shared/QueryListState';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Card,
   CardContent,

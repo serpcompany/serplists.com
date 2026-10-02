@@ -101,12 +101,19 @@ const NAVIGATION_MODULES = [
   "src/lib/navigation/leavesPage.ts",
   "src/components/RequireAuth.tsx",
 ];
-const FILES_THAT_EXPORT_MORE_THAN_COMPONENTS = [
-  "**/components/ui/*.{ts,tsx}",
-  "**/contexts/*.{ts,tsx}",
-  "src/app/**/*.{ts,tsx}",
-  "tests/**/*.{ts,tsx}",
-  "**/*.test.{ts,tsx}",
+const NEXT_ROUTE_MODULE_EXPORTS = [
+  "metadata",
+  "generateMetadata",
+  "viewport",
+  "generateViewport",
+  "generateStaticParams",
+  "dynamic",
+  "dynamicParams",
+  "revalidate",
+  "fetchCache",
+  "runtime",
+  "preferredRegion",
+  "maxDuration",
 ];
 
 const STORAGE_MESSAGE =
@@ -147,14 +154,7 @@ export default tseslint.config(
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    plugins: {
-      "react-refresh": reactRefresh,
-    },
     rules: {
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
@@ -173,9 +173,10 @@ export default tseslint.config(
     languageOptions: { sourceType: "commonjs", globals: globals.node },
   },
   {
-    files: FILES_THAT_EXPORT_MORE_THAN_COMPONENTS,
+    files: ["src/**/*.tsx"],
+    plugins: { "react-refresh": reactRefresh },
     rules: {
-      "react-refresh/only-export-components": "off",
+      "react-refresh/only-export-components": ["error", { allowExportNames: NEXT_ROUTE_MODULE_EXPORTS }],
     },
   },
   {
