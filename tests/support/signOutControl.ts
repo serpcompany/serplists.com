@@ -1,20 +1,20 @@
 import { act } from 'react';
+import { fireEvent } from '@testing-library/react';
 import { expect } from 'vitest';
 
-import { click, findByText, type FakeElement } from '../fixtures/fakeDom';
 import { deferred } from './deferred';
 import { navigation } from './nextNavigation';
+import { theButtonOrMenuItemNamed } from './renderInTheDom';
 
 export const aSignOutTheServerAnswersLater = () => deferred<{ ok: boolean }>();
 
 export async function expectTheControlToLeaveOnlyOnceSignedOut(
-  container: FakeElement,
   control: string,
   signingOut: ReturnType<typeof aSignOutTheServerAnswersLater>,
 ) {
   const before = navigation.log.length;
   await act(async () => {
-    click(container, findByText(container, 'BUTTON', control));
+    fireEvent.click(theButtonOrMenuItemNamed(control));
   });
   expect(navigation.log.slice(before)).toEqual([]);
 

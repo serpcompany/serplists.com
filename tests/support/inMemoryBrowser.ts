@@ -101,6 +101,14 @@ export class ReadonlyURLSearchParams extends URLSearchParams {
   }
 }
 
+export function objectInheriting(prototype: object): object {
+  const created: unknown = Object.create(prototype);
+  if (typeof created !== 'object' || created === null) throw new Error('Object.create made no object');
+  return created;
+}
+
+const theDomWindowIfAny = (): object => (typeof window === 'undefined' ? Object.prototype : window);
+
 const copyState = (state: unknown) => (state === undefined ? null : structuredClone(state));
 
 const toAppPath = (href: string) => {
@@ -226,7 +234,7 @@ export function createBrowser() {
     go: (delta = 0) => traverseOnALaterTask(delta),
   };
 
-  const window = {
+  const window = Object.assign(objectInheriting(theDomWindowIfAny()), {
     location,
     history,
     addEventListener: events.addEventListener.bind(events),
@@ -248,7 +256,7 @@ export function createBrowser() {
     }),
     requestAnimationFrame: (callback: (time: number) => void) => setTimeout(() => callback(Date.now()), 0),
     cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-  };
+  });
 
   const log: NavigationRecord[] = [];
 

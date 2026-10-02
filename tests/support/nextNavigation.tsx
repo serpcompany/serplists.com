@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   createBrowser,
   findRoute,
+  objectInheriting,
   ReadonlyURLSearchParams,
   type DocumentLoad,
   type NavigationRecord,
@@ -19,12 +20,6 @@ import {
 } from './inMemoryBrowser';
 
 const browser = createBrowser();
-
-function objectInheriting(prototype: object): object {
-  const created: unknown = Object.create(prototype);
-  if (typeof created !== 'object' || created === null) throw new Error('Object.create made no object');
-  return created;
-}
 
 export const navigation = {
   reset: (to = '/', options: ResetOptions = {}) => browser.reset(to, options),

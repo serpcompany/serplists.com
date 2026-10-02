@@ -3,23 +3,61 @@ import path from 'path';
 
 process.env['TZ'] = 'UTC';
 
+const TESTS_THAT_RENDER_INTO_THE_DOM = '**/*.dom.test.tsx';
+
+const HAPPY_DOM_FOLLOWS_NO_LINK = {
+  disableMainFrameNavigation: true,
+  disableChildFrameNavigation: true,
+  disableChildPageNavigation: true,
+  disableFallbackToSetURL: true,
+};
+
+const NEVER_TEST_FILES = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/tmp/**',
+  '**/playwright-report/**',
+  '**/test-results/**',
+  'tests/e2e/**',
+];
+
+const EVERY_TEST_FILE = {
+  globals: true,
+  setupFiles: './tests/setup.ts',
+  server: {
+    deps: {
+      inline: ['@opennextjs/aws'],
+    },
+  },
+};
+
+const resolve = {
+  alias: {
+    'next/font/google': path.resolve(__dirname, './tests/support/nextFontGoogle.ts'),
+    '@': path.resolve(__dirname, './src'),
+    '@functions': path.resolve(__dirname, './functions'),
+  },
+};
+
 export default defineConfig({
   test: {
-    globals: true,
+    ...EVERY_TEST_FILE,
+    name: 'node',
     environment: 'node',
-    setupFiles: './tests/setup.ts',
-    server: {
-      deps: {
-        inline: ['@opennextjs/aws'],
+    exclude: [...NEVER_TEST_FILES, TESTS_THAT_RENDER_INTO_THE_DOM],
+    projects: [
+      './vitest.config.ts',
+      {
+        resolve,
+        test: {
+          ...EVERY_TEST_FILE,
+          name: 'dom',
+          environment: 'happy-dom',
+          environmentOptions: { happyDOM: { settings: { navigation: HAPPY_DOM_FOLLOWS_NO_LINK } } },
+          include: [TESTS_THAT_RENDER_INTO_THE_DOM],
+          exclude: NEVER_TEST_FILES,
+        },
       },
-    },
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/tmp/**',
-      '**/playwright-report/**',
-      '**/test-results/**',
-      'tests/e2e/**',
     ],
     coverage: {
       provider: 'v8',
@@ -37,11 +75,5 @@ export default defineConfig({
       all: true,
     },
   },
-  resolve: {
-    alias: {
-      'next/font/google': path.resolve(__dirname, './tests/support/nextFontGoogle.ts'),
-      '@': path.resolve(__dirname, './src'),
-      '@functions': path.resolve(__dirname, './functions'),
-    },
-  },
+  resolve,
 });

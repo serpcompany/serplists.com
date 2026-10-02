@@ -1,39 +1,40 @@
 import { act } from 'react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 
-import { click, findAll, findAllByRole, findByText, type FakeElement, type FakeNode } from '../fixtures/fakeDom';
+import { theButtonOrMenuItemNamed } from './renderInTheDom';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/components/ui/alert-dialog', async () => (await import('./overlaysInPlace')).alertDialogInPlace);
 
-export const openDialogs = (container: FakeNode) => findAllByRole(container, 'dialog');
+export const openDialogs = () => screen.queryAllByRole('dialog');
 
-export async function openTheDialog(container: FakeElement, openLabel: string): Promise<FakeNode> {
+export async function openTheDialog(openLabel: string): Promise<HTMLElement> {
   await act(async () => {
-    click(container, findByText(container, 'BUTTON', openLabel));
+    fireEvent.click(theButtonOrMenuItemNamed(openLabel));
   });
-  const [dialog] = openDialogs(container);
+  const [dialog] = openDialogs();
   if (!dialog) throw new Error(`${openLabel} opened no dialog`);
   return dialog;
 }
 
-export async function clickInTheDialog(container: FakeElement, dialog: FakeNode, label: string) {
+export async function clickInTheDialog(dialog: HTMLElement, label: string) {
   await act(async () => {
-    click(container, findByText(dialog, 'BUTTON', label));
+    fireEvent.click(within(dialog).getByRole('button', { name: label }));
   });
 }
 
-export async function openAndConfirm(container: FakeElement, openLabel: string, confirmLabel = openLabel) {
-  await clickInTheDialog(container, await openTheDialog(container, openLabel), confirmLabel);
+export async function openAndConfirm(openLabel: string, confirmLabel = openLabel) {
+  await clickInTheDialog(await openTheDialog(openLabel), confirmLabel);
 }
 
-export const titleAndDescriptionOf = (dialog: FakeNode) => ({
-  title: findAll(dialog, (node) => node.nodeName === 'H2')[0]?.textContent,
-  description: findAll(dialog, (node) => node.nodeName === 'P')[0]?.textContent,
+export const titleAndDescriptionOf = (dialog: HTMLElement) => ({
+  title: within(dialog).queryByRole('heading')?.textContent,
+  description: within(dialog).queryAllByRole('paragraph')[0]?.textContent,
 });
 
-export async function openTheDeleteDialogWithNoneOpenBefore(container: FakeElement) {
-  expect(openDialogs(container)).toHaveLength(0);
-  const dialog = await openTheDialog(container, 'Delete');
+export async function openTheDeleteDialogWithNoneOpenBefore() {
+  expect(openDialogs()).toHaveLength(0);
+  const dialog = await openTheDialog('Delete');
   return { dialog, ...titleAndDescriptionOf(dialog) };
 }
