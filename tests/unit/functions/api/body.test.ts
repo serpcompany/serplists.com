@@ -1,43 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { isBodyWithinLimit } from '@functions/api/utils/body';
+import { readBodyWithinLimit } from '@functions/api/utils/body';
 
-function chunkedRequest(totalBytes: number, chunkBytes = 1024): Request {
-  const chunk = new Uint8Array(chunkBytes).fill(0x61);
+function chunkedBody(totalBytes: number, chunkBytes = 1024): ReadableStream<Uint8Array> {
   let sent = 0;
-  const body = new ReadableStream<Uint8Array>({
+  return new ReadableStream<Uint8Array>({
     pull(controller) {
       if (sent >= totalBytes) {
         controller.close();
         return;
       }
       const size = Math.min(chunkBytes, totalBytes - sent);
-      controller.enqueue(chunk.subarray(0, size));
+      controller.enqueue(new Uint8Array(size).fill(0x61 + (sent / chunkBytes) % 26));
       sent += size;
     },
   });
-  return new Request('http://localhost/api/templates', { method: 'POST', body, duplex: 'half' } as RequestInit);
 }
 
-describe('isBodyWithinLimit', () => {
-  it('accepts a body at the limit and leaves the original readable', async () => {
-    const request = chunkedRequest(10 * 1024);
+function endlessBody(chunkBytes = 1024): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.enqueue(new Uint8Array(chunkBytes));
+    },
+  });
+}
 
-    await expect(isBodyWithinLimit(request.clone(), 10 * 1024)).resolves.toBe(true);
-    expect((await request.arrayBuffer()).byteLength).toBe(10 * 1024);
+describe('readBodyWithinLimit', () => {
+  it('returns every byte of a body at the limit, in order', async () => {
+    const bytes = await readBodyWithinLimit(chunkedBody(10 * 1024), 10 * 1024);
+    const expected = new Uint8Array(await new Response(chunkedBody(10 * 1024)).arrayBuffer());
+
+    expect(bytes).toEqual(expected);
   });
 
-  it('settles as soon as a cloned body passes the limit, without waiting for a cancel only the other branch can settle', async () => {
-    const request = chunkedRequest(64 * 1024);
-
-    const result = await Promise.race([
-      isBodyWithinLimit(request.clone(), 8 * 1024),
-      new Promise((resolve) => setTimeout(() => resolve('timed out'), 1000)),
-    ]);
-
-    expect(result).toBe(false);
+  it('returns an empty body as no bytes', async () => {
+    await expect(readBodyWithinLimit(chunkedBody(0), 1)).resolves.toEqual(new Uint8Array(0));
   });
 
-  it('accepts a request without a body', async () => {
-    await expect(isBodyWithinLimit(new Request('http://localhost/api/templates'), 1)).resolves.toBe(true);
+  it('stops reading as soon as the body passes the limit, so a body that never ends is refused', async () => {
+    await expect(readBodyWithinLimit(endlessBody(), 8 * 1024)).resolves.toBeNull();
   });
 });

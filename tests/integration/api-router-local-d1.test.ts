@@ -24,9 +24,7 @@ let ownerCookie = "";
 function send(path: string, options: SendOptions = {}): Promise<Response> {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   const headers = {
-    ...(body === undefined
-      ? {}
-      : { "Content-Type": "application/json", "Content-Length": String(new TextEncoder().encode(body).byteLength) }),
+    ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     ...(options.cookie ? { Cookie: options.cookie } : {}),
     ...(options.origin ? { Origin: ORIGIN } : {}),
   };

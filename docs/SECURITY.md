@@ -417,10 +417,13 @@ whole large template or run, and no edit needs one sent back. MCP run writes kee
 content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
 agent writes come back in one result.
-The cap uses `Content-Length`, or counts the bytes of a clone of the body when it is
-missing or malformed, which buffers at most the cap. The count never waits for the
-clone's cancel: cancelling one branch of a cloned (teed) body settles only once the
-other branch is cancelled too, so waiting would hang every oversized request. Uploads
+The cap uses `Content-Length`, or, when it is missing or malformed, reads the body once,
+stopping as soon as it passes the cap, so it buffers at most the cap, and hands the
+handler a request built from those bytes (`readBodyWithinLimit` in
+`functions/api/utils/body.ts`). It never counts a clone: in Node's fetch (Vitest,
+`next dev`) a clone that is garbage collected cancels the original's body, so a handler
+that read the body after an await failed with "Body is unusable", and cancelling one
+branch of a teed body settles only once the other is cancelled too. Uploads
 are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file
 size, so an upload without a valid `Content-Length` (a chunked body) gets `411`

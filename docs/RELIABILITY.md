@@ -587,7 +587,9 @@ Common failures:
       `plainScriptsInTheHead()`) and `appStylesheet.ts`
       (`compileTheStylesheetTheRootLayoutImports()`).
     - Scripts and workflows: `workflowGuards.ts` and `throwawayGitRepository.ts`; a server's
-      port: `listeningPort.ts`; ESLint rules: `ruleTester.ts`.
+      port: `listeningPort.ts`; ESLint rules: `ruleTester.ts`; a garbage collection that runs
+      the finalizers, for code that must survive one (a request body read after an await):
+      `collectGarbageAndRunFinalizers()` in `garbageCollection.ts`.
   - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
     template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
     (`billing.ts`), API calls (`api-requests.ts`) and the schemas of what they read
