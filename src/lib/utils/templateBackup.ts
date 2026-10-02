@@ -1,4 +1,4 @@
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
@@ -10,7 +10,6 @@ import type {
   ChecklistTemplateImport,
   PortableChecklistTemplate,
   PortableTemplatePack,
-  TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { toPortableSections } from "@/lib/schemas/portableSections";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
@@ -32,10 +31,6 @@ import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 type TemplateImportWarning = {
   templateTitle: string;
   message: string;
-};
-
-export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
-  templates: ChecklistTemplate[];
 };
 
 export type TemplateImportResult = {
@@ -218,20 +213,12 @@ export const exportPortableTemplatesToJSON = (
   };
 };
 
-const portablePackKindSchema = z.object({ kind: z.literal("serplists-template-pack") });
-
-export const downloadBackupFile = (
-  backup: TemplateBackupExport | ExportedTemplatePack,
-  filename?: string
-): void => {
-  const jsonString = JSON.stringify(backup, null, 2);
+export const downloadBackupFile = (pack: ExportedTemplatePack, filename?: string): void => {
+  const jsonString = JSON.stringify(pack, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const defaultFilename =
-    portablePackKindSchema.safeParse(backup).success
-      ? `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`
-      : `checklist-templates-backup-${new Date().toISOString().split('T')[0]}.json`;
-  
+  const defaultFilename = `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`;
+
   const link = document.createElement("a");
   link.href = url;
   link.download = filename || defaultFilename;
