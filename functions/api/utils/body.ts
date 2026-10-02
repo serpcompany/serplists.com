@@ -1,5 +1,5 @@
 export async function readBodyWithinLimit(
-  body: ReadableStream<Uint8Array>,
+  body: ReadableStream<unknown>,
   maxBytes: number,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   const reader = body.getReader();
@@ -10,13 +10,20 @@ export async function readBodyWithinLimit(
     while (true) {
       const { done, value } = await reader.read();
       if (done) return concatenated(chunks, total);
-      total += value.byteLength;
+      const chunk = bytesOf(value);
+      total += chunk.byteLength;
       if (total > maxBytes) return null;
-      chunks.push(value);
+      chunks.push(chunk);
     }
   } finally {
     cancelWithoutWaiting(reader);
   }
+}
+
+function bytesOf(chunk: unknown): Uint8Array {
+  if (chunk instanceof Uint8Array) return chunk;
+  if (ArrayBuffer.isView(chunk)) return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  throw new TypeError("A body stream gave a chunk that is not bytes");
 }
 
 function concatenated(chunks: readonly Uint8Array[], totalBytes: number): Uint8Array<ArrayBuffer> {
@@ -29,6 +36,6 @@ function concatenated(chunks: readonly Uint8Array[], totalBytes: number): Uint8A
   return bytes;
 }
 
-function cancelWithoutWaiting(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+function cancelWithoutWaiting(reader: ReadableStreamDefaultReader<unknown>): void {
   reader.cancel().catch(() => undefined);
 }

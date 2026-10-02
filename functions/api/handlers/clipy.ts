@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Env } from '../types';
+import { readBodyWithinLimit } from '../utils/body';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { clipyVideoId, withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
@@ -359,27 +360,8 @@ async function readJsonWithinLimit(response: Response): Promise<unknown> {
   }
 
   if (!response.body) throw new Error('Clipy returned an empty response');
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error('Clipy response is too large');
-    }
-    chunks.push(value);
-  }
-
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  chunks.forEach((chunk) => {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  });
+  const bytes = await readBodyWithinLimit(response.body, MAX_RESPONSE_BYTES);
+  if (!bytes) throw new Error('Clipy response is too large');
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
