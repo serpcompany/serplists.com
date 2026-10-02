@@ -89,7 +89,7 @@ export function focusReorderHandle(handleId: string): void {
   window.requestAnimationFrame(() => {
     const handles = document.querySelectorAll<HTMLElement>("[data-reorder-handle]");
     for (const handle of handles) {
-      if (handle.dataset.reorderHandle === handleId) {
+      if (handle.dataset["reorderHandle"] === handleId) {
         handle.focus();
         return;
       }
@@ -102,7 +102,7 @@ export function focusReorderMoveButton(handleId: string, direction: ReorderDirec
   window.requestAnimationFrame(() => {
     const find = (dir: ReorderDirection) =>
       Array.from(document.querySelectorAll<HTMLButtonElement>("[data-reorder-move]")).find(
-        (button) => button.dataset.reorderMove === `${handleId}:${dir}`,
+        (button) => button.dataset["reorderMove"] === `${handleId}:${dir}`,
       );
     const same = find(direction);
     const target = same && !same.disabled ? same : find(direction === "up" ? "down" : "up");

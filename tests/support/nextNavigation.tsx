@@ -45,12 +45,12 @@ export const navigation = {
   window: browser.window,
   installWindow(extraWindowProperties: object = {}): () => void {
     const globals = globalThis as Record<string, unknown>;
-    const saved = globals.window;
+    const saved = globals['window'];
     const installed = objectInheriting(browser.window);
     Object.defineProperties(installed, Object.getOwnPropertyDescriptors(extraWindowProperties));
-    globals.window = installed;
+    globals['window'] = installed;
     return () => {
-      globals.window = saved;
+      globals['window'] = saved;
     };
   },
   settle: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),

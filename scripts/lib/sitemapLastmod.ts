@@ -11,6 +11,14 @@ export const templatePackSchema = z
 
 export type TemplatePack = z.infer<typeof templatePackSchema>;
 
+interface PackTemplate extends Record<string, unknown> {
+  slug?: unknown;
+  visibility?: unknown;
+  categories?: unknown;
+}
+
+const templatesOf = (pack: TemplatePack): PackTemplate[] => pack.templates ?? [];
+
 export type PublicTemplate = { slug: string; categories: string[]; contentHash: string };
 
 export type SourceSnapshot = { date: string; packs: TemplatePack[]; categoriesSource: string };
@@ -38,7 +46,7 @@ export function parseTemplatePack(text: string | null): TemplatePack | null {
 export function listPublicTemplates(packs: TemplatePack[]): PublicTemplate[] {
   const templates: PublicTemplate[] = [];
   for (const pack of packs) {
-    for (const template of pack.templates ?? []) {
+    for (const template of templatesOf(pack)) {
       const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
       if (!slug || template.visibility !== 'public') continue;
       templates.push({

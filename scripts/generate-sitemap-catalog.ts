@@ -91,7 +91,7 @@ const gitLastmod = async (sources: readonly string[]): Promise<string | null> =>
 const isShallowClone = (await git(['rev-parse', '--is-shallow-repository']))?.trim() === 'true';
 if (isShallowClone) {
   const message = 'Sitemap lastmod dates need full git history; this clone is shallow (use fetch-depth: 0).';
-  if (process.env.CI) throw new Error(message);
+  if (process.env['CI']) throw new Error(message);
   console.warn(`Warning: ${message}`);
 }
 

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-process.env.TZ = 'UTC';
+process.env['TZ'] = 'UTC';
 
 export default defineConfig({
   test: {
