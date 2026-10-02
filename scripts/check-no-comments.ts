@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 
 import {
-  awaitsAPerson,
   checkedLanguage,
   filesGitTracksOrWouldTrack,
   findComments,
@@ -20,9 +19,7 @@ function requestedFiles(): string[] {
 }
 
 const isFile = (file: string) => existsSync(file) && statSync(file).isFile();
-const checkable = requestedFiles().filter((file) => checkedLanguage(file) && isFile(file));
-const leftForAPerson = checkable.filter(awaitsAPerson);
-const files = checkable.filter((file) => !awaitsAPerson(file));
+const files = requestedFiles().filter((file) => checkedLanguage(file) && isFile(file));
 const countsByLanguage = new Map<string, number>();
 const filesWithComments = new Set<string>();
 let unreadableFiles = 0;
@@ -43,9 +40,6 @@ for (const file of files) {
   }
 }
 
-if (leftForAPerson.length > 0) {
-  console.log(`check-no-comments: skipped ${leftForAPerson.join(", ")}, which a person must clean (WORKFLOWS_AWAITING_A_PERSON).`);
-}
 const total = [...countsByLanguage.values()].reduce((sum, count) => sum + count, 0);
 if (total === 0 && unreadableFiles === 0) {
   console.log(`check-no-comments: no comments in ${files.length} file(s).`);

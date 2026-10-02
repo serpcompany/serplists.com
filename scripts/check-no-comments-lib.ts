@@ -17,6 +17,7 @@ import {
   shellCommentRanges,
   sqlCommentRanges,
   tomlCommentRanges,
+  markdownCommentRanges,
   xmlCommentRanges,
 } from "./lib/comment-ranges";
 
@@ -29,12 +30,13 @@ export type CommentLanguage =
   | "css"
   | "json"
   | "xml"
+  | "markdown"
   | "patch"
   | "dotenv"
   | "gitignore"
   | "gitattributes"
   | "npmrc";
-export type CommentCheck = "generated" | "check-no-comments" | "ESLint" | "documentation" | "no comment syntax";
+export type CommentCheck = "generated" | "check-no-comments" | "ESLint" | "no comment syntax";
 export interface FoundComment {
   line: number;
   language: string;
@@ -54,13 +56,6 @@ export const GENERATED_FILES: readonly string[] = [
   "docs/product-specs/portable-templates/examples/minimal/template.json",
   "docs/product-specs/portable-templates/examples/minimal/preview.html",
 ];
-
-export const WORKFLOWS_AWAITING_A_PERSON: readonly string[] = [
-  ".github/workflows/claude-code-review.yml",
-  ".github/workflows/maintenance.yml",
-];
-
-const DOCUMENTATION_FORMATS: readonly string[] = [".md"];
 
 const FORMATS_WITHOUT_COMMENTS: readonly string[] = [
   ".txt",
@@ -90,6 +85,7 @@ const FILE_LANGUAGES = new Map<string, CommentLanguage>([
   [".xml", "xml"],
   [".xsd", "xml"],
   [".svg", "xml"],
+  [".md", "markdown"],
   [".patch", "patch"],
   [".diff", "patch"],
 ]);
@@ -119,6 +115,7 @@ const LANGUAGE_NAMES: Record<Exclude<CommentLanguage, "patch">, string> = {
   css: "CSS",
   json: "JSON",
   xml: "XML",
+  markdown: "Markdown",
   dotenv: "dotenv",
   gitignore: ".gitignore",
   gitattributes: ".gitattributes",
@@ -130,6 +127,7 @@ const COMMENT_RANGES: Partial<Record<ScannedLanguage, (text: string) => CommentR
   css: cssCommentRanges,
   json: jsonCommentRanges,
   xml: xmlCommentRanges,
+  markdown: markdownCommentRanges,
   dotenv: dotenvCommentRanges,
   gitignore: gitignoreCommentRanges,
   gitattributes: gitattributesCommentRanges,
@@ -163,17 +161,12 @@ export function checkedLanguage(file: string): CommentLanguage | null {
   return languageOf(posixPath);
 }
 
-export function awaitsAPerson(file: string): boolean {
-  return WORKFLOWS_AWAITING_A_PERSON.includes(toPosix(file));
-}
-
 export function commentCheckOf(file: string): CommentCheck | null {
   const posixPath = toPosix(file);
   const extension = extensionOf(posixPath);
   if (GENERATED_FILES.includes(posixPath)) return "generated";
   if (checkedLanguage(posixPath)) return "check-no-comments";
   if (SCRIPT_KINDS.has(extension)) return "ESLint";
-  if (DOCUMENTATION_FORMATS.includes(extension)) return "documentation";
   const format = extension || path.posix.basename(posixPath);
   return FORMATS_WITHOUT_COMMENTS.includes(format) ? "no comment syntax" : null;
 }

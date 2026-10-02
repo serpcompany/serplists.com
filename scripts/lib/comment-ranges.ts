@@ -152,6 +152,35 @@ export function xmlCommentRanges(text: string): CommentRange[] {
   return ranges;
 }
 
+const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const MARKDOWN_CODE_SPAN = /(`+)[^`][\s\S]*?\1(?!`)/g;
+
+const blankedOut = (code: string) => code.replace(/[^\n]/g, " ");
+
+function withoutMarkdownCode(text: string): string {
+  let openFence: string | null = null;
+  return text
+    .split("\n")
+    .map((line) => {
+      const fence = MARKDOWN_FENCE.exec(line)?.[1];
+      if (openFence === null && fence) {
+        openFence = fence;
+        return blankedOut(line);
+      }
+      if (openFence !== null) {
+        if (fence && fence.startsWith(openFence.charAt(0)) && fence.length >= openFence.length) openFence = null;
+        return blankedOut(line);
+      }
+      return line;
+    })
+    .join("\n")
+    .replace(MARKDOWN_CODE_SPAN, blankedOut);
+}
+
+export function markdownCommentRanges(text: string): CommentRange[] {
+  return xmlCommentRanges(withoutMarkdownCode(text));
+}
+
 function lineCommentRanges(text: string, commentStartInLine: (line: string) => number): CommentRange[] {
   const ranges: CommentRange[] = [];
   let position = 0;

@@ -190,7 +190,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     - TOML outside basic, literal and multi-line strings; SQL's `--` and `/* */` outside
       strings and quoted names (`"name"`, backticks, `[name]`); CSS through PostCSS's
       tokenizer (strings and `url()` hold no comments); JSON and JSONC through TypeScript's
-      scanner; XML (`.xml`, `.xsd`, `.svg`) outside CDATA and processing instructions.
+      scanner; XML (`.xml`, `.xsd`, `.svg`) outside CDATA and processing instructions;
+      Markdown's HTML comments (`<!-- -->`), outside fenced code and code spans, so a doc can
+      still show one as an example.
     - Dotenv files (`.dev.vars*`, `.env*`): `#` lines, and a `#` after a value, which dotenv
       drops from an unquoted value. `.gitignore`: lines that start with `#`. `.gitattributes`:
       lines whose first character after any spaces is `#`. `.npmrc`: `#` and `;` lines, and an
@@ -202,16 +204,14 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `comments:check` reads, a file a generator writes (`GENERATED_FILES` in
     `scripts/check-no-comments-lib.ts`: the lockfile, `cloudflare-env.d.ts`, the portable
     template JSON Schema, the bundled sitemap catalog, and the example templates'
-    `template.json` and `preview.html`), Markdown, or a format without comment syntax
+    `template.json` and `preview.html`), or a format without comment syntax
     (`FORMATS_WITHOUT_COMMENTS`: plain text, `.gitkeep`, images, fonts and archives). So a new
     format fails it until the check reads it or one of those lists names it. The test also
     fails if `check:repo` or the pre-commit hook stops running `comments:check`, or if the
     hook's glob misses a file the check reads. ESLint ignores the generated
     `cloudflare-env.d.ts` and `next-env.d.ts`.
-  - Until a person removes their comments, `comments:check` skips the workflows in
-    `WORKFLOWS_AWAITING_A_PERSON`: agents may not edit CI workflows, so a person has to clean
-    them. The test fails once a listed workflow has no comments left, so the list only
-    shrinks.
+  - Nothing is skipped: every workflow is read, the Claude review and weekly maintenance
+    workflows included, and the coverage test fails if one has a comment.
 - **Duplicated code.** `pnpm run duplicates:check` (part of `check:repo`) runs jscpd over
   `src/`, `functions/`, `scripts/`, `db/` and `tests/` together, with the settings in
   `.jscpd.json`: jscpd's defaults of 50 tokens and 5 lines, a threshold of 0, and exit code

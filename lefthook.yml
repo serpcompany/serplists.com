@@ -7,7 +7,7 @@ pre-commit:
       glob: "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
       run: pnpm exec eslint --no-warn-ignored {staged_files}
     comments:
-      glob: "*{.yml,.yaml,.toml,.sql,.css,.json,.jsonc,.xml,.xsd,.svg,.patch,.diff,.gitignore,.gitattributes,.npmrc,.dev.vars*,.env*}"
+      glob: "*{.yml,.yaml,.toml,.sql,.css,.json,.jsonc,.xml,.xsd,.svg,.md,.patch,.diff,.gitignore,.gitattributes,.npmrc,.dev.vars*,.env*}"
       run: node --import tsx scripts/check-no-comments.ts {staged_files}
 
 pre-push:
