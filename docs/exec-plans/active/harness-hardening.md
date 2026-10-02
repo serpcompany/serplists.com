@@ -260,6 +260,12 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-02: the build and the browser tests moved out of CI into
+  `.github/workflows/browser-tests.yml`, which runs only on pull requests into `main` and
+  `staging`, on `ubuntu-latest`. It runs smoke tests on PRs into `staging` and the full
+  suite on PRs into `main`. CI keeps `verify`'s checks, the local D1 tests and schema
+  parity on every push. `tests/unit/workflows/browser-tests.test.ts` holds both workflows
+  to that.
 - 2026-10-02: TD-78 to TD-80 closed (624c187a..62f08e8c).
   - `downloadBackupFile` takes only the portable pack.
   - `normalizeSections` leaves out a legacy numeric Sub-task id instead of turning it into
@@ -565,6 +571,9 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-02: the browser tests run on pull requests only (the owner's call). They take the
+  longest and cost the most to run on every push. A push to `staging` already builds again
+  to deploy, and its PR ran the browser tests before it merged.
 - 2026-10-02: `cloudflare-env.d.ts` is not type-checked with `skipLibCheck` off. It is a
   generated file, already among the allowed exceptions, and it references OpenNext's
   `.open-next/worker.js`, which OpenNext ships without a declaration.
