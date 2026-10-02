@@ -2,47 +2,47 @@
   "staticPages": [
     {
       "path": "/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/features/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/features/template-builder/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/features/checklist-runs/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/features/public-sharing/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/features/import-export/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/pricing/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/about/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/contact/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     },
     {
       "path": "/templates/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T06:31:15.000Z"
     },
     {
       "path": "/categories/",
-      "lastmod": "2026-10-02T02:11:31.000Z"
+      "lastmod": "2026-10-02T07:34:00.000Z"
     }
   ],
   "templates": [
@@ -81,7 +81,7 @@
     "templatesHash": "af23fd31cdcca19cadfdbc90d94fbd953022ceb755be35a8afa6ba83cb084ea7",
     "templatesLastmod": "2026-07-10T15:24:46.000Z",
     "categoriesHash": "ba8c928bfa2fd88e4f8fff12f40abab5576e4970c77711d8198e3b18708923ad",
-    "categoriesLastmod": "2026-10-02T05:04:08.000Z",
-    "implementationLastmod": "2026-10-02T05:25:12.000Z"
+    "categoriesLastmod": "2026-10-02T07:34:00.000Z",
+    "implementationLastmod": "2026-10-02T07:34:00.000Z"
   }
 }
