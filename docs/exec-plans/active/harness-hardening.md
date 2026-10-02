@@ -260,6 +260,18 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, app side of round 3 done (f777bde3..1902fa14). TD-64 is closed.
+  - `noPropertyAccessFromIndexSignature` is on for the app, node and API projects, and the
+    guard test holds them to it. It fixed 656 errors.
+    - Stored checklist JSON reads through typed record shapes in
+      `src/lib/schemas/jsonRecords.ts`.
+    - Dictionaries that really vary are read with brackets.
+    - `NEXT_PUBLIC_` variables are declared, since Next.js inlines only dot reads.
+  - The tests set it off until their round.
+  - `no-unsafe-type-assertion` covers the app's TypeScript and fixed 62 assertions, most by
+    narrowing or a Zod parse.
+  - ESLint's recommended JavaScript rules, `no-undef` among them, cover `.js`, `.mjs` and
+    `.cjs`. That is TD-63's first step; converting the scripts is left.
 - 2026-10-01: phase 4, the small app tracker fixes are done: TD-33 to TD-39, TD-41 to TD-44,
   TD-60 and TD-62 (5523d3d8..45f90f31; TD-35's code landed in d457042d).
   - One `countTemplateItems` serves all ten places that counted tasks, and no number
