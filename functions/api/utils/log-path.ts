@@ -18,7 +18,6 @@ function redactSecretSegments(segments: string[]): string[] | null {
 }
 
 export function sanitizeLogPath(apiPath: string): string {
-  if (typeof apiPath !== 'string') return '';
   const segments = apiPath.split('/').filter(Boolean);
   const redacted = redactSecretSegments(segments);
   return redacted ? redacted.join('/') : apiPath;
