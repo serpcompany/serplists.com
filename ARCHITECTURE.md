@@ -59,7 +59,9 @@ Shared (imported by both sides)
 - views and components calling the API client (`src/lib/api.ts`, `src/lib/api/`) directly (type-only imports are allowed)
 - `src/components/ui/` depending on app state, features, pages, or the API client
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
-- runtime code importing tests or devDependencies; circular imports
+- runtime code importing tests or devDependencies; circular imports. npm packages stay in the
+  graph, unfollowed, so the rules about packages see them: the `exclude` option names only
+  build output at the repository root (`tests/unit/config/dependency-graph.test.ts`)
 - a module in `src/` or `functions/` that no route file in `src/app` and not
   `next.config.ts` (the security headers) reaches: dead code, with no folder exempt. Code
   only a script uses lives in `scripts/lib`, as the portable template JSON Schema builder
