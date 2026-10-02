@@ -2,7 +2,8 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.tests.tsbuildinfo",
-    "allowJs": false
+    "allowJs": false,
+    "noPropertyAccessFromIndexSignature": false
   },
   "include": [
     "../next-env.d.ts",

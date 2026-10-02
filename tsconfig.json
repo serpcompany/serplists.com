@@ -26,6 +26,7 @@
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
 
     "baseUrl": ".",
     "paths": {
