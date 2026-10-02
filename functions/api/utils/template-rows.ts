@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
+import { templateOwnerProfile } from '../../../src/lib/schemas/templateOwnerProfile';
 import { log } from './logger';
-import { normalizeSectionsPayload, normalizeStringArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { withStableTemplateIdentities } from './template-identities';
 import { isMissingRulesColumnError } from './template-writes';
 
@@ -65,6 +67,14 @@ export async function withRulesColumnFallback<T>(
   }
 }
 
+export async function findTemplateById(db: TemplateDb, templateId: string) {
+  const { templates } = schema;
+  const [template] = await withRulesColumnFallback((includeRules) =>
+    db.select(getTemplateSelectColumns(includeRules)).from(templates).where(eq(templates.id, templateId)).limit(1),
+  );
+  return template;
+}
+
 export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
   let sections: unknown[] = [];
   const normalized = normalizeSectionsPayload(template.items);
@@ -97,13 +107,7 @@ export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
     seoTitle: template.seo_title ?? '',
     seoDescription: template.seo_description ?? '',
     type: template.type,
-    ownerProfile:
-      typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
-        ? {
-            username: typeof template.owner_username === 'string' ? template.owner_username : undefined,
-            full_name: typeof template.owner_full_name === 'string' ? template.owner_full_name : undefined,
-          }
-        : undefined,
+    ownerProfile: templateOwnerProfile(template),
   };
 }
 

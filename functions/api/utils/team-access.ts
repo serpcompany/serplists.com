@@ -44,6 +44,12 @@ export function canManageTeam(role: TeamRole): boolean {
   return hasTeamRole(role, "admin");
 }
 
+export async function findActiveTeam(db: ReturnType<typeof createDb>, teamId: string) {
+  const { teams } = schema;
+  const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
+  return team;
+}
+
 export async function getActiveTeamMembership(
   env: Env,
   teamId: string,

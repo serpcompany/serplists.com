@@ -3,7 +3,8 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchWriteMissed } from "../utils/guarded-writes";
 import {
   buildInviteRevocation,
   selectPendingInvitesForUser,
@@ -11,6 +12,7 @@ import {
 } from "../utils/team-invite-revocation";
 import { canManageTeam, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 
 export type TeamRouteContext = {
   db: ReturnType<typeof createDb>;
@@ -35,7 +37,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid owner transfer payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid owner transfer payload");
   }
 
   const ownerMemberId = membership.id;
@@ -165,7 +167,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
       .update(teams)
       .set({ billing_owner_user_id: targetMember.user_id, updated_at: now })
       .where(and(eq(teams.id, teamId), isNull(teams.archived_at), targetPromotedNow())),
-    insertAuditEventWhere(db, auditEvent, targetPromotedNow()),
+    insertRowWhere(db, schema.audit_events, auditEvent, targetPromotedNow()),
   ]);
 
   if (batchWriteMissed(promoteResult)) {
@@ -205,7 +207,7 @@ export async function updateTeamMember(
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid member payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid member payload");
   }
   if (typeof parsed.data.role === "undefined" && typeof parsed.data.status === "undefined") {
     return jsonError("No fields to update", 400);
@@ -316,7 +318,7 @@ export async function updateTeamMember(
           actorManagesTeam,
         ),
       ),
-    insertAuditEventWhere(db, auditEvent, memberUpdatedNow),
+    insertRowWhere(db, schema.audit_events, auditEvent, memberUpdatedNow),
     ...inviteRevocations.flat(),
   ]);
 

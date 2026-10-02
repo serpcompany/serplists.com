@@ -1,7 +1,8 @@
 import type { schema } from "../db";
 import type { JsonRecord, SectionRecord } from "../../../src/lib/schemas/jsonRecords";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray } from "../utils/payloads";
+import { normalizeSectionsPayload } from "../utils/payloads";
+import { normalizeStringArray, parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { withStableTemplateIdentities } from "../utils/template-identities";
 import {
   boundedText,

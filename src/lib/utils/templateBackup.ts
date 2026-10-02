@@ -15,6 +15,7 @@ import type {
 import { toPortableSections } from "@/lib/schemas/portableSections";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { uniqueCategoryNames } from "@/lib/categorySlug";
+import { normalizeStringArray, parseJsonArray } from "@/lib/schemas/jsonArrays";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
 import { withImportedLinkSource } from "@/lib/utils/mediaSource";
@@ -50,34 +51,7 @@ const generateTempId = (prefix: string) => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 };
 
-const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
-
-const parseJsonArray = (value: unknown): unknown[] | null => {
-  if (isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      return isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
-const normalizeStringList = (value: unknown): string[] => {
-  const parsed = parseJsonArray(value);
-  if (parsed) {
-    return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return [];
-};
-
-const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
+const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringArray(value));
 
 const sectionHoldingLegacyItems = (items: unknown[]) => ({ id: "1", title: "Checklist", items });
 
@@ -131,7 +105,7 @@ const normalizeImportTemplate = (
     seoDescription: template.seoDescription || "",
     rules: template.rules,
     categories: normalizeCategoryList(template.categories ?? template.category),
-    tags: normalizeStringList(template.tags),
+    tags: normalizeStringArray(template.tags),
   };
 };
 
@@ -160,7 +134,7 @@ const normalizePortableTemplate = (
     seoDescription: template.seoDescription || "",
     rules: template.rules,
     categories: normalizeCategoryList(template.categories),
-    tags: normalizeStringList(template.tags),
+    tags: normalizeStringArray(template.tags),
   };
 };
 
@@ -240,7 +214,7 @@ export const exportPortableTemplatesToJSON = (
     seoDescription: template.seoDescription || undefined,
     visibility: template.isPublic ? "public" : "private",
     categories: normalizeCategoryList(template.categories),
-    tags: normalizeStringList(template.tags),
+    tags: normalizeStringArray(template.tags),
     sections: toPortableSections(template.sections),
     rules: template.rules,
   }));

@@ -1,4 +1,5 @@
-import { describePayloadError, normalizeStringArray, parseJsonArray, templatePayloadSchema } from './payloads';
+import { describePayloadError, templatePayloadSchema } from './payloads';
+import { normalizeStringArray, parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { assignMissingStableTemplateIdentities } from './template-reconciliation';
 import type { TemplateUpdateValues } from './template-writes';
 

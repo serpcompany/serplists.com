@@ -2,6 +2,7 @@ import { mapChecklistRuns } from '@/features/run-execution/runExecutionMappers';
 import { isApiError } from '@/lib/api-errors';
 import type { ApiRun } from '@/lib/schemas/apiRuns';
 import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
+import { templateOwnerProfile } from '@/lib/schemas/templateOwnerProfile';
 import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
@@ -60,10 +61,7 @@ export const mapApiTemplate = (template: ApiTemplate): ChecklistTemplate => ({
   version: typeof template.version === 'number' ? template.version : 1,
   teamId: readApiTemplateTeamId(template),
   ownerType: template.owner_type === 'team' || template.owner_type === 'user' ? template.owner_type : undefined,
-  ownerProfile:
-    typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
-      ? { username: optionalString(template.owner_username), full_name: optionalString(template.owner_full_name) }
-      : undefined,
+  ownerProfile: templateOwnerProfile(template),
 });
 
 const mapReadableRows = <T>(rows: ApiTemplate[], mapRow: (row: ApiTemplate) => T, kind: string): T[] =>

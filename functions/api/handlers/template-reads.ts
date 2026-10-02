@@ -14,7 +14,7 @@ import {
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 import {
-  getTemplateSelectColumns,
+  findTemplateById,
   parseTemplateRow,
   selectTemplatesWithOwner,
   withRulesColumnFallback,
@@ -107,19 +107,12 @@ async function readTemplateHistory(
   userId: string | null,
   templateId: string,
 ): Promise<Response> {
-  const { templates } = schema;
   if (!userId) {
     return jsonError('Unauthorized', 401);
   }
 
   const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
-  const [template] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules))
-      .from(templates)
-      .where(eq(templates.id, templateId))
-      .limit(1),
-  );
+  const template = await findTemplateById(db, templateId);
 
   if (!template || !(await canViewPrivateTemplate(env, template, userId))) {
     return jsonError('Template not found', 404);

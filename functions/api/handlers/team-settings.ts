@@ -4,8 +4,9 @@ import type { Env } from "../types";
 import { schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError, teamSlugSchema } from "../utils/team-slug";
-import { canManageTeam, type TeamRole } from "../utils/team-access";
+import { canManageTeam, findActiveTeam, type TeamRole } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 import { findHiddenShareLinkActors, HIDDEN_ACTOR } from "../utils/share-link-actors";
 import type { TeamRouteContext } from "./team-membership";
 
@@ -35,10 +36,10 @@ export async function updateTeamSettings(
 
   const parsed = updateTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
   }
 
-  const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
+  const team = await findActiveTeam(db, teamId);
   if (!team) {
     return jsonError("Organization not found", 404);
   }

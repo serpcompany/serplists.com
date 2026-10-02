@@ -8,7 +8,8 @@ import {
   type SubTaskRecord,
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
-import { normalizeSectionsPayload, parseJsonArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 
 export const MAX_SHARED_RUN_NOTES_LENGTH = 5000;
 

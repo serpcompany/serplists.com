@@ -4,10 +4,11 @@ import { schema } from '../db';
 import {
   formatPayloadIssue,
   normalizeSectionsPayload,
-  normalizeStringArray,
   templateImportFieldsSchema,
 } from '../utils/payloads';
+import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { json, jsonError } from '../utils/response';
+import { invalidPayloadResponse, readJsonBody } from '../utils/request-json';
 import { describeErrorForLog, log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -163,13 +164,10 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
 const portablePackKindSchema = z.object({ kind: z.literal('serplists-template-pack') });
 
 async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupContext, request: Request): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError('Invalid JSON payload', 400);
-  }
+  const read = await readJsonBody(request);
+  if ('response' in read) return read.response;
 
+  let { body } = read;
   let fileIndexes: number[] | null = null;
   let portableFailures: TemplateImportFailure[] = [];
   if (portablePackKindSchema.safeParse(body).success) {
@@ -185,7 +183,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
     : templateBackupImportBodySchema.safeParse(body);
 
   if (!parsedBody.success) {
-    return jsonError(parsedBody.error.issues[0]?.message || 'Invalid template import payload', 400);
+    return invalidPayloadResponse(parsedBody.error, 'Invalid template import payload');
   }
 
   const { templates: incomingTemplates, options } = parsedBody.data;

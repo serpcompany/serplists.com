@@ -2,7 +2,7 @@ import type { schema } from '../db';
 import type { Env } from '../types';
 import type { AuditSubject } from './audit';
 import { jsonError } from './response';
-import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from './team-access';
+import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole, type TeamRole } from './team-access';
 import { toPublicTemplate } from './template-public';
 import { parseTemplateRow, type TemplateRowColumns } from './template-rows';
 
@@ -18,25 +18,29 @@ export function getTemplateSubject(template: TemplateOwnerFields, fallbackUserId
   return { type: 'user', id: template.user_id || fallbackUserId };
 }
 
-export async function canViewTemplate(env: Env, template: TemplateVisibilityFields, userId: string | null): Promise<boolean> {
-  if (template.deleted_at) return false;
-  if (template.is_public === true) return true;
-  if (!userId) return false;
+async function ownerGrants(
+  env: Env,
+  template: TemplateOwnerFields,
+  userId: string,
+  teamRoleGrants: (role: TeamRole) => boolean,
+): Promise<boolean> {
   if (template.owner_type === 'team' && template.team_id) {
     const membership = await getActiveTeamMembership(env, template.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
+    return membership ? teamRoleGrants(normalizeTeamRole(membership.role)) : false;
   }
 
   return template.user_id === userId;
 }
 
-export async function canViewPrivateTemplate(env: Env, template: TemplateOwnerFields, userId: string): Promise<boolean> {
-  if (template.owner_type === 'team' && template.team_id) {
-    const membership = await getActiveTeamMembership(env, template.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
-  }
+export async function canViewTemplate(env: Env, template: TemplateVisibilityFields, userId: string | null): Promise<boolean> {
+  if (template.deleted_at) return false;
+  if (template.is_public === true) return true;
+  if (!userId) return false;
+  return canViewPrivateTemplate(env, template, userId);
+}
 
-  return template.user_id === userId;
+export function canViewPrivateTemplate(env: Env, template: TemplateOwnerFields, userId: string): Promise<boolean> {
+  return ownerGrants(env, template, userId, canViewTeam);
 }
 
 export async function serializeTemplateForViewer<T extends TemplateRowColumns & TemplateVisibilityFields>(
@@ -49,13 +53,8 @@ export async function serializeTemplateForViewer<T extends TemplateRowColumns & 
   return row.is_public === true ? toPublicTemplate(parseTemplateRow(row)) : null;
 }
 
-export async function canEditTemplate(env: Env, template: TemplateOwnerFields, userId: string): Promise<boolean> {
-  if (template.owner_type === 'team' && template.team_id) {
-    const membership = await getActiveTeamMembership(env, template.team_id, userId);
-    return membership ? canEditTeamTemplates(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return template.user_id === userId;
+export function canEditTemplate(env: Env, template: TemplateOwnerFields, userId: string): Promise<boolean> {
+  return ownerGrants(env, template, userId, canEditTeamTemplates);
 }
 
 export async function assertTeamTemplateCreateAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {

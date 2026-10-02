@@ -11,7 +11,8 @@ import {
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
 import { getTaskSubTasks, isSectionedList, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
-import { normalizeSectionsPayload, parseJsonArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 
 export const getId = (value: unknown): string | null => {
   if (!isChecklistNodeRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {

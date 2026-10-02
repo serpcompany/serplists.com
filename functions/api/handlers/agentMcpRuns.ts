@@ -20,7 +20,8 @@ import {
 import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import type { RunUpdates } from "../utils/checklist-runs";
 import { contentFits } from "../utils/content-limits";
-import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { normalizeSectionsPayload } from "../utils/payloads";
+import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { findRunCompletionRefusal } from "../utils/run-completion";
 import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 

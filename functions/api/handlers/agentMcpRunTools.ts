@@ -10,10 +10,13 @@ import {
   type RunOwnerContext,
 } from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchChanges, type RunUpdates } from "../utils/checklist-runs";
+import type { RunUpdates } from "../utils/checklist-runs";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchChanges } from "../utils/guarded-writes";
 import { log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { normalizeSectionsPayload } from "../utils/payloads";
+import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
@@ -139,35 +142,6 @@ function runRevisionExistsSql(runId: string, userId: string, revision: number) {
   )`;
 }
 
-function insertAuditWhenRunRevisionMatches(
-  db: ReturnType<typeof createDb>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
-  runId: string,
-  userId: string,
-  revision: number,
-) {
-  const { audit_events } = schema;
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${runRevisionExistsSql(runId, userId, revision)}
-  `);
-}
-
 export async function updateRun(
   request: Request,
   env: Env,
@@ -232,12 +206,11 @@ export async function updateRun(
   });
   const db = createDb(env);
   const batchResults = await db.batch([
-    insertAuditWhenRunRevisionMatches(
+    insertRowWhere(
       db,
+      schema.audit_events,
       auditEvent,
-      args.runId,
-      identity.userId,
-      currentRevision,
+      runRevisionExistsSql(args.runId, identity.userId, currentRevision),
     ),
     db.update(schema.checklist_runs)
       .set(updates)

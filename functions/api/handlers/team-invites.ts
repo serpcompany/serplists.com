@@ -9,6 +9,7 @@ import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 import { buildInviteRevocation } from "../utils/team-invite-revocation";
 import { activeTeamManagerExists } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -68,7 +69,7 @@ export async function createTeamInvite(
 
   const parsed = inviteTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid invite payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
   }
 
   const inviteEmail = parsed.data.email;

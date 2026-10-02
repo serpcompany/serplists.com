@@ -2,7 +2,7 @@ import { and, desc, eq, gt, isNotNull, isNull, not, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { insertAuditEventWhere } from "../utils/guarded-writes";
+import { insertRowWhere } from "../utils/guarded-insert";
 import { buildInviteRevocation, type TeamInvite } from "../utils/team-invite-revocation";
 import {
   activeTeamManagerExists,
@@ -158,7 +158,7 @@ export async function acceptTeamInviteRecord({
         joined_at: existingMembership.joined_at ?? now,
         updated_at: now,
       }).where(and(eq(team_members.id, memberId), acceptedInviteExistsSql(invite.id, userId, now))),
-      insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
+      insertRowWhere(db, schema.audit_events, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
     ]);
   } else {
     const insertedMembership = {
@@ -190,7 +190,7 @@ export async function acceptTeamInviteRecord({
           where ${acceptedInviteExistsSql(invite.id, userId, now)}
         `)
         .onConflictDoNothing({ target: [team_members.team_id, team_members.user_id] }),
-      insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
+      insertRowWhere(db, schema.audit_events, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
     ]);
   }
 

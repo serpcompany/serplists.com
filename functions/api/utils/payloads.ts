@@ -6,6 +6,7 @@ import {
 } from "../../../src/lib/schemas/templateFields";
 import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
 import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
+import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -97,33 +98,6 @@ export function describePayloadError(
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
   return { message, details: field === undefined ? {} : { field } };
-}
-
-const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
-
-export function parseJsonArray(value: unknown): unknown[] | null {
-  if (isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      return isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-export function normalizeStringArray(value: unknown): string[] {
-  const parsed = parseJsonArray(value);
-  if (parsed) {
-    return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-  }
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return [];
 }
 
 export function parseSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {

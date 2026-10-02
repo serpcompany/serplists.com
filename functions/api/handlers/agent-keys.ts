@@ -15,6 +15,7 @@ import {
   MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse, readJsonOrNull } from "../utils/request-json";
 import { getSessionUserId } from "../utils/session";
 
 const CONNECTION_SEGMENT = "connection";
@@ -34,14 +35,6 @@ const safeKeySelection = (personal_run_keys: typeof schema.personal_run_keys) =>
   revokedAt: personal_run_keys.revoked_at,
   permissions: personal_run_keys.permissions,
 });
-
-async function readJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 export async function handleAgentKeys(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
@@ -77,9 +70,9 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   if (request.method === "POST" && !keyId) {
-    const parsed = createKeyBodySchema.safeParse(await readJson(request));
+    const parsed = createKeyBodySchema.safeParse(await readJsonOrNull(request));
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "Invalid key payload", 400);
+      return invalidPayloadResponse(parsed.error, "Invalid key payload");
     }
 
     let secret: Awaited<ReturnType<typeof createPersonalRunKeySecret>>;

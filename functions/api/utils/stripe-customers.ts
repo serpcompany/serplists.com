@@ -24,20 +24,27 @@ export async function createStripeCustomer(
   return customer.id;
 }
 
-export async function storeFirstStripeCustomer(db: Db, userId: string, stripeCustomerId: string): Promise<string> {
-  const { stripe_customers } = schema;
-  const nowIso = new Date().toISOString();
-  await db
-    .insert(stripe_customers)
-    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
-    .onConflictDoNothing({ target: stripe_customers.user_id });
+export function insertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
+  return db
+    .insert(schema.stripe_customers)
+    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso });
+}
 
+async function storedStripeCustomerId(db: Db, userId: string): Promise<string | undefined> {
+  const { stripe_customers } = schema;
   const [row] = await db
     .select({ stripeCustomerId: stripe_customers.stripe_customer_id })
     .from(stripe_customers)
     .where(eq(stripe_customers.user_id, userId))
     .limit(1);
-  return row?.stripeCustomerId ?? stripeCustomerId;
+  return row?.stripeCustomerId;
+}
+
+export async function storeFirstStripeCustomer(db: Db, userId: string, stripeCustomerId: string): Promise<string> {
+  await insertStripeCustomer(db, userId, stripeCustomerId, new Date().toISOString()).onConflictDoNothing({
+    target: schema.stripe_customers.user_id,
+  });
+  return (await storedStripeCustomerId(db, userId)) ?? stripeCustomerId;
 }
 
 export async function replaceMissingStripeCustomer(
@@ -53,11 +60,5 @@ export async function replaceMissingStripeCustomer(
     .set({ stripe_customer_id: replacement, updated_at: new Date().toISOString() })
     .where(and(eq(stripe_customers.user_id, userId), eq(stripe_customers.stripe_customer_id, missingCustomerId)));
   log("warn", "stripe_customer_replaced", { userId, missingCustomerId, stripeCustomerId: replacement });
-
-  const [row] = await db
-    .select({ stripeCustomerId: stripe_customers.stripe_customer_id })
-    .from(stripe_customers)
-    .where(eq(stripe_customers.user_id, userId))
-    .limit(1);
-  return row?.stripeCustomerId ?? replacement;
+  return (await storedStripeCustomerId(db, userId)) ?? replacement;
 }

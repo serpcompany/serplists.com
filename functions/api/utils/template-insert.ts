@@ -4,6 +4,7 @@ import type { Env } from '../types';
 import { json, jsonError } from './response';
 import { isReservedTemplateSlug } from './reserved-template-slugs';
 import { generateSlug, truncateSlug, withSlugSuffix } from './slug';
+import { isUniqueViolationOn } from './unique-violation';
 import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 import {
   countTemplates,
@@ -20,13 +21,7 @@ type Db = ReturnType<typeof createDb>;
 export const TEMPLATE_SLUG_ATTEMPTS = 3;
 
 export function isTemplateSlugUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    const message = current instanceof Error ? current.message : String(current);
-    if (/unique constraint failed:[^\n]*\btemplates\.slug\b/i.test(message)) return true;
-    current = current instanceof Error ? current.cause : undefined;
-  }
-  return false;
+  return isUniqueViolationOn(error, 'templates.slug');
 }
 
 export function templateSlugBase(title: string): string {

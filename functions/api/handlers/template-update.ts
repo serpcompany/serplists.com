@@ -5,11 +5,10 @@ import { and, eq, isNull, ne, or } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import {
   describePayloadError,
-  normalizeStringArray,
-  parseJsonArray,
   parseSectionsPayload,
   templateUpdatePayloadSchema,
 } from '../utils/payloads';
+import { normalizeStringArray, parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { json, jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { buildAuditEventValues, buildTemplateVersionValues } from '../utils/audit';
@@ -18,7 +17,7 @@ import {
   type ReconciledRunUpdate,
   type TemplateUpdateValues,
 } from '../utils/template-writes';
-import { batchUpdateMissed } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 import { contentFits, contentTooLargeResponse } from '../utils/content-limits';
 import {
   assignMissingStableTemplateIdentities,
@@ -35,8 +34,9 @@ import {
   validateChangedTemplateFields,
 } from '../utils/template-changes';
 import { findFreeSuffixedSlug, isTemplateSlugUniqueViolation } from '../utils/template-insert';
+import { isUniqueViolationOn } from '../utils/unique-violation';
 import { isOwnPersonalTemplateRow } from '../utils/template-public';
-import { getTemplateSelectColumns, withRulesColumnFallback } from '../utils/template-rows';
+import { findTemplateById } from '../utils/template-rows';
 import { canEditTemplate, canViewTemplate, getTemplateSubject } from '../utils/template-permissions';
 import { junkTemplateTitles, type TemplateWriteOptions } from './template-create';
 
@@ -109,13 +109,7 @@ export async function updateTemplateForUser(
     return jsonError('No fields to update', 400);
   }
 
-  const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules))
-      .from(templates)
-      .where(eq(templates.id, templateId))
-      .limit(1),
-  );
+  const existingTemplate = await findTemplateById(db, templateId);
 
   if (!existingTemplate || !(await canViewTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found or unauthorized', 404);
@@ -333,10 +327,9 @@ export async function updateTemplateForUser(
         code: 'edit_conflict',
       });
     }
-    reconciledRuns = runResults.filter((result) => !batchUpdateMissed(result)).length;
+    reconciledRuns = runResults.filter((result) => !batchWriteMissed(result)).length;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
+    if (isUniqueViolationOn(error, 'template_versions.version')) {
       return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
         code: 'edit_conflict',
       });

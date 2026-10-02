@@ -2,13 +2,15 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchWriteMissed } from "../utils/guarded-writes";
 import { sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { activeTeamManagerExists, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { buildInviteRevocation, selectPendingInvitesFromInviter } from "../utils/team-invite-revocation";
 
 type Db = ReturnType<typeof createDb>;
+type TeamInviteRow = typeof schema.team_invites.$inferSelect;
 
 export async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
   const db = createDb(env);
@@ -34,6 +36,21 @@ const inviteExpired = () => jsonError("Invite expired", 410, { code: "invite_exp
 function noStore(response: Response): Response {
   response.headers.set("Cache-Control", "no-store");
   return response;
+}
+
+export async function findInviteByToken(
+  db: Db,
+  token: string,
+): Promise<{ invite: TeamInviteRow | undefined } | { response: Response }> {
+  const { team_invites } = schema;
+
+  const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return { response: jsonError("Unable to verify invite token", 500) };
+  }
+
+  const [invite] = await db.select().from(team_invites).where(eq(team_invites.token_hash, tokenHash)).limit(1);
+  return { invite };
 }
 
 export async function previewTeamInvite({
@@ -147,12 +164,12 @@ export async function declineTeamInvite({
 }): Promise<Response> {
   const { team_invites } = schema;
 
-  const tokenHash = await sha256Hex(token);
-  if (!tokenHash) {
-    return jsonError("Unable to verify invite token", 500);
+  const found = await findInviteByToken(db, token);
+  if ("response" in found) {
+    return found.response;
   }
 
-  const [invite] = await db.select().from(team_invites).where(eq(team_invites.token_hash, tokenHash)).limit(1);
+  const { invite } = found;
   if (!invite?.id || invite.revoked_at || invite.accepted_at) {
     return inviteNotFound();
   }
@@ -187,8 +204,9 @@ export async function declineTeamInvite({
           isNull(team_invites.revoked_at),
         ),
       ),
-    insertAuditEventWhere(
+    insertRowWhere(
       db,
+      schema.audit_events,
       auditEvent,
       sql`exists (
         select 1
@@ -261,7 +279,7 @@ export async function leaveTeam({
       })),
   );
   const results = await db.batch([
-    insertAuditEventWhere(db, auditEvent, stillLeavable()),
+    insertRowWhere(db, schema.audit_events, auditEvent, stillLeavable()),
     ...inviteRevocations.flat(),
     db.delete(team_members).where(leavableMembership()),
   ]);

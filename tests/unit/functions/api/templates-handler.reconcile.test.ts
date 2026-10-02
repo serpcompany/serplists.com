@@ -2,18 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { elementAt, firstOf, onlyElement, taskIn } from '../../../support/elements';
 import { z } from 'zod';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQL } from 'drizzle-orm';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks, successBody } from '../../../support/templatesHandler';
+import { schema } from '@functions/api/db';
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { columnNamesIn } from '../../../support/drizzleSql';
 import { storedSections, storedSectionsAsTheEditorResendsThem } from '../../../fixtures/editorResentSections';
 import { apiErrorBody, readJson } from '../../../support/readJson';
-import { arrayContaining, objectContaining } from '../../../support/asymmetricMatchers';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 import { jsonRecordIn, jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
 const reconciledBody = z.object({ reconciledRuns: z.number() }).passthrough();
+const auditEventRow = z
+  .object({ action: z.string(), resource_id: z.string(), actor_user_id: z.string().nullable(), metadata_json: z.string() })
+  .passthrough();
 
 describe('Templates Handlers', () => {
   beforeEach(resetTemplatesHandlerMocks);
@@ -347,25 +351,28 @@ describe('Templates Handlers', () => {
 
       expect(response.status).toBe(200);
       expect(data.reconciledRuns).toBe(1);
-      const dialect = new SQLiteSyncDialect();
-      const guardedInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => dialect.sqlToQuery(query as SQL));
-      expect(guardedInserts).toHaveLength(1);
-      const { sql: insertSql, params } = onlyElement(guardedInserts);
-      expect(params).toEqual(arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
-      const metadata = jsonRecordIn(params.find((param) => typeof param === 'string' && param.includes('"retired"')));
-      expect(metadata).toEqual(objectContaining({
+      const reconciledEvents = vi.mocked(insertRowWhere).mock.calls.flatMap(([, table, values, condition], call) => {
+        const event = auditEventRow.safeParse(values);
+        return table === schema.audit_events && event.success && event.data.action === 'checklist_run.reconciled'
+          ? [{ call, condition, event: event.data }]
+          : [];
+      });
+      const { call, condition, event } = onlyElement(reconciledEvents);
+      expect(event).toEqual(objectContaining({ resource_id: 'run-1', actor_user_id: 'user-123' }));
+      expect(jsonRecordIn(event.metadata_json)).toEqual(objectContaining({
         templateId: 'template-1',
         templateVersion: 3,
         fromRevision: 4,
         toRevision: 5,
         retired: [{ kind: 'item', id: 'item-2', title: 'Publish' }],
       }));
-      expect(JSON.stringify(params)).not.toContain('vault X');
-      expect(insertSql).toMatch(/where exists \(select 1 from "checklist_runs" where .*"checklist_runs"\."revision" = \?/);
-      expect(params).toContain(4);
+      expect(JSON.stringify(event)).not.toContain('vault X');
+      const guard = new SQLiteSyncDialect().sqlToQuery(condition);
+      expect(guard.sql).toMatch(/^exists \(select 1 from "checklist_runs" where .*"checklist_runs"\."revision" = \?/);
+      expect(guard.params).toContain(4);
       const statements = firstOf(dbMocks.db.batch.mock.calls)[0];
       expect(statements).toHaveLength(6);
-      expect(statements[3]).toEqual({ kind: 'conditional-insert' });
+      expect(statements[3]).toBe(elementAt(vi.mocked(insertRowWhere).mock.results, call).value);
       expect(statements[4]).toBe(dbMocks.updateChain);
       expect(jsonRecordsIn(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0].retired_items)).toEqual([
         objectContaining({ kind: 'item', item: objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),

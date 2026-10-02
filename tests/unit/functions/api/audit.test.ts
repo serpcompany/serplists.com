@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
-import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
+import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
+import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 import { apiEnv } from '../../../support/apiEnv';
@@ -35,7 +36,7 @@ function runGeneratedSql(db: DatabaseSync, query: BuiltQuery): number {
 }
 
 async function reconcileStatements(expectedRevision: number) {
-  const { checklist_runs } = schema;
+  const { audit_events, checklist_runs } = schema;
   const whereClause = and(
     eq(checklist_runs.id, 'run-1'),
     eq(checklist_runs.revision, expectedRevision),
@@ -51,7 +52,7 @@ async function reconcileStatements(expectedRevision: number) {
     createdAt: '2026-02-01T00:00:00.000Z',
   });
   return {
-    auditInsert: insertAuditEventWhen(drizzleThatOnlyBuildsSql, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
+    auditInsert: insertRowWhere(drizzleThatOnlyBuildsSql, audit_events, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
     runUpdate: drizzleThatOnlyBuildsSql.update(checklist_runs).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
   };
 }
@@ -59,7 +60,7 @@ async function reconcileStatements(expectedRevision: number) {
 const events = (db: DatabaseSync) =>
   db.prepare(`SELECT action, resource_id, metadata_json FROM audit_events`).all() as Array<Record<string, string>>;
 
-describe('insertAuditEventWhen', () => {
+describe('insertRowWhere for an audit event', () => {
   it('records the event when the guarded write applies', async () => {
     const db = migratedDatabase();
     const { auditInsert, runUpdate } = await reconcileStatements(4);

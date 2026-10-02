@@ -1,8 +1,7 @@
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
-import { insertAuditEventWhen } from './audit';
-import { batchUpdateMissed } from './checklist-runs';
+import { batchWriteMissed } from './guarded-writes';
 import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
@@ -90,7 +89,7 @@ export async function insertTemplateWithHistoryFallback(
     results = await runBatch(['rules']);
   }
 
-  return !(capacity && batchUpdateMissed(results[0]));
+  return !(capacity && batchWriteMissed(results[0]));
 }
 
 export type ReconciledRunUpdate = {
@@ -130,7 +129,7 @@ export async function updateTemplateWithHistoryFallback(
       db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
       ...reconciledRunUpdates.flatMap((runUpdate) => [
         ...(runUpdate.auditEvent
-          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
+          ? [insertRowWhere(db, audit_events, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
           : []),
         db
           .update(checklist_runs)
@@ -160,7 +159,7 @@ export async function updateTemplateWithHistoryFallback(
     results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
   return {
-    updated: !batchUpdateMissed(results[templateUpdateIndex]),
+    updated: !batchWriteMissed(results[templateUpdateIndex]),
     runResults: runResultIndexes.map((index) => results[index]),
   };
 }

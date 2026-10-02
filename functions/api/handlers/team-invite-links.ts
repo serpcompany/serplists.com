@@ -3,9 +3,11 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
+import { insertRowWhere } from "../utils/guarded-insert";
+import { batchWriteMissed } from "../utils/guarded-writes";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 import { activeTeamManagerExists } from "../utils/team-access";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 
@@ -60,7 +62,7 @@ export async function reissueTeamInviteLink({
 
   const parsed = reissueInviteLinkBodySchema.safeParse(await readOptionalJson(request));
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid invite payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
   }
 
   const now = new Date().toISOString();
@@ -110,8 +112,9 @@ export async function reissueTeamInviteLink({
       .update(team_invites)
       .set({ token_hash: tokenHash, role, expires_at: expiresAt, invited_by_user_id: userId, updated_at: now })
       .where(and(pendingTeamInviteWhere(teamId, inviteId, now), callerStillManages)),
-    insertAuditEventWhere(
+    insertRowWhere(
       db,
+      schema.audit_events,
       auditEvent,
       sql`exists (select 1 from ${team_invites} where ${team_invites.id} = ${inviteId} and ${team_invites.token_hash} = ${tokenHash})`,
     ),

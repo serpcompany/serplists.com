@@ -8,6 +8,7 @@ import {
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
 import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
+import { templateOwnerProfile } from '@/lib/schemas/templateOwnerProfile';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import { normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -75,20 +76,7 @@ const mapApiTemplate = (
     categories: template.categories ?? [],
     tags: Array.isArray(template.tags) ? template.tags : [],
     version: typeof template.version === 'number' ? template.version : 1,
-    ownerProfile:
-      typeof template.owner_username === 'string' ||
-      typeof template.owner_full_name === 'string'
-        ? {
-            username:
-              typeof template.owner_username === 'string'
-                ? template.owner_username
-                : undefined,
-            full_name:
-              typeof template.owner_full_name === 'string'
-                ? template.owner_full_name
-                : undefined,
-          }
-        : undefined,
+    ownerProfile: templateOwnerProfile(template),
   };
 };
 

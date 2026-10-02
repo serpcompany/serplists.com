@@ -1,6 +1,7 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
+import { readJsonPayload } from "../utils/request-json";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -68,19 +69,10 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
 }
 
 async function upsertOverride(request: Request, env: Env): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Invalid JSON payload", 400);
-  }
-
-  const parsed = overrideBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "Invalid override payload", 400);
-  }
-  const { userId, email, plan, expiresAt } = parsed.data;
-  const note = parsed.data.note ?? null;
+  const read = await readJsonPayload(request, overrideBodySchema, "Invalid override payload");
+  if ("response" in read) return read.response;
+  const { userId, email, plan, expiresAt } = read.payload;
+  const note = read.payload.note ?? null;
 
   const db = createDb(env);
   const idFromUserId = userId === undefined ? undefined : await findUserIdById(db, userId);

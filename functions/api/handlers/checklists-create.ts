@@ -5,15 +5,16 @@ import {
   checklistPayloadSchema,
   getRequestedTeamId,
   normalizeSectionsPayload,
-  parseJsonArray,
   parseSectionsPayload,
 } from '../utils/payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
 import { json, jsonError } from '../utils/response';
+import { readJsonPayload } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
 import { canRunTeamTemplates, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { resetRunCompletionState } from '../utils/template-reconciliation';
-import { batchUpdateMissed } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
 import { withStableTemplateIdentities } from '../utils/template-identities';
 import {
@@ -110,19 +111,10 @@ export async function createChecklistRun(
   url: URL,
   userId: string,
 ): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError('Invalid JSON payload', 400);
-  }
+  const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
+  if ('response' in read) return read.response;
 
-  const parsed = checklistPayloadSchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-  }
-
-  const { template_id, title, items, sections, status, teamId: payloadTeamId, team_id: payloadTeamIdSnake } = parsed.data;
+  const { template_id, title, items, sections, status, teamId: payloadTeamId, team_id: payloadTeamIdSnake } = read.payload;
   const requestedTeamId = getRequestedTeamId({ teamId: payloadTeamId, team_id: payloadTeamIdSnake }, url);
   const templateRunSource = template_id
     ? await resolveTemplateRunSource(env, template_id, userId, requestedTeamId)
@@ -181,7 +173,7 @@ export async function createChecklistRun(
     createdAt: now,
   });
   const batchResults = await db.batch(runInsertStatements(db, insertedRun, auditEvent, owner, capacity.limit));
-  if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
+  if (capacity.limit !== null && batchWriteMissed(batchResults[0])) {
     return activeRunLimitResponse(owner, { limit: capacity.limit, current: await countActiveRuns(env, owner) }, 'create');
   }
 

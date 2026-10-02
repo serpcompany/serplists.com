@@ -2,6 +2,7 @@ import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { json, jsonError } from "../utils/response";
+import { invalidPayloadResponse } from "../utils/request-json";
 import {
   generateUniqueTeamSlug,
   isTeamSlugTaken,
@@ -28,7 +29,7 @@ export async function createTeam(
 
   const parsed = createTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
+    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
   }
 
   const now = new Date().toISOString();

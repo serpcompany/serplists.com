@@ -1,8 +1,10 @@
-import { and, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
-import { z } from 'zod';
+import { and, eq, getTableColumns, isNull, sql, type SQL } from 'drizzle-orm';
 import { schema, type createDb } from '../db';
+import type { Env } from '../types';
 import type { AuditSubject } from './audit';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { jsonError } from './response';
+import { canUpdateRun, canViewRun } from './run-access';
 import { runSourceTemplateUsableSql } from './template-access';
 
 const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
@@ -91,15 +93,27 @@ export function serializeSharedChecklistRun(row: SharedRunRow) {
   };
 }
 
-const batchResultSchema = z.object({ meta: z.object({ changes: z.number() }) });
+export async function findRunToUpdate(
+  env: Env,
+  db: ReturnType<typeof createDb>,
+  runId: string,
+  userId: string,
+  notFoundMessage: string,
+): Promise<{ run: RunRow } | { response: Response }> {
+  const { checklist_runs } = schema;
+  const [run] = await db
+    .select()
+    .from(checklist_runs)
+    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
+    .limit(1);
 
-export function batchChanges(result: unknown): number | null {
-  const parsed = batchResultSchema.safeParse(result);
-  return parsed.success ? parsed.data.meta.changes : null;
-}
-
-export function batchUpdateMissed(result: unknown): boolean {
-  return batchChanges(result) === 0;
+  if (!run || !(await canViewRun(env, run, userId))) {
+    return { response: jsonError(notFoundMessage, 404) };
+  }
+  if (!(await canUpdateRun(env, run, userId))) {
+    return { response: jsonError('Forbidden', 403) };
+  }
+  return { run };
 }
 
 export function auditedRunUpdate(

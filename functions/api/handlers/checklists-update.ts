@@ -1,12 +1,14 @@
 import { Env } from '../types';
 import { and, eq, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { checklistPayloadSchema, parseJsonArray, parseSectionsPayload } from '../utils/payloads';
+import { checklistPayloadSchema, parseSectionsPayload } from '../utils/payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { json, jsonError } from '../utils/response';
+import { readJsonPayload } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
-import { canUpdateRun, canViewRun } from '../utils/run-access';
-import { auditedRunUpdate, batchUpdateMissed, getRunSubject, type RunUpdates } from '../utils/checklist-runs';
-import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
+import { auditedRunUpdate, findRunToUpdate, getRunSubject, type RunUpdates } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
+import { reopenLimitResponse } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 
@@ -19,19 +21,11 @@ export async function updateChecklistRun(
 ): Promise<Response> {
   const { checklist_runs } = schema;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError('Invalid JSON payload', 400);
-  }
+  const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
+  if ('response' in read) return read.response;
+  const { body } = read;
 
-  const parsed = checklistPayloadSchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-  }
-
-  const { title, items, sections, status, progress, completed_at, expected_revision } = parsed.data;
+  const { title, items, sections, status, progress, completed_at, expected_revision } = read.payload;
   const updates: RunUpdates = {};
   let nextSections: unknown[] | null = null;
 
@@ -57,18 +51,9 @@ export async function updateChecklistRun(
     return jsonError('No fields to update', 400);
   }
 
-  const [existingRun] = await db
-    .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
-    .limit(1);
-
-  if (!existingRun || !(await canViewRun(env, existingRun, userId))) {
-    return jsonError('Checklist not found', 404);
-  }
-  if (!(await canUpdateRun(env, existingRun, userId))) {
-    return jsonError('Forbidden', 403);
-  }
+  const found = await findRunToUpdate(env, db, checklistId, userId, 'Checklist not found');
+  if ('response' in found) return found.response;
+  const { run: existingRun } = found;
 
   const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;
   if (typeof expected_revision === 'number' && expected_revision !== currentRevision) {
@@ -81,11 +66,8 @@ export async function updateChecklistRun(
     const tooLarge = contentTooLargeResponse('run', nextSections, parseJsonArray(existingRun.items) ?? []);
     if (tooLarge) return tooLarge;
   }
-  if (isReopening(existingRun.status, status)) {
-    const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
-    const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
-    if (limitHit) return activeRunLimitResponse(runOwner, limitHit, 'reopen');
-  }
+  const reopenRefusal = await reopenLimitResponse(env, existingRun, status, userId);
+  if (reopenRefusal) return reopenRefusal;
 
   const now = new Date().toISOString();
   updates.updated_at = now;
@@ -116,7 +98,7 @@ export async function updateChecklistRun(
     isNull(checklist_runs.deleted_at),
   ), updates, auditEvent));
 
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
       code: 'edit_conflict',
     });

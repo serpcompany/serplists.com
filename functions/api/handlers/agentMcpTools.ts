@@ -50,32 +50,29 @@ export const getRunArgs = z.object({
   cursor: cursorArg.optional(),
 }).strict();
 
+const runAtRevision = z.object({
+  runId: z.string().trim().min(1),
+  expectedRevision: z.number().int().positive(),
+});
+
 export const updateRunArgs = z.discriminatedUnion("operation", [
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_task_completed"),
     taskId: z.string().trim().min(1),
     completed: z.boolean(),
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_subtask_completed"),
     taskId: z.string().trim().min(1),
     subtaskId: z.string().trim().min(1),
     completed: z.boolean(),
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_task_notes"),
     taskId: z.string().trim().min(1),
     notes: taskNotesArg,
   }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
+  runAtRevision.extend({
     operation: z.literal("set_run_status"),
     status: z.enum(["in_progress", "completed"]),
   }).strict(),

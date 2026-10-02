@@ -11,8 +11,8 @@ import {
   templateLimitResponse,
   type TemplateUpdateValues,
 } from '../utils/template-writes';
-import { batchUpdateMissed } from '../utils/checklist-runs';
-import { getTemplateSelectColumns, withRulesColumnFallback, type TemplateDb } from '../utils/template-rows';
+import { batchWriteMissed } from '../utils/guarded-writes';
+import { findTemplateById, type TemplateDb } from '../utils/template-rows';
 import {
   canEditTemplate,
   canViewPrivateTemplate,
@@ -33,13 +33,7 @@ export async function restoreTemplate(
     return jsonError('Template ID required', 400);
   }
 
-  const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules))
-      .from(templates)
-      .where(eq(templates.id, templateId))
-      .limit(1),
-  );
+  const existingTemplate = await findTemplateById(db, templateId);
 
   if (!existingTemplate || !(await canViewPrivateTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found', 404);
@@ -91,7 +85,7 @@ export async function restoreTemplate(
     insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, stillArchivedWithinLimit)),
     db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), stillArchivedWithinLimit)),
   ]);
-  if (batchUpdateMissed(restoreResults[1])) {
+  if (batchWriteMissed(restoreResults[1])) {
     if (limit !== null) {
       const currentCount = await countTemplates(env, owner);
       if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
@@ -111,13 +105,7 @@ export async function archiveTemplate(
 ): Promise<Response> {
   const { templates, audit_events } = schema;
 
-  const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules))
-      .from(templates)
-      .where(eq(templates.id, templateId))
-      .limit(1),
-  );
+  const existingTemplate = await findTemplateById(db, templateId);
 
   if (!existingTemplate || !(await canViewTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found or unauthorized', 404);
@@ -157,7 +145,7 @@ export async function archiveTemplate(
     insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
     db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
   ]);
-  if (batchUpdateMissed(archiveResults[1])) {
+  if (batchWriteMissed(archiveResults[1])) {
     return jsonError('Template not found or unauthorized', 404);
   }
 

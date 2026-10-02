@@ -3,8 +3,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
-import { canUpdateRun, canViewRun } from '../utils/run-access';
-import { auditedRunUpdate, batchUpdateMissed, getRunSubject } from '../utils/checklist-runs';
+import { auditedRunUpdate, findRunToUpdate, getRunSubject } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 
 export async function shareChecklistRun(
   request: Request,
@@ -19,18 +19,9 @@ export async function shareChecklistRun(
     return jsonError('Checklist run ID required', 400);
   }
 
-  const [run] = await db
-    .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
-    .limit(1);
-
-  if (!run || !(await canViewRun(env, run, userId))) {
-    return jsonError('Checklist run not found', 404);
-  }
-  if (!(await canUpdateRun(env, run, userId))) {
-    return jsonError('Forbidden', 403);
-  }
+  const found = await findRunToUpdate(env, db, runId, userId, 'Checklist run not found');
+  if ('response' in found) return found.response;
+  const { run } = found;
 
   const now = new Date().toISOString();
   const shareToken = crypto.randomUUID();
@@ -56,7 +47,7 @@ export async function shareChecklistRun(
     run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
     isNull(checklist_runs.deleted_at),
   ), shareUpdates, auditEvent));
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist run not found', 404);
   }
 
@@ -76,18 +67,9 @@ export async function stopSharingChecklistRun(
 ): Promise<Response> {
   const { checklist_runs } = schema;
 
-  const [run] = await db
-    .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
-    .limit(1);
-
-  if (!run || !(await canViewRun(env, run, userId))) {
-    return jsonError('Checklist run not found', 404);
-  }
-  if (!(await canUpdateRun(env, run, userId))) {
-    return jsonError('Forbidden', 403);
-  }
+  const found = await findRunToUpdate(env, db, runId, userId, 'Checklist run not found');
+  if ('response' in found) return found.response;
+  const { run } = found;
   if (!run.is_public) {
     return json({ id: runId, isPublic: false });
   }

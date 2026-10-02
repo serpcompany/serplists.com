@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { log } from "./logger";
+import { insertStripeCustomer } from "./stripe-customers";
 import { StripeApiError, expandableStripeIdSchema, stripeGet } from "./stripe";
 
 type Db = ReturnType<typeof createDb>;
@@ -252,22 +253,14 @@ export async function loadCurrentSubscription(
 }
 
 export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
-  const { stripe_customers } = schema;
-  return db
-    .insert(stripe_customers)
-    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
-    .onConflictDoUpdate({
-      target: stripe_customers.user_id,
-      set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
-    });
+  return insertStripeCustomer(db, userId, stripeCustomerId, nowIso).onConflictDoUpdate({
+    target: schema.stripe_customers.user_id,
+    set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
+  });
 }
 
 export function linkStripeCustomerIfUnmapped(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
-  const { stripe_customers } = schema;
-  return db
-    .insert(stripe_customers)
-    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
-    .onConflictDoNothing();
+  return insertStripeCustomer(db, userId, stripeCustomerId, nowIso).onConflictDoNothing();
 }
 
 export function upsertStripeSubscription(

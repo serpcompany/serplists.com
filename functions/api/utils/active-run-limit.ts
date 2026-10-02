@@ -85,3 +85,15 @@ export function activeRunLimitResponse(
 export function isReopening(currentStatus: unknown, nextStatus: unknown): boolean {
   return nextStatus === 'in_progress' && currentStatus !== 'in_progress';
 }
+
+export async function reopenLimitResponse(
+  env: Env,
+  run: Pick<typeof schema.checklist_runs.$inferSelect, 'status' | 'team_id' | 'user_id'>,
+  nextStatus: unknown,
+  actingUserId: string | null,
+): Promise<Response | null> {
+  if (!isReopening(run.status, nextStatus)) return null;
+  const owner = { userId: run.user_id, teamId: run.team_id ?? null };
+  const hit = await findActiveRunLimitHit(env, owner, actingUserId);
+  return hit ? activeRunLimitResponse(owner, hit, 'reopen') : null;
+}

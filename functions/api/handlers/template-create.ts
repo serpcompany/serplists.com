@@ -3,10 +3,10 @@ import { createDb } from '../db';
 import {
   describePayloadError,
   getRequestedTeamId,
-  normalizeStringArray,
   parseSectionsPayload,
   templatePayloadSchema,
 } from '../utils/payloads';
+import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';

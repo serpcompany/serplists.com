@@ -13,33 +13,17 @@ import type {
 } from '@/types/checklist';
 import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
 import type { ApiRun } from '@/lib/schemas/apiRuns';
+import { parseJsonArray } from '@/lib/schemas/jsonArrays';
 
 const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
-const parseJsonArray = (value: unknown): unknown[] => {
-  if (isArray(value)) {
-    return value;
-  }
-
-  if (typeof value !== 'string' || !value) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
 const normalizeChecklistSections = (checklist: ApiRun): ChecklistSection[] => {
   const rawSections = isArray(checklist.sections)
     ? checklist.sections
-    : parseJsonArray(checklist.items);
+    : parseJsonArray(checklist.items) ?? [];
 
   if (isSectionsShape(rawSections)) {
     return normalizeSections(rawSections);

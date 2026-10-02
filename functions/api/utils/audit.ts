@@ -1,6 +1,5 @@
 import type { AuditAction, TemplateVersionAction } from "../../../src/lib/schemas/auditActions";
-import { getTableColumns, sql, type SQL } from "drizzle-orm";
-import { schema, type createDb } from "../db";
+import type { schema } from "../db";
 import { sha256Hex } from "./crypto";
 import {
   capAuditColumn,
@@ -111,14 +110,4 @@ export async function buildTemplateVersionValues(
     change_summary: input.changeSummary ?? null,
     created_at: input.createdAt ?? new Date().toISOString(),
   };
-}
-
-export function insertAuditEventWhen(
-  db: ReturnType<typeof createDb>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
-  condition: SQL,
-) {
-  const values = auditEvent as Record<string, unknown>;
-  const columns = Object.keys(getTableColumns(schema.audit_events)).map((key) => sql`${values[key] ?? null}`);
-  return db.insert(schema.audit_events).select(sql`select ${sql.join(columns, sql`, `)} where ${condition}`);
 }

@@ -2,8 +2,7 @@ import { and, eq, exists, gt, isNull, notExists, sql, type SQL } from "drizzle-o
 import { alias } from "drizzle-orm/sqlite-core";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "./audit";
-import { allConditions } from "./guarded-insert";
-import { insertAuditEventWhere } from "./guarded-writes";
+import { allConditions, insertRowWhere } from "./guarded-insert";
 
 type Db = ReturnType<typeof createDb>;
 export type TeamInvite = typeof schema.team_invites.$inferSelect & { id: string };
@@ -114,8 +113,9 @@ export async function buildInviteRevocation({
           guard,
         ),
       ),
-    insertAuditEventWhere(
+    insertRowWhere(
       db,
+      audit_events,
       auditEvent,
       allConditions(
         revokedNow,

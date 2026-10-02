@@ -7,7 +7,8 @@ import {
   type JsonRecord,
 } from '../../../src/lib/schemas/jsonRecords';
 import { sha256Hex } from './crypto';
-import { normalizeSectionsPayload, parseJsonArray } from './payloads';
+import { normalizeSectionsPayload } from './payloads';
+import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 
 interface AuditedRowFields extends JsonRecord {
   items?: unknown;

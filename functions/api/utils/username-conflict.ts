@@ -1,6 +1,7 @@
 import type { Adapter, GenericEndpointContext } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { log } from './logger';
+import { isUniqueViolationOn } from './unique-violation';
 
 export const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
 export const USERNAME_TAKEN_MESSAGE = 'Username is already taken. Please try another.';
@@ -9,15 +10,8 @@ export function usernameTakenError(): APIError {
   return new APIError('UNPROCESSABLE_ENTITY', { message: USERNAME_TAKEN_MESSAGE, code: USERNAME_TAKEN_CODE });
 }
 
-const USERNAME_UNIQUE_VIOLATION = /UNIQUE constraint failed: users\.username\b/i;
-
 export function isUsernameUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
-    if (USERNAME_UNIQUE_VIOLATION.test(current.message)) return true;
-    current = current.cause;
-  }
-  return false;
+  return isUniqueViolationOn(error, 'users.username');
 }
 
 export async function assertUsernameAvailableForUpdate(

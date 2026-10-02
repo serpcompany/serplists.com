@@ -4,7 +4,8 @@ import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
 import { canDeleteRun, canRestoreRun, canViewRun, canViewRunHistory } from '../utils/run-access';
-import { auditedRunUpdate, batchUpdateMissed, getRunSubject } from '../utils/checklist-runs';
+import { auditedRunUpdate, getRunSubject } from '../utils/checklist-runs';
+import { batchWriteMissed } from '../utils/guarded-writes';
 import {
   activeRunCapacityAvailableSql,
   activeRunLimitResponse,
@@ -76,7 +77,7 @@ export async function restoreChecklistRun(
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, capacity.limit === null
     ? archivedRun
     : and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit)), restoreUpdates, auditEvent));
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     if (capacity.limit !== null) {
       const current = await countActiveRuns(env, owner);
       if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
@@ -139,7 +140,7 @@ export async function archiveChecklistRun(
     existingChecklist.team_id ? eq(checklist_runs.team_id, existingChecklist.team_id) : eq(checklist_runs.user_id, userId),
     isNull(checklist_runs.deleted_at),
   ), archiveUpdates, auditEvent));
-  if (batchUpdateMissed(batchResults[1])) {
+  if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist not found or unauthorized', 404);
   }
 

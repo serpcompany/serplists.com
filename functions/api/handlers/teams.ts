@@ -1,25 +1,17 @@
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import { sha256Hex } from "../utils/crypto";
 import { getSessionUserId } from "../utils/session";
-import { canManageTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
+import { canManageTeam, findActiveTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { readJsonOrNull } from "../utils/request-json";
 import { reissueTeamInviteLink } from "./team-invite-links";
-import { declineTeamInvite, leaveTeam, previewTeamInvite } from "./team-self-service";
+import { declineTeamInvite, findInviteByToken, leaveTeam, previewTeamInvite } from "./team-self-service";
 import { createTeam } from "./team-create";
 import { transferTeamOwnership, updateTeamMember } from "./team-membership";
 import { acceptTeamInviteRecord, listIncomingTeamInvites } from "./team-invite-accept";
 import { createTeamInvite, listTeamInvites, revokeTeamInvite } from "./team-invites";
 import { listTeamActivity, listTeamMembers, updateTeamSettings } from "./team-settings";
-
-async function readJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 export async function handleTeams(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
@@ -65,7 +57,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   if (request.method === "POST" && teamsSubpath.length === 0) {
-    return createTeam({ db, request, userId }, await readJson(request));
+    return createTeam({ db, request, userId }, await readJsonOrNull(request));
   }
 
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[2] === "accept") {
@@ -74,12 +66,12 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Invite token required", 400);
     }
 
-    const tokenHash = await sha256Hex(token);
-    if (!tokenHash) {
-      return jsonError("Unable to verify invite token", 500);
+    const found = await findInviteByToken(db, token);
+    if ("response" in found) {
+      return found.response;
     }
 
-    const [invite] = await db.select().from(team_invites).where(eq(team_invites.token_hash, tokenHash)).limit(1);
+    const { invite } = found;
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -131,7 +123,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   if (request.method === "GET" && teamsSubpath.length === 1) {
-    const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
+    const team = await findActiveTeam(db, teamId);
     if (!team) {
       return jsonError("Organization not found", 404);
     }
@@ -144,7 +136,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return updateTeamSettings({ db, request, teamId, userId, membership, role }, await readJson(request));
+    return updateTeamSettings({ db, request, teamId, userId, membership, role }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "members") {
@@ -158,7 +150,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       });
     }
 
-    return transferTeamOwnership({ db, request, teamId, userId, membership }, await readJson(request));
+    return transferTeamOwnership({ db, request, teamId, userId, membership }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "activity") {
@@ -190,7 +182,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return createTeamInvite({ db, env, request, teamId, userId }, await readJson(request));
+    return createTeamInvite({ db, env, request, teamId, userId }, await readJsonOrNull(request));
   }
 
   if (request.method === "DELETE" && teamsSubpath[1] === "invites" && teamsSubpath[2]) {
@@ -206,7 +198,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return updateTeamMember({ db, request, teamId, userId, membership }, teamsSubpath[2], await readJson(request));
+    return updateTeamMember({ db, request, teamId, userId, membership }, teamsSubpath[2], await readJsonOrNull(request));
   }
 
   return new Response("Method Not Allowed", { status: 405 });
