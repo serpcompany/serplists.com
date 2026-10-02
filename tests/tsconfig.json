@@ -2,14 +2,14 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.tests.tsbuildinfo",
-    "allowJs": false,
-    "noPropertyAccessFromIndexSignature": false
+    "allowJs": false
   },
   "include": [
     "../next-env.d.ts",
     "../cloudflare-env.d.ts",
     "../src/js-yaml.d.ts",
     "../src/css-custom-properties.d.ts",
+    "../src/next-public-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     "**/*.mts",

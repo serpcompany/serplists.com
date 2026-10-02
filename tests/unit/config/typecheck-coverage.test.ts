@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib.mjs';
-import { arrayContaining } from '../../support/asymmetricMatchers';
 import { elementAt } from '../../support/elements';
 
 const repoRoot = process.cwd();
@@ -16,9 +15,8 @@ const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
   'noFallthroughCasesInSwitch',
   'exactOptionalPropertyTypes',
   'noUncheckedIndexedAccess',
+  'noPropertyAccessFromIndexSignature',
 ];
-const TESTS_TSCONFIG = 'tests/tsconfig.json';
-const SETTINGS_ON_APP_CODE: ReadonlyArray<keyof ts.CompilerOptions> = ['noPropertyAccessFromIndexSignature'];
 
 const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
 
@@ -58,7 +56,7 @@ describe('pnpm run typecheck', () => {
     ).toEqual([]);
   });
 
-  it("holds every tsconfig it runs, the tests' included, to the four settings stricter than strict", () => {
+  it("holds every tsconfig it runs, the tests' included, to the five settings stricter than strict", () => {
     expect(
       tsconfigsTypecheckRuns.flatMap((tsconfig) => {
         const { options } = parsedTsconfig(tsconfig);
@@ -68,25 +66,8 @@ describe('pnpm run typecheck', () => {
       }),
       'These tsconfigs turn off a setting every project keeps on. Set it back to true, or remove the override so the ' +
         'project inherits it, and fix the errors it reports: narrow the value, give it a default that is right for ' +
-        'that case, or throw an error that names what is missing, never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
-    ).toEqual([]);
-  });
-
-  it("holds every tsconfig it runs but the tests' to noPropertyAccessFromIndexSignature", () => {
-    const appTsconfigs = tsconfigsTypecheckRuns.filter((tsconfig) => tsconfig !== TESTS_TSCONFIG);
-
-    expect(appTsconfigs).toEqual(arrayContaining(['tsconfig.json', 'tsconfig.node.json', 'functions/tsconfig.json']));
-    expect(
-      appTsconfigs.flatMap((tsconfig) => {
-        const { options } = parsedTsconfig(tsconfig);
-        return SETTINGS_ON_APP_CODE.filter((setting) => options[setting] !== true).map(
-          (setting) => `${tsconfig}: ${setting}`,
-        );
-      }),
-      'These tsconfigs let code read a known key off an index signature with a dot. Set the setting back to true and ' +
-        'fix what it reports: type the value with the shape it has (a Zod output, a Drizzle row, an interface that names ' +
-        'the keys it reads), and index only a real dictionary such as an env record or headers ' +
-        '(docs/RELIABILITY.md#quality-gates).',
+        'that case, or throw an error that names what is missing; type a value read by known keys with the shape it ' +
+        'has and index only a real dictionary; never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
     ).toEqual([]);
   });
 
