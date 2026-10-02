@@ -35,7 +35,7 @@ import {
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
-import { platformProxyOnLocalD1, runToolInRepo } from "./local-d1-handler-env";
+import { platformProxyOnLocalD1, runScriptInRepo, runToolInRepo } from "./local-d1-handler-env";
 import { apiEnv } from "../support/apiEnv";
 
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn() }));
@@ -66,7 +66,7 @@ function runOfficialTemplateSeed() {
 }
 
 function runLocalData(command: "seed-test" | "seed-official-login" | "cleanup" | "reset-passwords") {
-  runToolInRepo("tsx", ["scripts/data/local-d1-data.ts", command, "--persist-to", persistPath]);
+  runScriptInRepo("scripts/data/local-d1-data.ts", [command, "--persist-to", persistPath]);
 }
 
 const EVERY_FIXTURE_SEEDED = [4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5];

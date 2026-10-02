@@ -1,4 +1,4 @@
-import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env.mjs';
+import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env';
 
 forgetGitRepositoryOverrides();
 

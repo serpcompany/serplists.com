@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { parseEnvFile, parseEnvText } from '../../../scripts/lib/env-file.mjs';
+import { parseEnvFile, parseEnvText } from '../../../scripts/lib/env-file';
 
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'env-file-'));
 

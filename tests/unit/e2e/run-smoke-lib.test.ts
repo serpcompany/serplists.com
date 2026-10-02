@@ -12,7 +12,7 @@ import {
   needsOpenPort,
   resolveSmokeEnv,
   SMOKE_PERSIST_PATH,
-} from '../../e2e/run-smoke-lib.mjs';
+} from '../../e2e/run-smoke-lib';
 
 const repoRoot = path.resolve('/repo');
 const openPort = 4180;
@@ -180,7 +180,7 @@ describe('playwright.config.ts', () => {
     const servers = Array.isArray(config.webServer) ? config.webServer : [config.webServer];
 
     expect(servers).toHaveLength(1);
-    expect(servers[0]?.command).toBe('node tests/e2e/preview-server.mjs');
+    expect(servers[0]?.command).toBe('node --import tsx tests/e2e/preview-server.ts');
     expect(servers[0]?.url).toBe('http://localhost:4180/api/health');
     expect(config.use?.baseURL).toBe('http://localhost:4180');
   }, 60_000);

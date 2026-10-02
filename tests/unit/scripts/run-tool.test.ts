@@ -1,17 +1,22 @@
 import { ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, describe, expect, it } from 'vitest';
 import { firstOf } from '../../support/elements';
 
 import {
   buildPnpmInvocation,
+  buildScriptInvocation,
   buildToolInvocation,
+  execScript,
   execTool,
   killProcessTree,
   type ToolName,
-} from '../../../scripts/lib/run-tool.mjs';
+} from '../../../scripts/lib/run-tool';
 
-const LOCAL_TOOLS: ToolName[] = ['wrangler', 'next', 'opennextjs-cloudflare', 'tsx', 'drizzle-kit', 'playwright'];
+const LOCAL_TOOLS: ToolName[] = ['wrangler', 'next', 'opennextjs-cloudflare', 'drizzle-kit', 'playwright'];
 
 const envStartedBy = (npmExecPath?: string): NodeJS.ProcessEnv => ({ ...process.env, npm_execpath: npmExecPath });
 
@@ -25,6 +30,30 @@ describe('buildToolInvocation', () => {
       expect(invocation.args[0]).not.toMatch(/\.(cmd|ps1|sh)$/);
       expect(invocation.args.slice(1)).toEqual(['--version']);
     }
+  });
+});
+
+describe('buildScriptInvocation', () => {
+  it("runs a script in the current Node with tsx's loader, named by an absolute file URL", () => {
+    const { command, args, options } = buildScriptInvocation('scripts/check-docs.ts', ['--flag']);
+
+    expect(command).toBe(process.execPath);
+    expect(args[0]).toBe('--import');
+    expect(existsSync(fileURLToPath(firstOf(args.slice(1))))).toBe(true);
+    expect(args.slice(2)).toEqual(['scripts/check-docs.ts', '--flag']);
+    expect(options).toEqual({});
+  });
+});
+
+describe('execScript', { timeout: 60_000 }, () => {
+  const outsideTheRepository = mkdtempSync(path.join(tmpdir(), 'run-tool-script-'));
+  afterAll(() => rmSync(outsideTheRepository, { recursive: true, force: true }));
+
+  it('runs a TypeScript script from a folder outside the repository, where no tsx package resolves', () => {
+    const script = path.join(outsideTheRepository, 'typed.ts');
+    writeFileSync(script, 'const answer: number = 42;\nconsole.log(`answer ${answer}`);\n');
+
+    expect(execScript(script, [], { cwd: outsideTheRepository, encoding: 'utf8' })).toBe('answer 42\n');
   });
 });
 

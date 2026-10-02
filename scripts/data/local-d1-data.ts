@@ -5,7 +5,7 @@ import {
   seedLocalTestData,
   seedOfficialLocalLogin,
 } from "../../db/seeds/local";
-import { SEED_STATUS_PREFIX } from "../lib/local-d1-seed.mjs";
+import { SEED_STATUS_PREFIX } from "../lib/local-d1-seed";
 import { withLocalD1, type LocalDb } from "./local-d1";
 
 const command = process.argv[2];

@@ -24,7 +24,7 @@ import {
   splitSchemaQueryResults,
   type ByTable,
   type RequiredIndex,
-} from "../../../scripts/check-production-d1-schema-lib.mjs";
+} from "../../../scripts/check-production-d1-schema-lib";
 
 const sqlOnlySchema = z.object({
   triggers: z.array(z.object({ name: z.string(), table: z.string(), definition: z.string() })),
@@ -51,7 +51,7 @@ function sortIndexesByTable(record: ByTable<readonly RequiredIndex[]>) {
   );
 }
 
-describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db/schema/", () => {
+describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.ts matches db/schema/", () => {
   it("requires every table and column in the Drizzle schema", () => {
     const required = Object.fromEntries(
       Object.entries(REQUIRED_D1_SCHEMA).map(([table, columns]) => [

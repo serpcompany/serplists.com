@@ -9,7 +9,8 @@ import {
   findComments,
   GENERATED_FILES,
   NO_COMMENTS_MESSAGE,
-} from '../../../scripts/check-no-comments-lib.mjs';
+} from '../../../scripts/check-no-comments-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
 const repoRoot = process.cwd();
 const commentLines = (file: string, source: string[]) =>
@@ -334,11 +335,10 @@ describe('patches', () => {
 describe('check-no-comments command', () => {
   const workDir = mkdtempSync(path.join(tmpdir(), 'check-no-comments-'));
   afterAll(() => rmSync(workDir, { recursive: true, force: true }));
-  const run = (...files: string[]) =>
-    spawnSync(process.execPath, [path.join(repoRoot, 'scripts/check-no-comments.mjs'), ...files], {
-      cwd: workDir,
-      encoding: 'utf8',
-    });
+  const run = (...files: string[]) => {
+    const { command, args } = buildScriptInvocation(path.join(repoRoot, 'scripts/check-no-comments.ts'), files);
+    return spawnSync(command, args, { cwd: workDir, encoding: 'utf8' });
+  };
 
   writeFileSync(path.join(workDir, 'clean.toml'), 'name = "serp # checklists"\n');
   writeFileSync(path.join(workDir, 'commented.toml'), '# why\nname = "serp"\n');

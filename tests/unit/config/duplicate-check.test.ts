@@ -5,7 +5,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
+import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib';
 
 const repoRoot = process.cwd();
 const readJson = (file: string): unknown => JSON.parse(readFileSync(path.join(repoRoot, file), 'utf8'));
@@ -123,7 +123,7 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
     expect(
       settings.ignore.filter((pattern) => !allowed.includes(pattern)),
       'jscpd may skip only build output, db/migrations and the files a generator writes (GENERATED_FILES in ' +
-        'scripts/check-no-comments-lib.mjs). Move duplicated code into a shared helper instead of ignoring it.',
+        'scripts/check-no-comments-lib.ts). Move duplicated code into a shared helper instead of ignoring it.',
     ).toEqual([]);
     expect(
       settings.ignore,

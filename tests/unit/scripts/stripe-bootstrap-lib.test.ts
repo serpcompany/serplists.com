@@ -6,7 +6,7 @@ import {
   describePrice,
   ensurePrice,
   PRO_MONTHLY_CENTS,
-} from "../../../scripts/stripe/_bootstrap-lib.mjs";
+} from "../../../scripts/stripe/_bootstrap-lib";
 import { objectContaining } from "../../support/asymmetricMatchers";
 
 const MONTHLY = {

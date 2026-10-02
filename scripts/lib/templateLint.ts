@@ -16,7 +16,7 @@ import {
   portableChecklistTemplateSchema,
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
-import { normalizeEol } from "./line-endings.mjs";
+import { normalizeEol } from "./line-endings";
 
 export type TemplateLintIssue = {
   filePath: string;

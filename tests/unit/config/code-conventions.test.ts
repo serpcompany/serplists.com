@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
 import { queryKeys } from '@/lib/queryKeys';
-import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions.mjs';
+import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions';
 import type { apiJson, apiRequest, fetchFromThePageUnderTest } from '../../e2e/support/api-requests';
 import { onlyElement } from '../../support/elements';
 
@@ -91,15 +91,16 @@ const API_CASES: Case[] = [
 ];
 
 const SCRIPT_CASES: Case[] = [
-  refused('npx named as a command in a script', 'scripts/sample.mjs', "spawn('npx', ['wrangler']);", 'run-tool.mjs'),
-  refused('pnpm named as a command in a browser test helper', 'tests/e2e/support/sample.ts', "execFileSync('pnpm.cmd', ['exec', 'tsx']);", 'run-tool.mjs'),
-  refused('npx named as a command in an integration test', 'tests/integration/sample.test.ts', 'spawn(`npx`, ["wrangler"]);', 'run-tool.mjs'),
-  allowed('pnpm in run-tool.mjs', 'scripts/lib/run-tool.mjs', 'return { command: "pnpm", args, options: {} };'),
+  refused('npx named as a command in a script', 'scripts/sample.mjs', "spawn('npx', ['wrangler']);", 'run-tool.ts'),
+  refused('pnpm named as a command in a browser test helper', 'tests/e2e/support/sample.ts', "execFileSync('pnpm.cmd', ['exec', 'tsx']);", 'run-tool.ts'),
+  refused('npx named as a command in an integration test', 'tests/integration/sample.test.ts', 'spawn(`npx`, ["wrangler"]);', 'run-tool.ts'),
+  allowed('pnpm in run-tool.ts', 'scripts/lib/run-tool.ts', 'return { command: "pnpm", args, options: {} };'),
   allowed('pnpm in a message', 'scripts/sample.mjs', 'console.log("Run pnpm install first");'),
-  refused('a Stripe key read from env in a Stripe script', 'scripts/stripe/sample.mjs', 'const key = env.STRIPE_SECRET_KEY;', 'resolveTestSecretKey()'),
-  refused('the dedicated test key read from env', 'scripts/stripe/sample.mjs', 'const key = process.env.STRIPE_TEST_SECRET_KEY;', 'resolveTestSecretKey()'),
-  allowed('a Stripe key read in _env.mjs', 'scripts/stripe/_env.mjs', 'const key = env.STRIPE_SECRET_KEY;'),
-  refused('a hard-coded localhost port in a script', 'scripts/stripe/sample.mjs', "const url = 'http://localhost:8788/api/stripe/webhook';", 'dev session'),
+  refused('a Stripe key read from env in a Stripe script', 'scripts/stripe/sample.ts', 'const key = env.STRIPE_SECRET_KEY;', 'resolveTestSecretKey()'),
+  refused('the dedicated test key read from env', 'scripts/stripe/sample.ts', 'const key = process.env.STRIPE_TEST_SECRET_KEY;', 'resolveTestSecretKey()'),
+  refused('a Stripe key read from env by its name in brackets', 'scripts/stripe/sample.ts', 'const key = env["STRIPE_SECRET_KEY"];', 'resolveTestSecretKey()'),
+  allowed('a Stripe key read in _env.ts', 'scripts/stripe/_env.ts', 'const key = env["STRIPE_SECRET_KEY"];'),
+  refused('a hard-coded localhost port in a script', 'scripts/stripe/sample.ts', "const url = 'http://localhost:8788/api/stripe/webhook';", 'dev session'),
 ];
 
 const SPEC = 'tests/e2e/sample.spec.ts';

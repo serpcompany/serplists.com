@@ -1,4 +1,4 @@
-import { noExternalDataCasts } from '../../../scripts/eslint-rules/no-external-data-casts.mjs';
+import { noExternalDataCasts } from '../../../scripts/eslint-rules/no-external-data-casts';
 import { typescriptRuleTester } from '../../support/ruleTester';
 
 typescriptRuleTester().run('no-external-data-casts', noExternalDataCasts, {

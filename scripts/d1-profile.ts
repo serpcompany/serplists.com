@@ -1,11 +1,11 @@
-import type { ChildProcess } from "node:child_process";
+import { type ChildProcess, execFileSync } from "node:child_process";
 import { createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
-import { execTool, killProcessTree, spawnTool, type ToolName } from "./lib/run-tool.mjs";
+import { buildScriptInvocation, buildToolInvocation, type Invocation, killProcessTree, spawnTool } from "./lib/run-tool";
 import {
   buildUpdateRunBody,
   buildUpdateTemplateBody,
@@ -45,8 +45,8 @@ const freePort = () =>
     });
   });
 
-function run(tool: ToolName, args: string[]) {
-  execTool(tool, args, { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
+function run({ command, args, options }: Invocation) {
+  execFileSync(command, args, { ...options, cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
 }
 
 const syntheticSql = buildSyntheticSql(datasetCounts(scale));
@@ -54,11 +54,11 @@ const syntheticSql = buildSyntheticSql(datasetCounts(scale));
 function buildDatabase() {
   rmSync(path.join(repoRoot, persistPath), { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
-  run("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath]);
-  run("tsx", ["scripts/data/local-d1-data.ts", "seed-test", "--persist-to", persistPath]);
+  run(buildToolInvocation("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath]));
+  run(buildScriptInvocation("scripts/data/local-d1-data.ts", ["seed-test", "--persist-to", persistPath]));
   const sqlFile = path.join(outDir, "synthetic.sql");
   writeFileSync(sqlFile, syntheticSql);
-  run("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
+  run(buildToolInvocation("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]));
 }
 
 function filesWithTheirText(dir: string, extension: string) {
@@ -160,7 +160,7 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
 }
 
 async function main() {
-  run("opennextjs-cloudflare", ["build"]);
+  run(buildToolInvocation("opennextjs-cloudflare", ["build"]));
   mkdirSync(outDir, { recursive: true });
   const key = hashOfEverythingTheDatasetIsBuiltFrom();
   const statePath = path.join(repoRoot, persistPath);

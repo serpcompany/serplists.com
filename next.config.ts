@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 import { assertProductionApiUrl } from './scripts/lib/buildEnv';
-import { applyDevBindings } from './scripts/lib/dev-bindings.mjs';
+import { applyDevBindings } from './scripts/lib/dev-bindings';
 import {
   CONTENT_SECURITY_POLICY,
   LOCAL_CONTENT_SECURITY_POLICY,

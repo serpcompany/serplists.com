@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
-import { normalizeEol } from './line-endings.mjs';
+import { normalizeEol } from './line-endings';
 
 export const templatePackSchema = z
   .object({

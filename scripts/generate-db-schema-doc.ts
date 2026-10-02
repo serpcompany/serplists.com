@@ -3,8 +3,8 @@ import path from "node:path";
 import { is, SQL } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../db/schema/index";
-import { matchesGeneratedText } from "./lib/line-endings.mjs";
-import { readSqlOnlySchema } from "./lib/sql-only-schema.mjs";
+import { matchesGeneratedText } from "./lib/line-endings";
+import { readSqlOnlySchema } from "./lib/sql-only-schema";
 
 const outputPath = path.join(process.cwd(), "docs/generated/db-schema.md");
 const sqlOnlyPath = path.join(process.cwd(), "db/sql-only-schema.json");

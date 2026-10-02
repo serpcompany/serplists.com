@@ -4,11 +4,13 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib.mjs';
+import { filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib';
 import { elementAt } from '../../support/elements';
 
 const repoRoot = process.cwd();
 const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
+const JAVASCRIPT_FILE = /\.(js|jsx|mjs|cjs)$/;
+const DECLARATION_OF_A_JAVASCRIPT_MODULE = /\.d\.(mts|cts)$/;
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
 const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
   'noImplicitOverride',
@@ -47,6 +49,17 @@ const parsedTsconfig = (tsconfig: string): ts.ParsedCommandLine => {
 const filesTheTsconfigIncludes = (tsconfig: string): string[] =>
   parsedTsconfig(tsconfig).fileNames.map((file) => path.relative(repoRoot, file).split(path.sep).join('/'));
 
+const configsOnlyJavaScriptLoads = repositoryFiles.filter((file) => !file.includes('/') && JAVASCRIPT_FILE.test(file));
+
+const modulesImportedBy = (file: string): string[] =>
+  ts
+    .preProcessFile(readFileSync(path.join(repoRoot, file), 'utf8'), true, true)
+    .importedFiles.map(({ fileName }) => path.posix.normalize(path.posix.join(path.posix.dirname(file), fileName)));
+
+const importedByAConfigOnlyJavaScriptLoads = new Set(configsOnlyJavaScriptLoads.flatMap(modulesImportedBy));
+const loadedOnlyAsJavaScript = (file: string) =>
+  importedByAConfigOnlyJavaScriptLoads.has(file) || importedByAConfigOnlyJavaScriptLoads.has(file.replace(JAVASCRIPT_FILE, ''));
+
 describe('pnpm run typecheck', () => {
   it('runs every tsconfig the repository holds', () => {
     expect(
@@ -77,6 +90,21 @@ describe('pnpm run typecheck', () => {
       'These tsconfigs set allowJs, so a JavaScript module joins the program with the types TypeScript infers from ' +
         'its code. Set "allowJs": false (Next.js writes its suggested true only when the key is missing) and give the ' +
         'module a .d.mts beside it, or convert it to TypeScript.',
+    ).toEqual([]);
+  });
+
+  it('keeps every script TypeScript, unless a config only JavaScript can load imports it', () => {
+    expect(
+      repositoryFiles.filter(
+        (file) =>
+          file.startsWith('scripts/') &&
+          (DECLARATION_OF_A_JAVASCRIPT_MODULE.test(file) || (JAVASCRIPT_FILE.test(file) && !loadedOnlyAsJavaScript(file))),
+      ),
+      'These files under scripts/ are JavaScript, or a declaration file written for a JavaScript module, so ' +
+        'pnpm run typecheck never checks their code. Write them in TypeScript: every script runs with tsx\'s loader ' +
+        '(node --import tsx), and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. Only a module ' +
+        `that a root config read without a TypeScript loader imports (${configsOnlyJavaScriptLoads.join(', ')}) may be ` +
+        'JavaScript (docs/design-docs/development-environment.md#writing-scripts).',
     ).toEqual([]);
   });
 

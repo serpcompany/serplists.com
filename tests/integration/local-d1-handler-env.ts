@@ -1,9 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { NO_DEV_VARS_OR_DOTENV_FILES } from "../../scripts/data/local-d1";
-import { execTool, REPO_ROOT } from "../../scripts/lib/run-tool.mjs";
+import { buildScriptInvocation, buildToolInvocation, type Invocation, REPO_ROOT } from "../../scripts/lib/run-tool";
 import { apiEnv } from "../support/apiEnv";
 import type { Env } from "@functions/api/types";
 
@@ -12,13 +13,22 @@ export type LocalD1 = {
   dispose: () => Promise<void>;
 };
 
-export function runToolInRepo(tool: "tsx" | "wrangler", args: string[]): string {
-  return execTool(tool, args, {
+export function runInRepo({ command, args, options }: Invocation): string {
+  return execFileSync(command, args, {
+    ...options,
     cwd: REPO_ROOT,
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-  }).toString();
+  });
+}
+
+export function runToolInRepo(tool: "wrangler", args: string[]): string {
+  return runInRepo(buildToolInvocation(tool, args));
+}
+
+export function runScriptInRepo(script: string, args: string[]): string {
+  return runInRepo(buildScriptInvocation(script, args));
 }
 
 export function platformProxyOnLocalD1<Env>(persistPath: string): Promise<PlatformProxy<Env>> {

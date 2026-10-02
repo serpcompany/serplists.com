@@ -8,7 +8,7 @@ import {
   forgetGitRepositoryOverrides,
   GIT_REPOSITORY_OVERRIDES,
   withoutGitRepositoryOverrides,
-} from '../../../scripts/lib/git-env.mjs';
+} from '../../../scripts/lib/git-env';
 
 const scratch = mkdtempSync(path.join(tmpdir(), 'git-env-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));

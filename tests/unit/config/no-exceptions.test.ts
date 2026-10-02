@@ -5,9 +5,9 @@ import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
-import { walkFiles } from '../../../scripts/lib/repo-files.mjs';
-import { NAMING_CONVENTIONS } from '../../../scripts/eslint-rules/naming-conventions.mjs';
+import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib';
+import { walkFiles } from '../../../scripts/lib/repo-files';
+import { NAMING_CONVENTIONS } from '../../../scripts/eslint-rules/naming-conventions';
 import { onlyElement } from '../../support/elements';
 import { isError, rulesFor } from '../../support/eslintConfig';
 
@@ -63,7 +63,7 @@ const authoredCodeFiles = filesGitTracksOrWouldTrack().filter(
   (file: string) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)),
 );
 const typeScriptFiles = authoredCodeFiles.filter((file: string) => /\.(ts|tsx|mts|cts)$/.test(file));
-const ESLINT_CONFIGS = ['eslint.config.js', 'eslint.type-aware.config.js'];
+const ESLINT_CONFIGS = ['eslint.config.ts', 'eslint.type-aware.config.ts'];
 
 async function typeScriptFilesNotHeldTo(rule: string, options: unknown[]): Promise<string[]> {
   const relaxed: string[] = [];
@@ -123,7 +123,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     expect(
       exempt,
       `These files are not held to ESLint max-lines ${MAX_LINES}. Remove the per-file cap, override or ignore from ` +
-        'eslint.config.js and split the file into modules by responsibility instead.',
+        'eslint.config.ts and split the file into modules by responsibility instead.',
     ).toEqual([]);
   });
 
@@ -267,7 +267,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     for (const [code, filePath] of samples) {
       expect(
         await refusals(code, filePath),
-        `ESLint must refuse \`${code}\` in ${filePath}. Restore SKIPPED_TEST_RESTRICTIONS for TEST_FILES in eslint.config.js.`,
+        `ESLint must refuse \`${code}\` in ${filePath}. Restore SKIPPED_TEST_RESTRICTIONS for TEST_FILES in eslint.config.ts.`,
       ).toBe(1);
     }
     expect(await refusals("describe('a', () => { it.each([1])('b %s', () => {}); });", 'tests/unit/sample.test.ts')).toBe(0);

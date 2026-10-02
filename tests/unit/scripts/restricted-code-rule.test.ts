@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { restrictedCode } from '../../../scripts/eslint-rules/restricted-code.mjs';
+import { restrictedCode } from '../../../scripts/eslint-rules/restricted-code';
 import { typescriptRuleTester } from '../../support/ruleTester';
 
 const COPY = "navigator.clipboard.writeText('x');";

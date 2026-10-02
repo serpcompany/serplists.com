@@ -20,8 +20,8 @@ import {
   resolveDevServerPort,
   stopDevSession,
   writeDevSession,
-} from "../../../scripts/dev-auto-lib.mjs";
-import { applyDevBindings, DEV_BINDINGS_VARIABLE, parseDevBindings } from "../../../scripts/lib/dev-bindings.mjs";
+} from "../../../scripts/dev-auto-lib";
+import { applyDevBindings, DEV_BINDINGS_VARIABLE, parseDevBindings } from "../../../scripts/lib/dev-bindings";
 
 describe("buildCorsAllowedOrigins", () => {
   it("adds the dev server's origin and preserves existing allowed origins", () => {
@@ -305,7 +305,7 @@ describe("isProcessAlive", () => {
 });
 
 describe("isOwnedDevProcess", () => {
-  const launcher = { startedAt: 1_000_000, commandLine: "C:\\node\\node.exe scripts/dev-auto.mjs" };
+  const launcher = { startedAt: 1_000_000, commandLine: "C:\\node\\node.exe --import tsx scripts/dev-auto.ts" };
   const alive = () => true;
 
   it("accepts the recorded dev launcher at a start time the OS reports a little apart, as ps gives whole seconds", async () => {

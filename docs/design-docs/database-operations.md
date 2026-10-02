@@ -118,7 +118,7 @@ list migration state, and detect schema drift without applying anything. If
 `check:prod:d1-schema` fails, production is missing tables, columns, named indexes
 or SQL-only triggers the deployed API needs; apply pending migrations before
 shipping the frontend. The check requires every Drizzle table, column and named
-index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.mjs`, which a
+index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.ts`, which a
 unit test keeps equal to `db/schema/`) and every trigger in
 `db/sql-only-schema.json`, on its table and with the recorded definition. Extra
 columns, indexes and tables are allowed.
@@ -176,7 +176,7 @@ baseline.
   writes lives in `db/seeds/local-test-data/`, one module per kind of row (people,
   Organizations, Templates, Runs, then activity and history), which `seedLocalTestData`
   inserts in that order with one clock, after `cleanup.ts` there deletes the old rows.
-  The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
+  The seed stages are listed once in `scripts/lib/local-d1-seed.ts`.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing
   (`tests/integration/setup-local-seed.test.ts`). seedLocalTestData runs without a

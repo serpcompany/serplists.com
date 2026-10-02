@@ -28,14 +28,14 @@ If you want to create Stripe resources programmatically, use:
 
 ```bash
 # Dry-run (no network calls)
-node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 900 --dry-run
+node --import tsx scripts/stripe/bootstrap.ts --mode both --currency usd --monthly 900 --dry-run
 
 # Create test resources using the test key from `.dev.vars`.
-node scripts/stripe/bootstrap.mjs --mode test --currency usd --monthly 900
+node --import tsx scripts/stripe/bootstrap.ts --mode test --currency usd --monthly 900
 
 # Live administration requires a live key injected into the process environment
 # by an approved secret manager or secure shell session. Never put it in `.dev.vars`.
-node scripts/stripe/bootstrap.mjs --mode live --currency usd --monthly 900
+node --import tsx scripts/stripe/bootstrap.ts --mode live --currency usd --monthly 900
 ```
 
 After creating prices, set `STRIPE_PRO_PRICE_ID` in Cloudflare Pages to the **live** monthly `price_...` id.
@@ -52,7 +52,7 @@ first, then:
 
 1. Create a new Price on the Pro product in Stripe, moving the
    `serp-checklists_pro_monthly` lookup key to it (`transfer_lookup_key`).
-   `bootstrap.mjs` refuses to reuse a lookup-key price that is archived, on
+   `bootstrap.ts` refuses to reuse a lookup-key price that is archived, on
    another product, or differs from the request in amount, currency, or
    interval, and prints each price id with its amount.
 2. Append the old price id to `STRIPE_PRO_LEGACY_PRICE_IDS` (comma-separated)
@@ -95,14 +95,14 @@ Portal configuration.
 Every local Stripe script reads the test key from `STRIPE_SECRET_KEY=sk_test_...`
 in `.dev.vars`, as `.dev.vars.example` lays it out; `STRIPE_TEST_SECRET_KEY` (or
 `STRIPE_SECRET_KEY_TEST`) overrides it. They resolve it with
-`resolveTestSecretKey()` in `scripts/stripe/_env.mjs` and never accept a key that
+`resolveTestSecretKey()` in `scripts/stripe/_env.ts` and never accept a key that
 does not start with `sk_test_`. In every Stripe script the process environment wins
 over `.dev.vars`, so a key a secret manager injects for a one-off administrative command
 is the one used.
 
 ```bash
 # Idempotently create/confirm test resources.
-node scripts/stripe/bootstrap.mjs --mode test --currency usd --monthly 900
+node --import tsx scripts/stripe/bootstrap.ts --mode test --currency usd --monthly 900
 pnpm run stripe:portal:configure -- --test
 pnpm run stripe:local:setup
 

@@ -14,13 +14,14 @@ const UNSAFE_ANY_RULES = [
 const CAST_RULE = 'serplists/no-external-data-casts';
 const ASSERTION_RULE = '@typescript-eslint/no-unsafe-type-assertion';
 const RULES_TESTS_ONCE_TURNED_OFF = ['@typescript-eslint/no-explicit-any', '@typescript-eslint/no-this-alias'];
-const TYPE_AWARE_CONFIG = 'eslint.type-aware.config.js';
+const TYPE_AWARE_CONFIG = 'eslint.type-aware.config.ts';
 
 const TYPE_CHECKED_FILES = [
   'src/lib/api/request.ts',
   'src/components/shared/ContentRenderer.tsx',
   'functions/api/handlers/stripe.ts',
   'scripts/generate-db-schema-doc.ts',
+  'scripts/lib/run-tool.ts',
   'db/schema/templates.ts',
 ];
 
@@ -63,7 +64,7 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
     },
   );
 
-  it.each([...TYPE_CHECKED_FILES, 'scripts/lib/run-tool.mjs', ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
+  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
     'refuses external data casts in %s on every commit',
     async (file) => {
       expect(isError((await rulesFor(everyCommit, file))[CAST_RULE])).toBe(true);

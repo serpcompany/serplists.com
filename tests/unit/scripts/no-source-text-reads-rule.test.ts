@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { noSourceTextReads } from '../../../scripts/eslint-rules/no-source-text-reads.mjs';
+import { noSourceTextReads } from '../../../scripts/eslint-rules/no-source-text-reads';
 import { typescriptRuleTester } from '../../support/ruleTester';
 
 const aTestFile = path.join(process.cwd(), 'tests', 'unit', 'lib', 'sample.test.ts');

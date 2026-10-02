@@ -17,9 +17,9 @@ migrations, backups, and R2 storage are in
 
 | Where | What runs |
 | --- | --- |
-| Pre-commit hook | Secret scan, ESLint (`eslint.config.js`, without the type-aware rules) and the comment check on staged files |
+| Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -97,20 +97,30 @@ projects leave it at TypeScript's default of off, and the tests' tsconfig turns 
 declaration files the repository cannot edit (miniflare's, better-auth's, Drizzle's MySQL and
 SingleStore builders, `lib.dom.d.ts` against the Workers types, the generated
 `cloudflare-env.d.ts` and Next.js's `.next/types`). The authored declaration files
-(`src/*.d.ts`, the `.d.mts` files beside the scripts) check clean with it off.
+(`src/*.d.ts`, `scripts/lib/postcss-tokenize.d.ts`) check clean with it off.
 
-`pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
-`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
+Scripts are TypeScript too, run with tsx's loader (`node --import tsx scripts/<name>.ts`), and
+ESLint loads `eslint.config.ts`, `eslint.type-aware.config.ts` and the rules in
+`scripts/eslint-rules/` through jiti, so the node project type-checks all of them and the
+type-aware lint rules read them. `tests/unit/config/typecheck-coverage.test.ts` fails on a `.js`,
+`.mjs`, `.cjs`, `.d.mts` or `.d.cts` file under `scripts/`, unless a root config that its tool reads
+without a TypeScript loader (`.dependency-cruiser.cjs`, `postcss.config.js`) imports it. It tells
+that from the config's own imports, not from a list of files ([writing
+scripts](design-docs/development-environment.md#writing-scripts)).
+
+`pnpm run lint` runs ESLint with `eslint.type-aware.config.ts`: everything in
+`eslint.config.ts`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
 app, API, node and tests projects, and `@typescript-eslint/no-unsafe-type-assertion` on app,
 API, script and database code and every test file ([repository checks](#repository-checks)). Type information
 makes a run three to four times as long: 70 to 91 s against 22 s for `eslint .` on the owner's
 machine (70 and 74 s once the assertion rule covered the tests), of which the tests project adds
 about 35 s (the run took 52 to 54 s without it). So
-the pre-commit hook and editors use `eslint.config.js` alone and the type-aware rules fail at
+the pre-commit hook and editors use `eslint.config.ts` alone and the type-aware rules fail at
 `pnpm run verify` (the push hook) and in CI.
 
-`eslint.config.js` holds every `.js`, `.mjs` and `.cjs` file to ESLint's recommended JavaScript
-rules (`js.configs.recommended`), `no-undef` among them: TypeScript does not check these files,
+`eslint.config.ts` holds every `.js`, `.mjs` and `.cjs` file to ESLint's recommended JavaScript
+rules (`js.configs.recommended`), `no-undef` among them: TypeScript does not check these files (the
+root configs only JavaScript can load, and tests of what a JavaScript caller may pass),
 so a name nothing defines would otherwise fail only as a `ReferenceError` when the line runs.
 They are Node code, so their globals are Node's: browser globals such as `window` and
 `document` are off, and so are CommonJS's wrapper variables (`require`, `module`, `exports`,
@@ -151,14 +161,14 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 - **Comments** are not allowed in any file: a name, a test named for the behavior, or the
   doc that owns the area holds what one would say. Two checks enforce it, and a test keeps
   them complete.
-  - ESLint's `serplists/no-comments` rule (`scripts/eslint-rules/no-comments.mjs`) reports
+  - ESLint's `serplists/no-comments` rule (`scripts/eslint-rules/no-comments.ts`) reports
     every comment in every TypeScript and JavaScript file but a shebang: JSDoc, comments
     inside JSX, and directives (`eslint-disable`, `@ts-expect-error`, `/// <reference>`,
     `/* global */`). The config sets `noInlineConfig`, so an `eslint-disable` comment cannot
     hide one.
-  - `pnpm run comments:check` (`scripts/check-no-comments.mjs`, part of `check:repo`) checks
+  - `pnpm run comments:check` (`scripts/check-no-comments.ts`, part of `check:repo`) checks
     every other format in every file git tracks or would track, and the pre-commit hook runs
-    it on the staged files of those formats (`node scripts/check-no-comments.mjs <files>`
+    it on the staged files of those formats (`node --import tsx scripts/check-no-comments.ts <files>`
     checks the files named). It reads each format by its own rules for strings, so a `#` in
     a URL or a `--` in a quoted name is not a comment:
     - YAML through the `yaml` package's parser. In GitHub workflows and actions and the
@@ -179,7 +189,7 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   - `tests/unit/scripts/comment-check-coverage.test.ts` fails on any file in the repository no
     check covers. Each must be TypeScript or JavaScript that ESLint holds to the rule, a format
     `comments:check` reads, a file a generator writes (`GENERATED_FILES` in
-    `scripts/check-no-comments-lib.mjs`: the lockfile, `cloudflare-env.d.ts`, the portable
+    `scripts/check-no-comments-lib.ts`: the lockfile, `cloudflare-env.d.ts`, the portable
     template JSON Schema, the bundled sitemap catalog, and the example templates'
     `template.json` and `preview.html`), Markdown, or a format without comment syntax
     (`FORMATS_WITHOUT_COMMENTS`: plain text, `.gitkeep`, images, fonts and archives). So a new
@@ -218,7 +228,7 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     migration that rebuilds a table restates all of it.
 - **Tests check what code does, not how it is written.** A test that matches the text of the
   code breaks on a harmless refactor and passes when the behavior breaks, so ESLint's
-  `serplists/no-source-text-reads` (`scripts/eslint-rules/no-source-text-reads.mjs`) refuses,
+  `serplists/no-source-text-reads` (`scripts/eslint-rules/no-source-text-reads.ts`) refuses,
   in every test file, a `readFileSync`, `readFile` or `createReadStream` of a code file under
   `src/` or `functions/` (JavaScript, TypeScript or CSS), a listing of a folder under them
   (`readdirSync`, `readdir`, `opendir`, `glob`), and a `?raw` import or raw `import.meta.glob`
@@ -232,7 +242,7 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   test instead.
 - **External data is parsed at the boundary.** A cast trusts a guessed shape, so data from
   outside the code is parsed with a Zod schema where it arrives:
-  - `serplists/no-external-data-casts` (`scripts/eslint-rules/no-external-data-casts.mjs`)
+  - `serplists/no-external-data-casts` (`scripts/eslint-rules/no-external-data-casts.ts`)
     refuses, in `src/`, `functions/`, `scripts/` and `db/` and in every test file (`tests/`,
     its unit and integration tests, browser specs, support and fixtures, and the tests beside
     the code in `src/`), a cast (`as T` or `<T>`) of
@@ -246,11 +256,11 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   - The type-aware rules `no-unsafe-assignment`, `no-unsafe-member-access`, `no-unsafe-call`,
     `no-unsafe-return` and `no-unsafe-argument` refuse an `any` flowing on uncast, as in
     `const data: Foo = await response.json()`, in the TypeScript files of the same folders and
-    of `tests/`, whose types come from `tests/tsconfig.json` (`eslint.type-aware.config.js`,
-    run by `pnpm run lint`). The `.mjs` scripts and tests are not type-checked, so of these
-    checks only the cast rule reads them, beside ESLint's recommended JavaScript rules
-    ([quality gates](#quality-gates)). Tests are held to `no-explicit-any` and
-    `no-this-alias` as app code is: no override turns them off for test files.
+    of `tests/`, whose types come from `tests/tsconfig.json` (`eslint.type-aware.config.ts`,
+    run by `pnpm run lint`). Every script is TypeScript, so they hold there too; the one
+    JavaScript test left is not type-checked, so of these checks only the cast rule reads it,
+    beside ESLint's recommended JavaScript rules ([quality gates](#quality-gates)). Tests are
+    held to `no-explicit-any` and `no-this-alias` as app code is: no override turns them off for test files.
   - `@typescript-eslint/no-unsafe-type-assertion`, in the same config, folders and test files,
     refuses an `as` that narrows a type, whatever the value: a cast from `unknown` or `any`,
     from a union to one member, or from `string` to a literal. Narrow instead: a type guard, `in`,
@@ -272,8 +282,8 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `no-this-alias` turned off.
 - **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
   that scans the code:
-  - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the
-    conventions in `scripts/eslint-rules/code-conventions.mjs`: each an esquery selector, the
+  - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.ts`) takes the
+    conventions in `scripts/eslint-rules/code-conventions.ts`: each an esquery selector, the
     message saying what to use instead, and the modules that own that code, if any (the one
     module that may import `react-markdown`, read `maxActiveRuns`, listen for storage events,
     touch the clipboard or render `<img>`). It runs with `APP_CONVENTIONS` on `src/`, `API_CONVENTIONS` on
@@ -283,7 +293,7 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     one, setup requests through the API helpers rather than a fetch inside `page.evaluate()`,
     and Template paths the e2e stack has ([testing conventions](#testing-conventions)).
   - `serplists/navigate-while-visit-is-current`
-    (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses code in `src/` that
+    (`scripts/eslint-rules/navigate-while-visit-is-current.ts`) refuses code in `src/` that
     moves the user outside a page-visit check after an await in an async handler, or in a
     promise's `.then()`, `.catch()` or `.finally()` callback ([frontend
     conventions](FRONTEND.md)).
@@ -291,8 +301,8 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `tests/unit/config/code-conventions.test.ts` lints a sample of every convention with the
     real config, in the folder it covers and in the module that owns it.
 - **Naming conventions.** `@typescript-eslint/naming-convention` holds every TypeScript file,
-  tests included, to `NAMING_CONVENTIONS` (`scripts/eslint-rules/naming-conventions.mjs`). It
-  is set once in `eslint.config.js` for `**/*.{ts,tsx,mts,cts}` and needs no type information,
+  tests included, to `NAMING_CONVENTIONS` (`scripts/eslint-rules/naming-conventions.ts`). It
+  is set once in `eslint.config.ts` for `**/*.{ts,tsx,mts,cts}` and needs no type information,
   so the pre-commit hook runs it too. A name's case says what it holds:
   - variables, functions, parameters and default or namespace imports are camelCase, or
     PascalCase when they hold a React component, a context or a class (`const Icon = ...`,
@@ -318,7 +328,15 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     ([database operations](design-docs/database-operations.md#schema-ownership)).
   - `tests/unit/config/naming-conventions.test.ts` lints a sample of each case with the real
     config, and `tests/unit/config/no-exceptions.test.ts` fails if a TypeScript file is held to
-    other options in `eslint.config.js` or `eslint.type-aware.config.js`.
+    other options in `eslint.config.ts` or `eslint.type-aware.config.ts`.
+- **Scripts are TypeScript.** Every script, the ESLint configs and the ESLint rules are
+  type-checked in the node project and read by the type-aware lint rules.
+  `tests/unit/config/typecheck-coverage.test.ts` fails on JavaScript, or a declaration file
+  written for it, under `scripts/`, unless a root config only JavaScript can load imports it
+  ([quality gates](#quality-gates)). The script convention that reads a Stripe secret key only
+  through `scripts/stripe/_env.ts` (`SCRIPT_CONVENTIONS`) refuses a bracketed read
+  (`env["STRIPE_SECRET_KEY"]`) as well as a dotted one, since `noPropertyAccessFromIndexSignature`
+  has TypeScript read the environment with brackets.
 
 ## Deploy pipeline
 
@@ -399,7 +417,7 @@ one repeats its D1, R2 and self-reference bindings.
   headers and redirects, `public/_headers`) and what renders on request (the Worker's
   `vars`). Each environment's vars in `wrangler.toml` set it, and each environment's build
   command must set the same value (`SITE_ENV=production pnpm run build:worker`). A build
-  without it is non-production, which is the safe default; `scripts/check-env.mjs` rejects a
+  without it is non-production, which is the safe default; `scripts/check-env.ts` rejects a
   value other than `production` or `staging`, so a misspelled `production` cannot quietly
   hide the site from search engines.
 - **One host per environment.** `next.config.ts` sends every other host that reaches the
@@ -528,7 +546,7 @@ Common failures:
     `tests/unit/scripts/sitemap-implementation-sources.test.ts` does;
   - a column default or a trigger: apply the migrations with `SqliteD1` and read the row back;
   - a rule about how all code is written: a convention in
-    `scripts/eslint-rules/code-conventions.mjs`, with a sample in
+    `scripts/eslint-rules/code-conventions.ts`, with a sample in
     `tests/unit/config/code-conventions.test.ts`.
 - **Look for shared setup before writing any.** A mock, fixture or browser step that a second
   test needs lives in one of three folders, and `pnpm run duplicates:check` fails on a second
@@ -582,7 +600,7 @@ Common failures:
   - Without the clearing, a test that runs `git init`, `add` or `commit` in its fixture would
     write into the real repository instead.
   - Scripts that run git in a directory they are given use `withoutGitRepositoryOverrides()`
-    from `scripts/lib/git-env.mjs`.
+    from `scripts/lib/git-env.ts`.
 - Every test runs. ESLint refuses `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `xit` and a
   `.only` call in Vitest and Playwright files, and a test file excluded from `test:run` must
   be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass
@@ -691,13 +709,15 @@ Common failures:
     itself.
   - A request init, a prop or a fixture field with no value is left out
     (`...(body === undefined ? {} : { body })`), not set to `undefined`, as the app's code does.
-  - A JavaScript module a test imports gets a declaration file beside it
-    (`scripts/lib/run-tool.d.mts`). Without one, TypeScript infers its types from the code,
-    and a parameter that defaults to `null` then accepts only `null`. `tests/tsconfig.json`
-    turns `allowJs` off, so `pnpm run typecheck` fails on an import that has none.
+  - Scripts are TypeScript, so a test imports a script's own module and gets its types: no
+    declaration file sits beside a script, and `tests/tsconfig.json` turns `allowJs` off, so a
+    test that imports JavaScript fails `pnpm run typecheck`. A test starts a script with
+    `buildScriptInvocation()` or `execScript()` from `scripts/lib/run-tool.ts`, which run it
+    with tsx's loader from any folder. tsx reads the `@/` alias from the `tsconfig.json` it
+    finds above the working folder, so a test that runs a script from a folder outside the
+    checkout and needs the alias sets `TSX_TSCONFIG_PATH` (`tests/unit/scripts/line-endings.test.ts`).
   - A test of what a JavaScript caller may pass but the declared types rule out is a
-    `.test.mjs` file: the scripts that call `run-tool.mjs` from JavaScript
-    (`tests/unit/scripts/run-tool-from-javascript.test.mjs`), and workerd, whose local R2
+    `.test.mjs` file: workerd, whose local R2
     reports a range with its unused fields set to `undefined`
     (`tests/unit/functions/api/r2-file-response-from-workerd.test.mjs`). A test of content
     stored before the API checked every write is TypeScript: it passes the stored JSON as
@@ -709,9 +729,9 @@ Common failures:
     `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
     complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.
 - Smoke and e2e suites run against the production build on a local worker, or dedicated
-  staging, never production. `tests/e2e/run-smoke.mjs` builds the app with OpenNext
+  staging, never production. `tests/e2e/run-smoke.ts` builds the app with OpenNext
   (skip with `--skip-build`), and Playwright's web server
-  (`tests/e2e/preview-server.mjs`) serves it with `opennextjs-cloudflare preview`
+  (`tests/e2e/preview-server.ts`) serves it with `opennextjs-cloudflare preview`
   (workerd) on one origin for the pages and the API: `localhost:4173`, or the next free
   port, with D1 state in `.wrangler/smoke-state`. Keep the `localhost` host name;
   mixing `127.0.0.1` drops `SameSite=Lax` cookies. The runner seeds the same directory
@@ -738,7 +758,7 @@ Common failures:
   and a new session read, which hides the bug. Arriving through the app also keeps browser
   Back inside it.
 - The browser tests run the production configuration (`E2E_SITE_ENV` in
-  `tests/e2e/run-smoke-lib.mjs`): the runner builds with `SITE_ENV=production`, the preview
+  `tests/e2e/run-smoke-lib.ts`): the runner builds with `SITE_ENV=production`, the preview
   gets the same var, and CI's Build step sets it too. Pages are then indexable and load Tag
   Manager, as on `serplists.com`. The runner refuses a build it reuses (`--skip-build`) that
   was made for another environment, since the preview's var alone cannot change what the
@@ -762,7 +782,7 @@ Common failures:
   of those or creates its own Template. A literal Template path in `tests/e2e` must name one
   in `E2E_TEMPLATE_PAGES` (and an `/api/templates/slug/<slug>` one in
   `E2E_TEMPLATE_API_SLUGS`, which the API answers only for seeded Templates) in
-  `scripts/eslint-rules/code-conventions.mjs`, or ESLint refuses it;
+  `scripts/eslint-rules/code-conventions.ts`, or ESLint refuses it;
   `tests/unit/e2e/seeded-template-paths.test.ts` checks that seed-test or the bundle has
   every one. A path that must be missing names its user or Template with the `no-such-`
   prefix (`/profile/serp/no-such-template/`), which the rule skips and no seeded or bundled

@@ -13,8 +13,8 @@ import {
   type SourceSnapshot,
   type TemplatePack,
 } from './lib/sitemapLastmod';
-import { matchesGeneratedText } from './lib/line-endings.mjs';
-import { withoutGitRepositoryOverrides } from './lib/git-env.mjs';
+import { matchesGeneratedText } from './lib/line-endings';
+import { withoutGitRepositoryOverrides } from './lib/git-env';
 
 type StaticPage = {
   path: string;

@@ -14,7 +14,7 @@ import {
   TEST_USER_IDS,
 } from "../../../../db/seeds/local";
 import * as schema from "../../../../db/schema/index";
-import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed.mjs";
+import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed";
 import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");

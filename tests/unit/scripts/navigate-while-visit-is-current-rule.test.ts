@@ -1,4 +1,4 @@
-import { navigateWhileVisitIsCurrent } from '../../../scripts/eslint-rules/navigate-while-visit-is-current.mjs';
+import { navigateWhileVisitIsCurrent } from '../../../scripts/eslint-rules/navigate-while-visit-is-current';
 import { typescriptRuleTester } from '../../support/ruleTester';
 
 const ungated = (call: string) => ({ messageId: 'ungated', data: { call } });

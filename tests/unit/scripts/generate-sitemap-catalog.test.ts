@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { execTool } from '../../../scripts/lib/run-tool.mjs';
+import { execScript } from '../../../scripts/lib/run-tool';
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { z } from 'zod';
@@ -65,7 +65,7 @@ function writePack(templates: unknown[], file = packPath) {
 }
 
 function generate(): Catalog {
-  execTool('tsx', [generator], { cwd: repo, stdio: 'pipe', env: throwawayRepositoryEnvironment({ CI: '' }) });
+  execScript(generator, [], { cwd: repo, stdio: 'pipe', env: throwawayRepositoryEnvironment({ CI: '' }) });
   return parseJsonText(readFileSync(path.join(repo, catalogPath), 'utf8'), catalogSchema);
 }
 

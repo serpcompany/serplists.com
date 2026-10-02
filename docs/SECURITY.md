@@ -189,9 +189,10 @@ Rules:
   type-checks. URL values
   are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
-  host (`functions/api/utils/origin-list.ts`, mirrored in plain JavaScript for the script,
-  which Node runs without a TypeScript loader, in `scripts/lib/origin-list.mjs`;
-  `tests/unit/scripts/origin-list-parity.test.ts` keeps the two equal). A bare host (`serplists.com`), `host:port` with no scheme (which
+  host (`functions/api/utils/origin-list.ts`; `scripts/check-env.ts` checks the API's own schema,
+  `API_ENV_SCHEMA` in `functions/api/env-schema.ts`, and
+  `tests/unit/config/committed-origins.test.ts` holds the values `wrangler.toml` and
+  `.dev.vars.example` commit to it). A bare host (`serplists.com`), `host:port` with no scheme (which
   parses with the opaque origin `null`), a wildcard, a URL with credentials, or a list
   with no entries fails every request with the configuration `500`. A path or
   trailing slash is dropped, and empty entries (a trailing comma) are ignored.
@@ -233,7 +234,7 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
   cross-origin client (local development) can read how long a `429` lasts.
 
 Locally, `pnpm run dev:all` passes its server's origin as `FRONTEND_URL` and adds it to
-`CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.mjs`).
+`CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.ts`).
 
 ## Secrets in URLs and third-party tags
 

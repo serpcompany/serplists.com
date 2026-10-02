@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
-const SCRIPT = fileURLToPath(new URL('../../../scripts/check-env.mjs', import.meta.url));
+const SCRIPT = fileURLToPath(new URL('../../../scripts/check-env.ts', import.meta.url));
 const cwdWithoutDevVars = mkdtempSync(path.join(tmpdir(), 'check-env-'));
 
 function checkEnv(overrides: Record<string, string>) {
@@ -19,7 +20,8 @@ function checkEnv(overrides: Record<string, string>) {
     CORS_ALLOWED_ORIGINS: 'http://localhost:8080',
   };
   Object.assign(env, overrides);
-  return spawnSync(process.execPath, [SCRIPT], { cwd: cwdWithoutDevVars, env, encoding: 'utf8', timeout: 60_000 });
+  const { command, args } = buildScriptInvocation(SCRIPT);
+  return spawnSync(command, args, { cwd: cwdWithoutDevVars, env, encoding: 'utf8', timeout: 60_000 });
 }
 
 afterAll(() => rmSync(cwdWithoutDevVars, { recursive: true, force: true }));

@@ -8,7 +8,8 @@ import {
   parseBaselineArgs,
   readD1Databases,
   resolveBaselineTarget,
-} from '../../../scripts/d1-baseline-migrations-lib.mjs';
+} from '../../../scripts/d1-baseline-migrations-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 import { z } from 'zod';
 import { parseJsonText } from '../../support/storedJson';
 
@@ -146,7 +147,8 @@ describe('d1-baseline-migrations CLI dry runs, which never call wrangler without
     const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
     delete childEnv['CLOUDFLARE_ENV'];
     if (!env['D1_DATABASE_NAME']) delete childEnv['D1_DATABASE_NAME'];
-    return spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'd1-baseline-migrations.mjs'), ...args], {
+    const { command, args: commandArgs } = buildScriptInvocation(path.join(repoRoot, 'scripts', 'd1-baseline-migrations.ts'), args);
+    return spawnSync(command, commandArgs, {
       cwd: repoRoot,
       encoding: 'utf8',
       env: childEnv,

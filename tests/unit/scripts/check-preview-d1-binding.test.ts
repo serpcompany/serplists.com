@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { findPreviewD1BindingProblem } from '../../../scripts/check-preview-d1-binding-lib.mjs';
-import { readD1Databases } from '../../../scripts/d1-baseline-migrations-lib.mjs';
+import { findPreviewD1BindingProblem } from '../../../scripts/check-preview-d1-binding-lib';
+import { readD1Databases } from '../../../scripts/d1-baseline-migrations-lib';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
 const repoRoot = process.cwd();
 
@@ -32,7 +33,8 @@ describe('the preview D1 binding check', () => {
   it('passes wrangler.toml as committed, from the command line too', () => {
     expect(problemIn(readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8'))).toBeNull();
 
-    const run = spawnSync(process.execPath, ['scripts/check-preview-d1-binding.mjs'], { cwd: repoRoot, encoding: 'utf8' });
+    const { command, args } = buildScriptInvocation('scripts/check-preview-d1-binding.ts');
+    const run = spawnSync(command, args, { cwd: repoRoot, encoding: 'utf8' });
     expect(run.status).toBe(0);
     expect(run.stdout).toContain('Preview D1 binding points at a separate database.');
   });

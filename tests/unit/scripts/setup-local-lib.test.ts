@@ -8,8 +8,8 @@ import {
   planSeedSteps,
   RESET_SEED_STEPS,
   SEED_STATUS_PREFIX,
-} from '../../../scripts/lib/local-d1-seed.mjs';
-import { renderDevVars, runLocalD1Setup } from '../../../scripts/setup-local-lib.mjs';
+} from '../../../scripts/lib/local-d1-seed';
+import { renderDevVars, runLocalD1Setup } from '../../../scripts/setup-local-lib';
 
 const example = readFileSync(path.join(process.cwd(), '.dev.vars.example'), 'utf8');
 const SECRET = 'a'.repeat(48);

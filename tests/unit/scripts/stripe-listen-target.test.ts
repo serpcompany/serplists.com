@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveWebhookForwardTarget,
   retargetForDevSession,
-} from "../../../scripts/stripe/_listen-target.mjs";
+} from "../../../scripts/stripe/_listen-target";
 
 const ALIVE = 101;
 const DEAD = 202;

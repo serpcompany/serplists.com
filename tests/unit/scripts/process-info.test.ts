@@ -6,13 +6,13 @@ import {
   parsePsProcessInfo,
   parseWindowsProcessInfo,
   readProcessInfo,
-} from '../../../scripts/lib/process-info.mjs';
+} from '../../../scripts/lib/process-info';
 
 describe('parseWindowsProcessInfo', () => {
   it('reads the PowerShell JSON', () => {
-    expect(parseWindowsProcessInfo('{"startedAt":1790599283202,"commandLine":"node scripts/dev-auto.mjs all"}\r\n')).toEqual({
+    expect(parseWindowsProcessInfo('{"startedAt":1790599283202,"commandLine":"node --import tsx scripts/dev-auto.ts all"}\r\n')).toEqual({
       startedAt: 1790599283202,
-      commandLine: 'node scripts/dev-auto.mjs all',
+      commandLine: 'node --import tsx scripts/dev-auto.ts all',
     });
     expect(parseWindowsProcessInfo('{"startedAt":1790599283202,"commandLine":null}')).toEqual({
       startedAt: 1790599283202,
@@ -29,9 +29,9 @@ describe('parseWindowsProcessInfo', () => {
 
 describe('parsePsProcessInfo', () => {
   it('reads the start time and command line', () => {
-    expect(parsePsProcessInfo('Mon Sep  8 06:30:00 2026 node scripts/dev-auto.mjs all\n')).toEqual({
+    expect(parsePsProcessInfo('Mon Sep  8 06:30:00 2026 node --import tsx scripts/dev-auto.ts all\n')).toEqual({
       startedAt: new Date(2026, 8, 8, 6, 30, 0).getTime(),
-      commandLine: 'node scripts/dev-auto.mjs all',
+      commandLine: 'node --import tsx scripts/dev-auto.ts all',
     });
   });
 

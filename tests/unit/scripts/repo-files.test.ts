@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { directoriesAFreshCheckoutLacks, walkFiles } from '../../../scripts/lib/repo-files.mjs';
+import { directoriesAFreshCheckoutLacks, walkFiles } from '../../../scripts/lib/repo-files';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 
 const repoRoot = process.cwd();

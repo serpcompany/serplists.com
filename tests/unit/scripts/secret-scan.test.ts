@@ -11,7 +11,7 @@ const lefthookCommands = z
   .object({ 'pre-commit': z.object({ commands: z.record(z.object({ run: z.string() }).passthrough()) }).passthrough() })
   .passthrough();
 
-import { buildScriptInvocation } from '../../../scripts/lib/run-tool.mjs';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 import { selectScanTargets } from '../../../scripts/secret-scan-lib';
 
 const repoRoot = process.cwd();

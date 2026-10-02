@@ -387,7 +387,7 @@ Each of these needs the user's approval, or happens with the domain move:
   secret) to `next.config.ts` in `SERPLISTS_DEV_BINDINGS`, which sets them over the
   bindings.
 - 2026-09-29: **Browser tests run the production build** in workerd: the runner builds with
-  OpenNext, seeds `.wrangler/smoke-state`, and `tests/e2e/preview-server.mjs` serves it with
+  OpenNext, seeds `.wrangler/smoke-state`, and `tests/e2e/preview-server.ts` serves it with
   `opennextjs-cloudflare preview` and `--var` overrides (passed through a shell, so only
   plain values). They run on one Playwright worker (one workerd process renders every page
   and prefetch), sign in by typing (no dev Fill buttons in production), and move inside the
@@ -493,7 +493,7 @@ Each of these needs the user's approval, or happens with the domain move:
   request instead of from the static cache.
 - 2026-09-29: **Home without category tiles.** The reference's category tiles would need
   the public catalog, which Home must not load (an ESLint convention in
-  `scripts/eslint-rules/code-conventions.mjs` now holds that).
+  `scripts/eslint-rules/code-conventions.ts` now holds that).
 - 2026-09-29: **Public template page as a detail page.** A breadcrumb replaces "Back" (the
   same destination). The sticky header with the actions is gone: the actions sit in the page
   header, and the closing banner keeps Save and Start Run.

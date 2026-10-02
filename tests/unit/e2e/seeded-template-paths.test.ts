@@ -7,7 +7,7 @@ import {
   DELIBERATELY_MISSING_PREFIX,
   E2E_TEMPLATE_API_SLUGS,
   E2E_TEMPLATE_PAGES,
-} from '../../../scripts/eslint-rules/code-conventions.mjs';
+} from '../../../scripts/eslint-rules/code-conventions';
 import { SqliteD1 } from '../../support/sqlite-d1';
 import { repoTemplates, resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 

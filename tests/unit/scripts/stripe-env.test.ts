@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { parseEnvFile } from "../../../scripts/lib/env-file.mjs";
-import { resolveLiveSecretKey, resolveTestSecretKey, stripeSecretKeyIsLive } from "../../../scripts/stripe/_env.mjs";
-import { renderDevVars } from "../../../scripts/setup-local-lib.mjs";
+import { parseEnvFile } from "../../../scripts/lib/env-file";
+import { resolveLiveSecretKey, resolveTestSecretKey, stripeSecretKeyIsLive } from "../../../scripts/stripe/_env";
+import { renderDevVars } from "../../../scripts/setup-local-lib";
 
 describe("resolveTestSecretKey", () => {
   it("reads the test key from STRIPE_SECRET_KEY, as .dev.vars.example provides it", () => {

@@ -7,8 +7,8 @@ import { z } from 'zod';
 
 const commandOutput = z.object({ stdout: z.string().optional(), stderr: z.string().optional() }).passthrough();
 
-import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings.mjs';
-import { buildToolInvocation } from '../../../scripts/lib/run-tool.mjs';
+import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 
 const repoRoot = process.cwd();
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
@@ -86,14 +86,14 @@ describe('generated artifact checks on a CRLF checkout', () => {
       mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
       writeFileSync(path.join(cwd, file), toCrlf(edit(file, readFileSync(path.join(repoRoot, file), 'utf8'))));
     }
-    const invocation = buildToolInvocation('tsx', [
-      '--tsconfig',
-      path.join(repoRoot, 'tsconfig.json'),
-      path.join(repoRoot, script),
-      '--check',
-    ]);
+    const invocation = buildScriptInvocation(path.join(repoRoot, script), ['--check']);
     try {
-      execFileSync(invocation.command, invocation.args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+      execFileSync(invocation.command, invocation.args, {
+        cwd,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        env: { ...process.env, TSX_TSCONFIG_PATH: path.join(repoRoot, 'tsconfig.json') },
+      });
       return { ok: true, output: '' };
     } catch (error) {
       const failure = commandOutput.parse(error);

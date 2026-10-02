@@ -120,7 +120,7 @@ and agents (MCP) call them directly and do not follow redirects.
   a page path by hand: no link may depend on a redirect. `tests/unit/lib/canonicalUrls.test.ts`
   checks every builder, the sitemap entries and the links the API writes, and ESLint refuses a
   hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
-  `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.mjs`).
+  `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.ts`).
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
   route helpers (`isPathWithin`, `resolveRouteShell`, `resolveConsoleSection`), which accept
   either form, not with `===` or `startsWith` on a literal.
@@ -359,7 +359,7 @@ write: [client data](design-docs/client-data.md).
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
   after the user has left. ESLint's `serplists/navigate-while-visit-is-current`
-  (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses code in `src/` that
+  (`scripts/eslint-rules/navigate-while-visit-is-current.ts`) refuses code in `src/` that
   navigates, signs in or starts checkout after an await in an async handler, or in a
   promise's `.then()`, `.catch()` or `.finally()` callback, outside a visit gate (an
   `if (visit.isCurrent())` branch, an early return once the visit has ended, a callback given

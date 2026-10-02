@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, describe, expect, it } from 'vitest';
-import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH, mirrorOutputToLog } from '../../../scripts/lib/log-mirror.mjs';
+import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH, mirrorOutputToLog } from '../../../scripts/lib/log-mirror';
 
 const workDir = mkdtempSync(path.join(tmpdir(), 'log-mirror-'));
 afterAll(() => rmSync(workDir, { recursive: true, force: true }));

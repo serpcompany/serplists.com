@@ -1,7 +1,7 @@
 import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-import { NO_COMMENTS_MESSAGE, noComments } from '../../../scripts/eslint-rules/no-comments.mjs';
+import { NO_COMMENTS_MESSAGE, noComments } from '../../../scripts/eslint-rules/no-comments';
 import { javascriptRuleTester, typescriptRuleTester } from '../../support/ruleTester';
 
 const removeComment = (line: number, column: number) => ({ message: NO_COMMENTS_MESSAGE, line, column });

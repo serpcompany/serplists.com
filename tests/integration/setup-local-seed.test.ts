@@ -6,16 +6,31 @@ import { afterAll, describe, expect, it } from "vitest";
 import { LEGACY_TEST_TEMPLATE_SLUGS } from "../../db/seeds/local";
 import { account, templates, users } from "../../db/schema/index";
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
-import { LOCAL_SEED_STEPS, parseSeedStatus, RESET_SEED_STEPS } from "../../scripts/lib/local-d1-seed.mjs";
-import { runLocalD1Setup } from "../../scripts/setup-local-lib.mjs";
-import { runToolInRepo } from "./local-d1-handler-env";
+import {
+  LOCAL_SEED_STEPS,
+  parseSeedStatus,
+  RESET_SEED_STEPS,
+  type SeedStatus,
+  type SeedStep,
+  seedStepInvocation,
+} from "../../scripts/lib/local-d1-seed";
+import { runLocalD1Setup } from "../../scripts/setup-local-lib";
+import { runInRepo, runScriptInRepo, runToolInRepo } from "./local-d1-handler-env";
 
 const persistPath = mkdtempSync(path.join(tmpdir(), "serplists-setup-seed-"));
 const legacyPersistPath = mkdtempSync(path.join(tmpdir(), "serplists-setup-legacy-"));
 const DEVELOPER_TEMPLATE_ID = "developer-made-template";
 
-function tool(name: "tsx" | "wrangler", args: string[], persist = persistPath) {
-  return runToolInRepo(name, [...args, "--persist-to", persist]);
+function migrate(persist = persistPath) {
+  runToolInRepo("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persist]);
+}
+
+function seed(step: SeedStep, persist = persistPath) {
+  runInRepo(seedStepInvocation(step, ["--persist-to", persist]));
+}
+
+function seedStatus(persist = persistPath): SeedStatus {
+  return parseSeedStatus(runScriptInRepo("scripts/data/local-d1-data.ts", ["seed-status", "--persist-to", persist]));
 }
 
 async function insertATemplateJohnMadeWhileDevelopingThatSeedTestWouldDelete(db: LocalDb) {
@@ -37,14 +52,14 @@ function setupSteps(persist = persistPath) {
     run: (step: string) => {
       steps.push(step);
       if (step === "migrate") {
-        tool("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local"], persist);
+        migrate(persist);
         return;
       }
       const seedStep = LOCAL_SEED_STEPS.find((candidate) => candidate.id === step);
       if (!seedStep) throw new Error(`Unexpected setup step ${step}`);
-      tool(seedStep.tool, seedStep.args, persist);
+      seed(seedStep, persist);
     },
-    readSeedStatus: () => parseSeedStatus(tool("tsx", ["scripts/data/local-d1-data.ts", "seed-status"], persist)),
+    readSeedStatus: () => seedStatus(persist),
   });
   return { steps, status };
 }
@@ -68,10 +83,10 @@ describe("pnpm run setup on an existing local D1, which seeds what is missing ev
     "seeds a migrated but unseeded database, then never resets what is there",
     async () => {
       const unseeded = { testData: false, officialTemplates: false, officialLogin: false, legacyTestSlugs: false };
-      const statusBeforeAnyMigrationAsDevApiLeavesIt = parseSeedStatus(tool("tsx", ["scripts/data/local-d1-data.ts", "seed-status"]));
+      const statusBeforeAnyMigrationAsDevApiLeavesIt = seedStatus();
       expect(statusBeforeAnyMigrationAsDevApiLeavesIt).toEqual(unseeded);
-      tool("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local"]);
-      const statusMigratedButNeverSeeded = parseSeedStatus(tool("tsx", ["scripts/data/local-d1-data.ts", "seed-status"]));
+      migrate();
+      const statusMigratedButNeverSeeded = seedStatus();
       expect(statusMigratedButNeverSeeded).toEqual(unseeded);
 
       const first = setupSteps();
@@ -102,8 +117,8 @@ describe("pnpm run setup on an existing local D1, which seeds what is missing ev
     "repairs a database seeded before the sample- test slugs without reseeding test data",
     async () => {
       const persist = legacyPersistPath;
-      tool("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local"], persist);
-      for (const step of RESET_SEED_STEPS) tool(step.tool, step.args, persist);
+      migrate(persist);
+      for (const step of RESET_SEED_STEPS) seed(step, persist);
       const officialIds = await withLocalD1(persist, async (db) => {
         const official = await db.select({ id: templates.id }).from(templates).where(eq(templates.user_id, "serp-user"));
         await recreateTheStateBeforeSampleSlugs(db);

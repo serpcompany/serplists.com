@@ -5,7 +5,7 @@ description: Run and debug the SERP Lists Playwright browser tests. Picks the sm
 
 # Run and debug the browser tests
 
-The browser tests run the production build on an isolated local stack: `tests/e2e/run-smoke.mjs`
+The browser tests run the production build on an isolated local stack: `tests/e2e/run-smoke.ts`
 builds the app with OpenNext and `SITE_ENV=production`, wipes, migrates, and seeds its own D1 in
 `.wrangler/smoke-state`, and serves the build in workerd on a free port from 4173. One workerd
 process renders every page, so the tests run on one Playwright worker. Run one stack at a time

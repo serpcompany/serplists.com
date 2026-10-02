@@ -4,7 +4,7 @@ import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
 } from "./lib/portableTemplateJsonSchema";
-import { matchesGeneratedText } from "./lib/line-endings.mjs";
+import { matchesGeneratedText } from "./lib/line-endings";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);
 const nextJson = `${JSON.stringify(buildPortableTemplatePackJsonSchema(), null, 2)}\n`;

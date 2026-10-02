@@ -23,7 +23,7 @@ export default defineConfig({
   },
   webServer: {
     name: "app",
-    command: "node tests/e2e/preview-server.mjs",
+    command: "node --import tsx tests/e2e/preview-server.ts",
     url: `${APP_URL}/api/health`,
     reuseExistingServer,
     timeout: 180000,

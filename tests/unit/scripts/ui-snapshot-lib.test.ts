@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { parseUiSnapArgs } from '../../../scripts/ui-snapshot-lib.mjs';
+import { parseUiSnapArgs } from '../../../scripts/ui-snapshot-lib';
 
 const route = 'dashboard/templates';
 const mobile = ['--mobile'];

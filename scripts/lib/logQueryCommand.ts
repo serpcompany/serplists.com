@@ -21,7 +21,7 @@ import {
   type LogFilter,
 } from "./logQueries";
 
-import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH } from "./log-mirror.mjs";
+import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH } from "./log-mirror";
 
 export const defaultLogFile = DEV_LOG_PATH;
 export const browserTestLogFile = BROWSER_TEST_LOG_PATH;
