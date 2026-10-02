@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { readableRowsOf } from "./apiResponses";
 import { portableTemplateRuleSchema } from "./checklistSchema";
+import { templateOwnerSchema } from "./templateOwner";
 
 const text = z.string().nullish();
 const storedFlag = z.union([z.boolean(), z.number()]).nullish();
@@ -33,6 +34,7 @@ export const apiTemplateSchema = z.object({
   deleted_at: text,
   owner_username: text,
   owner_full_name: text,
+  owner: templateOwnerSchema.optional().catch(undefined),
 });
 
 export const apiTemplateListSchema = readableRowsOf(apiTemplateSchema);

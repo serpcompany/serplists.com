@@ -44,10 +44,24 @@ Every mapper from an API template row to a `ChecklistTemplate` reads its Organiz
 `readApiTemplateTeamId` (`src/lib/templates/apiTemplateOwner.ts`), which follows the server's
 rule (a row is the Organization's only with a `team_id`, and with `owner_type` `team` when the
 row has an owner type), so permission checks that compare `teamId` agree wherever a template
-was loaded from. Public catalog rows never name an Organization
+was loaded from. Public catalog rows carry no `team_id`
 ([SECURITY.md](../SECURITY.md#model)), so `isPersonalTemplateOf`
 (`src/lib/templates/templateOwnership.ts`) also checks the owner type to tell a user's
 Organization template apart from their Personal ones.
+
+Both mappers also keep the Template Owner the API names in `owner`
+([data persistence](data-persistence.md#resource-ownership)) as `owner` on
+`ChecklistTemplate`: its type, its User or Organization id, its handle and its name
+(`readApiTemplateOwner` in `src/lib/templates/apiTemplateOwner.ts`). `teamId`, `ownerType`
+and `ownerProfile`, which permissions and Share read, still come from the legacy fields.
+- A response can lack `owner` for a while after the deploy that added it: an open tab, or a
+  Worker still on the older version, keeps sending the shape it had. The schema accepts a
+  missing `owner`, and reads one it cannot parse as missing, so the row is never dropped.
+- The mapper then derives the same owner from the legacy fields: a Personal Template's User
+  from `user_id`, `owner_username` and `owner_full_name`, and an Organization Template's
+  Organization from its `team_id`, with a `null` handle and name, never its Creator.
+- A public Organization Template from an older response names no `team_id`, so it maps
+  with no `owner`; it keeps its `ownerType` of `team`.
 
 History requests ask for what their screen shows, since each entry is an audit row read with
 its user: the run and Template Changelogs ask for `HISTORY_DISPLAY_LIMIT` entries

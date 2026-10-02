@@ -1,6 +1,6 @@
 import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import { templateOwnerProfile } from '@/lib/schemas/templateOwnerProfile';
-import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
+import { readApiTemplateOwner, readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -50,4 +50,5 @@ export const mapApiTemplate = (template: ApiTemplate): ChecklistTemplate => ({
   teamId: readApiTemplateTeamId(template),
   ownerType: template.owner_type === 'team' || template.owner_type === 'user' ? template.owner_type : undefined,
   ownerProfile: templateOwnerProfile(template),
+  owner: readApiTemplateOwner(template),
 });
