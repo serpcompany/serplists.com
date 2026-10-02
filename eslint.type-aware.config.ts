@@ -1,8 +1,11 @@
 import baseConfig from "./eslint.config";
 
-const TYPE_CHECKED_CODE = ["src/**/*.{ts,tsx}", "functions/**/*.ts", "scripts/**/*.{ts,mts}", "db/**/*.ts"];
-const TYPE_CHECKED_TESTS = ["tests/**/*.{ts,tsx,mts,cts}"];
-const TYPE_CHECKED_PROJECTS = ["./tsconfig.json", "./functions/tsconfig.json", "./tsconfig.node.json", "./tests/tsconfig.json"];
+export const TYPE_CHECKED_AREAS = [
+  { folders: ["src"], files: ["src/**/*.{ts,tsx}"], project: "./tsconfig.json" },
+  { folders: ["functions", "db"], files: ["functions/**/*.ts", "db/**/*.ts"], project: "./functions/tsconfig.json" },
+  { folders: ["scripts"], files: ["scripts/**/*.{ts,mts}"], project: "./tsconfig.node.json" },
+  { folders: ["tests"], files: ["tests/**/*.{ts,tsx,mts,cts}"], project: "./tests/tsconfig.json" },
+];
 
 const UNSAFE_ANY_RULES = {
   "@typescript-eslint/no-unsafe-argument": "error",
@@ -14,13 +17,13 @@ const UNSAFE_ANY_RULES = {
 
 const typeAwareConfig = [
   ...baseConfig,
-  {
-    files: [...TYPE_CHECKED_CODE, ...TYPE_CHECKED_TESTS],
+  ...TYPE_CHECKED_AREAS.map(({ files, project }) => ({
+    files,
     languageOptions: {
-      parserOptions: { project: TYPE_CHECKED_PROJECTS, tsconfigRootDir: import.meta.dirname },
+      parserOptions: { project, tsconfigRootDir: import.meta.dirname },
     },
     rules: { ...UNSAFE_ANY_RULES, "@typescript-eslint/no-unsafe-type-assertion": "error" },
-  },
+  })),
 ];
 
 export default typeAwareConfig;

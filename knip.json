@@ -9,6 +9,9 @@
   "drizzle": {
     "config": ["db/drizzle.config.ts"]
   },
+  "eslint": {
+    "config": ["eslint.config.ts", "eslint.type-aware.config.ts"]
+  },
   "ignoreDependencies": ["@secretlint/secretlint-rule-preset-recommend"],
   "ignoreBinaries": ["stripe"],
   "treatConfigHintsAsErrors": true

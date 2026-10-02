@@ -120,14 +120,25 @@ that from the config's own imports, not from a list of files ([writing
 scripts](design-docs/development-environment.md#writing-scripts)).
 
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.ts`: everything in
-`eslint.config.ts`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
-app, API, node and tests projects, and `@typescript-eslint/no-unsafe-type-assertion` on app,
-API, script and database code and every test file ([repository checks](#repository-checks)). Type information
-makes a run three to four times as long: 70 to 91 s against 22 s for `eslint .` on the owner's
-machine (70 and 74 s once the assertion rule covered the tests), of which the tests project adds
-about 35 s (the run took 52 to 54 s without it). So
-the pre-commit hook and editors use `eslint.config.ts` alone and the type-aware rules fail at
-`pnpm run verify` (the push hook) and in CI.
+`eslint.config.ts`, plus the `@typescript-eslint/no-unsafe-*` rules and
+`@typescript-eslint/no-unsafe-type-assertion` on app, API, script and database code and every
+test file ([repository checks](#repository-checks)).
+- `TYPE_CHECKED_AREAS` in that config gives each area the one TypeScript project that types
+  it: `src` the app's `tsconfig.json`, `functions` and `db` `functions/tsconfig.json` (the
+  Workers types), `scripts` `tsconfig.node.json`, and `tests` `tests/tsconfig.json`.
+- `scripts/lint.ts` runs ESLint once per area, then once over every other file with the
+  areas left out (`lintRuns()` in `scripts/lib/lint-runs.ts`), so each process holds one
+  project.
+  - In one process the four projects needed over 3 GB of heap, more than Node's default
+    limit on CI's runner, and CI's lint ran out of memory. Each run now fits in 2 GB.
+  - The API is also typed by its own project now, not by the app's, which happens to
+    include some API files through imports. So lint reads a request body's chunks as the
+    Workers types give them, not as the browser's.
+- A run takes about 85 s against 22 s for `eslint .` on the owner's machine. So the
+  pre-commit hook and editors use `eslint.config.ts` alone, and the type-aware rules fail at
+  `pnpm run verify` (the push hook) and in CI.
+- `tests/unit/config/external-data-boundaries.test.ts` fails if an area loses its project or
+  its run.
 
 `eslint.config.ts` holds every `.js`, `.mjs` and `.cjs` file to ESLint's recommended JavaScript
 rules (`js.configs.recommended`), `no-undef` among them: TypeScript does not check these files (the

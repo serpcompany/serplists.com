@@ -13,7 +13,7 @@
     "promote:prepare": "node --import tsx scripts/promote-prepare.ts",
     "setup": "node --import tsx scripts/setup-local.ts",
     "build": "pnpm run sitemap:generate && pnpm run headers:generate && next build",
-    "lint": "eslint --config eslint.type-aware.config.ts .",
+    "lint": "node --import tsx scripts/lint.ts",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json && tsc -p functions/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p tsconfig.declarations.json",
     "typecheck:env": "node --import tsx scripts/check-env.ts",
     "verify": "pnpm run typecheck:env && pnpm run lint && pnpm run typecheck && pnpm run check:repo && pnpm run test:run",

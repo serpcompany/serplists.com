@@ -22,6 +22,7 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 const TOOL_PACKAGES = {
   "drizzle-kit": "drizzle-kit",
+  eslint: "eslint",
   next: "next",
   "opennextjs-cloudflare": "@opennextjs/cloudflare",
   playwright: "@playwright/test",

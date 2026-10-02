@@ -3,6 +3,8 @@ import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { isError, rulesFor } from '../../support/eslintConfig';
+import { TYPE_CHECKED_AREAS } from '../../../eslint.type-aware.config';
+import { lintRuns, TYPE_AWARE_CONFIG } from '../../../scripts/lib/lint-runs';
 
 const UNSAFE_ANY_RULES = [
   '@typescript-eslint/no-unsafe-argument',
@@ -14,7 +16,6 @@ const UNSAFE_ANY_RULES = [
 const CAST_RULE = 'serplists/no-external-data-casts';
 const ASSERTION_RULE = '@typescript-eslint/no-unsafe-type-assertion';
 const RULES_TESTS_ONCE_TURNED_OFF = ['@typescript-eslint/no-explicit-any', '@typescript-eslint/no-this-alias'];
-const TYPE_AWARE_CONFIG = 'eslint.type-aware.config.ts';
 
 const TYPE_CHECKED_FILES = [
   'src/lib/api/request.ts',
@@ -49,7 +50,27 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
   const everyCommit = new ESLint({ cwd: process.cwd() });
 
   it('runs pnpm run lint with the type-aware config, so verify and CI refuse unsafe any', () => {
-    expect(lintScript).toBe(`eslint --config ${TYPE_AWARE_CONFIG} .`);
+    expect(lintScript).toBe('node --import tsx scripts/lint.ts');
+    expect(lintRuns().every((args) => args.slice(0, 2).join(' ') === `--config ${TYPE_AWARE_CONFIG}`)).toBe(true);
+  });
+
+  it('lints each type-checked area in its own process, and every other file once more without them', () => {
+    const areaFolders = TYPE_CHECKED_AREAS.flatMap(({ folders }) => folders);
+    const runs = lintRuns().map((args) => args.slice(2));
+    const everythingElse = runs.at(-1);
+
+    expect(runs.slice(0, -1)).toEqual(TYPE_CHECKED_AREAS.map(({ folders }) => folders));
+    expect(everythingElse).toEqual(['.', ...areaFolders.flatMap((folder) => ['--ignore-pattern', `${folder}/**`])]);
+  });
+
+  it('gives each area the one TypeScript project that types it, so no process loads a project it does not lint', () => {
+    expect(TYPE_CHECKED_AREAS.map(({ folders, project }) => [folders.join(' '), project])).toEqual([
+      ['src', './tsconfig.json'],
+      ['functions db', './functions/tsconfig.json'],
+      ['scripts', './tsconfig.node.json'],
+      ['tests', './tests/tsconfig.json'],
+    ]);
+    expect(TYPE_CHECKED_AREAS.every(({ folders, files }) => files.every((glob) => folders.some((folder) => glob.startsWith(`${folder}/`))))).toBe(true);
   });
 
   const rulesTurnedOff = async (file: string, names: readonly string[]) => {
