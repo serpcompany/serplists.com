@@ -35,7 +35,11 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 Run permissions (`functions/api/utils/run-access.ts`) follow this table for an
 Organization run (reading needs `viewer`, saving `runner`, archiving and restoring
 `admin`), and a Personal run belongs to its owner. An archived run can only be read
-through its history or restored.
+through its history or restored. Runs and Templates decide this with one helper over
+their ownership columns (`ownerGrants` in `functions/api/utils/owner-access.ts`): with a
+`team_id`, an active member whose role grants the action; without one, the `user_id`
+alone. A Template counts its `team_id` only while its `owner_type` is `team`, so a
+Personal Template that still names an Organization stays its owner's.
 
 There must be exactly one active `owner` role per Organization. Role transfers demote the current `owner` to `admin` and promote the selected active member to `owner`.
 
