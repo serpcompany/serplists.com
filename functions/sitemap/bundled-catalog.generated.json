@@ -2,39 +2,39 @@
   "staticPages": [
     {
       "path": "/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/features/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/features/template-builder/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/features/checklist-runs/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/features/public-sharing/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/features/import-export/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/pricing/",
-      "lastmod": "2026-10-01T05:23:56.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/about/",
-      "lastmod": "2026-09-30T03:46:02.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/contact/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     },
     {
       "path": "/templates/",
@@ -42,7 +42,7 @@
     },
     {
       "path": "/categories/",
-      "lastmod": "2026-10-01T05:21:42.000Z"
+      "lastmod": "2026-10-02T02:11:31.000Z"
     }
   ],
   "templates": [
@@ -82,6 +82,6 @@
     "templatesLastmod": "2026-07-10T15:24:46.000Z",
     "categoriesHash": "c524c19bb5a926954d28391ebfbff0e0a90c576a69500a76b25d215fdd28f9f2",
     "categoriesLastmod": "2026-09-03T18:56:30.000Z",
-    "implementationLastmod": "2026-10-01T22:57:54.000Z"
+    "implementationLastmod": "2026-10-02T01:31:44.000Z"
   }
 }
