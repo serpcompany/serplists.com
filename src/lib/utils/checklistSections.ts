@@ -73,10 +73,15 @@ const shownContentSchema = z.object({
   subItems: z.array(shownSubItemSchema).optional(),
 }).passthrough();
 
+const textIdOf = (id: unknown): { id?: string } =>
+  typeof id === "string" ? { id } : typeof id === "number" && Number.isFinite(id) ? { id: String(id) } : {};
+
 const shownContents = (contents: unknown[]): ChecklistItemContent[] =>
   contents.flatMap((content) => {
     const parsed = shownContentSchema.safeParse(content);
-    return parsed.success ? [parsed.data] : [];
+    if (!parsed.success) return [];
+    const { id, ...shown } = parsed.data;
+    return [{ ...shown, ...textIdOf(id) }];
   });
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {

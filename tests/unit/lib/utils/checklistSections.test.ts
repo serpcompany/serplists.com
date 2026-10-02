@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { elementAt, firstOf } from '../../../support/elements';
+import { elementAt, firstOf, taskIn } from '../../../support/elements';
 
 import {
   calculateSectionsProgress,
@@ -11,6 +11,8 @@ import {
 } from '@/lib/utils/checklistSections';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
+import { normalizePortableSections } from '@/lib/schemas/portableTemplateNormalize';
+import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import {
   MALFORMED_CONTENTS_A_TEMPLATE_STORED,
   malformedSectionsStoredBeforeValidation,
@@ -112,6 +114,36 @@ describe('normalizeSections on stored content', () => {
 
     expect(firstOf(section.items).contents).toEqual(THE_SAME_CONTENTS_MADE_SAFE);
     expect(calculateSectionsProgress([section])).toBe(0);
+  });
+
+  it('reads a stored numeric content id as text, as the editor and the portable export do, and leaves out any other id that is not text', () => {
+    const stored: unknown = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{
+        id: 'i1',
+        title: 'Task',
+        isCompleted: false,
+        contents: [
+          { id: 7, type: 'text', value: 'Numeric id' },
+          { id: true, type: 'text', value: 'Flag id' },
+          { id: 'c3', type: 'text', value: 'Text id' },
+        ],
+      }],
+    }];
+    const contents = taskIn(normalizeSections(stored), 0, 0).contents;
+
+    expect(contents).toEqual([
+      { id: '7', type: 'text', value: 'Numeric id' },
+      { type: 'text', value: 'Flag id' },
+      { id: 'c3', type: 'text', value: 'Text id' },
+    ]);
+    expect(normalizePortableSections(normalizeSections(stored))).toEqual(normalizePortableSections(stored));
+    const keptEditorContentIds = (sections: unknown) => buildTemplateEditorFormValues({ sections }).sections
+      .flatMap((section) => section.items.flatMap((item) => item.contents.map((content) => content.id)))
+      .filter((id) => !id.startsWith('content_'));
+    expect(keptEditorContentIds(normalizeSections(stored))).toEqual(['7', 'c3']);
+    expect(keptEditorContentIds(stored)).toEqual(['7', 'c3']);
   });
 
   it('keeps valid content and legacy completion as before', () => {
