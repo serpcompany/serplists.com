@@ -1,11 +1,11 @@
 ## Summary
 
-<!-- What changed and why. Link the issue: "Closes #123". -->
+What changed and why. Link the issue: "Closes #123".
 
 ## Evidence
 
-<!-- How you know it works. For UI changes, paste `pnpm run ui:snap` output or a
-screenshot before and after. For bugs, show the reproduction failing first. -->
+How you know it works. For UI changes, paste `pnpm run ui:snap` output or a
+screenshot before and after. For bugs, show the reproduction failing first.
 
 ## Checklist
 

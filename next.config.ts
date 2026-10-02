@@ -42,6 +42,7 @@ const LEGACY_PATH_REDIRECTS = [
 const DASHBOARD_HOME_REDIRECT = { source: '/dashboard', destination: '/dashboard/templates/', permanent: false };
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   turbopack: {
