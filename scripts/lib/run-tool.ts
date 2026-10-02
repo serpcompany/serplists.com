@@ -58,7 +58,7 @@ export function buildToolInvocation(
   return { command: execPath, args: [resolveToolBin(tool, { repoRoot }), ...args], options: {} };
 }
 
-export function tsxLoaderUrl({ repoRoot = REPO_ROOT }: { repoRoot?: string } = {}): string {
+function tsxLoaderUrl({ repoRoot = REPO_ROOT }: { repoRoot?: string } = {}): string {
   return pathToFileURL(createRequire(path.join(repoRoot, "package.json")).resolve("tsx")).href;
 }
 
@@ -120,10 +120,6 @@ export function execTool(tool: ToolName, args: readonly string[], options: ExecF
 export function execTool(tool: ToolName, args: readonly string[], options?: ExecFileSyncOptions): string | Buffer;
 export function execTool(tool: ToolName, args: readonly string[], options: ExecFileSyncOptions = {}): string | Buffer {
   return execInvocation(buildToolInvocation(tool, args), options);
-}
-
-export function spawnScript(script: string, args: readonly string[], options: SpawnOptions = {}): ChildProcess {
-  return spawnInvocation(buildScriptInvocation(script, args), options);
 }
 
 export function execScript(script: string, args: readonly string[], options: ExecFileSyncOptionsWithStringEncoding): string;

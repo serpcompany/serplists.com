@@ -264,7 +264,7 @@ as they are.
 
 Scripts are TypeScript, and every one runs in Node with tsx's loader:
 `node --import tsx scripts/<name>.ts`, the same in `package.json`, the Lefthook hooks and the
-workflows. Code that starts a script calls `execScript()` or `spawnScript()` from
+workflows. Code that starts a script calls `execScript()` or `buildScriptInvocation()` from
 `scripts/lib/run-tool.ts`, which pass the loader by its absolute URL, so the script may run
 in any folder. Why this way:
 - Node's own type stripping needs `--experimental-strip-types` before Node 22.18 (this machine
@@ -295,7 +295,7 @@ schema reads them.
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
 `scripts/lib/run-tool.ts`: `execTool`/`spawnTool` run a dependency's bin script
 (wrangler, next, opennextjs-cloudflare, playwright, drizzle-kit) with the current Node,
-`execScript`/`spawnScript` run a script with tsx's loader,
+`execScript` and `buildScriptInvocation` run a script with tsx's loader,
 and `execPnpm` runs pnpm itself through the pnpm that launched the script (`npm_execpath`).
 A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin. Outside
 `pnpm run` there is no pnpm script to reuse, so on Windows `execPnpm` goes through `cmd.exe`
