@@ -260,6 +260,21 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the boundary rules reach the tests (69dea124..df9d9686). TD-61 is
+  closed.
+  - Test files are held to `serplists/no-external-data-casts`, to the type-aware
+    `no-unsafe-*` rules (with types from `tests/tsconfig.json`), and to `no-explicit-any`
+    and `no-this-alias`. Their test-only overrides are gone.
+  - It fixed 996 hits in 203 files, plus 92 `JsonRecord` casts in the MCP tests.
+  - The browser specs' request helpers take the app's schemas.
+  - Doubles are typed through the interfaces they stand in for (`SqliteD1` implements
+    `D1Database`; `InMemoryR2Bucket`).
+  - `pnpm run lint` takes about 85 to 90 s.
+  - New tracker rows:
+    - TD-67: `as never` and `postDataJSON()`;
+    - TD-68: a real DOM in place of the fake one, whose `createRoot` support extends a
+      React interface marked internal;
+    - TD-69: four stored-content tests written in JavaScript.
 - 2026-10-01: phase 4, app side of round 3 done (f777bde3..1902fa14). TD-64 is closed.
   - `noPropertyAccessFromIndexSignature` is on for the app, node and API projects, and the
     guard test holds them to it. It fixed 656 errors.
