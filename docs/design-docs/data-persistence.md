@@ -13,7 +13,6 @@ The persistence layer uses Cloudflare D1 for transactional data, the API in the 
 - `functions/api/utils/audit.ts` - Audit event value builder.
 - `db/schema/` - Drizzle schema used by runtime queries.
 - `db/schema.sql` - maintained reference snapshot for local inspection.
-- `db/types/` - Drizzle model types.
 - `db/migrations/*.sql` - D1 schema history.
 - `db/seeds/` - local and official seed data.
 - `db/maintenance/` - one-off maintenance SQL that is not schema history.
