@@ -140,7 +140,7 @@ describe('normalizeSections on stored content', () => {
     ]);
     expect(normalizePortableSections(normalizeSections(stored))).toEqual(normalizePortableSections(stored));
     const keptEditorContentIds = (sections: unknown) => buildTemplateEditorFormValues({ sections }).sections
-      .flatMap((section) => section.items.flatMap((item) => item.contents.map((content) => content.id)))
+      .flatMap((section) => section.items.flatMap((item) => (item.contents ?? []).map((content) => content.id)))
       .filter((id) => !id.startsWith('content_'));
     expect(keptEditorContentIds(normalizeSections(stored))).toEqual(['7', 'c3']);
     expect(keptEditorContentIds(stored)).toEqual(['7', 'c3']);
