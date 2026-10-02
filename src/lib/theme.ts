@@ -7,6 +7,13 @@ export const THEME_CHANGE_EVENT = 'serplists-theme-change';
 
 export type SerpListsTheme = 'light' | 'dark';
 
+type ThemeClassList = Pick<DOMTokenList, 'contains' | 'toggle'>;
+
+export type ThemeDocument = {
+  documentElement: { classList: ThemeClassList };
+  body: { classList: ThemeClassList };
+};
+
 const isTheme = (value: unknown): value is SerpListsTheme =>
   value === 'light' || value === 'dark';
 
@@ -23,21 +30,21 @@ export const getStoredTheme = (
 };
 
 export const getDocumentTheme = (
-  documentRef: Document = document,
+  documentRef: ThemeDocument = document,
 ): SerpListsTheme =>
   documentRef.documentElement.classList.contains('dark') ||
   documentRef.body.classList.contains('dark')
     ? 'dark'
     : 'light';
 
-const setDocumentTheme = (documentRef: Document, theme: SerpListsTheme) => {
+const setDocumentTheme = (documentRef: ThemeDocument, theme: SerpListsTheme) => {
   const isDark = theme === 'dark';
   documentRef.documentElement.classList.toggle('dark', isDark);
   documentRef.body.classList.toggle('dark', isDark);
 };
 
 export const applyStoredTheme = (
-  documentRef: Document = document,
+  documentRef: ThemeDocument = document,
   storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   const theme = getStoredTheme(storage);
@@ -47,7 +54,7 @@ export const applyStoredTheme = (
 
 export const setStoredTheme = (
   theme: SerpListsTheme,
-  documentRef: Document = document,
+  documentRef: ThemeDocument = document,
   storage: Pick<Storage, 'setItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   setDocumentTheme(documentRef, theme);
@@ -61,7 +68,7 @@ export const setStoredTheme = (
 };
 
 export const toggleDocumentTheme = (
-  documentRef: Document = document,
+  documentRef: ThemeDocument = document,
   storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   const nextTheme = getDocumentTheme(documentRef) === 'dark' ? 'light' : 'dark';
@@ -83,7 +90,7 @@ const isFromAnotherStorageArea = (event: ThemeStorageEvent, localStorageArea: un
 
 export const syncThemeFromStorageEvent = (
   event: ThemeStorageEvent,
-  documentRef: Document = document,
+  documentRef: ThemeDocument = document,
   storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
   localStorageArea: unknown = getLocalStorage(),
 ): SerpListsTheme | null => {
@@ -92,7 +99,7 @@ export const syncThemeFromStorageEvent = (
 };
 
 interface ThemeSubscriptionOptions {
-  documentRef?: Document;
+  documentRef?: ThemeDocument;
   localStorageArea?: unknown;
   storage?: Pick<Storage, 'getItem'> | null;
   target?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;

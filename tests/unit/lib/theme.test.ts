@@ -10,6 +10,7 @@ import {
   THEME_CHANGE_EVENT,
   THEME_STORAGE_KEY,
   toggleDocumentTheme,
+  type ThemeDocument,
 } from '@/lib/theme';
 
 const createThemeHarness = () => {
@@ -38,13 +39,15 @@ const createThemeHarness = () => {
     document: {
       body: { classList: bodyClassList },
       documentElement: { classList: documentElementClassList },
-    } as unknown as Document,
+    } satisfies ThemeDocument,
     documentElementClassNames: htmlClassNames,
     isDark: () => htmlClassNames.has('dark') || bodyClassNames.has('dark'),
     storage: {
       getItem: vi.fn((key: string) => storage.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
-    } as unknown as Storage,
+      setItem: vi.fn((key: string, value: string): void => {
+        storage.set(key, value);
+      }),
+    } satisfies Pick<Storage, 'getItem' | 'setItem'>,
     storedValues: storage,
   };
 };
@@ -188,7 +191,7 @@ describe('theme changes from another tab, which arrive only as a storage event a
   it('ignores other keys and sessionStorage', () => {
     const harness = createThemeHarness();
     harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
-    const sessionArea = { getItem: () => null } as unknown as Storage;
+    const sessionArea = { getItem: () => null };
 
     expect(
       syncThemeFromStorageEvent(
