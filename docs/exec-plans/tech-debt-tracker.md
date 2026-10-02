@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-78.**
+then you raise it. **Next ID: TD-79.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -37,3 +37,4 @@ then you raise it. **Next ID: TD-78.**
 | TD-75 | Runs | Possibly a bug, not confirmed: the shared-run merge (`functions/api/utils/shared-run-merge.ts`) matches Sub-tasks without ids by position, so legacy `null` content blocks before them could pair the wrong Sub-tasks. | Write a test with stored id-less Sub-tasks after legacy `null` blocks; fix the matching if it misaligns. Small to medium. | None |
 | TD-76 | Agent safety | `.claude/settings.json` asks before `node scripts/* --allow-production*`, but scripts now run as `node --import tsx scripts/<name>.ts`, so a direct run of `scripts/d1-baseline-migrations.ts --allow-production` is no longer asked (`pnpm run db:migrations:baseline:prod` still is, through `pnpm *:prod*`). | A person adds the ask rules for `node --import tsx scripts/* --allow-production*` (Bash and PowerShell) and updates the literal command in `tests/unit/config/agent-tooling.test.ts`. Small; needs a person, since agents do not edit their own permission settings. | None |
 | TD-77 | Tests | DOM tests swap Base UI's overlays (AlertDialog and the other dialogs) for in-place stand-ins. The real ones render in happy-dom but close after an exit transition, and checks that a dialog closed failed 3 times in 12 parallel runs. | Render the real overlays and wait for them to close with `waitFor` or `waitForElementToBeRemoved`, then delete the stand-ins. Medium. | None |
+| TD-78 | Dead code | `downloadBackupFile` still accepts a `TemplateBackupExport` and has a default file name for backups, but every caller passes a portable pack. | Narrow it to the portable pack and drop the backup branch and its name. Small. | None |

@@ -260,6 +260,18 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, dead code (dd14418b..49366e5a).
+  - `deadcode:check` runs knip in `check:repo` and takes about 3 s.
+    - `knip.json` names only the entry points no plugin sees, plus the two allowed
+      ignores.
+    - `treatConfigHintsAsErrors` fails on an entry or ignore that matches nothing.
+    - The guard refuses any other setting.
+  - Deleted: 12 unused files, 185 unused exports, 58 unused types, 3 duplicate exports and
+    7 unused packages, including `jszip`, `@uiw/react-md-editor` and `caniuse-lite`.
+    `@opennextjs/aws` is a direct devDependency.
+  - 20 tests of deleted code went with it. Where the behavior lives on, the tests now go
+    through the functions the app calls.
+  - New tracker row: TD-78.
 - 2026-10-01: phase 4, component tests run in happy-dom (e42e64c2..9caa0457). TD-68 is
   closed.
   - Files named `*.dom.test.tsx` run in happy-dom as their own Vitest project. Everything
@@ -522,6 +534,14 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: knip counts tests as users of an export.
+  - 174 exports are used by their own module and also imported by a unit test of that
+    helper. They stay exported.
+  - Testing a module's helpers directly is a choice about test design, not dead code.
+    Forcing every such test through a public function would rewrite about 100 test files
+    for little safety.
+  - An export that only tests use, and that its own module does not use, is dead code,
+    and knip deletes it.
 - 2026-10-01: scripts run as `node --import tsx`.
   - Not Node's own type stripping: local Node 22.16 needs a flag for it, and it cannot
     resolve the `@/` alias or extensionless imports that the seed, sitemap and profiling
