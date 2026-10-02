@@ -122,8 +122,8 @@ and agents (MCP) call them directly and do not follow redirects.
   hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
   `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.ts`).
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
-  route helpers (`isPathWithin`, `resolveRouteShell`, `resolveConsoleSection`), which accept
-  either form, not with `===` or `startsWith` on a literal.
+  route helpers (`isPathWithin`, `resolveRouteShell`), which accept either form, not with
+  `===` or `startsWith` on a literal.
 - `next.config.ts` sets `trailingSlash: true`, so the URLs Next.js writes (canonical and Open
   Graph URLs) get their slash, and `skipTrailingSlashRedirect: true`: Next.js's own
   trailing-slash redirect would move the API too, and OpenNext skips its redirect for files.

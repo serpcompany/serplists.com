@@ -206,10 +206,10 @@ server's "Refresh before ..." text no longer applies.
   Template lists reload before the error shows (`refreshRunsAfterConflict`,
   `refreshTemplatesAfterConflict` in `src/contexts/templateListCache.ts`), and the cached
   public catalog drops the template instead of refetching its edge copy.
-- A template save's answer (`parseTemplateUpdateResponse`) carries the version and slug it
-  stored. The next save sends that version, never a local `+1`: a save that changes nothing
-  keeps it. An answer without a version is an error that asks for a reload before saving
-  again, rather than a guessed version.
+- A template save's answer (`templateUpdateResultSchema`, which `api.updateTemplate` parses
+  it with) carries the version and slug it stored. The next save sends that version, never a
+  local `+1`: a save that changes nothing keeps it. An answer without a version is an error
+  that asks for a reload before saving again, rather than a guessed version.
 
 ## Loading states
 
