@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Lock, Mail, MailWarning } from "lucide-react";
+import { Lock, Mail, MailWarning } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -20,9 +20,10 @@ import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
 } from "@/lib/auth/devUsers";
+import { StatusNotice } from "@/components/auth/AuthFields";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { PasswordInput } from "@/components/auth/PasswordInput";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { BusyButton } from "@/components/shared/BusyButton";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -247,10 +248,9 @@ const Login = () => {
           ) : null}
 
           {showResendVerification ? (
-            <Alert role="status">
-              <MailWarning />
-              <AlertTitle>{verificationFailure ?? "Verify your email before signing in."}</AlertTitle>
-            </Alert>
+            <StatusNotice icon={<MailWarning />}>
+              {verificationFailure ?? "Verify your email before signing in."}
+            </StatusNotice>
           ) : null}
 
           <Field>
@@ -294,33 +294,25 @@ const Login = () => {
 
           <Field>
             {showResendVerification ? (
-              <Button
+              <BusyButton
                 type="button"
                 variant="outline"
                 onClick={handleResendVerification}
-                disabled={isResendingVerification}
+                busy={isResendingVerification}
+                busyLabel="Resending verification…"
               >
-                {isResendingVerification ? (
-                  <>
-                    <Loader2 data-icon="inline-start" className="animate-spin" />
-                    Resending verification…
-                  </>
-                ) : (
-                  "Resend verification email"
-                )}
-              </Button>
+                Resend verification email
+              </BusyButton>
             ) : null}
 
-            <Button type="submit" disabled={isSubmitting || isLoading}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 data-icon="inline-start" className="animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
-            </Button>
+            <BusyButton
+              type="submit"
+              busy={isSubmitting}
+              busyLabel="Signing in..."
+              disabled={isSubmitting || isLoading}
+            >
+              Sign in
+            </BusyButton>
           </Field>
         </FieldGroup>
       </form>

@@ -15,6 +15,17 @@ import { runHistorySchema, type RunHistoryResponse } from "@/lib/schemas/history
 
 export type ChecklistRunHistoryResponse = RunHistoryResponse;
 
+type RunSaveBody = {
+  template_id?: string;
+  title?: string;
+  items?: unknown[];
+  sections?: unknown[];
+  status?: string;
+  progress?: number;
+  completed_at?: string | undefined;
+  expected_revision?: number | undefined;
+};
+
 const isPositiveWholeNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
 
@@ -74,35 +85,14 @@ export const runsApi = {
     return apiRequest(`/checklists/shared/${encodeURIComponent(shareToken)}`, apiRunSchema);
   },
 
-  async updateSharedChecklist(
-    shareToken: string,
-    updates: {
-      template_id?: string;
-      title?: string;
-      items?: unknown[];
-      sections?: unknown[];
-      status?: string;
-      progress?: number;
-      completed_at?: string | undefined;
-      expected_revision?: number | undefined;
-    }
-  ) {
+  async updateSharedChecklist(shareToken: string, updates: RunSaveBody) {
     return apiRequest(`/checklists/shared/${encodeURIComponent(shareToken)}`, sharedRunSavedSchema, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   },
 
-  async updateChecklist(id: string, updates: {
-    template_id?: string;
-    title?: string;
-    items?: unknown[];
-    sections?: unknown[];
-    status?: string;
-    progress?: number;
-    completed_at?: string | undefined;
-    expected_revision?: number | undefined;
-  }) {
+  async updateChecklist(id: string, updates: RunSaveBody) {
     return apiRequest(`/checklists/${id}`, runSavedSchema, {
       method: 'PUT',
       body: JSON.stringify(updates),

@@ -15,10 +15,10 @@ import { PROFILE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
 import { publicProfileSchema } from '@/lib/schemas/accountResponses';
 import { apiTemplateListSchema } from '@/lib/schemas/apiTemplates';
 import { buildPublicProfilePath } from '@/lib/routes';
-import type { PageSeo } from '@/lib/seo/pageMetadata';
 
 import { fetchApiJson } from '../api';
 import { getRequestOrigin } from '../cloudflare';
+import type { PageSeoLookup } from './pageSeoLookup';
 
 const CACHE_TTL_SECONDS = 5 * 60;
 const CACHE_KEY_PREFIX = '/__page-meta/v1/profiles/';
@@ -36,13 +36,8 @@ const profileApi: UserProfileApiClient = {
     fetchApiJson(`/api/templates/public?userId=${encodeURIComponent(userId)}`, apiTemplateListSchema),
 };
 
-export type ProfilePageSeo =
-  | { kind: 'found'; seo: PageSeo }
-  | { kind: 'not_found'; seo: PageSeo }
-  | { kind: 'unavailable' };
-
-export const loadProfilePageSeo = cache(async (username: string): Promise<ProfilePageSeo> => {
-  const notFound: ProfilePageSeo = {
+export const loadProfilePageSeo = cache(async (username: string): Promise<PageSeoLookup> => {
+  const notFound: PageSeoLookup = {
     kind: 'not_found',
     seo: { ...PROFILE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
   };

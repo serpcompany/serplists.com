@@ -1,29 +1,12 @@
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
-
-import { PageJsonLd } from '@/components/seo/PageJsonLd';
-import { buildPageMetadata } from '@/lib/seo/pageMetadata';
+import { seoPage } from '@/components/seo/seoPage';
 import { loadCategoryPageSeo } from '@/server/pageMeta/categoryPage';
 import { routeParam } from '@/server/routeParam';
 import CategoryDetailRoute from '@/views/CategoryDetailRoute';
 
-type Props = { params: Promise<{ categorySlug: string }> };
+const page = seoPage(
+  async (params: Promise<{ categorySlug: string }>) => loadCategoryPageSeo(routeParam((await params).categorySlug)),
+  CategoryDetailRoute,
+);
 
-const loadSeo = async (params: Props['params']) =>
-  loadCategoryPageSeo(routeParam((await params).categorySlug));
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const seo = await loadSeo(params);
-  return seo ? buildPageMetadata(seo) : {};
-}
-
-export default function Page({ params }: Props) {
-  return (
-    <>
-      <Suspense fallback={null}>
-        <PageJsonLd seo={loadSeo(params)} />
-      </Suspense>
-      <CategoryDetailRoute />
-    </>
-  );
-}
+export const generateMetadata = page.generateMetadata;
+export default page.Page;

@@ -1,4 +1,5 @@
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
+import type { ApiRun } from '@/lib/schemas/apiRuns';
 
 import { getInitialSelectedItemId, mapChecklistToRun } from './runExecutionMappers';
 import type { RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
@@ -15,48 +16,17 @@ export const resolveMode = ({
   shareToken?: string | undefined;
 }): RunExecutionMode => (shareToken ? 'shared' : 'private');
 
-export const loadRunExecutionData = async (
-  options: RunExecutionLoadOptions,
-  dependencies: RunExecutionDependencies,
+const loadRun = async (
+  mode: RunExecutionMode,
+  key: string | undefined,
+  fetchRun: (key: string) => Promise<ApiRun>,
 ): Promise<RunExecutionLoadResult> => {
-  const mode = resolveMode(options);
-  const apiClient = getApiClient(dependencies);
-
-  if (mode === 'private') {
-    if (!options.runId) {
-      return { kind: 'not_found', mode };
-    }
-
-    try {
-      const checklist = await apiClient.getChecklistById(options.runId);
-      const run = mapChecklistToRun(checklist, options.runId);
-      return {
-        kind: 'ok',
-        mode,
-        run,
-        selectedItemId: getInitialSelectedItemId(run),
-      };
-    } catch (error) {
-      if (isApiError(error) && error.status === 404) {
-        return { kind: 'not_found', mode };
-      }
-
-      return {
-        kind: 'error',
-        message: getApiErrorMessage(error, 'Unable to load run.'),
-        mode,
-      };
-    }
-  }
-
-  if (!options.shareToken) {
+  if (!key) {
     return { kind: 'not_found', mode };
   }
 
   try {
-    const checklist = await apiClient.getSharedChecklist(options.shareToken);
-    const run = mapChecklistToRun(checklist, options.shareToken);
-
+    const run = mapChecklistToRun(await fetchRun(key), key);
     return {
       kind: 'ok',
       mode,
@@ -74,4 +44,16 @@ export const loadRunExecutionData = async (
       mode,
     };
   }
+};
+
+export const loadRunExecutionData = async (
+  options: RunExecutionLoadOptions,
+  dependencies: RunExecutionDependencies,
+): Promise<RunExecutionLoadResult> => {
+  const mode = resolveMode(options);
+  const apiClient = getApiClient(dependencies);
+
+  return mode === 'private'
+    ? loadRun(mode, options.runId, (runId) => apiClient.getChecklistById(runId))
+    : loadRun(mode, options.shareToken, (shareToken) => apiClient.getSharedChecklist(shareToken));
 };

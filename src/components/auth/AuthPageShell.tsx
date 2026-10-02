@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 
 import { AuthCard } from '@/components/auth/AuthCard';
+import { Link } from '@/components/navigation/Link';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { buildLoginPath } from '@/lib/routes';
 
 const POINTS = [
   'Reusable templates for SOPs, audits, launches, and operations.',
@@ -32,6 +34,14 @@ function AuthAside() {
         ))}
       </ul>
     </div>
+  );
+}
+
+export function BackToSignInFooter() {
+  return (
+    <>
+      Remembered it? <Link href={buildLoginPath()}>Back to sign in</Link>
+    </>
   );
 }
 

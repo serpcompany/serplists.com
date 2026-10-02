@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { IconTile } from '@/components/layout/IconTile';
 import { Link } from '@/components/navigation/Link';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 type MediaCardProps = {
@@ -87,5 +88,32 @@ export function MediaCard({
       </div>
       {action ? <div className="absolute top-2 right-2 z-10">{action}</div> : null}
     </article>
+  );
+}
+
+export function MediaCardHoverAction({ children }: { children: ReactNode }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden"
+    >
+      {children}
+    </div>
+  );
+}
+
+const SHOWN_CATEGORIES = 2;
+
+export function MediaCardCategories({ categories, countHidden = false }: { categories: string[]; countHidden?: boolean }) {
+  const hidden = categories.length - SHOWN_CATEGORIES;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {categories.slice(0, SHOWN_CATEGORIES).map((category) => (
+        <Badge key={category} variant="secondary">
+          {category}
+        </Badge>
+      ))}
+      {countHidden && hidden > 0 ? <Badge variant="secondary">+{hidden}</Badge> : null}
+    </span>
   );
 }

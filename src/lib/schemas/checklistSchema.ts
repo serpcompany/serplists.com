@@ -40,21 +40,29 @@ export const portableTemplateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).default("error"),
 });
 
-export const checklistTemplateSchema = z.object({
-  id: z.string(),
-  title: z.string(),
+const templateDescriptionFields = {
   description: z.string().optional(),
   type: z.enum(["checklist", "recipe"]).optional(),
-  sections: z.array(checklistSectionSchema),
-  userId: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  isPublic: z.boolean(),
+};
+
+const templatePublishingFields = {
   version: z.number().int().optional(),
   slug: z.string().optional(),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   rules: z.array(portableTemplateRuleSchema).optional(),
+};
+
+export const checklistTemplateSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  ...templateDescriptionFields,
+  sections: z.array(checklistSectionSchema),
+  userId: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  isPublic: z.boolean(),
+  ...templatePublishingFields,
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
 });
@@ -62,19 +70,14 @@ export const checklistTemplateSchema = z.object({
 export const checklistTemplateImportSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
-  description: z.string().optional(),
-  type: z.enum(["checklist", "recipe"]).optional(),
+  ...templateDescriptionFields,
   sections: z.union([z.array(z.unknown()), z.string()]).optional(),
   items: z.union([z.array(z.unknown()), z.string()]).optional(),
   userId: z.string().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
   isPublic: z.boolean().optional(),
-  version: z.number().int().optional(),
-  slug: z.string().optional(),
-  seoTitle: z.string().optional(),
-  seoDescription: z.string().optional(),
-  rules: z.array(portableTemplateRuleSchema).optional(),
+  ...templatePublishingFields,
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),
   tags: z.union([z.array(z.string()), z.string()]).optional()

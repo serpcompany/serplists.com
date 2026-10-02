@@ -22,16 +22,10 @@ import { SearchField } from '@/components/layout/SearchField';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { ViewModeToggle } from '@/components/layout/ViewModeToggle';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
+import { LabeledSelect } from '@/components/shared/LabeledSelect';
 import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty';
 import { Field, FieldLabel } from '@/components/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
@@ -54,9 +48,6 @@ const sortLabels: Record<CategorySort, string> = {
   trending: 'Trending',
   name: 'Name A-Z',
 };
-
-const isCategorySort = (value: string): value is CategorySort =>
-  Object.prototype.hasOwnProperty.call(sortLabels, value);
 
 const categoriesBreadcrumb = { href: buildPublicCategoriesPath(), label: 'All Categories' };
 
@@ -189,27 +180,14 @@ const CategoryDetail = () => {
           </Field>
 
           <div className="flex items-end gap-3">
-            <Field className="flex-1 sm:w-40 sm:flex-none">
-              <FieldLabel htmlFor={`${fieldId}-sort`}>Sort by</FieldLabel>
-              <Select
-                items={sortLabels}
-                value={sortBy}
-                onValueChange={(value) => {
-                  if (value && isCategorySort(value)) setSortBy(value);
-                }}
-              >
-                <SelectTrigger className="w-full" id={`${fieldId}-sort`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(sortLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            <LabeledSelect
+              className="flex-1 sm:w-40 sm:flex-none"
+              id={`${fieldId}-sort`}
+              label="Sort by"
+              labels={sortLabels}
+              value={sortBy}
+              onValueChange={setSortBy}
+            />
             <ViewModeToggle onChange={setViewMode} value={viewMode} />
           </div>
         </Toolbar>

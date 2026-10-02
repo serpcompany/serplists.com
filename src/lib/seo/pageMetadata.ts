@@ -76,3 +76,8 @@ export function buildPageJsonLd(seo: PageSeo): Record<string, unknown> {
       : {}),
   };
 }
+
+export async function metadataForSeo(seo: Promise<PageSeo | null>, withoutSeo: Metadata = {}): Promise<Metadata> {
+  const resolved = await seo;
+  return resolved ? buildPageMetadata(resolved) : withoutSeo;
+}

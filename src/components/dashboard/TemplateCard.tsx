@@ -10,8 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { MediaCard } from '@/components/layout/MediaCard';
-import { Badge } from '@/components/ui/badge';
+import { MediaCard, MediaCardCategories, MediaCardHoverAction } from '@/components/layout/MediaCard';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -104,31 +103,17 @@ export function TemplateCard({
       }
       clampDescription
       description={template.description || undefined}
-      eyebrow={
-        categories.length > 0 ? (
-          <span className="flex flex-wrap gap-1">
-            {categories.slice(0, 2).map((category) => (
-              <Badge key={category} variant="secondary">
-                {category}
-              </Badge>
-            ))}
-            {categories.length > 2 ? <Badge variant="secondary">+{categories.length - 2}</Badge> : null}
-          </span>
-        ) : undefined
-      }
+      eyebrow={categories.length > 0 ? <MediaCardCategories categories={categories} countHidden /> : undefined}
       href={buildConsoleTemplatePath(template.id)}
       icon={<TypeIcon />}
       mediaOverlay={
         onStartRun ? (
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden"
-          >
+          <MediaCardHoverAction>
             <Button className="relative z-10" onClick={() => onStartRun(template.id)} tabIndex={-1}>
               <Play data-icon="inline-start" />
               Start Run
             </Button>
-          </div>
+          </MediaCardHoverAction>
         ) : undefined
       }
       title={template.title}

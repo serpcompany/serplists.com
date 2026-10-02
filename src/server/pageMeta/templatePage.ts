@@ -15,14 +15,9 @@ import {
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/repoTemplateCatalog';
 import { buildCanonicalPublicTemplatePath, buildPublicTemplatePath } from '@/lib/routes';
-import type { PageSeo } from '@/lib/seo/pageMetadata';
 
 import { getRequestOrigin, getWorkerEnv } from '../cloudflare';
-
-export type TemplatePageSeo =
-  | { kind: 'found'; seo: PageSeo }
-  | { kind: 'not_found'; seo: PageSeo }
-  | { kind: 'unavailable' };
+import type { PageSeoLookup } from './pageSeoLookup';
 
 type FoundTemplatePage = TemplatePageSource & {
   createdAt?: string | null;
@@ -30,7 +25,7 @@ type FoundTemplatePage = TemplatePageSource & {
   canonicalPath: string | null;
 };
 
-const toFoundSeo = (template: FoundTemplatePage): TemplatePageSeo => {
+const toFoundSeo = (template: FoundTemplatePage): PageSeoLookup => {
   const text = resolveTemplatePageText(template);
   return {
     kind: 'found',
@@ -46,10 +41,10 @@ const toFoundSeo = (template: FoundTemplatePage): TemplatePageSeo => {
 };
 
 export const loadTemplatePageSeo = cache(
-  async (username: string, identifier: string): Promise<TemplatePageSeo> => {
+  async (username: string, identifier: string): Promise<PageSeoLookup> => {
     const owner = username.trim().toLowerCase();
     const id = identifier.trim();
-    const notFound: TemplatePageSeo = {
+    const notFound: PageSeoLookup = {
       kind: 'not_found',
       seo: { ...TEMPLATE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
     };
