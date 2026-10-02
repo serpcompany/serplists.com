@@ -260,6 +260,18 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, component tests run in happy-dom (e42e64c2..9caa0457). TD-68 is
+  closed.
+  - Files named `*.dom.test.tsx` run in happy-dom as their own Vitest project. Everything
+    else stays in Node, because happy-dom replaces `fetch`, `Request` and `Response`, and
+    server renders must see no `window`.
+  - happy-dom was chosen over jsdom: 32 s against 53 s for the DOM tests. jsdom also lacks
+    `matchMedia` and needs Node 22.22.
+  - The 43 migrated files query by role, label and text with Testing Library.
+  - The hand-written fake DOM, its React interface augmentation and the naming filter are
+    deleted, and `input-group.tsx` uses `instanceof Element` again.
+  - The unit suite takes 248 s, up from 222 s.
+  - New tracker row: TD-77. Dialog tests still use in-place stand-ins for Base UI overlays.
 - 2026-10-01: phase 4, every script is TypeScript (ac014966..114c5a92). TD-63 is closed.
   - 58 scripts, the ESLint configs and rules, and the e2e runners are TypeScript, so
     `pnpm run typecheck` and the type-aware lint cover them.
@@ -520,8 +532,8 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
 - 2026-10-01: the naming rule matches two names by name, because another module dictates
   them; no file is carved out.
   - The HTTP method names Next.js route handlers must export.
-  - React DOM's create-root container interface, which the fake DOM augments. That one
-    goes with TD-68.
+  - React DOM's create-root container interface, which the fake DOM augmented. It went
+    with the fake DOM (TD-68, 8411df12), and the rule now refuses that augmentation.
 - 2026-10-01: rule override audit decisions.
   - `argsIgnorePattern: "^_"` stays. Some parameters exist only for their type:
     TanStack infers `mutate()`'s variables from `mutationFn`'s parameter, and test doubles
