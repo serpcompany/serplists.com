@@ -255,6 +255,11 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-02: CI's lint ran out of memory: the four TypeScript projects in one ESLint process
+  needed over 3 GB of heap, more than Node's default limit on the runner. `scripts/lint.ts`
+  now runs ESLint once per area with that area's one project, and each run fits in 2 GB.
+  Typed by its own project, the API showed two body readers taking the Workers types'
+  untyped chunks; they now share one reader that narrows each chunk to bytes.
 - 2026-10-02: no comments anywhere. The Claude review and weekly maintenance workflows are
   comment-free, and `WORKFLOWS_AWAITING_A_PERSON` is gone, so `comments:check` skips no
   file.
