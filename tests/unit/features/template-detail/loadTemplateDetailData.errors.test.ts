@@ -153,9 +153,9 @@ describe('public template detail load failures', () => {
   });
 });
 
-describe('public template with a UUID-shaped slug, which templates saved before such slugs were refused can have', () => {
-  const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 
+describe('public template with a UUID-shaped slug, which templates saved before such slugs were refused can have', () => {
   it('loads it by slug after the id lookup finds nothing', async () => {
     const apiClient = buildApiClient({
       getTemplateById: vi.fn().mockRejectedValue(createApiError(404)),

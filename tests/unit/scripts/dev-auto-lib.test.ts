@@ -137,17 +137,17 @@ describe("findOpenPort", () => {
   });
 });
 
-describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
-  const HOLDER = `
-    const server = require("node:net").createServer();
-    server.on("error", (error) => { console.log("error:" + error.code); });
-    server.listen({ ...JSON.parse(process.argv[1]), port: 0 }, () => console.log("port:" + server.address().port));
-    process.stdin.on("end", () => process.exit(0));
-    process.stdin.resume();
-  `;
+const PORT_HOLDER_SCRIPT = `
+  const server = require("node:net").createServer();
+  server.on("error", (error) => { console.log("error:" + error.code); });
+  server.listen({ ...JSON.parse(process.argv[1]), port: 0 }, () => console.log("port:" + server.address().port));
+  process.stdin.on("end", () => process.exit(0));
+  process.stdin.resume();
+`;
 
+describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
   async function holdPortFromAnotherProcess(listen: Record<string, unknown>) {
-    const child = spawn(process.execPath, ["-e", HOLDER, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
+    const child = spawn(process.execPath, ["-e", PORT_HOLDER_SCRIPT, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
     const line = await new Promise<string>((resolve) => {
       child.stdout.once("data", (data) => resolve(String(data).trim()));
       child.once("exit", () => resolve("exited"));

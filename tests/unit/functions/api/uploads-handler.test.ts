@@ -364,27 +364,27 @@ describe('Uploads Handler file downloads', () => {
   });
 });
 
-describe('Uploads Handler delete authorization', () => {
-  const SELF = 'user-123';
-  const OTHER = 'user-456';
+const SIGNED_IN_USER_ID = 'user-123';
+const OTHER_USER_ID = 'user-456';
 
+describe('Uploads Handler delete authorization', () => {
   it('lets an account delete its own avatar', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+    vi.mocked(getSessionUserId).mockResolvedValue(SIGNED_IN_USER_ID);
     const env = uploadEnv();
 
-    const response = await handleUploads(deleteRequest(`avatars/${SELF}/a.png`), env);
+    const response = await handleUploads(deleteRequest(`avatars/${SIGNED_IN_USER_ID}/a.png`), env);
 
     expect(response.status).toBe(200);
-    expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith(`avatars/${SELF}/a.png`);
+    expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith(`avatars/${SIGNED_IN_USER_ID}/a.png`);
   });
 
   it.each(['template-files', 'template-images', 'template-videos'])(
     'refuses to delete %s, even for the account that uploaded it, since Templates, versions, Runs and copies may use it',
     async (bucket) => {
-      vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+      vi.mocked(getSessionUserId).mockResolvedValue(SIGNED_IN_USER_ID);
       const env = uploadEnv();
 
-      const response = await handleUploads(deleteRequest(`${bucket}/${SELF}/doc.pdf`), env);
+      const response = await handleUploads(deleteRequest(`${bucket}/${SIGNED_IN_USER_ID}/doc.pdf`), env);
 
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({ code: 'asset_referenced' });
@@ -393,18 +393,18 @@ describe('Uploads Handler delete authorization', () => {
   );
 
   it.each([
-    ['another account avatar', `avatars/${OTHER}/a.png`],
+    ['another account avatar', `avatars/${OTHER_USER_ID}/a.png`],
     ['an unknown account avatar', 'avatars/user-999/a.png'],
-    ['an avatar key with the caller id after another segment', `avatars/evil/${SELF}/a.png`],
-    ['a Template image key with the caller id after another segment', `template-images/evil/${SELF}/a.png`],
-    ['a key in another bucket', `other-bucket/${SELF}/a.png`],
-    ['a key with the caller id smuggled in', `template-files/${OTHER}/a.pdf/${SELF}/x`],
-    ['an extra path segment', `avatars/${SELF}/nested/a.png`],
-    ['an unknown bucket', `x/${SELF}/y`],
-    ['a key with no file name', `avatars/${SELF}/`],
-    ['a key with no bucket', `${SELF}/a.png`],
+    ['an avatar key with the caller id after another segment', `avatars/evil/${SIGNED_IN_USER_ID}/a.png`],
+    ['a Template image key with the caller id after another segment', `template-images/evil/${SIGNED_IN_USER_ID}/a.png`],
+    ['a key in another bucket', `other-bucket/${SIGNED_IN_USER_ID}/a.png`],
+    ['a key with the caller id smuggled in', `template-files/${OTHER_USER_ID}/a.pdf/${SIGNED_IN_USER_ID}/x`],
+    ['an extra path segment', `avatars/${SIGNED_IN_USER_ID}/nested/a.png`],
+    ['an unknown bucket', `x/${SIGNED_IN_USER_ID}/y`],
+    ['a key with no file name', `avatars/${SIGNED_IN_USER_ID}/`],
+    ['a key with no bucket', `${SIGNED_IN_USER_ID}/a.png`],
   ])('refuses to delete %s', async (_label, key) => {
-    vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+    vi.mocked(getSessionUserId).mockResolvedValue(SIGNED_IN_USER_ID);
     const env = uploadEnv();
 
     const response = await handleUploads(deleteRequest(key), env);
@@ -417,7 +417,7 @@ describe('Uploads Handler delete authorization', () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     const env = uploadEnv();
 
-    const response = await handleUploads(deleteRequest(`avatars/${SELF}/a.png`), env);
+    const response = await handleUploads(deleteRequest(`avatars/${SIGNED_IN_USER_ID}/a.png`), env);
 
     expect(response.status).toBe(401);
     expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();

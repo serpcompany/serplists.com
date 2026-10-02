@@ -294,9 +294,9 @@ describe("the Customer Portal with a Stripe customer that no longer exists", () 
   });
 });
 
-describe("a missing customer with a stored subscription on a current Pro price, which means the deployed keys are wrong, not the customer", () => {
-  const CONTACT_SUPPORT = "Your billing account could not be found. Contact support.";
+const CONTACT_SUPPORT = "Your billing account could not be found. Contact support.";
 
+describe("a missing customer with a stored subscription on a current Pro price, which means the deployed keys are wrong, not the customer", () => {
   it("keeps the customer at the portal and says to contact support", async () => {
     storeSubscription("sub_pro", "cus_stale", "active", "price_pro");
 

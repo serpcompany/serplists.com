@@ -24,6 +24,8 @@ import { mcpArgumentsError, mcpTemplatesPage, mcpToolCall, mcpToolResponse, runK
 import { readJson } from "../../../support/readJson";
 import { anyInstanceOf, objectContaining, stringContaining } from "../../../support/asymmetricMatchers";
 
+const LONE_SURROGATE_ESCAPE = /\\ud[89a-f][0-9a-f]{2}/i;
+
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
@@ -177,7 +179,6 @@ describe("personal run MCP handler", () => {
 
   describe("strict JSON clients", () => {
     const structuredContentOf = (raw: string) => mcpToolResponse.parse(JSON.parse(raw)).result.structuredContent;
-    const LONE_SURROGATE_ESCAPE = /\\ud[89a-f][0-9a-f]{2}/i;
 
     const ownedTemplateRow = (overrides: JsonRecord) => ({
       id: "template-1",

@@ -18,12 +18,12 @@ import { mcpRunResult, mcpToolCall } from "../../../support/agentMcp";
 import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 import { jsonRecordIn } from "../../../support/storedJson";
 
+const AUDIT_PAYLOAD_BUDGET_BYTES = 4 * 1024;
+
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
   describe("audit payloads", () => {
-    const AUDIT_PAYLOAD_BUDGET_BYTES = 4 * 1024;
-
     async function recordedAudit() {
       expect(buildAuditEventValues).toHaveBeenCalledOnce();
       const result = firstOf(vi.mocked(buildAuditEventValues).mock.results);

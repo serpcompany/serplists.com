@@ -140,9 +140,10 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
   });
 });
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 describe('UUID-shaped slugs are reserved, since template pages and link previews read a UUID in their path as a template id', () => {
   const uuid = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
-  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const expectNotUuid = (stored: unknown) => {
     expectSuffixed(stored, uuid);
     expect(stored).not.toMatch(UUID_PATTERN);

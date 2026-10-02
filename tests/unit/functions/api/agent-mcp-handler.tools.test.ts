@@ -24,6 +24,8 @@ import {
 } from "../../../support/agentMcp";
 import { readJson } from "../../../support/readJson";
 
+const ROOT_KEYWORDS_CLIENTS_REJECT = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else", "$ref", "enum", "const"];
+
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
@@ -87,8 +89,6 @@ describe("personal run MCP handler", () => {
   });
 
   describe("tool input schemas", () => {
-    const ROOT_KEYWORDS_CLIENTS_REJECT = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else", "$ref", "enum", "const"];
-
     async function listTools() {
       return (await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList)).result.tools;
     }

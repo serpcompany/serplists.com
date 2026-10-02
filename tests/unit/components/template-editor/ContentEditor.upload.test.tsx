@@ -228,9 +228,9 @@ describe('ContentEditor media uploads', () => {
   });
 });
 
-describe('ContentEditor media URL typed over an upload', () => {
-  const EXTERNAL_URL = 'https://example.com/pricing.pdf';
+const EXTERNAL_URL = 'https://example.com/pricing.pdf';
 
+describe('ContentEditor media URL typed over an upload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.pendingUploadsFromContext = createPendingUploads();
