@@ -5,9 +5,12 @@ const publicHandleAndName = {
   displayName: z.string().nullable(),
 };
 
-export const templateOwnerSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("user"), userId: z.string(), ...publicHandleAndName }),
-  z.object({ type: z.literal("team"), teamId: z.string(), ...publicHandleAndName }),
-]);
+const userOwnerSchema = z.object({ type: z.literal("user"), userId: z.string(), ...publicHandleAndName });
+const organizationOwnerSchema = z.object({ type: z.literal("team"), teamId: z.string(), ...publicHandleAndName });
+const unnamedOrganizationOwnerSchema = z.object({ type: z.literal("team") });
 
-export type TemplateOwner = z.infer<typeof templateOwnerSchema>;
+export const templateOwnerSchema = z.union([userOwnerSchema, organizationOwnerSchema, unnamedOrganizationOwnerSchema]);
+
+export type TemplateOwner = z.infer<typeof userOwnerSchema> | z.infer<typeof organizationOwnerSchema>;
+
+export type PublicTemplateOwner = z.infer<typeof userOwnerSchema> | z.infer<typeof unnamedOrganizationOwnerSchema>;

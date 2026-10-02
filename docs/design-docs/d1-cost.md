@@ -191,8 +191,8 @@ Every Template list and detail read also joins the owning Organization by primar
 an Organization Template, and reads nothing more for a Personal one (`selectTemplatesWithOwner`
 in `functions/api/utils/template-rows.ts`, [data persistence](data-persistence.md#resource-ownership)).
 That adds one row per Organization Template: the Organization template list's budget went
-from 3 to 4 rows per Template on 2026-10-02, and a public Organization Template adds one row
-to a catalog miss.
+from 3 to 4 rows per Template on 2026-10-02. A public Organization Template adds one row to a
+catalog miss too, although public responses drop the Organization's name and slug.
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per

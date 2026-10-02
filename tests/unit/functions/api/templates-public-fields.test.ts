@@ -10,6 +10,7 @@ vi.mock('@functions/api/utils/session', () => ({
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { toPublicTemplate } from '@functions/api/utils/template-public';
+import type { TemplateOwner } from '@/lib/schemas/templateOwner';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiEnv } from '../../../support/apiEnv';
 import { readJson } from '../../../support/readJson';
@@ -89,8 +90,10 @@ const activeMembership = { id: 'member-1', team_id: 'org-1', user_id: 'member-7'
 
 const sortedKeys = (value: Record<string, unknown>) => Object.keys(value).sort();
 
-const THE_ORGANIZATION_AS_OWNER = { type: 'team', teamId: 'org-1', publicHandle: 'launch-crew', displayName: 'Launch Crew' };
-const THE_USER_AS_OWNER = { type: 'user', userId: 'user-9', publicHandle: 'alice', displayName: 'Alice Example' };
+const THE_ORGANIZATION_AS_OWNER: TemplateOwner = { type: 'team', teamId: 'org-1', publicHandle: 'launch-crew', displayName: 'Launch Crew' };
+const THE_USER_AS_OWNER: TemplateOwner = { type: 'user', userId: 'user-9', publicHandle: 'alice', displayName: 'Alice Example' };
+const AN_ORGANIZATION_UNNAMED = { type: 'team' };
+const THE_ORGANIZATION_BY_ID_SLUG_OR_NAME = /org-1|launch-crew|Launch Crew/;
 
 const publicOwner = z.object({ owner: z.object({ type: z.string() }).passthrough() }).passthrough();
 
@@ -103,8 +106,10 @@ const expectPublicShape = (template: Record<string, unknown>) => {
   expect(template).not.toHaveProperty('owner_team_slug');
   expect(template).not.toHaveProperty('owner_team_name');
   const { owner } = publicOwner.parse(template);
-  const ownerId = owner.type === 'team' ? 'teamId' : 'userId';
-  expect(sortedKeys(owner)).toEqual(['displayName', ownerId, 'publicHandle', 'type'].sort());
+  expect(owner.type === 'team' ? owner : sortedKeys(owner)).toEqual(
+    owner.type === 'team' ? AN_ORGANIZATION_UNNAMED : ['displayName', 'publicHandle', 'type', 'userId'],
+  );
+  expect(JSON.stringify(template)).not.toMatch(THE_ORGANIZATION_BY_ID_SLUG_OR_NAME);
 };
 
 const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown(), owner: z.unknown() }).passthrough();
@@ -115,7 +120,7 @@ async function get<Output>(path: string, schema: ResponseSchema<Output>) {
   return { status: response.status, body: await readJson(response, schema) };
 }
 
-describe('public template responses, which never say who in an Organization edited a template, and name its owner only by type, id, handle and name', () => {
+describe('public template responses, which never say who in an Organization created or edited a template, or which Organization owns it', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chainSelectsUpdatesAndDeletes(dbMocks);
@@ -136,7 +141,7 @@ describe('public template responses, which never say who in an Organization edit
     expectPublicShape(firstOf(body));
     expect(body[0]).toMatchObject({ id: 'template-1', user_id: 'creator-1', owner_type: 'team', version: 4 });
     expect(firstOf(body).sections).toEqual(sections);
-    expect(firstOf(body).owner).toEqual(THE_ORGANIZATION_AS_OWNER);
+    expect(firstOf(body).owner).toEqual(AN_ORGANIZATION_UNNAMED);
   });
 
   it.each([
@@ -150,7 +155,7 @@ describe('public template responses, which never say who in an Organization edit
     expect(status).toBe(200);
     expectPublicShape(body);
     expect(body.ownerProfile).toEqual({ username: 'alice', full_name: 'Alice Example' });
-    expect(body.owner).toEqual(THE_ORGANIZATION_AS_OWNER);
+    expect(body.owner).toEqual(AN_ORGANIZATION_UNNAMED);
   });
 
   it('a signed-in visitor who is not in the Organization gets only public fields', async () => {
@@ -200,6 +205,7 @@ describe('public template responses, which never say who in an Organization edit
 
     expect(status).toBe(200);
     expect(body).toMatchObject({ team_id: 'org-1', created_by_user_id: 'creator-1', updated_by_user_id: 'editor-2' });
+    expect(body.owner).toEqual(THE_ORGANIZATION_AS_OWNER);
   });
 
   it('the owner reading a public Personal template by id still gets the full row', async () => {
@@ -219,6 +225,7 @@ describe('public template responses, which never say who in an Organization edit
     const { body } = await get('/api/templates?teamId=org-1', templateRows);
 
     expect(body[0]).toMatchObject({ team_id: 'org-1', updated_by_user_id: 'editor-2' });
+    expect(firstOf(body).owner).toEqual(THE_ORGANIZATION_AS_OWNER);
   });
 
   it('a private Organization template is still not found for a non-member', async () => {
@@ -230,10 +237,11 @@ describe('public template responses, which never say who in an Organization edit
     expect(status).toBe(404);
   });
 
-  it('keeps only the public fields of an owner, whatever else its projection carries', () => {
-    const owner = { ...THE_ORGANIZATION_AS_OWNER, billingOwnerUserId: 'creator-1', memberIds: ['editor-2'], role: 'owner' };
+  it('says only that an Organization owns a template, and keeps only the public fields of a User owner', () => {
+    const organization = { ...THE_ORGANIZATION_AS_OWNER, billingOwnerUserId: 'creator-1', memberIds: ['editor-2'], role: 'owner' };
+    const user = { ...THE_USER_AS_OWNER, email: 'alice@example.test' };
 
-    expect(toPublicTemplate({ id: 'template-1', owner }).owner).toEqual(THE_ORGANIZATION_AS_OWNER);
-    expect(toPublicTemplate({ id: 'template-1', owner: 'org-1' })).toEqual({ id: 'template-1' });
+    expect(toPublicTemplate({ id: 'template-1', owner: organization }).owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(toPublicTemplate({ id: 'template-2', owner: user }).owner).toEqual(THE_USER_AS_OWNER);
   });
 });

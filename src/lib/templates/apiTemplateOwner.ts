@@ -1,5 +1,5 @@
 import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
-import type { TemplateOwner } from '@/lib/schemas/templateOwner';
+import type { PublicTemplateOwner, TemplateOwner } from '@/lib/schemas/templateOwner';
 
 type ApiTemplateOwner = Pick<ApiTemplate, 'owner_type' | 'team_id' | 'teamId'>;
 type ApiTemplateOwnerFields = ApiTemplateOwner &
@@ -20,12 +20,12 @@ export const readApiTemplateTeamId = (
 
 export const readApiTemplateOwner = (
   template: ApiTemplateOwnerFields,
-): TemplateOwner | undefined => {
+): TemplateOwner | PublicTemplateOwner | undefined => {
   if (template.owner) return template.owner;
 
   const teamId = readApiTemplateTeamId(template);
   if (teamId) return { type: 'team', teamId, publicHandle: null, displayName: null };
-  if (template.owner_type === 'team') return undefined;
+  if (template.owner_type === 'team') return { type: 'team' };
 
   const userId = nonEmptyString(template.user_id);
   return userId

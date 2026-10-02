@@ -120,12 +120,16 @@ Personal data uses User ownership. Organization data uses Organization ownership
     `{ type: 'team', teamId, publicHandle, displayName }`, the Organization's id, slug and
     name. A Template counts its `team_id` only while its `owner_type` is `team`, so a
     Personal Template that still names an Organization stays its User's.
+  - Public responses never name an Organization ([SECURITY.md](../SECURITY.md#model)):
+    `toPublicTemplate` (`functions/api/utils/template-public.ts`) keeps a Personal
+    Template's owner whole and sends an Organization Template's as `{ type: 'team' }`
+    only, with no id, slug or name.
   - The type values are the stored `owner_type` values (renaming them is TD-5).
     `publicHandle` and `displayName` are `null` when the User or Organization has none.
   - `selectTemplatesWithOwner` joins `teams` by primary key only for rows whose `owner_type`
     is `team`, so a Personal row reads no `teams` row and each Organization Template reads
-    one ([D1 cost](d1-cost.md)). The Organization's slug and name reach the response only
-    inside `owner`.
+    one ([D1 cost](d1-cost.md)), whose name and slug a public response then drops. The
+    Organization's slug and name reach a member's response only inside `owner`.
   - The Creator stays in the legacy fields, kept for now: `user_id`, `owner_username`,
     `owner_full_name` and `ownerProfile` (the User joined on `templates.user_id`), beside
     `owner_type` and `team_id`. Share links and the public routes, lookups and sitemaps

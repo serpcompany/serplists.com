@@ -18,6 +18,8 @@ const templateBody = z
 const templateList = z.array(templateBody);
 
 const THE_ORGANIZATION = { type: "team", teamId: "org-1", publicHandle: "acme-launch", displayName: "Acme Launch Team" };
+const AN_ORGANIZATION_UNNAMED = { type: "team" };
+const THE_ORGANIZATION_BY_ID_SLUG_OR_NAME = /org-1|acme-launch|Acme Launch Team/;
 const THE_PERSONAL_OWNER = { type: "user", userId: "owner-2", publicHandle: "bob", displayName: "Bob Owner" };
 
 type StoredTemplate = { id: string; userId: string; ownerType: "user" | "team"; teamId: string | null; createdAt: string };
@@ -67,26 +69,42 @@ describe("the owner of a Template in API responses, read from its stored owner t
     database.sqlite.close();
   });
 
-  it("names the User for a Personal Template and the Organization for an Organization Template", async () => {
+  it("names the User for a Personal Template and only says an Organization owns an Organization Template in the public catalog", async () => {
     const catalog = await listed("templates?scope=public", null);
 
     expect(catalog.map(({ id, owner }) => [id, owner])).toEqual([
-      ["organization-1", THE_ORGANIZATION],
+      ["organization-1", AN_ORGANIZATION_UNNAMED],
       ["personal-1", THE_PERSONAL_OWNER],
     ]);
   });
 
   it.each([
-    ["the public catalog", "list", "templates?scope=public", null],
-    ["a visitor's read by slug", "detail", "templates/slug/organization-1", null],
     ["a member's read by id", "detail", "templates/organization-1", "creator-1"],
+    ["a member's read by slug", "detail", "templates/slug/organization-1", "creator-1"],
     ["the Organization's list", "list", "templates?teamId=org-1", "creator-1"],
-  ])("never returns the Creator as the owner of an Organization Template in %s, and keeps the Creator fields", async (_label, kind, path, viewer) => {
+  ])("names the Organization, never the Creator, as the owner of an Organization Template in %s", async (_label, kind, path, viewer) => {
     const body = kind === "list" ? await listed(path, viewer) : [await detail(path, viewer)];
     const template = body.find(({ id }) => id === "organization-1");
 
     expect(template?.owner).toEqual(THE_ORGANIZATION);
     expect(template).toMatchObject({ user_id: "creator-1", owner_username: "alice" });
+  });
+
+  it.each([
+    ["the public catalog", "templates?scope=public", null],
+    ["a visitor's read by slug", "templates/slug/organization-1", null],
+    ["a visitor's read by id", "templates/organization-1", null],
+    ["a read by id from someone outside the Organization", "templates/organization-1", "owner-2"],
+  ])("never names the Organization or makes the Creator the owner of an Organization Template in %s", async (_label, path, viewer) => {
+    const response = await read(path, viewer);
+    const sent = await response.clone().text();
+    const body = await readJson(response, z.union([templateList, templateBody.transform((template) => [template])]));
+    const template = body.find(({ id }) => id === "organization-1");
+
+    expect(template?.owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(template).toMatchObject({ user_id: "creator-1", owner_username: "alice" });
+    expect(template).not.toHaveProperty("team_id");
+    expect(sent).not.toMatch(THE_ORGANIZATION_BY_ID_SLUG_OR_NAME);
   });
 
   it("sends the Organization's name and slug only inside the owner, not as columns of the row", async () => {

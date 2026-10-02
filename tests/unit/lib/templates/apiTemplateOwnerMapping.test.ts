@@ -32,6 +32,8 @@ const personalRow = {
 };
 
 const { team_id: teamIdPublicRowsLeftOut, ...publicOrganizationRowFromBeforeTheOwner } = organizationRow;
+const AN_ORGANIZATION_UNNAMED = { type: 'team' } as const;
+const publicOrganizationRow = { ...publicOrganizationRowFromBeforeTheOwner, owner: AN_ORGANIZATION_UNNAMED };
 
 const asReceived = (body: Record<string, unknown>): ApiTemplate => apiTemplateSchema.parse(body);
 
@@ -44,6 +46,10 @@ describe('the API Template schema', () => {
   it("reads the owner the API sends, a User's or an Organization's", () => {
     expect(asReceived({ ...personalRow, owner: THE_USER }).owner).toEqual(THE_USER);
     expect(asReceived({ ...organizationRow, owner: THE_ORGANIZATION }).owner).toEqual(THE_ORGANIZATION);
+  });
+
+  it('reads the owner of a public Organization Template, which says only that an Organization owns it', () => {
+    expect(asReceived(publicOrganizationRow).owner).toEqual(AN_ORGANIZATION_UNNAMED);
   });
 
   it('keeps only the owner fields it knows', () => {
@@ -100,11 +106,14 @@ describe.each(MAPPERS)('%s', (_label, map) => {
     });
   });
 
-  it('keeps a public Organization Template from before the owner was added, whose Organization the response does not name, with no owner', () => {
-    const template = map(asReceived(publicOrganizationRowFromBeforeTheOwner));
+  it.each([
+    ['as the API sends it', publicOrganizationRow],
+    ['from before the owner was added', publicOrganizationRowFromBeforeTheOwner],
+  ])('maps a public Organization Template %s to an owner that says only that an Organization owns it', (_case, row) => {
+    const template = map(asReceived(row));
 
-    expect(template).toMatchObject({ id: 'template-1', ownerType: 'team', userId: 'creator-1' });
-    expect(template.owner).toBeUndefined();
+    expect(template.owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(template).toMatchObject({ id: 'template-1', ownerType: 'team', userId: 'creator-1', teamId: undefined });
   });
 
   it('falls back to the legacy fields when the owner cannot be read', () => {
