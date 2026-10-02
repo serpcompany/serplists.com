@@ -16,7 +16,7 @@ import {
   TEST_TEMPLATE_IDS,
   TEST_USER_EMAILS,
   TEST_USER_IDS,
-} from "../../db/seeds/local";
+} from "../../db/seeds/local-test-data/ids";
 import {
   account,
   auditEvents,

@@ -10,9 +10,8 @@ import {
   repairLegacyTestTemplateSlugs,
   seedLocalTestData,
   seedOfficialLocalLogin,
-  TEST_TEMPLATE_IDS,
-  TEST_USER_IDS,
 } from "../../../../db/seeds/local";
+import { TEST_TEMPLATE_IDS, TEST_USER_IDS } from "../../../../db/seeds/local-test-data/ids";
 import * as schema from "../../../../db/schema/index";
 import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed";
 import { SqliteD1 } from "../../../support/sqlite-d1";

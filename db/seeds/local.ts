@@ -10,15 +10,7 @@ import { seedTestRuns } from "./local-test-data/runs";
 import { seedTestTemplates } from "./local-test-data/templates";
 import { seedClock, sqliteTime } from "./local-test-data/values";
 
-export {
-  DEV_PASSWORD_HASH,
-  TEST_RUN_IDS,
-  TEST_TEAM_IDS,
-  TEST_TEAM_TEMPLATE_IDS,
-  TEST_TEMPLATE_IDS,
-  TEST_USER_EMAILS,
-  TEST_USER_IDS,
-} from "./local-test-data/ids";
+export { DEV_PASSWORD_HASH, TEST_USER_EMAILS } from "./local-test-data/ids";
 export { cleanupLocalTestData };
 
 export async function seedLocalTestData(db: LocalDb): Promise<void> {
