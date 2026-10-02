@@ -71,6 +71,34 @@ describe("personal run MCP handler", () => {
     expect(present(contentAt(task, 0).subItems, "the sub-tasks").every((item) => item.isCompleted)).toBe(true);
   });
 
+  it("updates a legacy Sub-task stored with a numeric id when named by that id's text, and keeps the stored id", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+      items: JSON.stringify([{
+        id: "section-1",
+        items: [{
+          id: "task-1",
+          isCompleted: false,
+          contents: [{ type: "subItems", value: "", subItems: [{ id: 7, title: "Legacy", isCompleted: false }] }],
+        }],
+      }]),
+      revision: 3,
+    })]);
+
+    const body = await updateRun({
+      expectedRevision: 3,
+      operation: "set_subtask_completed",
+      taskId: "task-1",
+      subtaskId: "7",
+      completed: true,
+    });
+
+    expect(body.result.isError).toBeUndefined();
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
+    const task = taskIn(storedSectionsIn(updates.items), 0, 0);
+    expect(task.isCompleted).toBe(true);
+    expect(contentAt(task, 0).subItems).toEqual([{ id: 7, title: "Legacy", isCompleted: true }]);
+  });
+
   it("returns a structured edit conflict without writing", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
 

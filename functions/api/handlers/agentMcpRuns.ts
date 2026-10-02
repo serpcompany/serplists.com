@@ -10,6 +10,7 @@ import {
   isRecord,
   isSectionRecord,
   isTaskRecord,
+  readTextId,
   taskRecordsIn,
   type ChecklistNodeRecord,
   type ContentRecord,
@@ -148,7 +149,7 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
     return;
   }
 
-  const subtask = subtasks.find((candidate) => candidate.id === operation.subtaskId);
+  const subtask = subtasks.find((candidate) => readTextId(candidate.id) === operation.subtaskId);
   if (!subtask) throw new ToolError("Subtask not found", "subtask_not_found");
   subtask.isCompleted = operation.completed;
   task.isCompleted = subtasks.length > 0 && subtasks.every((candidate) => candidate.isCompleted === true);
