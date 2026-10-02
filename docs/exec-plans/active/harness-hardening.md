@@ -158,7 +158,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
 ## Exceptions allowed
 
 - **Generated files:** `cloudflare-env.d.ts`, `next-env.d.ts`, `pnpm-lock.yaml`,
-  `docs/generated/` and the rest of `GENERATED_FILES` in `scripts/check-no-comments-lib.mjs`.
+  `docs/generated/` and the rest of `GENERATED_FILES` in `scripts/check-no-comments-lib.ts`.
   They are not authored code: a generator rewrites them, so the checks skip them.
 - **`db/migrations`** is left out of the duplicate check.
   - Applied migrations are append-only history and cannot be edited to share code.
@@ -260,6 +260,18 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, every script is TypeScript (ac014966..114c5a92). TD-63 is closed.
+  - 58 scripts, the ESLint configs and rules, and the e2e runners are TypeScript, so
+    `pnpm run typecheck` and the type-aware lint cover them.
+    - 35 `.d.mts` files are gone.
+    - It fixed 717 type errors, with outside data parsed by Zod.
+  - Scripts run as `node --import tsx scripts/<name>.ts`.
+  - JavaScript remains only where the tool loads no TypeScript: `.dependency-cruiser.cjs`,
+    `postcss.config.js`, and one test of a JavaScript caller. The guard refuses
+    JavaScript under `scripts/` unless one of those configs imports it.
+  - A convention now also catches bracketed reads of the Stripe keys.
+  - New tracker row: TD-76. A permission rule no longer matches the new script command,
+    and a person must update it.
 - 2026-10-01: phase 4, the tests reach the app's level (807fe774..d77092e4). TD-66, TD-67
   and TD-69 are closed.
   - `noPropertyAccessFromIndexSignature` is on for tests. It fixed 1,059 errors, and the
@@ -274,7 +286,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
     shared-run merge.
 - 2026-10-01: phase 4, app side of round 4 done: naming conventions (836ec7b4..47d6e0f7).
   - `@typescript-eslint/naming-convention` covers every TypeScript file, with its options
-    in `scripts/eslint-rules/naming-conventions.mjs`.
+    in `scripts/eslint-rules/naming-conventions.ts`.
     - camelCase by default, with PascalCase allowed for components.
     - UPPER_CASE only for module-scope `const`.
     - Properties and destructured names are unchecked, since they mirror external
@@ -353,7 +365,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
     storage reads, message data and form data, and every `as unknown as`. It covers
     `src/`, `functions/`, `scripts/` and `db/`, and fixed 65 casts.
   - The type-aware `no-unsafe-*` rules fixed 29 more. They run in
-    `eslint.type-aware.config.js`, which `pnpm run lint` uses.
+    `eslint.type-aware.config.ts`, which `pnpm run lint` uses.
   - `apiRequest(endpoint, schema)` takes a required Zod schema at all 56 endpoints, and
     the client's types are `z.infer` of shared schemas in `src/lib/schemas/`. A response
     it cannot read is an `ApiError` with code `unreadable_response`.
@@ -381,7 +393,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - `tests/tsconfig.json` sets `allowJs: false`, so a test that imports a `.mjs` without a
     `.d.mts` fails the type check. 14 declaration files were added.
   - Other changes:
-    - one `.env` parser, `scripts/lib/env-file.mjs`;
+    - one `.env` parser, `scripts/lib/env-file.ts`;
     - one `postcss` version, with no override;
     - `@types/node` 22.20;
     - `wrangler.toml` parsed with smol-toml and Zod.
@@ -413,7 +425,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - Tests check behavior, not source text. 53 reads of `src/` and `functions/` in 38 test
     files are gone, and `serplists/no-source-text-reads` refuses new ones.
     - The properties those tests scanned for became lint rules: `serplists/restricted-code`,
-      with its table in `scripts/eslint-rules/code-conventions.mjs`, and
+      with its table in `scripts/eslint-rules/code-conventions.ts`, and
       `serplists/navigate-while-visit-is-current`.
     - The rest became tests that render, call or request the code.
   - Rate limiting is deny-by-default (e60aa426). A route family added to the router is
@@ -488,7 +500,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   absolute one and globs it, and on Windows that glob matches no file, so the check passed
   while reading nothing. The guard test refuses a `path` setting.
 - 2026-10-01: a convention the tests used to scan the source for is a lint rule entry in
-  `scripts/eslint-rules/code-conventions.mjs`. An entry may name `owners`, the modules
+  `scripts/eslint-rules/code-conventions.ts`. An entry may name `owners`, the modules
   that implement the convention (the clipboard helper may touch the clipboard), as
   ESLint's `ignores` already did for `browserStorage.ts` and the logger. That is the
   rule's definition, not an exception.
@@ -498,6 +510,13 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: scripts run as `node --import tsx`.
+  - Not Node's own type stripping: local Node 22.16 needs a flag for it, and it cannot
+    resolve the `@/` alias or extensionless imports that the seed, sitemap and profiling
+    scripts load.
+  - Not the `tsx` command: it starts a second process, and one process keeps Ctrl+C, exit
+    codes and the dev launcher's pid as they were.
+  - Start-up costs about 200 to 300 ms more per hook script.
 - 2026-10-01: the naming rule matches two names by name, because another module dictates
   them; no file is carved out.
   - The HTTP method names Next.js route handlers must export.
@@ -523,7 +542,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
     MCP availability when the flag is unset, and the MCP Host check against DNS
     rebinding. Widening a credential gate gains nothing.
   - A zoneless ISO timestamp is UTC, as D1 stores times.
-- 2026-10-01: the type-aware lint rules run from `eslint.type-aware.config.js`, the base
+- 2026-10-01: the type-aware lint rules run from `eslint.type-aware.config.ts`, the base
   config plus one block, and `pnpm run lint` uses it. The pre-commit hook and the editor
   keep the base config.
   - With type information, ESLint cannot lint the in-memory samples that
