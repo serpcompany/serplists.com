@@ -18,6 +18,13 @@ import { restrictedCode } from "./scripts/eslint-rules/restricted-code.mjs";
 
 const MAX_LINES = 500;
 
+const turnedOff = (names) => Object.fromEntries(names.map((name) => [name, "off"]));
+const NODE_MODULE_GLOBALS = {
+  ...turnedOff(Object.keys(globals.browser).filter((name) => !(name in globals.nodeBuiltin))),
+  ...turnedOff(Object.keys(globals.node).filter((name) => !(name in globals.nodeBuiltin))),
+  ...globals.nodeBuiltin,
+};
+
 const SERPLISTS_RULES = {
   rules: {
     "navigate-while-visit-is-current": navigateWhileVisitIsCurrent,
@@ -159,6 +166,15 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
     },
+  },
+  {
+    extends: [js.configs.recommended],
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: { globals: NODE_MODULE_GLOBALS },
+  },
+  {
+    files: ["**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: globals.node },
   },
   {
     files: FILES_THAT_EXPORT_MORE_THAN_COMPONENTS,

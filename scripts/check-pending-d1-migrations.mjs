@@ -1,20 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import { buildToolInvocation } from "./lib/run-tool.mjs";
 
 const NO_PENDING_MIGRATIONS = "No migrations to apply!";
 const PENDING_MIGRATIONS = "Migrations to be applied:";
-
-function stripAnsi(value) {
-  return value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
-}
 
 export function evaluateMigrationListResult({ status, stdout = "", error = null }) {
   if (error || status !== 0) {
     return { ok: false, reason: "wrangler_failed" };
   }
 
-  const output = stripAnsi(stdout);
+  const output = stripVTControlCharacters(stdout);
   if (output.includes(PENDING_MIGRATIONS)) {
     return { ok: false, reason: "pending_migrations" };
   }
