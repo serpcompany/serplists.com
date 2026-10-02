@@ -82,7 +82,7 @@ export function DevLoginBar(): JSX.Element | null {
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
-    } catch (error) {
+    } catch {
       toast.error('Login error - check the dev server log (tmp/logs/dev-all.log).');
     } finally {
       setIsLoading(false);

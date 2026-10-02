@@ -42,6 +42,8 @@ lint rule, dependency rule, or check with an error message that explains the fix
 | Log through the structured logger in the API; never log emails, tokens, or other personal data | Logs must be queryable JSON with a `requestId` | ESLint `no-restricted-syntax` on `console.*` in `functions/` |
 | Use [PRODUCT_SENSE.md](../PRODUCT_SENSE.md) vocabulary in user-visible text | Product language drifts fast | ESLint `no-restricted-syntax` on Team/Workspace copy in UI code |
 | Keep files under 500 lines | Large files are hard for agents to change safely | ESLint `max-lines` on every authored code file (every JavaScript and TypeScript file but the generated ones), tests, scripts, seeds and config included, with no per-file caps or excluded folders (`tests/unit/config/no-exceptions.test.ts`) |
+| Unused variables, imports and caught errors fail the lint; only an argument kept for its type is marked with `_` | A name nothing reads is dead code, and an ignore pattern for variables or caught errors lets any of it stay | `@typescript-eslint/no-unused-vars` on every TypeScript file with only `argsIgnorePattern: "^_"` and `ignoreRestSiblings` (a parameter can matter for its type alone: TanStack infers a mutation's variables from `mutationFn`, a test double declares the signature it stands in for); `tests/unit/config/no-exceptions.test.ts` fails on a file with other options ([quality gates](../RELIABILITY.md#quality-gates)) |
+| UI primitives follow the product vocabulary too | A primitive's visible text reaches every page that uses it | The Team/Workspace copy rule covers `src/components/ui/`, with no folder left out; `tests/unit/config/no-exceptions.test.ts` lints a primitive's copy ([PRODUCT_SENSE.md](../PRODUCT_SENSE.md)) |
 | No unused code | Dead code gets copied and "fixed" by mistake | ESLint `@typescript-eslint/no-unused-vars`, `deps:check` |
 | No duplicated code | A copy drifts from the code it copied, and a fix reaches only one of them | `pnpm run duplicates:check` (jscpd at its defaults, 50 tokens and 5 lines, with a threshold of 0) over `src/`, `functions/`, `scripts/`, `db/` and `tests/` together in `check:repo`, `db/migrations` and generated files aside; `tests/unit/config/duplicate-check.test.ts` fails if the settings loosen, the check stops running, a folder drops out or jscpd skips a file it could check ([repository checks](../RELIABILITY.md#repository-checks)) |
 | Tests check what code does, not how it is written | A test that matches source text breaks on a harmless refactor and passes when the behavior breaks | ESLint `serplists/no-source-text-reads` on every test file: no reading a code file or folder under `src/` or `functions/` as text, and no `?raw` import of one (`tests/unit/scripts/no-source-text-reads-rule.test.ts`, [repository checks](../RELIABILITY.md#repository-checks)) |
@@ -63,5 +65,8 @@ in the [harness hardening plan](../exec-plans/active/harness-hardening.md#except
 
 `tests/unit/config/no-exceptions.test.ts` fails when one comes back: an authored code file not
 held to `max-lines` 500, `eslint-suppressions.json` or a suppression flag, a dependency-cruiser
-baseline, `--ignore-known` or a rule below `error`, or a test file no suite runs. ESLint
-refuses skipped, todo, fixme and focused tests.
+baseline, `--ignore-known` or a rule below `error`, or a test file no suite runs; a
+reachability rule that leaves a module out or a rule path that carves one out; a TSX file in
+`src/` the fast-refresh rule relaxes; an `<img>` outside `UserContentImage`; a TypeScript
+file whose `no-unused-vars` ignores more than an argument marked `_`; and UI primitives
+outside the vocabulary rule. ESLint refuses skipped, todo, fixme and focused tests.

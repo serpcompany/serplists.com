@@ -157,7 +157,7 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
+        { argsIgnorePattern: "^_", ignoreRestSiblings: true },
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
       "@next/next/no-img-element": "off",
@@ -235,7 +235,7 @@ export default tseslint.config(
   },
   {
     files: ["src/views/**/*.tsx", "src/components/**/*.tsx", "src/features/**/*.{ts,tsx}"],
-    ignores: ["src/components/ui/**", "**/*.test.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",

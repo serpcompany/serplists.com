@@ -33,6 +33,8 @@ const fastRefreshOptions = z.tuple([
   z.unknown(),
   z.object({ allowConstantExport: z.boolean().optional(), allowExportNames: z.array(z.string()).optional() }).passthrough(),
 ]);
+const UNUSED_VARS_OPTIONS = { argsIgnorePattern: '^_', ignoreRestSiblings: true };
+const unusedVarsOptions = z.tuple([z.unknown(), z.record(z.unknown())]);
 const sameNames = (left: string[], right: string[]) => [...left].sort().join() === [...right].sort().join();
 
 const packageScripts = z
@@ -180,6 +182,33 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
         'reloads its importers and drops their state. Move the other exports to a module of their own instead of ' +
         'relaxing react-refresh/only-export-components.',
     ).toEqual([]);
+  });
+
+  it('holds every TypeScript file to no-unused-vars, marking only an argument kept for its type with _', async () => {
+    const eslint = new ESLint({ cwd: repoRoot });
+    const relaxed: string[] = [];
+    for (const file of authoredCodeFiles.filter((name: string) => /\.(ts|tsx|mts|cts)$/.test(name))) {
+      const setting = (await rulesFor(eslint, file))['@typescript-eslint/no-unused-vars'];
+      const options = unusedVarsOptions.safeParse(setting).data?.[1];
+      if (!isError(setting) || JSON.stringify(options) !== JSON.stringify(UNUSED_VARS_OPTIONS)) {
+        relaxed.push(`${file}: ${JSON.stringify(setting ?? 'not linted')}`);
+      }
+    }
+
+    expect(
+      relaxed,
+      `Unused variables, imports and caught errors fail the lint everywhere: keep no-unused-vars at ${JSON.stringify(UNUSED_VARS_OPTIONS)}. ` +
+        'Delete what is unused, and write catch {} for an error the code does not read.',
+    ).toEqual([]);
+  });
+
+  it('holds the UI primitives to the product vocabulary in their visible text', async () => {
+    const eslint = new ESLint({ cwd: repoRoot });
+    const result = onlyElement(
+      await eslint.lintText('export const Label = () => <span>Switch Workspace</span>;', { filePath: 'src/components/ui/sample.tsx' }),
+    );
+
+    expect(result.messages.map((message) => message.message)).toContainEqual(expect.stringContaining('PRODUCT_SENSE.md'));
   });
 
   it('lets only UserContentImage render <img> in src/, with no file exempt from the convention', async () => {
