@@ -10,6 +10,7 @@
     "../src/js-yaml.d.ts",
     "../src/css-custom-properties.d.ts",
     "../src/next-public-env.d.ts",
+    "../scripts/lib/postcss-tokenize.d.ts",
     "**/*.ts",
     "**/*.tsx",
     "**/*.mts",
