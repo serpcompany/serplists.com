@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.js`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -53,12 +53,43 @@ fails when a tsconfig that `pnpm run typecheck` runs turns one of the four setti
 read what may be missing through the helpers in `tests/support/elements.ts`
 ([testing conventions](#testing-conventions)).
 
+The app, node and API tsconfigs add a fifth, `noPropertyAccessFromIndexSignature`: a key read
+with a dot must come from a type that names it, so `record.title` on a
+`Record<string, unknown>` is an error. Type the value with the shape it has instead:
+- a Drizzle row (`$inferSelect`, or a `Pick` or `Partial` of it), a Zod output, or the result
+  type of the function that built it;
+- for stored checklist JSON, the record shapes in `src/lib/schemas/jsonRecords.ts`
+  (`SectionRecord`, `TaskRecord`, `ContentRecord`, `SubTaskRecord`), which name the keys the
+  code reads, keep every other stored field, and narrow through `isSectionRecord` and the
+  like with no cast;
+- for any other JSON map read by known keys (MCP tool results, audit metadata, request
+  bodies), an interface that extends `JsonRecord` and names those keys as `unknown`, or a Zod
+  object with `.passthrough()`. A passthrough object puts the keys it names first, so keep
+  `z.record()` where the parsed value's key order is serialized or hashed.
+
+Index with brackets only a dictionary whose keys vary: `process.env` in scripts and configs, a
+`dataset`, headers, query parameters. Read the `undefined` that `noUncheckedIndexedAccess`
+gives. The app's `NEXT_PUBLIC_` variables are declared on `NodeJS.ProcessEnv`
+(`src/next-public-env.d.ts`), since Next.js inlines only `process.env.NAME` read with a dot.
+`typecheck-coverage.test.ts` fails when the app, node or API tsconfig turns the setting off.
+The tests' tsconfig turns it off until a later round of the
+[harness hardening plan](exec-plans/active/harness-hardening.md).
+
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
-`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
-app, API and node projects ([repository checks](#repository-checks)). Type information makes a
-run about 2.4 times as long (49 s against 21 s for `eslint .` on the owner's machine), so the
-pre-commit hook and editors use `eslint.config.js` alone and the type-aware rules fail at
+`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules and
+`@typescript-eslint/no-unsafe-type-assertion`, which read types from the app, API and node
+projects ([repository checks](#repository-checks)). Type information makes a run about 2.4
+times as long (50 s against 21 s for `eslint .` on the owner's machine), so the pre-commit
+hook and editors use `eslint.config.js` alone and the type-aware rules fail at
 `pnpm run verify` (the push hook) and in CI.
+
+`eslint.config.js` holds every `.js`, `.mjs` and `.cjs` file to ESLint's recommended JavaScript
+rules (`js.configs.recommended`), `no-undef` among them: TypeScript does not check these files,
+so a name nothing defines would otherwise fail only as a `ReferenceError` when the line runs.
+They are Node code, so their globals are Node's: browser globals such as `window` and
+`document` are off, and so are CommonJS's wrapper variables (`require`, `module`, `exports`,
+`__dirname`) everywhere but `.cjs` files, which parse as CommonJS.
+`tests/unit/config/javascript-recommended-rules.test.ts` lints samples to show each part holds.
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
@@ -183,13 +214,20 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `no-unsafe-return` and `no-unsafe-argument` refuse an `any` flowing on uncast, as in
     `const data: Foo = await response.json()`, in the TypeScript files of the same folders
     (`eslint.type-aware.config.js`, run by `pnpm run lint`). The `.mjs` scripts are not
-    type-checked, so only the cast rule reads them.
+    type-checked, so of these checks only the cast rule reads them, beside ESLint's
+    recommended JavaScript rules ([quality gates](#quality-gates)).
+  - `@typescript-eslint/no-unsafe-type-assertion`, in the same config and folders, refuses an
+    `as` that narrows a type, whatever the value: a cast from `unknown` or `any`, from a
+    union to one member, or from `string` to a literal. Narrow instead: a type guard, `in`,
+    `instanceof`, a Zod parse, `skipToken` for a TanStack query that waits for an id, a guard
+    that throws an error naming what is missing, or the null check a Base UI `Select`'s
+    `onValueChange` needs. An `as` that widens or names the same type is allowed.
   - Tests join in a later round of the
     [harness hardening plan](exec-plans/active/harness-hardening.md); until then they read
     responses with `readJson(response, schema)` from `tests/support/readJson.ts`.
   - `tests/unit/scripts/no-external-data-casts-rule.test.ts` covers the rule, and
     `tests/unit/config/external-data-boundaries.test.ts` fails if `pnpm run lint` stops using
-    the type-aware config or a folder loses the rules.
+    the type-aware config or a folder loses the rules, the assertion rule included.
 - **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
   that scans the code:
   - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the

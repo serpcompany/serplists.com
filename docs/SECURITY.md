@@ -184,7 +184,9 @@ Rules:
   `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `NEXT_PUBLIC_`
   client variables, `emptyStringAsUndefined: true`). Next.js inlines a `NEXT_PUBLIC_` value
   into the browser bundle only where the code names it in full, so `src/env.ts` lists each
-  one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole. URL values
+  one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole, and
+  `src/next-public-env.d.ts` declares each on `NodeJS.ProcessEnv` so that dot read
+  type-checks. URL values
   are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
   host (`functions/api/utils/origin-list.ts`, mirrored in plain JavaScript for the script,
