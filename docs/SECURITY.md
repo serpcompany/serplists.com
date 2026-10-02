@@ -202,7 +202,7 @@ Rules:
   the process environment by an approved secret manager. `pnpm run
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
-  `scripts/secret-scan.mjs` scans every git-tracked file, or the files passed to
+  `scripts/secret-scan.ts` scans every git-tracked file, or the files passed to
   it, as literal paths through secretlint's engine. The secretlint CLI would read
   route files such as `functions/api/[[route]].ts` as globs and skip them. Deleted
   files, folders, and anything under `.git` or `node_modules` (the folders the CLI skips

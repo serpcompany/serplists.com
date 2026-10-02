@@ -105,7 +105,7 @@ Each of these needs the user's approval, or happens with the domain move:
   push to `staging` ([RELIABILITY.md](../../RELIABILITY.md#deploy-pipeline)).
 - **Production deploy workflow** (phase 4): build each environment with its own `SITE_ENV`
   (`SITE_ENV=staging` for `--env preview`, `SITE_ENV=production` for `--env production`), then
-  run `node scripts/check-site-standards.mjs <workers.dev URL> <staging|production>` against
+  run `node --import tsx scripts/check-site-standards.ts <workers.dev URL> <staging|production>` against
   the deployment (it sends the smoke-test header), and against the canonical host after the
   domain move.
   - Keep the Pages workflow's gate that refuses to deploy while migrations are pending:
@@ -133,7 +133,7 @@ Each of these needs the user's approval, or happens with the domain move:
   the Worker; confirm it after the domain move.
 - **Staging's domain:** staging lives on its `workers.dev` address for now. When
   `staging.serplists.com` moves to the Worker, point `STAGING_ORIGIN`
-  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.mjs` and staging's
+  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.ts` and staging's
   `CORS_ALLOWED_ORIGINS` back at it.
 - **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
   `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
@@ -193,7 +193,7 @@ Each of these needs the user's approval, or happens with the domain move:
     308 with the environment's host, and the `x-serplists-smoke-test` header exempts
     workers.dev (`1e0d7588`).
   - [x] Browser tests on canonical URLs, with `tests/e2e/site-standards.spec.ts`, and
-    `scripts/check-site-standards.mjs` for a running site (`89a433b5`, `a6a95c6a`). Production
+    `scripts/check-site-standards.ts` for a running site (`89a433b5`, `a6a95c6a`). Production
     and staging builds, served in workerd with `opennextjs-cloudflare preview --env production`
     and `--env preview`, pass all 45 of its checks. The full browser suite passes on the
     production build: 253 tests on one worker in 29 minutes.
@@ -446,7 +446,7 @@ Each of these needs the user's approval, or happens with the domain move:
   The Tag Manager bootstrap renders on production only.
 - 2026-09-29: **The browser tests run the production configuration** (`SITE_ENV=production`
   in the runner and in CI's build), since production is what users see. Staging's rules are
-  covered by unit tests and by `scripts/check-site-standards.mjs` on a staging build.
+  covered by unit tests and by `scripts/check-site-standards.ts` on a staging build.
 - 2026-09-29: **One host per environment.** `www.serplists.com` redirects to `serplists.com`,
   and every `*.workers.dev` URL (version previews included) to its environment's host, in one
   hop and in canonical form. A request with the `x-serplists-smoke-test` header (not a secret)

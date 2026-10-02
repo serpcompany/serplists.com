@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createEngine } from "@secretlint/node";
 
-import { selectScanTargets } from "./secret-scan-lib.mjs";
+import { selectScanTargets } from "./secret-scan-lib";
 
-function listTrackedFiles() {
+function listTrackedFiles(): string[] {
   const result = spawnSync("git", ["ls-files", "-z"], { encoding: "utf8" });
 
   if (result.error) {
@@ -12,7 +12,7 @@ function listTrackedFiles() {
   }
 
   if (result.status !== 0) {
-    process.stderr.write(result.stderr ?? "");
+    process.stderr.write(result.stderr);
     process.exit(result.status ?? 2);
   }
 

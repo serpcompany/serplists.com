@@ -351,18 +351,18 @@ The staging deploy:
    Worker. The step fails when the output names no `workers.dev` URL, so a deployment is never
    left unchecked.
 5. probes the new deployment's `/api/health` (the Worker boots) and `/api/templates` (D1 is
-   bound) with `scripts/verify-deployment.mjs`.
+   bound) with `scripts/verify-deployment.ts`.
    - It tries up to six times, 10 seconds apart, since a new hostname can take a few seconds
      to resolve.
    - A 5xx or no response (DNS, connect, TLS, or a 30-second timeout) fails the run. Other
      statuses, such as an access policy, only warn.
    - The probe follows no redirect, so an access login counts as its redirect status.
-6. checks the deployment against the site standards with `scripts/check-site-standards.mjs`.
+6. checks the deployment against the site standards with `scripts/check-site-standards.ts`.
 
 Settings:
 
 - **Address:** staging answers on its `workers.dev` address, which `STAGING_ORIGIN`
-  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.mjs` and staging's
+  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.ts` and staging's
   `CORS_ALLOWED_ORIGINS` in `wrangler.toml` all name.
 - **Database:** the `preview` environment binds `serp-checklists-staging-db`.
 - **Secrets:** the Worker has `BETTER_AUTH_SECRET`. Stripe and auth email secrets are not set,
@@ -412,7 +412,7 @@ one repeats its D1, R2 and self-reference bindings.
   URL; the header is not a secret.
   When adding a host (another custom domain), add its redirect in `next.config.ts` and a
   case in `tests/unit/config/urlStandard.test.ts`.
-- **Checking a running site.** `node scripts/check-site-standards.mjs <base-url>
+- **Checking a running site.** `node --import tsx scripts/check-site-standards.ts <base-url>
   <staging|production>` checks the URL standard (canonical URLs answer 200, the other form
   308 in one hop, the API is never redirected, the sitemaps list only canonical URLs), the
   environment's robots.txt, `X-Robots-Tag` and Tag Manager, and the host redirects. Against
@@ -743,7 +743,7 @@ Common failures:
   Manager, as on `serplists.com`. The runner refuses a build it reuses (`--skip-build`) that
   was made for another environment, since the preview's var alone cannot change what the
   build baked in. Staging's noindex is covered by the unit tests and
-  `scripts/check-site-standards.mjs`. `tests/e2e/site-standards.spec.ts` checks the URL
+  `scripts/check-site-standards.ts`. `tests/e2e/site-standards.spec.ts` checks the URL
   standard, the production rules and the host redirects (Playwright sends the other hosts
   as a `Host` header).
 - A spec that checks a page's own robots rule loads the page as `https://serplists.com`

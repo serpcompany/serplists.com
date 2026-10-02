@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { SMOKE_TEST_HEADER } from '../../scripts/check-site-standards.mjs';
+import { SMOKE_TEST_HEADER } from '../../scripts/check-site-standards';
 import { capturedGroup } from '../support/elements';
 import { APP_URL } from './support/stack';
 

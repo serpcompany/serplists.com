@@ -74,7 +74,7 @@ describe('the staging deploy', () => {
 
   it('checks the new deployment responds and meets the site standards', () => {
     const deployIndex = steps.findIndex((step) => step.id === 'deploy');
-    for (const command of ['node scripts/verify-deployment.mjs', 'node scripts/check-site-standards.mjs "$DEPLOY_URL" staging']) {
+    for (const command of ['node --import tsx scripts/verify-deployment.ts', 'node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" staging']) {
       const probe = steps.find((step) => step.run?.trim() === command);
       assert.exists(probe, `no step runs ${command}`);
       expect(probe.env?.['DEPLOY_URL']).toBe('${{ steps.deploy.outputs.url }}');

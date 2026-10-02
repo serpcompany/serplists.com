@@ -1,7 +1,8 @@
 import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -43,6 +44,14 @@ export function buildToolInvocation(tool, args = [], { execPath = process.execPa
   return { command: execPath, args: [resolveToolBin(tool, { repoRoot }), ...args], options: {} };
 }
 
+export function tsxLoaderUrl({ repoRoot = REPO_ROOT } = {}) {
+  return pathToFileURL(createRequire(path.join(repoRoot, "package.json")).resolve("tsx")).href;
+}
+
+export function buildScriptInvocation(script, args = [], { execPath = process.execPath, repoRoot = REPO_ROOT } = {}) {
+  return { command: execPath, args: ["--import", tsxLoaderUrl({ repoRoot }), script, ...args], options: {} };
+}
+
 const ARG_CMD_EXE_PASSES_UNCHANGED = /^[\w@+=:./\\-]+$/;
 
 export function buildPnpmInvocation(
@@ -78,6 +87,16 @@ export function spawnTool(tool, args, options = {}) {
 
 export function execTool(tool, args, options = {}) {
   const invocation = buildToolInvocation(tool, args);
+  return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
+}
+
+export function spawnScript(script, args, options = {}) {
+  const invocation = buildScriptInvocation(script, args);
+  return spawn(invocation.command, invocation.args, { ...invocation.options, ...options });
+}
+
+export function execScript(script, args, options = {}) {
+  const invocation = buildScriptInvocation(script, args);
   return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
 

@@ -2,7 +2,7 @@ pre-commit:
   parallel: true
   commands:
     secret-scan:
-      run: node scripts/secret-scan.mjs {staged_files}
+      run: node --import tsx scripts/secret-scan.ts {staged_files}
     lint:
       glob: "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
       run: pnpm exec eslint --no-warn-ignored {staged_files}

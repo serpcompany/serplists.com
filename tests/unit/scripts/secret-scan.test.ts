@@ -11,10 +11,10 @@ const lefthookCommands = z
   .object({ 'pre-commit': z.object({ commands: z.record(z.object({ run: z.string() }).passthrough()) }).passthrough() })
   .passthrough();
 
-import { selectScanTargets } from '../../../scripts/secret-scan-lib.mjs';
+import { buildScriptInvocation } from '../../../scripts/lib/run-tool.mjs';
+import { selectScanTargets } from '../../../scripts/secret-scan-lib';
 
 const repoRoot = process.cwd();
-const scriptPath = path.join(repoRoot, 'scripts', 'secret-scan.mjs');
 const fakeGithubTokenAssembledAtRuntime = ['gh', 'p_', 'wWPw5k4aXcaT4fNP0UcnZwJUVFk6LO0pINUx'].join('');
 
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'secret-scan-'));
@@ -31,7 +31,8 @@ function writeFixture(relativePath: string, content: string): string {
 }
 
 function runScan(paths: string[]) {
-  const result = spawnSync(process.execPath, [scriptPath, ...paths], {
+  const { command, args } = buildScriptInvocation(path.join(repoRoot, 'scripts', 'secret-scan.ts'), paths);
+  const result = spawnSync(command, args, {
     cwd: repoRoot,
     encoding: 'utf8',
     env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
@@ -112,6 +113,6 @@ describe('pre-commit secret scan', () => {
   it('runs the repository scan script on staged files instead of bare secretlint', () => {
     const config = lefthookCommands.parse(yaml.load(readFileSync(path.join(repoRoot, 'lefthook.yml'), 'utf8')));
 
-    expect(valueAt(config['pre-commit'].commands, 'secret-scan').run).toBe('node scripts/secret-scan.mjs {staged_files}');
+    expect(valueAt(config['pre-commit'].commands, 'secret-scan').run).toBe('node --import tsx scripts/secret-scan.ts {staged_files}');
   });
 });

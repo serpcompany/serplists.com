@@ -262,6 +262,23 @@ as they are.
 
 ## Writing scripts
 
+Scripts are TypeScript, and every one runs in Node with tsx's loader:
+`node --import tsx scripts/<name>.ts`, the same in `package.json`, the Lefthook hooks and the
+workflows. Code that starts a script calls `execScript()` or `spawnScript()` from
+`scripts/lib/run-tool.mjs`, which pass the loader by its absolute URL, so the script may run
+in any folder. Why this way:
+- Node's own type stripping needs `--experimental-strip-types` before Node 22.18 (this machine
+  runs 22.16; CI's `22` is newer), and it only strips: every import must name its `.ts` file,
+  so the extensionless imports and the `@/` alias of the app code that the seed, sitemap and
+  profiling scripts load do not resolve.
+- The `tsx` command runs the script in a second Node process that it starts and relays
+  signals to. That takes longer to start, and one process per script keeps Ctrl+C, exit codes
+  and the pid the dev launcher records as they were.
+- Start-up of `secret-scan` on one file, the pre-commit hook's case, on the owner's machine:
+  322 ms as JavaScript, 365 ms with Node's type stripping, 534 ms with `node --import tsx` and
+  622 ms with the `tsx` command. The hook runs it beside ESLint, which takes about 2.5 s, so
+  a commit takes no longer.
+
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
 `scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dependency's bin script
 (wrangler, next, opennextjs-cloudflare, tsx, playwright, drizzle-kit) with the current Node,

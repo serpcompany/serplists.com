@@ -564,7 +564,7 @@ local build or `next dev`):
 
 Share pages are noindex on every environment, in their metadata and in the `X-Robots-Tag`
 that `next.config.ts` sends for `/share/`. `tests/unit/seo/siteEnvIndexing.test.ts` checks
-both sides, and `scripts/check-site-standards.mjs` checks a running site.
+both sides, and `scripts/check-site-standards.ts` checks a running site.
 
 - Static pages export `metadata` (`/templates/`, `/categories/`, the 404 page).
 - Dynamic public pages look their subject up in `generateMetadata`, the way the page itself

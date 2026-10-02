@@ -1,7 +1,7 @@
 import { loadBuiltRoutes, workerRedirect } from '../../support/builtRoutes';
 import { describe, expect, it } from 'vitest';
 
-import { checkSiteStandards, SMOKE_TEST_HEADER, type SiteRequest } from '../../../scripts/check-site-standards.mjs';
+import { checkSiteStandards, SMOKE_TEST_HEADER, type SiteRequest } from '../../../scripts/check-site-standards';
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 
 

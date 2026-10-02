@@ -2,7 +2,7 @@ import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { elementAt } from '../../support/elements';
 
-import { verifyDeployment } from '../../../scripts/verify-deployment.mjs';
+import { verifyDeployment } from '../../../scripts/verify-deployment';
 
 const BASE_URL = 'https://serp-checklists-preview.serp.workers.dev';
 

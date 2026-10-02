@@ -1,17 +1,47 @@
 import http from "node:http";
 import https from "node:https";
 import { pathToFileURL } from "node:url";
+import { z } from "zod";
 
 export const SMOKE_TEST_HEADER = "x-serplists-smoke-test";
 
-const CANONICAL_ORIGINS = { production: "https://serplists.com", staging: "https://serp-checklists-preview.serpcompany.workers.dev" };
+const siteEnvironmentSchema = z.enum(["production", "staging"]);
+export type SiteEnvironment = z.infer<typeof siteEnvironmentSchema>;
+
+export interface SiteResponse {
+  status: number;
+  location: string | null;
+  headers: Readonly<Record<string, string | string[] | undefined>>;
+  body: string;
+}
+
+export type SiteRequest = (
+  url: string,
+  options: { host?: string | undefined; headers: Record<string, string> },
+) => Promise<SiteResponse>;
+
+export interface SiteStandardsResult {
+  passed: number;
+  failed: number;
+  lines: string[];
+}
+
+type SiteGetOptions = { host?: string | undefined; sendSmokeTestHeader?: boolean };
+
+const CANONICAL_ORIGINS: Record<SiteEnvironment, string> = {
+  production: "https://serplists.com",
+  staging: "https://serp-checklists-preview.serpcompany.workers.dev",
+};
 
 const ONE_SEEDED_PAGE_OF_EACH_KIND = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];
 const FILES = ["/robots.txt", "/sitemap.xml", "/sitemaps/pages/1.xml"];
 const API = ["/api/health", "/api/auth/get-session", "/api/mcp", "/api/stripe/webhook"];
 const LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST = "serp-checklists-check.serp.workers.dev";
 
-export function getWithoutFollowingRedirects(url, { host, headers = {}, timeoutMs = 30_000 } = {}) {
+export function getWithoutFollowingRedirects(
+  url: string,
+  { host, headers = {}, timeoutMs = 30_000 }: { host?: string | undefined; headers?: Record<string, string>; timeoutMs?: number } = {},
+): Promise<SiteResponse> {
   const target = new URL(url);
   const client = target.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
@@ -21,7 +51,7 @@ export function getWithoutFollowingRedirects(url, { host, headers = {}, timeoutM
       (response) => {
         let body = "";
         response.setEncoding("utf8");
-        response.on("data", (chunk) => {
+        response.on("data", (chunk: string) => {
           body += chunk;
         });
         response.on("end", () => {
@@ -38,61 +68,65 @@ export function getWithoutFollowingRedirects(url, { host, headers = {}, timeoutM
   });
 }
 
-function siteUnderCheck(base, request) {
+function siteUnderCheck(base: URL, request: SiteRequest) {
   const origin = base.origin;
   const onWorkersDev = base.hostname.endsWith(".workers.dev");
-  const get = (path, { host, sendSmokeTestHeader = onWorkersDev } = {}) =>
+  const get = (path: string, { host, sendSmokeTestHeader = onWorkersDev }: SiteGetOptions = {}) =>
     request(`${origin}${path}`, { host, headers: sendSmokeTestHeader ? { [SMOKE_TEST_HEADER]: "1" } : {} });
 
-  const lines = [];
+  const lines: string[] = [];
   let failed = 0;
-  const check = (ok, message) => {
+  const check = (ok: boolean, message: string) => {
     lines.push(`${ok ? "ok  " : "FAIL"} ${message}`);
     if (!ok) failed += 1;
   };
-  const expectStatus = async (path, want) => {
+  const expectStatus = async (path: string, want: number) => {
     const { status } = await get(path);
     check(status === want, `${status} ${path}${status === want ? "" : ` (want ${want})`}`);
   };
-  const expectRedirect = async (path, want, options) => {
+  const expectRedirect = async (path: string, want: string, options?: SiteGetOptions) => {
     const { status, location } = await get(path, options);
     const ok = status === 308 && location === want;
     check(ok, `${path}${options?.host ? ` on ${options.host}` : ""} -> ${status} ${location ?? ""}${ok ? "" : ` (want 308 ${want})`}`);
   };
-  const result = () => ({ passed: lines.length - failed, failed, lines });
+  const result = (): SiteStandardsResult => ({ passed: lines.length - failed, failed, lines });
   return { base, origin, onWorkersDev, get, check, expectStatus, expectRedirect, result };
 }
 
-async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }) {
+type SiteUnderCheck = ReturnType<typeof siteUnderCheck>;
+
+const locsIn = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+
+async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }: SiteUnderCheck) {
   for (const page of ONE_SEEDED_PAGE_OF_EACH_KIND.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
   await expectRedirect("/login?next=%2Fdashboard%2F", `${origin}/login/?next=%2Fdashboard%2F`);
   for (const file of FILES) await expectRedirect(`${file}/`, `${origin}${file}`);
 }
 
-async function checkTheApiIsNeverRedirected({ get, check }) {
+async function checkTheApiIsNeverRedirected({ get, check }: SiteUnderCheck) {
   for (const path of [...API, ...API.map((apiPath) => `${apiPath}/`)]) {
     const { status } = await get(path);
     check(status < 300 || status >= 400, `${status} ${path} (the API is never redirected)`);
   }
 }
 
-async function checkSitemapsListOnlyCanonicalUrls({ get, check }) {
+async function checkSitemapsListOnlyCanonicalUrls({ get, check }: SiteUnderCheck) {
   const index = (await get("/sitemap.xml")).body;
-  const children = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+  const children = locsIn(index);
   check(children.length > 0 && children.every((loc) => /^https:\/\/serplists\.com\/sitemaps\/[a-z]+\/\d+\.xml$/.test(loc)), `the sitemap index lists ${children.length} unslashed .xml files on serplists.com`);
   for (const child of children) {
     const { body } = await get(new URL(child).pathname);
-    const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+    const locs = locsIn(body);
     const bad = locs.filter((loc) => !/^https:\/\/serplists\.com\/(?:[^?#]*\/)?$/.test(loc));
     check(locs.length > 0 && bad.length === 0, `${new URL(child).pathname} lists ${locs.length} slashed page URLs${bad.length ? `; not canonical: ${bad.slice(0, 3).join(", ")}` : ""}`);
   }
 }
 
-async function checkOnlyProductionIsIndexedOrLoadsAnalytics({ get, check }, siteEnv) {
+async function checkOnlyProductionIsIndexedOrLoadsAnalytics({ get, check }: SiteUnderCheck, siteEnv: SiteEnvironment) {
   const robots = (await get("/robots.txt")).body;
   const home = await get("/");
   const staticFile = await get("/og-default.png");
-  const noindex = (response) => /noindex/i.test(String(response.headers["x-robots-tag"] ?? ""));
+  const noindex = (response: SiteResponse) => /noindex/i.test(String(response.headers["x-robots-tag"] ?? ""));
   const tagManager = /googletagmanager\.com\/gtm\.js/.test(home.body);
   if (siteEnv === "production") {
     check(/^Allow: \/$/m.test(robots) && !/^Disallow: \/$/m.test(robots), "robots.txt allows crawling");
@@ -109,18 +143,22 @@ async function checkOnlyProductionIsIndexedOrLoadsAnalytics({ get, check }, site
   }
 }
 
-async function checkOtherHostsRedirectToTheCanonicalHost({ base, onWorkersDev, get, check, expectRedirect }, { canonicalOrigin, local }) {
+async function checkOtherHostsRedirectToTheCanonicalHost(
+  { base, onWorkersDev, get, check, expectRedirect }: SiteUnderCheck,
+  { canonicalOrigin, local }: { canonicalOrigin: string; local: boolean },
+) {
   if (onWorkersDev || local) {
-    const workersDevHost = local ? { host: LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST } : {};
+    const workersDevHost = local ? LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST : undefined;
+    const onTheWorkersDevHost = workersDevHost === undefined ? {} : { host: workersDevHost };
     if (new URL(canonicalOrigin).hostname.endsWith(".workers.dev")) {
-      const page = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: false });
-      check(page.status === 200, `${page.status} /about/ on ${workersDevHost.host ?? base.host}, where this environment lives`);
+      const page = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
+      check(page.status === 200, `${page.status} /about/ on ${workersDevHost ?? base.host}, where this environment lives`);
     } else {
-      for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]]) {
-        await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...workersDevHost, sendSmokeTestHeader: false });
+      for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]] as const) {
+        await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
       }
-      const smokeTest = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: true });
-      check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost.host ?? base.host} with ${SMOKE_TEST_HEADER}`);
+      const smokeTest = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: true });
+      check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost ?? base.host} with ${SMOKE_TEST_HEADER}`);
     }
   }
   if (local) {
@@ -129,10 +167,19 @@ async function checkOtherHostsRedirectToTheCanonicalHost({ base, onWorkersDev, g
   }
 }
 
-export async function checkSiteStandards({ baseUrl, siteEnv, local = false, request = getWithoutFollowingRedirects }) {
+export async function checkSiteStandards({
+  baseUrl,
+  siteEnv,
+  local = false,
+  request = getWithoutFollowingRedirects,
+}: {
+  baseUrl: string;
+  siteEnv: SiteEnvironment;
+  local?: boolean;
+  request?: SiteRequest;
+}): Promise<SiteStandardsResult> {
   const base = new URL(baseUrl);
   const canonicalOrigin = CANONICAL_ORIGINS[siteEnv];
-  if (!canonicalOrigin) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
   const site = siteUnderCheck(base, request);
 
   for (const path of [...ONE_SEEDED_PAGE_OF_EACH_KIND, ...FILES]) await site.expectStatus(path, 200);
@@ -148,10 +195,12 @@ export async function checkSiteStandards({ baseUrl, siteEnv, local = false, requ
 async function main() {
   const [baseUrl, siteEnv] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!baseUrl || !siteEnv) {
-    console.error("usage: node scripts/check-site-standards.mjs <base-url> <staging|production> [--local]");
+    console.error("usage: node --import tsx scripts/check-site-standards.ts <base-url> <staging|production> [--local]");
     process.exit(2);
   }
-  const result = await checkSiteStandards({ baseUrl, siteEnv, local: process.argv.includes("--local") });
+  const environment = siteEnvironmentSchema.safeParse(siteEnv);
+  if (!environment.success) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
+  const result = await checkSiteStandards({ baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") });
   result.lines.forEach((line) => console.log(line));
   console.log(`${result.passed} passed, ${result.failed} failed`);
   process.exit(result.failed ? 1 : 0);

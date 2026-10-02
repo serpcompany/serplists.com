@@ -1,13 +1,12 @@
-#!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 
 const dryRun = process.argv.includes("--dry-run");
 
-function git(...args) {
+function git(...args: string[]): string {
   return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function tryGit(...args) {
+function tryGit(...args: string[]): string | null {
   try {
     return git(...args);
   } catch {
@@ -30,7 +29,7 @@ const treesStagingHasHad = new Set(git("log", "--format=%T", "origin/staging").s
 const lastPromotion = git("log", "--first-parent", "--format=%H %T", "origin/main")
   .split("\n")
   .map((line) => line.split(" "))
-  .find(([, tree]) => treesStagingHasHad.has(tree))?.[0];
+  .find(([, tree]) => tree !== undefined && treesStagingHasHad.has(tree))?.[0];
 const mainUnchangedSinceTheLastPromotion = () => git("rev-parse", `${lastPromotion}^{tree}`) === mainTree;
 const mergingMainsLaterChangesLeavesStagingUnchanged = () =>
   tryGit("merge-tree", "--write-tree", `--merge-base=${lastPromotion}`, "origin/staging", "origin/main") === stagingTree;

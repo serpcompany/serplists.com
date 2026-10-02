@@ -17,12 +17,20 @@ export function buildToolInvocation(
   args?: string[],
   options?: { execPath?: string; repoRoot?: string },
 ): Invocation;
+export function tsxLoaderUrl(options?: { repoRoot?: string }): string;
+export function buildScriptInvocation(
+  script: string,
+  args?: readonly string[],
+  options?: { execPath?: string; repoRoot?: string },
+): Invocation;
 export function buildPnpmInvocation(
   args: string[],
   options?: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; execPath?: string },
 ): Invocation;
 export function spawnTool(tool: ToolName, args: string[], options?: SpawnOptions): ChildProcess;
 export function execTool(tool: ToolName, args: string[], options?: ExecFileSyncOptions): string | Buffer;
+export function spawnScript(script: string, args: readonly string[], options?: SpawnOptions): ChildProcess;
+export function execScript(script: string, args: readonly string[], options?: ExecFileSyncOptions): string | Buffer;
 export function execPnpm(args: string[], options?: ExecFileSyncOptions): string | Buffer;
 export function killPidTree(pid: number, signal?: NodeJS.Signals, options?: { platform?: NodeJS.Platform }): void;
 export function killProcessTree(

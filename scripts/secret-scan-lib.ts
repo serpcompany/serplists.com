@@ -3,7 +3,7 @@ import path from "node:path";
 
 const FOLDERS_SECRETLINT_SKIPS_BY_DEFAULT = new Set([".git", "node_modules"]);
 
-function isFile(filePath) {
+function isFile(filePath: string): boolean {
   try {
     return statSync(filePath).isFile();
   } catch {
@@ -11,8 +11,8 @@ function isFile(filePath) {
   }
 }
 
-export function selectScanTargets(paths, { cwd }) {
-  const targets = [];
+export function selectScanTargets(paths: readonly string[], { cwd }: { cwd: string }): string[] {
+  const targets: string[] = [];
 
   for (const requested of paths) {
     const absolutePath = path.resolve(cwd, requested);
