@@ -44,8 +44,8 @@ Details: [development environment](docs/design-docs/development-environment.md).
 
 ## Definition of done
 
-1. `pnpm run verify` passes. CI runs the same checks plus build, D1 integration,
-   browser tests, and schema parity.
+1. `pnpm run verify` passes. CI runs the same checks plus D1 integration and schema
+   parity; pull requests also run the build and browser tests in their own workflow.
 2. UI changes: attach `pnpm run ui:snap` output or a screenshot to the PR as evidence.
 3. Behavior changes update the docs that describe them (`pnpm run docs:check` keeps
    links and paths honest, not content).

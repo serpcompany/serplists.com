@@ -20,7 +20,8 @@ migrations, backups, and R2 storage are in
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
 | `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects and, with `skipLibCheck` off, the declaration files the repository writes, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
-| CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
+| CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), on every pull request and every push to `main` and `staging` |
+| Browser tests (pull requests only) | `.github/workflows/browser-tests.yml`: the OpenNext build (`build:worker`) and the browser tests against it, smoke on PRs into `staging` and the full suite on PRs into `main`, on the standard `ubuntu-latest` runner. Pushes run neither: they are the slowest and most expensive checks, and a push to `staging` builds again to deploy |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
@@ -139,8 +140,8 @@ They are Node code, so their globals are Node's: browser globals such as `window
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
-files, so they stay fast; the push hook runs the full gate. The CI Quality Gate checks out
-the full git history (`fetch-depth: 0`), since the build dates sitemap entries from
+files, so they stay fast; the push hook runs the full gate. The browser tests workflow checks
+out the full git history (`fetch-depth: 0`), since the build dates sitemap entries from
 `git log`. When a CI failure looks flaky,
 re-run once. If it fails again, treat it as real, and record genuinely flaky tests
 in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
@@ -377,7 +378,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
 ## Deploy pipeline
 
-`.github/workflows/ci.yml` runs on pull requests and pushes to `main` and `staging`. A push
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main` and `staging`;
+`.github/workflows/browser-tests.yml` builds and runs the browser tests on pull requests only
+(`tests/unit/workflows/browser-tests.test.ts`). A push
 to `staging` that passes the Quality Gate and the schema parity check deploys staging, through
 `.github/workflows/deploy-staging.yml` (`tests/unit/workflows/deploy-staging.test.ts`).
 

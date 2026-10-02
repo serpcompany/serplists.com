@@ -39,8 +39,9 @@ app code, because the tests load the build, not the source.
 4. To watch it happen, go through the same steps on `pnpm run preview` with the `verify-web`
    skill.
 
-CI runs `test:smoke` on pull requests and `test:e2e:full` on promotions to `main`. When a run
-fails, CI uploads `tests/test-results/` as the `playwright-evidence` artifact:
+The `Browser tests` workflow (`.github/workflows/browser-tests.yml`) runs only on pull requests:
+`test:smoke` on PRs into `staging` and `test:e2e:full` on promotions to `main`. When a run
+fails, it uploads `tests/test-results/` as the `playwright-evidence` artifact:
 `gh run download <run-id> -n playwright-evidence` fetches it, and
 `gh run view <run-id> --log-failed` shows the failing step's log.
 

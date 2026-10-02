@@ -223,8 +223,9 @@ the end of a run, `preview-server.ts` kills its whole process tree: on Windows, 
 otherwise keep the port.
 
 Browser failures keep a trace, video, and screenshot under `tests/test-results/`
-(`retain-on-failure`: retries are off, so `on-first-retry` would keep nothing), and CI
-uploads that folder as the `playwright-evidence` artifact when a run fails;
+(`retain-on-failure`: retries are off, so `on-first-retry` would keep nothing), and the
+browser tests workflow uploads that folder as the `playwright-evidence` artifact when a run
+fails;
 open a trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure
 also has an `error-context.md` with the page snapshot at the moment it failed. The
 server's output from the latest browser test run, API lines included, is in

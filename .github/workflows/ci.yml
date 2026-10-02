@@ -29,8 +29,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -61,31 +59,6 @@ jobs:
 
       - name: Local D1 fixture integration
         run: pnpm run test:local-d1
-
-      - name: Build
-        env:
-          SITE_ENV: production
-        run: pnpm run build:worker
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Smoke tests
-        if: github.base_ref != 'main'
-        run: pnpm run test:smoke -- --skip-build
-
-      - name: Full end-to-end tests (promotions to main)
-        if: github.base_ref == 'main'
-        run: pnpm run test:e2e:full -- --skip-build
-
-      - name: Upload Playwright evidence (traces, videos, screenshots)
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-evidence
-          path: tests/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
 
   db-parity:
     name: Drizzle schema parity

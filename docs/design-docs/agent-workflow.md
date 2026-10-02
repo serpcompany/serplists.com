@@ -220,7 +220,7 @@ nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<numbe
 A GitHub admin applies these once:
 
 - Branch protection or a ruleset on `main` and `staging`: require a pull request and
-  the `Quality Gate` and `Drizzle schema parity` checks. Leave `Code Review` optional.
+  the `Quality Gate`, `Drizzle schema parity` and `Browser tests` checks. Leave `Code Review` optional.
 - Allow auto-merge, so green PRs merge without waiting on a person.
 - Claude code review:
   1. Install the [Claude GitHub App](https://github.com/apps/claude) on this repository.
