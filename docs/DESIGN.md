@@ -14,7 +14,9 @@ pattern it follows, and its proof pass (SERP's UI runbook).
 - **Components:** shadcn/ui vendored in `src/components/ui/`, configured by
   `components.json` (style `base-nova` on Base UI primitives, base color `neutral`, CSS
   variables, `lucide` icons), as in the approved zenbujapanese.com stack.
-  Reference: [shadcn/ui docs](references/shadcn-ui-llms.txt).
+  Reference: [shadcn/ui docs](references/shadcn-ui-llms.txt). A primitive keeps only the
+  parts screens use: `pnpm run deadcode:check` fails on an unused export, so delete the parts
+  a `shadcn add` brings that nothing renders.
 - **Styling:** Tailwind CSS 4 with `tw-animate-css`, `shadcn/tailwind.css` and
   `@tailwindcss/typography`, all loaded by `src/app/globals.css`, which holds the shadcn
   default theme tokens (neutral, light and dark) unchanged: no custom colors, fonts, radii
@@ -71,7 +73,7 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | --- | --- | --- |
 | Shell switch | `src/components/Layout.tsx` | Picks the console shell or the public shell from the path, unless it is given one: the 404 page's `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives the console shell only to a signed-in user on a missing console path, after the session check |
 | `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the `SiteNavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
-| `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (per link a title, which names it, and a muted description, which describes it), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links. It composes shadcn's root itself, since shadcn's takes no `render` for the popup, to render Base UI's menu popup as a `div`: as a `<nav>`, whose links the trigger claims, it was an empty, unlabelled landmark |
+| `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (per link a title, which names it, and a muted description, which describes it), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links. It composes the root itself (shadcn's takes no `render` for the popup, so `navigation-menu.tsx` vendors none), to render Base UI's menu popup as a `div`: as a `<nav>`, whose links the trigger claims, it was an empty, unlabelled landmark |
 | `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` (Templates, Company, Support), each titled by an `h2` |
 | `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and, from `md` up, the `SiteNavigationMenu` aligned right), the page and the site footer |
 | `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. Its rows are 44px tall, full-size targets (32px squares when collapsed). On phones it opens as its own sheet |

@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -226,6 +226,35 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `db/migrations`, `GENERATED_FILES`, a missing tokenizer or fewer than 5 lines.
   - `db/migrations` stays out for good: applied migrations are append-only history, and a
     migration that rebuilds a table restates all of it.
+- **Dead code.** `pnpm run deadcode:check` (part of `check:repo`, about 3 seconds) runs knip
+  with `knip.json` and fails on an unused file, dependency or devDependency, a package or
+  binary code uses that `package.json` does not list, an import that does not resolve, an
+  unused export, type or enum member, and a value exported under two names. Delete what it
+  reports; an export only its own module uses stops being exported. Exports of an entry file
+  are not reported, since a framework reads them by name (a route's `GET`, `generateMetadata`
+  or `dynamic`).
+  - The entry points are what the code runs from. knip's plugins find most of them: the
+    Next.js route files and `next.config.ts`; the scripts `package.json`, `lefthook.yml` and
+    the workflows run; the Vitest and Playwright configs and their test files; the ESLint
+    configs and the rules they import; `.dependency-cruiser.cjs`, the PostCSS config, the
+    tsconfigs and `wrangler.toml`. `knip.json` names the rest: `open-next.config.ts`, which
+    OpenNext's CLI reads; `scripts/stripe/bootstrap.ts`, which a person runs
+    ([billing](design-docs/billing.md)); `tests/e2e/preview-server.ts`, Playwright's
+    `webServer` command; `tests/support/nextFontGoogle.ts`, the module Vitest aliases
+    `next/font/google` to; and `db/drizzle.config.ts`, which `db:generate` passes to
+    drizzle-kit by path.
+  - Test files are entry points, so an export that only tests import passes the check.
+  - It ignores two things knip cannot see used: `@secretlint/secretlint-rule-preset-recommend`,
+    which secretlint loads by name from `.secretlintrc.json`, and the `stripe` binary, the
+    Stripe CLI installed outside npm. `treatConfigHintsAsErrors` fails the check on an entry
+    pattern that matches no file and on an ignore nothing needs, so the lists only shrink. A
+    JSDoc tag such as `@public` would hide an export from knip, but the comment checks refuse
+    every comment.
+  - `tests/unit/config/dead-code-check.test.ts` fails if `check:repo` stops running the
+    check, the script gains a flag, another knip config file appears, or `knip.json` sets
+    anything but entry points and those two ignores: no `rules`, `include` or `exclude` that
+    turns an issue type off, no other ignore or tag, no negated pattern and no plugin
+    turned off.
 - **Tests check what code does, not how it is written.** A test that matches the text of the
   code breaks on a harmless refactor and passes when the behavior breaks, so ESLint's
   `serplists/no-source-text-reads` (`scripts/eslint-rules/no-source-text-reads.ts`) refuses,

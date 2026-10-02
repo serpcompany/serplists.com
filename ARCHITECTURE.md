@@ -70,6 +70,11 @@ Shared (imported by both sides)
 There is no baseline of known violations: every violation fails the check, so fix
 the code rather than the rule.
 
+knip (`pnpm run deadcode:check`) covers the rest of the repository from the entry points its
+tools load (scripts, tests and configs as well as the route files): unused files, exports
+and packages, and packages used without being listed
+([repository checks](docs/RELIABILITY.md#repository-checks)).
+
 Other invariants (Zod at API boundaries, structured logging, product vocabulary,
 file size) are listed with their enforcement in
 [core beliefs](docs/design-docs/core-beliefs.md).
