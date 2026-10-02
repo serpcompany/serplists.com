@@ -5,7 +5,8 @@ What changed and why. Link the issue: "Closes #123".
 ## Evidence
 
 How you know it works. For UI changes, paste `pnpm run ui:snap` output or a
-screenshot before and after. For bugs, show the reproduction failing first.
+screenshot before and after. For bugs, name the regression test and show it failing
+before the fix.
 
 ## Checklist
 

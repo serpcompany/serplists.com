@@ -60,6 +60,9 @@ Details: [development environment](docs/design-docs/development-environment.md).
   errors include the fix; read the message before changing code.
 - There are no lint suppressions, dependency baselines, file-size exceptions, or
   skipped tests. When a check fails, fix the code; never add an exception to pass.
+- Every bug fix, regressions included, lands with a test that fails without the fix, in
+  the same `fix:` commit, so the bug cannot come back unnoticed. The commit-msg hook and
+  CI refuse a `fix:` commit that changes no test.
 - Parse external data with Zod at the boundary; do not guess shapes.
 - API code logs with `log()` from `functions/api/utils/logger.ts`, never personal data.
 - User-visible text uses [PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md) terms (Organization, not Team or Workspace).

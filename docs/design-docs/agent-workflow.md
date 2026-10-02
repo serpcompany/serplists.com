@@ -13,7 +13,11 @@ kept clean.
    current behavior in Chrome with the `verify-web` skill (recording it), with
    `pnpm run ui:snap`, or with a failing test
    ([development environment](development-environment.md), [agent tooling](#agent-tooling)).
-4. Make the change with tests. Run `pnpm run verify` before opening the PR.
+4. Make the change with tests.
+   - For a bug, the failing test from step 3 becomes the regression test. Commit it with
+     the fix as `fix:`: the commit-msg hook and CI refuse a `fix:` commit that changes no
+     test.
+   - Run `pnpm run verify` before opening the PR.
 5. Open a PR into `staging` and fill in the template, including evidence for UI changes.
 6. Review loop: review your own diff first. Claude then reviews the PR automatically
    (see [Claude code review](#claude-code-review)). Address every comment: fix it, or

@@ -10,6 +10,11 @@ pre-commit:
       glob: "*{.yml,.yaml,.toml,.sql,.css,.json,.jsonc,.xml,.xsd,.svg,.md,.patch,.diff,.gitignore,.gitattributes,.npmrc,.dev.vars*,.env*}"
       run: node --import tsx scripts/check-no-comments.ts {staged_files}
 
+commit-msg:
+  commands:
+    fix-needs-a-test:
+      run: node --import tsx scripts/check-fix-commits.ts --commit-msg {1}
+
 pre-push:
   commands:
     verify:
