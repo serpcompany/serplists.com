@@ -32,7 +32,7 @@ const TYPE_CHECKED_TEST_FILES = [
   'tests/e2e/run-share.spec.ts',
   'tests/e2e/support/api-requests.ts',
   'tests/support/readJson.ts',
-  'tests/fixtures/fakeDom.ts',
+  'tests/support/renderInTheDom.ts',
   'tests/setup.ts',
 ];
 

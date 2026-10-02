@@ -16,7 +16,6 @@ const NO_UNDERSCORE_AFFIXES = { leadingUnderscore: "forbid", trailingUnderscore:
 const NOT_ALL_CAPITALS: NameMatch = { regex: "^[A-Z][A-Z0-9]+$", match: false };
 
 const NEXT_ROUTE_HANDLER_NAMES = ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
-const REACT_DOM_ROOT_CONTAINERS_INTERFACE = "DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS";
 
 const VALUES_IN_CAMEL_OR_PASCAL_CASE: NamingConvention[] = [
   { selector: ["variable", "function", "import"], format: CAMEL_OR_PASCAL_CASE, custom: NOT_ALL_CAPITALS, ...NO_UNDERSCORE_AFFIXES },
@@ -41,11 +40,6 @@ const NAMES_ANOTHER_MODULE_GIVES: NamingConvention[] = [
     selector: "function",
     modifiers: ["exported", "global"],
     filter: { regex: `^(${NEXT_ROUTE_HANDLER_NAMES.join("|")})$`, match: true },
-    format: ["UPPER_CASE"],
-  },
-  {
-    selector: "interface",
-    filter: { regex: `^${REACT_DOM_ROOT_CONTAINERS_INTERFACE}$`, match: true },
     format: ["UPPER_CASE"],
   },
 ];

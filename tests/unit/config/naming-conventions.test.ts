@@ -25,6 +25,7 @@ describe('naming conventions on every TypeScript file', { timeout: 30_000 }, () 
     ['a snake_case type', 'export type user_row = { id: string };\n', 'src/lib/sample.ts'],
     ['a snake_case class property', "export class Store { private cache_key = ''; read() { return this.cache_key; } }\n", 'src/lib/sample.ts'],
     ['an HTTP method name on a function no route module exports', 'function GET() { return 1; }\nexport const handler = GET;\n', 'src/app/sample/route.ts'],
+    ["an augmentation of React DOM's root container interface, which only a hand-written DOM needs", "declare module 'react-dom/client' {\n  interface DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS { fake: unknown }\n}\n", 'tests/fixtures/sample.ts'],
   ])('refuses %s', async (_label, code, filePath) => {
     expect(await namingReports(code, filePath)).not.toEqual([]);
   });
@@ -41,7 +42,6 @@ describe('naming conventions on every TypeScript file', { timeout: 30_000 }, () 
     ['the HTTP method names a Next.js route module exports', 'export async function GET() { return new Response(); }\n', 'src/app/sample/route.ts'],
     ["an import under its exporter's name", "import React from 'react';\nimport { Geist_Mono } from 'next/font/google';\nexport const all = [React, Geist_Mono];\n", 'src/app/sample.tsx'],
     ["a stand-in that exports a module's names", 'const geistMono = font();\nexport { geistMono as Geist_Mono };\n', 'tests/support/sample.ts'],
-    ["React DOM's root container interface, which a fake DOM augments", "declare module 'react-dom/client' {\n  interface DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS { fake: unknown }\n}\n", 'tests/fixtures/sample.ts'],
   ])('allows %s', async (_label, code, filePath) => {
     expect(await namingReports(code, filePath)).toEqual([]);
   });
