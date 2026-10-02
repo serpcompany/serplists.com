@@ -4,6 +4,7 @@ import { assert, describe, expect, it } from 'vitest';
 
 import { metadata as rootMetadata } from '@/app/layout';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
+import { z } from 'zod';
 
 const pngSize = (file: string) => {
   const bytes = readFileSync(file);
@@ -19,11 +20,19 @@ const expectShippedCardImage = (url: string | undefined) => {
   expect(pngSize(file)).toEqual({ width: 1200, height: 630 });
 };
 
-type ImageEntry = { url: string | URL; width?: number | string; height?: number | string };
+const imageEntry = z
+  .object({
+    url: z.union([z.string(), z.instanceof(URL)]),
+    width: z.union([z.number(), z.string()]).optional(),
+    height: z.union([z.number(), z.string()]).optional(),
+  })
+  .passthrough();
+
+type ImageEntry = z.output<typeof imageEntry>;
 
 const firstImage = (images: unknown): ImageEntry => {
-  const [image] = Array.isArray(images) ? images : [images];
-  return typeof image === 'string' || image instanceof URL ? { url: image } : (image as ImageEntry);
+  const [image] = z.array(z.unknown()).safeParse(images).data ?? [images];
+  return typeof image === 'string' || image instanceof URL ? { url: image } : imageEntry.parse(image);
 };
 
 const resolveAgainstMetadataBase = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();

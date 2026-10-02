@@ -7,9 +7,8 @@ import {
   templateEditorFormSchema,
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
-import type { ChecklistSection } from "@/types/checklist";
 
-const contentsStoredBeforeTheApiCheckedWrites: Array<[string, unknown]> = [
+const contentsStoredBeforeTheApiCheckedWrites = [
   ["null file details", { id: "c1", type: "file", value: "https://x/doc.pdf", fileName: null, fileSize: null, uploadType: null }],
   ["a numeric id and value", { id: 1, type: "text", value: 5 }],
   ["an unknown type", { id: "c2", type: "link", value: "https://example.com" }],
@@ -21,14 +20,14 @@ const contentsStoredBeforeTheApiCheckedWrites: Array<[string, unknown]> = [
   ["a bare string", "Just some text"],
 ];
 
-const sectionsWith = (content: unknown): ChecklistSection[] =>
+const sectionsWith = (content) =>
   [
     {
       id: "section-1",
       title: "Prep",
       items: [{ id: "item-1", title: "Task", description: 12, contents: [content] }],
     },
-  ] as unknown as ChecklistSection[];
+  ];
 
 describe("buildTemplateEditorFormValues with content stored before the API checked every write", () => {
   it.each(contentsStoredBeforeTheApiCheckedWrites)("opens %s in a state the editor can save", (_label, content) => {
@@ -66,7 +65,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
             },
           ],
         },
-      ] as unknown as ChecklistSection[],
+      ],
     }), 0, 0).contents ?? [];
 
     expect(unknownType).toEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
@@ -96,7 +95,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
             },
           ],
         },
-      ] as unknown as ChecklistSection[],
+      ],
     }), 0, 0).contents ?? [];
 
     expect(contents[0]).toEqual(
@@ -118,7 +117,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
             { id: "item-2", title: "B", contents: [{ id: 1, type: "image", value: "" }] },
           ],
         },
-      ] as unknown as ChecklistSection[],
+      ],
     });
 
     const ids = values.sections.flatMap((section) =>
@@ -135,7 +134,7 @@ describe("validateTemplateEditorFormForSave", () => {
     sectionAt(values, 0).items.push({
       id: "item-1",
       title: "Task",
-      contents: [{ id: 1 as unknown as string, type: "text", value: "x" }],
+      contents: [{ id: 1, type: "text", value: "x" }],
     });
 
     const errors = validateTemplateEditorFormForSave(values);

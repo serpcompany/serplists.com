@@ -23,7 +23,7 @@ import RequireAuth from '@/components/RequireAuth';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { inThePersonalWorkspace } from '../../fixtures/workspaces';
-import { findElementOf } from '../../support/elementTree';
+import { findElement, findElementOf } from '../../support/elementTree';
 import { withSiteEnv } from '../../support/siteEnv';
 
 appShell.auth = { logout: vi.fn().mockResolvedValue({ ok: true }), user: null };
@@ -160,7 +160,7 @@ describe('App public route parity', () => {
     for (const siteEnv of ['production', 'staging', undefined]) {
       const html = await withSiteEnv(siteEnv, () => RootLayout({ children: null }));
       expect(html.type, String(siteEnv)).toBe('html');
-      expect(html.props.className, String(siteEnv)).not.toMatch(/\bdark\b/);
+      expect(findElement(html, (element) => element.type === 'html')?.props.className, String(siteEnv)).not.toMatch(/\bdark\b/);
     }
   });
 });

@@ -80,7 +80,7 @@ describe('export summary', () => {
   });
   const valid = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Check DNS' }] }];
   const noTasks = 'Template has no sections with tasks';
-  const packAsTheApiSendsIt = (templates: ReturnType<typeof source>[]) =>
+  const packAsTheApiSendsIt = (templates: ReturnType<typeof source>[]): unknown =>
     JSON.parse(JSON.stringify(buildPortableTemplatePack(templates, 'me@example.com')));
 
   it('reads the templates written and those left out from the pack manifest', () => {

@@ -4,8 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import type { HookDouble } from '../../support/hookDoubles';
+import type { useTemplateEditorModel } from '@/features/template-editor/useTemplateEditorModel';
 
-const mockModel = vi.fn();
+type TemplateEditorModel = ReturnType<typeof useTemplateEditorModel>;
+
+const mockModel = vi.fn<HookDouble<typeof useTemplateEditorModel>>();
 const workspace = {
   activeTeamId: undefined as string | undefined,
   canEditTemplates: true,
@@ -15,7 +19,7 @@ const workspace = {
 
 vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
-  useTemplateEditorModel: () => mockModel(),
+  useTemplateEditorModel: (...args: Parameters<typeof useTemplateEditorModel>) => mockModel(...args),
 }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com', username: 'jane' } }),
@@ -28,7 +32,7 @@ vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
   return { useTemplateEditorAccess: () => editorAccess() };
 });
 
-const loadedModel = (ownership: Record<string, unknown> | undefined) => ({
+const loadedModel = (ownership: TemplateEditorModel['ownership']): Partial<TemplateEditorModel> => ({
   initialValues: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
   isSaving: false,
   loading: false,

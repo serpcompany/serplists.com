@@ -9,6 +9,8 @@ import {
   readD1Databases,
   resolveBaselineTarget,
 } from '../../../scripts/d1-baseline-migrations-lib.mjs';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const repoRoot = process.cwd();
 const d1 = readD1Databases(readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8'));
@@ -119,9 +121,7 @@ describe('readD1Databases', () => {
 });
 
 describe('package.json baseline scripts', () => {
-  const scripts = (JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
-    scripts: Record<string, string>;
-  }).scripts;
+  const { scripts } = parseJsonText(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'), z.object({ scripts: z.record(z.string()) }).passthrough());
   const argvOf = (name: string) => valueAt(scripts, name).split(/\s+/).slice(2);
 
   it('points the staging baseline at the staging database', () => {

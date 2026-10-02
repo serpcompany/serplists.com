@@ -11,6 +11,7 @@ const UNSAFE_ANY_RULES = [
   '@typescript-eslint/no-unsafe-return',
 ];
 const CAST_RULE = 'serplists/no-external-data-casts';
+const ASSERTION_RULE = '@typescript-eslint/no-unsafe-type-assertion';
 const TYPE_AWARE_CONFIG = 'eslint.type-aware.config.js';
 
 const TYPE_CHECKED_FILES = [
@@ -38,11 +39,12 @@ describe('external data is parsed at the boundary, not cast', { timeout: 30_000 
     expect(lintScript).toBe(`eslint --config ${TYPE_AWARE_CONFIG} .`);
   });
 
-  it.each(TYPE_CHECKED_FILES)('refuses unsafe any and external data casts in %s', async (file) => {
+  it.each(TYPE_CHECKED_FILES)('refuses unsafe any, external data casts and narrowing type assertions in %s', async (file) => {
     const rules = await rulesFor(typeAware, file);
 
     expect(UNSAFE_ANY_RULES.filter((rule) => !isError(rules[rule]))).toEqual([]);
     expect(isError(rules[CAST_RULE])).toBe(true);
+    expect(isError(rules[ASSERTION_RULE])).toBe(true);
   });
 
   it.each([...TYPE_CHECKED_FILES, 'scripts/lib/run-tool.mjs'])('refuses external data casts in %s on every commit', async (file) => {

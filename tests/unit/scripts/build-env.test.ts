@@ -3,12 +3,12 @@ import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERV
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { assertProductionApiUrl } from '../../../scripts/lib/buildEnv';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 describe('production build environment', () => {
   it('does not load .dev.vars into the production build', () => {
-    const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
-      scripts: Record<string, string>;
-    };
+    const { scripts } = parseJsonText(readFileSync('package.json', 'utf8'), z.object({ scripts: z.record(z.string()) }).passthrough());
 
     expect(scripts.build).toContain('next build');
     expect(scripts.build).not.toContain('.dev.vars');

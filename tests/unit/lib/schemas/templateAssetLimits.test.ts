@@ -9,6 +9,8 @@ import { formatUploadLimit, TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from "@/lib/utils/templateBackup";
 import { validateFile } from "@/lib/utils/fileUpload";
 import type { ChecklistTemplate } from "@/types/checklist";
+import { z } from "zod";
+import { checklistSectionSchema } from "@/lib/schemas/checklistSchema";
 
 const sectionsWithAsset = (fileSize: unknown, type = "file") => [
   {
@@ -63,17 +65,20 @@ describe("template asset limits", () => {
   });
 
   it("round-trips an exported template with the largest upload", () => {
-    const template = {
+    const template: ChecklistTemplate = {
       id: "template-1",
       title: "Onboarding",
       description: "",
-      sections: sectionsWithAsset(UPLOAD_MAX_BYTES),
+      sections: z.array(checklistSectionSchema).parse(sectionsWithAsset(UPLOAD_MAX_BYTES)),
+      userId: "user-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
       isPublic: false,
       categories: [],
       tags: [],
-    } as unknown as ChecklistTemplate;
+    };
 
-    const pack = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([template])));
+    const pack: unknown = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([template])));
     const parsed = parseTemplatesFromData(pack);
 
     expect(parsed.templates).toHaveLength(1);

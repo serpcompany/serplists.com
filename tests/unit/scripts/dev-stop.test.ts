@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const devStop = path.join(process.cwd(), 'scripts', 'dev-stop.mjs');
 const workDir = mkdtempSync(path.join(tmpdir(), 'dev-stop-'));
@@ -23,7 +25,7 @@ function startIdleProcessReportingWhatTheLauncherRecords(fileName: string): Prom
   const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'ignore'] });
   children.push(child);
   return new Promise((resolve, reject) => {
-    child.stdout?.once('data', (chunk) => resolve(JSON.parse(String(chunk))));
+    child.stdout?.once('data', (chunk) => resolve(parseJsonText(String(chunk), z.object({ pid: z.number(), startedAt: z.number() }))));
     child.once('error', reject);
   });
 }

@@ -1,5 +1,5 @@
 import { assert, describe, expect, it, vi } from "vitest";
-import { firstOf, sectionAt } from "../../support/elements";
+import { contentAt, firstOf, sectionAt, taskAt } from "../../support/elements";
 
 import { persistTemplateSave } from "@/hooks/useTemplateSave";
 import { applyTemplateSaveDefaults } from "@/hooks/useTemplateValidation";
@@ -34,9 +34,11 @@ const buildInput = (overrides: Partial<Parameters<typeof persistTemplateSave>[1]
   ...overrides,
 });
 
-const buildDependencies = <Overrides extends Partial<Parameters<typeof persistTemplateSave>[0]>>(overrides: Overrides) => ({
-  createTemplate: vi.fn().mockResolvedValue({ id: "template-1" }),
-  updateTemplate: vi.fn().mockResolvedValue({ version: 2, slug: "template-title" }),
+type SaveDependencies = Parameters<typeof persistTemplateSave>[0];
+
+const buildDependencies = <Overrides extends Partial<SaveDependencies>>(overrides: Overrides) => ({
+  createTemplate: vi.fn<SaveDependencies["createTemplate"]>().mockResolvedValue({ id: "template-1" }),
+  updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 2, slug: "template-title" }),
   applyDefaults: vi.fn((title: string, sections: ChecklistSection[]) => ({
     title: title.trim(),
     sections,
@@ -48,7 +50,7 @@ describe("persistTemplateSave", () => {
   it("returns success after create without owning navigation", async () => {
     let createResolved = false;
     const dependencies = buildDependencies({
-      createTemplate: vi.fn().mockImplementation(async () => {
+      createTemplate: vi.fn<SaveDependencies["createTemplate"]>().mockImplementation(async () => {
         await Promise.resolve();
         createResolved = true;
         return { id: "template-1" };
@@ -105,7 +107,7 @@ describe("persistTemplateSave", () => {
 
   it("returns the version the server saved so the next save can send it", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockResolvedValue({ success: true, version: 6 }),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 6 }),
     });
 
     const result = await persistTemplateSave(
@@ -124,7 +126,7 @@ describe("persistTemplateSave", () => {
   it("returns the title and sections it sent after defaults, which the editor rebuilds its form from", async () => {
     const dependencies = buildDependencies({
       applyDefaults: applyTemplateSaveDefaults,
-      updateTemplate: vi.fn().mockResolvedValue({ version: 4 }),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 4 }),
     });
 
     const result = await persistTemplateSave(
@@ -173,8 +175,8 @@ describe("persistTemplateSave", () => {
     );
 
     const sent = firstOf(dependencies.createTemplate.mock.calls)[0];
-    expect(sent.sections[0].title).toBe("Section 1");
-    expect(sent.sections[0].items[0].contents?.[0].subItems).toEqual([{ id: "sub-a", title: "A" }]);
+    expect(sectionAt(sent, 0).title).toBe("Section 1");
+    expect(contentAt(taskAt(sent, 0, 0), 0).subItems).toEqual([{ id: "sub-a", title: "A" }]);
     expect(result.saved?.sections).toEqual(sent.sections);
   });
 
@@ -192,7 +194,7 @@ describe("persistTemplateSave", () => {
 
   it("returns the slug the server stored, which may carry a suffix", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockResolvedValue({ slug: "moving-checklist-1a2b3c4d", version: 6 }),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ slug: "moving-checklist-1a2b3c4d", version: 6 }),
     });
 
     const result = await persistTemplateSave(
@@ -245,7 +247,7 @@ describe("persistTemplateSave", () => {
 
   it("leaves visibility out of an update the editor's switch did not change, and returns the saved version", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockResolvedValue({ version: 6 }),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockResolvedValue({ version: 6 }),
     });
 
     const result = await persistTemplateSave(
@@ -261,7 +263,7 @@ describe("persistTemplateSave", () => {
 
   it("returns failure when create rejects", async () => {
     const dependencies = buildDependencies({
-      createTemplate: vi.fn().mockRejectedValue(new Error("create failed")),
+      createTemplate: vi.fn<SaveDependencies["createTemplate"]>().mockRejectedValue(new Error("create failed")),
     });
 
     const result = await persistTemplateSave(dependencies, buildInput());
@@ -275,7 +277,7 @@ describe("persistTemplateSave", () => {
 
   it("returns failure when update rejects", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockRejectedValue(new Error("update failed")),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockRejectedValue(new Error("update failed")),
     });
 
     const result = await persistTemplateSave(
@@ -307,7 +309,7 @@ describe("persistTemplateSave", () => {
 
   it("keeps an expired session as auth_required", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockRejectedValue(createApiError(401, { error: "Unauthorized" })),
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockRejectedValue(createApiError(401, { error: "Unauthorized" })),
     });
 
     const result = await persistTemplateSave(
@@ -320,7 +322,7 @@ describe("persistTemplateSave", () => {
 
   it("marks a save refused because the template changed since it was loaded", async () => {
     const dependencies = buildDependencies({
-      updateTemplate: vi.fn().mockRejectedValue(
+      updateTemplate: vi.fn<SaveDependencies["updateTemplate"]>().mockRejectedValue(
         createApiError(409, {
           error: "Template changed since it was loaded. Refresh before saving again.",
           code: "edit_conflict",

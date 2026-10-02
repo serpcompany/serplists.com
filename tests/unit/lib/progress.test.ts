@@ -5,7 +5,8 @@ import { calculateRunProgress } from '@functions/api/utils/template-reconciliati
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import { toProgressPercent } from '@/lib/progress';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
-import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
+import type { ChecklistSection } from '@/types/checklist';
+import { buildRun } from '../../fixtures/runExecutionFixtures';
 
 const TASKS = 40;
 const SUB_TASKS_PER_TASK = 4;
@@ -77,7 +78,7 @@ describe('toProgressPercent', () => {
 describe('run progress on large runs, where one open unit in 200 must not round to 100', () => {
   it('is 99 in every calculator when one of 200 units is left', () => {
     const sections = sectionsWithOneOf200UnitsOpen();
-    const run = { id: 'run-1', sections } as unknown as ChecklistRun;
+    const run = buildRun({ id: 'run-1', sections });
 
     expect(calculateSectionsProgress(sections)).toBe(99);
     expect(countRunExecutionItems(run)).toEqual({

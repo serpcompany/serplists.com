@@ -23,7 +23,6 @@ import {
   TEMPLATE_TITLE_MAX,
 } from "@/lib/schemas/templateLimits";
 import { buildTemplateUpdateRequest } from "@/lib/templates/templateUpdate";
-import type { ChecklistSection } from "@/types/checklist";
 import { buildTemplateVersionValues } from "@functions/api/utils/audit";
 import { requestBodyLimit } from "@functions/api/utils/body-limit";
 import { normalizeSectionsPayload } from "@functions/api/utils/payloads";
@@ -119,7 +118,7 @@ function loadTemplate(stored: Sections) {
 
 function editorBodyForAnUnchangedSave(stored: Sections) {
   const form = buildTemplateEditorFormValues(loadTemplate(stored));
-  const { sections } = applyTemplateSaveDefaults("Template", form.sections as unknown as ChecklistSection[]);
+  const { sections } = applyTemplateSaveDefaults("Template", form.sections);
   return { sections, body: buildTemplateUpdateRequest({ id: "template-1", ...largestEditorEnvelope, sections }) };
 }
 

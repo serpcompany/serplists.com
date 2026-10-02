@@ -9,8 +9,9 @@ import { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
 import { stringMatching } from '../../support/asymmetricMatchers';
+import { z } from 'zod';
 
-const images = (value: unknown) => (Array.isArray(value) ? value : value ? [value] : []);
+const images = (value: unknown): unknown[] => z.array(z.unknown()).safeParse(value).data ?? (value ? [value] : []);
 
 describe('root layout metadata, the defaults every page head starts from', () => {
   it('titles a page that sets no title with the brand, and brands the others once', () => {

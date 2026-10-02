@@ -6,7 +6,10 @@ import { firstOf } from '../../support/elements';
 
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
-import { createPendingUploads } from '@/features/template-editor/pendingUploads';
+import { createPendingUploads, type usePendingTemplateEditorUploads } from '@/features/template-editor/pendingUploads';
+import type { useTemplateEditorModel } from '@/features/template-editor/useTemplateEditorModel';
+import type { useTemplateEditorState } from '@/hooks/useTemplateEditorState';
+import type { useTemplateEditorAccess } from '@/features/template-editor/useTemplateEditorAccess';
 import {
   EDITOR_UNSAVED_CHANGES_MESSAGE,
   EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
@@ -14,11 +17,12 @@ import {
 
 import { editorAccess as buildAccess, editorState } from '../../fixtures/templateEditorHooks';
 import { anyInstanceOf, objectContaining } from '../../support/asymmetricMatchers';
+import type { HookDouble } from '../../support/hookDoubles';
 
-const mockUseTemplateEditorModel = vi.fn();
-const mockUseTemplateEditorState = vi.fn();
-const mockUseTemplateEditorAccess = vi.fn();
-const mockUsePendingTemplateEditorUploads = vi.fn();
+const mockUseTemplateEditorModel = vi.fn<HookDouble<typeof useTemplateEditorModel>>();
+const mockUseTemplateEditorState = vi.fn<HookDouble<typeof useTemplateEditorState>>();
+const mockUseTemplateEditorAccess = vi.fn<HookDouble<typeof useTemplateEditorAccess>>();
+const mockUsePendingTemplateEditorUploads = vi.fn<HookDouble<typeof usePendingTemplateEditorUploads>>();
 const useFormCalls = vi.fn();
 const leaveGuardedWith = vi.fn();
 
@@ -34,12 +38,12 @@ vi.mock('@/features/template-editor/useTemplateEditorLeaveGuard', async (importO
 
 vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
-  useTemplateEditorModel: (...args: unknown[]) =>
+  useTemplateEditorModel: (...args: Parameters<typeof useTemplateEditorModel>) =>
     mockUseTemplateEditorModel(...args),
 }));
 
 vi.mock('@/hooks/useTemplateEditorState', () => ({
-  useTemplateEditorState: (...args: unknown[]) =>
+  useTemplateEditorState: (...args: Parameters<typeof useTemplateEditorState>) =>
     mockUseTemplateEditorState(...args),
 }));
 
@@ -53,13 +57,13 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
-  useTemplateEditorAccess: (...args: unknown[]) =>
+  useTemplateEditorAccess: (...args: Parameters<typeof useTemplateEditorAccess>) =>
     mockUseTemplateEditorAccess(...args),
 }));
 
 vi.mock('@/features/template-editor/pendingUploads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/template-editor/pendingUploads')>()),
-  usePendingTemplateEditorUploads: (...args: unknown[]) =>
+  usePendingTemplateEditorUploads: (...args: Parameters<typeof usePendingTemplateEditorUploads>) =>
     mockUsePendingTemplateEditorUploads(...args),
 }));
 

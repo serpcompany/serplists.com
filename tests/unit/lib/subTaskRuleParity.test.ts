@@ -15,7 +15,7 @@ import {
 import { objectContaining } from '../../support/asymmetricMatchers';
 import { errorThrownBy } from '../../support/thrownError';
 
-type Json = Record<string, any>;
+type Json = Record<string, unknown>;
 
 const hidden = (isCompleted: boolean) => ({ id: 'hidden', title: 'Hidden', isCompleted });
 const visible = (isCompleted: boolean) => ({ id: 'visible', title: 'Visible', isCompleted });
