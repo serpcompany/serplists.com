@@ -43,11 +43,6 @@ const inputGroupAddonVariants = cva(
   }
 )
 
-type AncestorSearch = { closest: (selectors: string) => unknown }
-
-const findsAncestors = (target: EventTarget): target is EventTarget & AncestorSearch =>
-  "closest" in target && typeof target.closest === "function"
-
 function InputGroupAddon({
   className,
   align = "inline-start",
@@ -60,7 +55,7 @@ function InputGroupAddon({
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}
       onClick={(e) => {
-        if (findsAncestors(e.target) && e.target.closest("button")) {
+        if (e.target instanceof Element && e.target.closest("button")) {
           return
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus()
