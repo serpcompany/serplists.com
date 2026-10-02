@@ -1,4 +1,4 @@
-import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
+import { optimizeImage, isImageFile, prepareAvatarImage } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
 import { getUploadedAssetKey, isUploadedAssetUrl } from "@/lib/utils/mediaSource";
 import {
@@ -63,7 +63,7 @@ export const uploadFile = async (
 
 export { getUploadedAssetKey, isUploadedAssetUrl };
 
-export const uploadAvatar = (file: File) => api.uploadToR2({ bucket: 'avatars', file });
+export const uploadAvatar = async (file: File) => api.uploadToR2({ bucket: 'avatars', file: await prepareAvatarImage(file) });
 
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);

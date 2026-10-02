@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
+import { prepareAvatarImage } from '@/lib/imageOptimization';
 import { AVATAR_MIME_TYPES } from '../../../fixtures/avatarTypes';
 
 import { findByAriaLabel, findElement, handlerOf } from '../../../support/elementTree';
@@ -16,6 +17,12 @@ vi.mock('react', async (importOriginal) =>
 );
 
 vi.mock('@/lib/api', async () => (await import('../../../support/uploadMocks')).r2UploadApi());
+
+const preparedAvatar = new File(['webp'], 'avatar.webp', { type: 'image/webp' });
+vi.mock('@/lib/imageOptimization', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/imageOptimization')>()),
+  prepareAvatarImage: vi.fn(),
+}));
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
@@ -67,6 +74,7 @@ describe('AvatarUpload', () => {
     vi.clearAllMocks();
     auth.user = { id: 'u1' };
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: NEW_URL });
+    vi.mocked(prepareAvatarImage).mockResolvedValue(preparedAvatar);
     vi.mocked(api.deleteFromR2).mockResolvedValue({ success: true });
   });
 
@@ -144,6 +152,17 @@ describe('AvatarUpload', () => {
     expect(view.onAvatarUpdate).toHaveBeenCalledWith('');
   });
 
+  it('uploads the small square image the browser prepared, not the original, so a large photo is shrunk instead of refused', async () => {
+    vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
+    const photo = new File([new Uint8Array(12 * 1024 * 1024)], 'photo.png', { type: 'image/png' });
+
+    await render().selectFile(photo);
+
+    expect(prepareAvatarImage).toHaveBeenCalledWith(photo);
+    expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'avatars', file: preparedAvatar });
+    expect(toast.success).toHaveBeenCalled();
+  });
+
   it('accepts only the image types the API stores for avatars', async () => {
     const view = render();
 
@@ -190,10 +209,10 @@ describe('AvatarUpload', () => {
       expect(target.value).toBe('');
     });
 
-    it('after a file over 5MB is refused', async () => {
-      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' });
+    it('after an image the browser cannot read is refused', async () => {
+      vi.mocked(prepareAvatarImage).mockRejectedValue(new Error('Failed to load image'));
 
-      const target = await render().selectFile(big);
+      const target = await render().selectFile(png());
 
       expect(api.uploadToR2).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalled();

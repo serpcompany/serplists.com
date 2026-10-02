@@ -17,10 +17,10 @@ migrations, backups, and R2 storage are in
 
 | Where | What runs |
 | --- | --- |
-| Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files |
+| Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files; the commit-msg hook refuses a `fix:` commit that stages no test |
 | Pre-push hook | `pnpm run verify` |
 | `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects and, with `skipLibCheck` off, the declaration files the repository writes, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
-| CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), on every pull request and every push to `main` and `staging` |
+| CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), on every pull request and every push to `main` and `staging`; on a pull request, every `fix:` commit must change a test |
 | Browser tests (pull requests only) | `.github/workflows/browser-tests.yml`: the OpenNext build (`build:worker`) and the browser tests against it, smoke on PRs into `staging` and the full suite on PRs into `main`, on the standard `ubuntu-latest` runner. Pushes run neither: they are the slowest and most expensive checks, and a push to `staging` builds again to deploy |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -159,6 +159,17 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
 ### Repository checks
 
+- **Bug fixes carry a regression test.**
+  - `scripts/check-fix-commits.ts` refuses a `fix:` commit (any Conventional Commits fix,
+    scoped or breaking) that changes no test: no file under `tests/`, and no `.test.` or
+    `.spec.` file beside the code.
+  - It runs twice:
+    - in the Lefthook commit-msg hook (`--commit-msg`), on the staged files;
+    - in CI's Quality Gate on a pull request (`--range origin/<base>..<head>`), on every
+      commit but merges. That step needs the full history, so the Quality Gate checks out
+      with `fetch-depth: 0`.
+  - A commit that fixes no behavior takes another type: `refactor:`, `build:`, `docs:`,
+    `test:` or `chore:`.
 - **Docs** (`pnpm run docs:check`, part of `check:repo`) reads `AGENTS.md`, `ARCHITECTURE.md`,
   `README.md`, every Markdown file under `docs/`, and the skills in `.claude/skills/`. It fails
   when:

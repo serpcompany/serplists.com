@@ -326,6 +326,18 @@ transparency), other decodable types become PNG, a small image within 1920x1080 
 sent as it is, and the original is kept when re-encoding does not make it smaller.
 Files attached to File blocks are never re-encoded.
 
+Before an avatar upload, the browser always redraws the image as a small square
+(`prepareAvatarImage` in `src/lib/imageOptimization.ts`):
+- it crops the centred square, which is what the round avatar shows;
+- it scales it to at most 512 by 512 pixels (`AVATAR_MAX_PIXELS`), never enlarging a
+  smaller one;
+- it encodes it as WebP (PNG in a browser without WebP encoding) under the name
+  `avatar.webp`.
+
+Avatars show at 24 to 128 pixels, so a phone photo of several megabytes becomes tens of
+kilobytes and loads at once. That also means the 5MB limit applies to what is sent, so
+a larger photo is shrunk rather than refused. An animated GIF becomes a still image.
+
 Uploads are not reference-counted and record no Personal or Organization owner. A
 template upload's URL is copied into the saved template, its `template_versions`
 snapshots, every run started from it, and duplicates and clones, so deleting the

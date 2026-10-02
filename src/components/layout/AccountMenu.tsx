@@ -5,7 +5,7 @@ import { ChevronsUpDown, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Link } from '@/components/navigation/Link';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -112,9 +112,19 @@ const useUserInitial = () => {
   );
 };
 
-export function AccountMenu() {
+function UserAvatar() {
+  const { user } = useAuth();
   const initial = useUserInitial();
 
+  return (
+    <Avatar size="sm">
+      <AvatarImage src={user?.image || undefined} alt="" />
+      <AvatarFallback>{initial}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+export function AccountMenu() {
   return (
     <AccountMenuContent
       side="bottom"
@@ -122,9 +132,7 @@ export function AccountMenu() {
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Account menu" />}
         >
-          <Avatar size="sm">
-            <AvatarFallback>{initial}</AvatarFallback>
-          </Avatar>
+          <UserAvatar />
         </DropdownMenuTrigger>
       }
     />
@@ -134,7 +142,6 @@ export function AccountMenu() {
 export function SidebarAccountMenu() {
   const { user } = useAuth();
   const { isMobile } = useSidebar();
-  const initial = useUserInitial();
 
   return (
     <AccountMenuContent
@@ -149,9 +156,7 @@ export function SidebarAccountMenu() {
             />
           }
         >
-          <Avatar size="sm">
-            <AvatarFallback>{initial}</AvatarFallback>
-          </Avatar>
+          <UserAvatar />
           <span className="grid min-w-0 flex-1 text-left leading-tight">
             <span className="truncate font-medium">{user?.name || 'Account settings'}</span>
             <span className="truncate text-xs text-muted-foreground">

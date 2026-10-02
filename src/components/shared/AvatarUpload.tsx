@@ -9,7 +9,6 @@ import { authClient } from "@/lib/auth-client";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
 import { deleteUploadedAsset, uploadAvatar } from "@/lib/utils/fileUpload";
-import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -47,11 +46,6 @@ export const AvatarUpload = ({
 
     if (!isAllowedUpload("avatars", file)) {
       toast.error("Please select a PNG, JPEG, WebP, or GIF image");
-      return;
-    }
-
-    if (file.size > UPLOAD_MAX_BYTES.avatars) {
-      toast.error(`File size must be less than ${formatUploadLimit(UPLOAD_MAX_BYTES.avatars)}`);
       return;
     }
 

@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -41,6 +43,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Every fix commit adds a regression test
+        if: github.event_name == 'pull_request'
+        env:
+          FIX_COMMIT_RANGE: origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+        run: node --import tsx scripts/check-fix-commits.ts --range "$FIX_COMMIT_RANGE"
 
       - name: Validate environment contract
         run: pnpm run typecheck:env
