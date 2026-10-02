@@ -7,9 +7,7 @@ import {
   getRepoCatalogCreatedAt,
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
-import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
-import { templateOwnerProfile } from '@/lib/schemas/templateOwnerProfile';
-import { normalizeSections } from '@/lib/utils/checklistSections';
+import { mapApiTemplate } from '@/lib/templates/apiTemplateMapper';
 import { normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -43,42 +41,6 @@ const PROFILE_LOAD_ERROR_MESSAGE = 'Unable to load this public profile.';
 
 const normalizeUsername = (value: string | undefined) =>
   value?.trim().toLowerCase() ?? '';
-
-const mapApiTemplate = (
-  template: ApiTemplate,
-): ChecklistTemplate => {
-  const sections = Array.isArray(template.sections)
-    ? template.sections
-    : Array.isArray(template.items)
-      ? [
-          {
-            id: '1',
-            title: 'Checklist',
-            items: template.items,
-          },
-        ]
-      : [];
-
-  return {
-    id: String(template.id),
-    title: String(template.title),
-    description:
-      typeof template.description === 'string' ? template.description : '',
-    sections: normalizeSections(sections),
-    userId: String(template.user_id),
-    createdAt: String(template.created_at),
-    updatedAt:
-      typeof template.updated_at === 'string'
-        ? template.updated_at
-        : String(template.created_at),
-    isPublic: Boolean(template.is_public ?? true),
-    slug: typeof template.slug === 'string' ? template.slug : '',
-    categories: template.categories ?? [],
-    tags: Array.isArray(template.tags) ? template.tags : [],
-    version: typeof template.version === 'number' ? template.version : 1,
-    ownerProfile: templateOwnerProfile(template),
-  };
-};
 
 const mergeProfileTemplates = (
   username: string,

@@ -3,7 +3,7 @@ import { elementAt, taskIn } from "../../../support/elements";
 import { storedSections, type StoredSections } from "../../../support/storedJson";
 
 import { buildRunUpdatePayload } from "@/contexts/runUpdatePayload";
-import { mapApiTemplate } from "@/contexts/templateListFetchers";
+import { mapApiTemplate } from "@/lib/templates/apiTemplateMapper";
 import { mapChecklistToRun } from "@/features/run-execution/runExecutionMappers";
 import { applyTemplateSaveDefaults } from "@/hooks/useTemplateValidation";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";

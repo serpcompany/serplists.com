@@ -10,7 +10,7 @@ import {
   buildDiscoveryCategories,
   type DiscoveryCategory,
 } from '@/components/checklist-library/discovery-utils';
-import { mapApiTemplate } from '@/contexts/templateListFetchers';
+import { mapApiTemplate } from '@/lib/templates/apiTemplateMapper';
 import { buildCategoryPageTitle, describeCategoryPage } from '@/lib/publicPageMeta';
 import { mergePublicTemplateCollections, repoTemplates } from '@/lib/repoTemplateCatalog';
 import {
