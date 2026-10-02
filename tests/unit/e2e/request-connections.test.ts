@@ -1,9 +1,9 @@
 import http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { request } from '@playwright/test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { disableRequestKeepAlive, playwrightHttpAgent } from '../../e2e/support/request-connections';
+import { listeningPort } from '../../support/listeningPort';
 
 let server: http.Server;
 let baseUrl: string;
@@ -18,7 +18,7 @@ beforeEach(async () => {
     connections += 1;
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  baseUrl = `http://127.0.0.1:${listeningPort(server)}`;
 });
 
 afterEach(async () => {

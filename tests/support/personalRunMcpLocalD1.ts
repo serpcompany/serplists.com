@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PlatformProxy } from "wrangler";
+import { z } from "zod";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
 import { contentSaveBytes, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
@@ -11,7 +12,7 @@ import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { firstOf } from "./elements";
 import { jsonObject, readJson } from "./readJson";
 import { apiEnv } from "./apiEnv";
-import { optionalRecordIn, recordIn } from "./mcpResponses";
+import { optionalRecordIn } from "./mcpResponses";
 import type { Env } from "@functions/api/types";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -82,8 +83,10 @@ export async function bodyOf(response: Response): Promise<JsonRecord> {
   return readJson(response, jsonObject);
 }
 
-export function toolPayload(body: JsonRecord): JsonRecord {
-  return optionalRecordIn(recordIn(body.result).structuredContent) ?? {};
+const toolResultBody = z.object({ result: z.object({ structuredContent: z.unknown() }).passthrough() }).passthrough();
+
+export function toolPayload(body: unknown): JsonRecord {
+  return optionalRecordIn(toolResultBody.parse(body).result.structuredContent) ?? {};
 }
 
 export function toolError(body: JsonRecord): string | undefined {

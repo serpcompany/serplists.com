@@ -5,6 +5,7 @@ import { z } from "zod";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { ToolError } from "@functions/api/handlers/agentMcpTools";
 import type { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
+import type { SectionRecord } from "@/lib/schemas/jsonRecords";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -75,14 +76,14 @@ export function toolErrorOf(action: () => unknown): ToolError {
   throw new Error("expected a ToolError");
 }
 
-export const outlineOf = (sections: JsonRecord[]) =>
+export const outlineOf = (sections: readonly SectionRecord[]) =>
   sections.map((entry) => objectContaining({
     id: entry.id,
     taskCount: z.array(z.unknown()).parse(entry.items).length,
     bytes: resultBytes(entry),
   }));
 
-export function sectionFieldsOfTheFirstTwoPages(pages: JsonRecord[]) {
+export function sectionFieldsOfTheFirstTwoPages(pages: readonly { section?: unknown }[]) {
   expect(pages.length).toBeGreaterThan(3);
   const sections = pages.map((page) => jsonRecord.parse(page.section));
   const first = firstOf(sections);

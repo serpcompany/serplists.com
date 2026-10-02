@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 
 import { apiJson, apiRequest, bodyNotRead } from "./api-requests";
-import { jsonRecords, savedTemplateSchema } from "./api-bodies";
+import { apiTemplateRows, savedTemplateSchema } from "./api-bodies";
 import { registerNewAccount, uniqueSuffix } from "./sign-in";
 
 const PASSWORD = "Aa!template-editor-password-12345";
@@ -22,7 +22,7 @@ export async function registerAccount(page: Page) {
 }
 
 export async function findTemplateByTitle(page: Page, title: string) {
-  const templates = await apiJson(page, "/templates?scope=personal", jsonRecords);
+  const templates = await apiJson(page, "/templates?scope=personal", apiTemplateRows);
   return templates.find((template) => template.title === title) ?? null;
 }
 
@@ -95,7 +95,7 @@ const savedSections = z.array(z.object({ items: z.array(savedTask) }).passthroug
 
 const aSection = z.object({ items: z.array(z.unknown()) }).passthrough();
 
-export function getTemplateSections(template: Record<string, unknown>) {
+export function getTemplateSections(template: { sections?: unknown; items?: unknown }) {
   const rawSections = template.sections ?? template.items ?? [];
   const parsed: unknown = typeof rawSections === "string" ? JSON.parse(rawSections) : rawSections;
   const entries = z.array(z.unknown()).safeParse(parsed);
@@ -146,8 +146,8 @@ export async function saveAndReadTheSavedSections(page: Page, templateTitle: str
   return { savedTemplate, sections: getTemplateSections(savedTemplate ?? {}) };
 }
 
-export async function deleteTheSavedTemplate(page: Page, savedTemplate: Record<string, unknown> | null) {
-  if (savedTemplate && typeof savedTemplate.id === "string") {
+export async function deleteTheSavedTemplate(page: Page, savedTemplate: { id: string } | null) {
+  if (savedTemplate) {
     await deleteTemplate(page, savedTemplate.id);
   }
 }

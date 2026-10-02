@@ -48,9 +48,9 @@ export const dropdownMenuRenderedOpen = {
   DropdownMenuTrigger: ({ children }: ChildrenProps) => <button type="button">{children}</button>,
   DropdownMenuContent: ({ children }: ChildrenProps) => <div role="menu">{children}</div>,
   DropdownMenuGroup: ({ children }: ChildrenProps) => <div role="group">{children}</div>,
-  DropdownMenuItem: ({ children, render }: ChildrenProps & { render?: ReactElement }) =>
+  DropdownMenuItem: ({ children, render }: ChildrenProps & { render?: ReactElement<{ role?: string }> }) =>
     isValidElement(render) ? (
-      cloneElement(render as ReactElement<Record<string, unknown>>, { role: 'menuitem' }, children)
+      cloneElement(render, { role: 'menuitem' }, children)
     ) : (
       <div role="menuitem">{children}</div>
     ),

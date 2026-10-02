@@ -13,13 +13,13 @@ type SitemapRouteGet = (request: Request, context: { params: Promise<{ page: str
 
 type WorkerRequest = {
   request: Request;
-  env: unknown;
+  env: object;
   waitUntil?: (promise: Promise<unknown>) => void;
   params?: { page?: string };
 };
 
 export const sitemapRouteInTheWorker = (GET: SitemapRouteGet) => async ({ request, env, waitUntil, params }: WorkerRequest) => {
-  serverContext.env = env as Record<string, unknown>;
+  serverContext.env = env;
   serverContext.waitUntil = [];
   const pageFileNameAsNextJsPassesIt = `${params?.page ?? ''}.xml`;
   const response = await GET(request, { params: Promise.resolve({ page: pageFileNameAsNextJsPassesIt }) });

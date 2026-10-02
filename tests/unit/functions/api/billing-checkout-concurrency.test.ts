@@ -30,8 +30,7 @@ function createStripeWithItsIdempotencyRules() {
 
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    const headers = (init?.headers ?? {}) as Record<string, string>;
-    const idempotencyKey = headers["Idempotency-Key"];
+    const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key") ?? undefined;
     const body = String(init?.body ?? "");
     const method = init?.method ?? "GET";
     calls.push({ method, url: url.pathname, form: new URLSearchParams(body), idempotencyKey });

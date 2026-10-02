@@ -1,18 +1,31 @@
 import { existsSync, readFileSync } from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import type { AddressInfo, Socket } from 'node:net';
+import type { Socket } from 'node:net';
 import path from 'node:path';
 import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { listeningPort } from '../../support/listeningPort';
 import { parseJsonText } from '../../support/storedJson';
 
 const KEEP_ALIVE_TIMEOUT_DISABLED = 0;
 const PAST_A_NODE_SERVERS_DEFAULT_IDLE_CLOSE_MS = 6_500;
 
-type WorkerUrl = { protocol: string; hostname: string; port: string };
-type ProxyMessage = { type: string; proxyData?: { userWorkerUrl: WorkerUrl; headers?: Record<string, string> } };
-type UserWorkerRelays = { relay(message: ProxyMessage): Promise<ProxyMessage>; close(): Promise<void> };
+const workerUrlSchema = z.object({ protocol: z.string(), hostname: z.string(), port: z.string() }).passthrough();
+const proxyMessageSchema = z
+  .object({
+    type: z.string(),
+    proxyData: z.object({ userWorkerUrl: workerUrlSchema, headers: z.record(z.string()).optional() }).passthrough().optional(),
+  })
+  .passthrough();
+const echoedRequest = z.object({ method: z.string(), url: z.string(), host: z.string(), body: z.string() }).passthrough();
+
+type WorkerUrl = z.output<typeof workerUrlSchema>;
+type ProxyMessage = z.input<typeof proxyMessageSchema>;
+interface UserWorkerRelaysModule {
+  relay(message: ProxyMessage): unknown;
+  close(): unknown;
+}
 
 const require = createRequire(import.meta.url);
 const wranglerDir = path.dirname(require.resolve('wrangler/package.json'));
@@ -22,6 +35,30 @@ const { pnpm } = parseJsonText(
   z.object({ pnpm: z.object({ patchedDependencies: z.record(z.string()).optional() }).passthrough().optional() }).passthrough(),
 );
 const relayModule = path.join(wranglerDir, 'wrangler-dist', 'serplists-user-worker-relay.js');
+
+const isUserWorkerRelays = (value: unknown): value is UserWorkerRelaysModule =>
+  typeof value === 'object' &&
+  value !== null &&
+  'relay' in value &&
+  typeof value.relay === 'function' &&
+  'close' in value &&
+  typeof value.close === 'function';
+
+function createUserWorkerRelays() {
+  const exported: unknown = require(relayModule);
+  const relaysClass = typeof exported === 'object' && exported !== null && 'UserWorkerRelays' in exported ? exported.UserWorkerRelays : undefined;
+  if (typeof relaysClass !== 'function') throw new Error(`${relayModule} exports no UserWorkerRelays class`);
+  const relays: unknown = Reflect.construct(relaysClass, []);
+  if (!isUserWorkerRelays(relays)) throw new Error(`UserWorkerRelays in ${relayModule} has no relay() and close()`);
+  return {
+    relay: async (message: ProxyMessage) => proxyMessageSchema.parse(await relays.relay(message)),
+    close: async () => {
+      await relays.close();
+    },
+  };
+}
+
+type UserWorkerRelays = ReturnType<typeof createUserWorkerRelays>;
 
 function createEchoingWorker() {
   return http.createServer((req, res) => {
@@ -65,9 +102,8 @@ describe('the relay between the dev proxy and the worker', () => {
     worker.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_DISABLED;
     worker.on('connection', () => (workerConnections += 1));
     await new Promise<void>((resolve) => worker.listen(0, '127.0.0.1', resolve));
-    workerUrl = { protocol: 'http:', hostname: '127.0.0.1', port: String((worker.address() as AddressInfo).port) };
-    const { UserWorkerRelays } = require(relayModule) as { UserWorkerRelays: new () => UserWorkerRelays };
-    relays = new UserWorkerRelays();
+    workerUrl = { protocol: 'http:', hostname: '127.0.0.1', port: String(listeningPort(worker)) };
+    relays = createUserWorkerRelays();
     proxyPool = new http.Agent({ keepAlive: true, maxSockets: 1 });
   });
 
@@ -86,7 +122,7 @@ describe('the relay between the dev proxy and the worker', () => {
   }
 
   function send(to: WorkerUrl, method: string, pathname: string, body?: string) {
-    return new Promise<{ status: number; setCookie: string[]; json: Record<string, string>; socket: Socket }>(
+    return new Promise<{ status: number; setCookie: string[]; json: z.output<typeof echoedRequest>; socket: Socket }>(
       (resolve, reject) => {
         const req = http.request({ host: to.hostname, port: Number(to.port), method, path: pathname, agent: proxyPool }, (res) => {
           let text = '';
@@ -100,7 +136,7 @@ describe('the relay between the dev proxy and the worker', () => {
             resolve({
               status: res.statusCode,
               setCookie: res.headers['set-cookie'] ?? [],
-              json: parseJsonText(text, z.record(z.string())),
+              json: parseJsonText(text, echoedRequest),
               socket,
             });
           });
@@ -148,7 +184,7 @@ describe('the relay between the dev proxy and the worker', () => {
   it("drops the proxy's connection when the worker cannot take a request, as a lost connection to the worker would, so the proxy's own handling of that still applies", async () => {
     const stopped = http.createServer();
     await new Promise<void>((resolve) => stopped.listen(0, '127.0.0.1', resolve));
-    const stoppedWorkerUrl = { ...workerUrl, port: String((stopped.address() as AddressInfo).port) };
+    const stoppedWorkerUrl = { ...workerUrl, port: String(listeningPort(stopped)) };
     await new Promise((resolve) => stopped.close(resolve));
     const { proxyData } = await relays.relay({ type: 'play', proxyData: { userWorkerUrl: stoppedWorkerUrl } });
     assert.exists(proxyData);
@@ -164,7 +200,7 @@ describe('the relay between the dev proxy and the worker', () => {
     });
 
     expect(outcome).toBeInstanceOf(Error);
-    expect((outcome as NodeJS.ErrnoException).code).toBe('ECONNRESET');
+    expect(outcome).toMatchObject({ code: 'ECONNRESET' });
   });
 
   it('reuses one relay per worker, and leaves remote mode and other messages alone', async () => {

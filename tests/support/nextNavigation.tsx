@@ -70,8 +70,8 @@ function useSearchParams(): ReadonlyURLSearchParams {
   return browser.searchParamsFor(useSnapshot().href);
 }
 
-function useParams<T extends RouteParams = RouteParams>(): T {
-  return useSnapshot().params as T;
+function useParams(): RouteParams {
+  return useSnapshot().params;
 }
 
 class NextNavigationError extends Error {

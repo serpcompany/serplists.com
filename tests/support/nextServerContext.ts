@@ -1,5 +1,5 @@
 export const serverContext = {
-  env: {} as Record<string, unknown>,
+  env: {} as object,
   host: 'serplists.com',
   protocol: 'https',
   waitUntil: [] as Promise<unknown>[],

@@ -33,7 +33,7 @@ export type JsonRecord = Record<string, unknown>;
 
 export const NO_TEMPLATE_HOLDS_THE_SLUG: JsonRecord[] = [];
 
-export function personalRun(overrides: JsonRecord = {}): JsonRecord {
+export function personalRun(overrides: JsonRecord = {}) {
   return {
     id: "run-1",
     user_id: "user-1",

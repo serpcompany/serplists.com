@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { billingStatusSchema } from "@/lib/schemas/accountResponses";
 import { sessionMocks } from "../../../support/mockedSession";
 import "../../../support/checkoutWithoutARateLimit";
 import {
@@ -26,7 +27,7 @@ import { handleBilling } from "@functions/api/handlers/billing";
 const USER_ID = "user-1";
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 let subscriptionListStripeReturns: { data: unknown[]; has_more: boolean } | null;
 
 const stripeSubscription = (id: string, status: string, priceId = PRO_PRICE_ID) => ({
@@ -49,10 +50,10 @@ function insertOverride(plan: string, expiresAt: number | null = null) {
 
 const checkout = () => postToBilling(env(), "checkout");
 
-async function billingStatus(query = ""): Promise<Record<string, unknown>> {
+async function billingStatus(query = "") {
   const response = await handleBilling(new Request(`http://localhost/api/billing/status${query}`), env());
   expect(response.status).toBe(200);
-  return response.json();
+  return readJson(response, billingStatusSchema.passthrough());
 }
 
 const LIST_OPEN_SESSIONS = "GET https://api.stripe.com/v1/checkout/sessions?customer=cus_1&status=open&limit=100";
@@ -60,7 +61,7 @@ const LIST_SUBSCRIPTIONS = "GET https://api.stripe.com/v1/subscriptions?customer
 const CREATE_SESSION = "POST https://api.stripe.com/v1/checkout/sessions";
 
 function stripeCalls(): string[] {
-  return fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit | undefined)?.method ?? "GET"} ${String(url)}`);
+  return fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? "GET"} ${String(url)}`);
 }
 
 function storedSubscriptionStatuses(): string[] {
@@ -152,7 +153,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription, where
 
     const response = await handleBilling(
       new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
-      { ...(env() as object), STRIPE_PRO_LEGACY_PRICE_IDS: "price_old" } as never,
+      stripeBillingEnv(d1, { STRIPE_PRO_LEGACY_PRICE_IDS: "price_old" }),
     );
 
     expect(response.status).toBe(409);

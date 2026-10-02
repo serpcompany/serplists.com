@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { capturedGroup, firstOf } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
 import "../../../support/checkoutWithoutARateLimit";
@@ -30,11 +30,11 @@ type StripeSession = {
 };
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 let sessions: StripeSession[];
 let idempotentResponses: Map<string, string>;
 let nextSessionId: number;
-let subscriptionsStripeLists: unknown[];
+let subscriptionsStripeLists: ReturnType<typeof stripeSubscription>[];
 let sessionListOverride: (() => Response) | null;
 let whileStripeExpiresTheSession: ((session: StripeSession) => void) | null;
 
@@ -74,7 +74,7 @@ function addSession(overrides: Partial<StripeSession> = {}): StripeSession {
 
 function cancelTheIncompleteSubscriptionItOpened(session: StripeSession) {
   subscriptionsStripeLists = subscriptionsStripeLists.filter(
-    (subscription) => (subscription as { id: string }).id !== session.subscription,
+    (subscription) => subscription.id !== session.subscription,
   );
 }
 
@@ -82,7 +82,7 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   const url = new URL(String(input));
   const method = init?.method ?? "GET";
   const form = new URLSearchParams(String(init?.body ?? ""));
-  const idempotencyKey = (init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"];
+  const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key");
 
   if (method === "GET" && url.pathname === "/v1/subscriptions") {
     return jsonResponse({ object: "list", data: subscriptionsStripeLists, has_more: false });
@@ -124,7 +124,7 @@ const checkout = () => postToBilling(stripeBillingEnv(d1), "checkout");
 function stripeCalls(): string[] {
   return fetchMock.mock.calls.map(([input, init]) => {
     const url = new URL(String(input));
-    return `${(init as RequestInit | undefined)?.method ?? "GET"} ${url.pathname}`;
+    return `${init?.method ?? "GET"} ${url.pathname}`;
   });
 }
 

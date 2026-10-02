@@ -10,8 +10,7 @@ export const LOCAL_AUTH_ORIGIN = 'http://localhost:8788';
 type BetterAuthPost = { body?: unknown; cookie?: string; origin?: string };
 
 export function postToBetterAuth(env: Env, path: string, { body, cookie, origin = LOCAL_AUTH_ORIGIN }: BetterAuthPost = {}) {
-  const headers: Record<string, string> = { Origin: origin, 'Content-Type': 'application/json' };
-  if (cookie) headers.Cookie = cookie;
+  const headers = { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) };
   const request = new Request(`${origin}/api/auth/${path}`, {
     method: 'POST',
     headers,

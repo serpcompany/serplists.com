@@ -64,7 +64,5 @@ export function expectTheOrganizationPlanChecked() {
 }
 
 export function expectTheOrganizationOwnsIt(inserted: Record<string, unknown>) {
-  expect(inserted.owner_type).toBe('team');
-  expect(inserted.team_id).toBe('team-1');
-  expect(inserted.created_by_user_id).toBe('user-123');
+  expect(inserted).toMatchObject({ owner_type: 'team', team_id: 'team-1', created_by_user_id: 'user-123' });
 }

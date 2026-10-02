@@ -2,6 +2,7 @@ import {
   callRecordingResults,
   isRecord,
   jsonTextPartsJoiner,
+  type PagedResult,
   readOutlineFromItsFirstPage,
   readSectionInFull,
   type PagedRead,
@@ -32,8 +33,8 @@ export async function readRetiredWork(call: PagedRead, scope: JsonRecord = {}): 
   return entries;
 }
 
-export async function readRunInFull(read: PagedRead, runId: string): Promise<{ run: JsonRecord; results: JsonRecord[] }> {
-  const results: JsonRecord[] = [];
+export async function readRunInFull(read: PagedRead, runId: string): Promise<{ run: JsonRecord; results: PagedResult[] }> {
+  const results: PagedResult[] = [];
   const call = callRecordingResults(read, { runId }, results);
 
   const page = await call({});

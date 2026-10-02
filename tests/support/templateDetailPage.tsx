@@ -8,6 +8,7 @@ import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { present } from './elements';
+import type { ElementProps } from './elementTree';
 
 type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
 type TemplateDetailModel = ReturnType<typeof useTemplateDetailModel>;
@@ -24,9 +25,9 @@ const {
 } = vi.hoisted(() => ({
   contextCreateTemplate: vi.fn(),
   contextUpdateTemplate: vi.fn(),
-  moreMenuItemProps: [] as Array<Record<string, unknown>>,
+  moreMenuItemProps: [] as ElementProps[],
   recordListsThePageAsksFor: vi.fn(),
-  visibilitySwitchProps: [] as Array<Record<string, unknown>>,
+  visibilitySwitchProps: [] as ElementProps[],
   userStillOnThePage: { current: false },
   workspaceState: {
     activeTeamId: undefined as string | undefined,
@@ -117,7 +118,7 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
 vi.mock('@/components/ui/switch', async () => {
   const { createElement } = await import('react');
   return {
-    Switch: (props: Record<string, unknown>) => {
+    Switch: (props: ElementProps) => {
       visibilitySwitchProps.push(props);
       return createElement('button', {
         'aria-checked': String(props.checked),
@@ -136,9 +137,9 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
     ...actual,
     DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
       createElement('div', { role: 'menu' }, children),
-    DropdownMenuItem: (props: Record<string, unknown>) => {
+    DropdownMenuItem: (props: ElementProps & { children?: React.ReactNode }) => {
       moreMenuItemProps.push(props);
-      return createElement('div', { role: 'menuitem' }, props.children as React.ReactNode);
+      return createElement('div', { role: 'menuitem' }, props.children);
     },
     DropdownMenuSeparator: () => createElement('hr'),
   };

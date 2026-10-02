@@ -145,7 +145,7 @@ export const aWindowOnTheSite = () => ({
 });
 
 export function installFakeDomGlobals(navigationWindow?: object): () => void {
-  const globals = globalThis as Record<string, unknown>;
+  const globals: { window?: unknown; IS_REACT_ACT_ENVIRONMENT?: unknown } = globalThis;
   const saved = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
   globals.window = Object.assign(
     Object.create(navigationWindow ?? { addEventListener() {}, removeEventListener() {} }),

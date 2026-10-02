@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { afterAll, expect } from 'vitest';
 import { z } from 'zod';
+import { listeningPort } from './listeningPort';
 
 export const workflowStepSchema = z.object({
   id: z.string().optional(),
@@ -34,7 +34,7 @@ export async function withAFakeGitHubApi<T>(
   const server = createServer((request, response) => answer(new URL(request.url ?? '/', 'http://localhost'), response));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
-    return await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    return await run(`http://127.0.0.1:${listeningPort(server)}`);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

@@ -144,8 +144,9 @@ export class SqliteD1 implements D1Database {
     this.sqlite.prepare(sql).run(...params.map(toSqliteValue));
   }
 
-  rows<T extends Row = Row>(sql: string, ...params: unknown[]): T[] {
-    return this.sqlite.prepare(sql).all(...params.map(toSqliteValue)).map((row) => ({ ...row }) as T);
+  rows<T extends Row = Row>(sql: string, ...params: unknown[]): T[];
+  rows(sql: string, ...params: unknown[]): Row[] {
+    return this.sqlite.prepare(sql).all(...params.map(toSqliteValue)).map((row) => ({ ...row }));
   }
 
   queryPlan(query: RecordedQuery): string[] {
