@@ -35,7 +35,7 @@ import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import type { TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
-import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
+import { templateUpdateResultSchema } from '@/lib/templateUpdateResult';
 import { jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
 const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
@@ -143,7 +143,7 @@ const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistT
     const body = await readJson(response, updateBody);
     responses.push(body);
     if (!response.ok) throw new Error(String(body.error));
-    return parseTemplateUpdateResponse(body);
+    return templateUpdateResultSchema.parse(body);
   },
   applyDefaults: applyTemplateSaveDefaults,
 }, input);

@@ -25,11 +25,3 @@ export const templateUpdateResultSchema = templateUpdateResponseSchema.transform
   structureChanged: data.structureChanged,
   reconciledRuns: data.reconciledRuns,
 }));
-
-export function parseTemplateUpdateResponse(body: unknown): TemplateUpdateResult {
-  const parsed = templateUpdateResultSchema.safeParse(body);
-  if (!parsed.success) {
-    throw new Error(TEMPLATE_UPDATE_RESPONSE_ERROR);
-  }
-  return parsed.data;
-}

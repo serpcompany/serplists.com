@@ -191,7 +191,6 @@ export const portableTemplatePackLooseEnvelopeSchema = portableTemplatePackEnvel
   templates: z.array(z.unknown()),
 });
 
-export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
 export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
 export type PortableTemplateRule = z.infer<typeof portableTemplateRuleSchema>;
@@ -199,16 +198,8 @@ export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplate
 export type PortableTemplatePackLooseEnvelope = z.infer<typeof portableTemplatePackLooseEnvelopeSchema>;
 export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
-export const validateTemplate = (data: unknown): ChecklistTemplate => {
-  return checklistTemplateSchema.parse(data);
-};
-
 export const validateBackup = (data: unknown): TemplateBackup => {
   return templateBackupSchema.parse(data);
-};
-
-export const validateTemplateArray = (data: unknown): ChecklistTemplate[] => {
-  return z.array(checklistTemplateSchema).parse(data);
 };
 
 export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImport[] => {
@@ -217,8 +208,4 @@ export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImp
 
 export const validatePortableTemplatePackEnvelope = (data: unknown): PortableTemplatePackLooseEnvelope => {
   return portableTemplatePackLooseEnvelopeSchema.parse(data);
-};
-
-export const validatePortableTemplatePack = (data: unknown): PortableTemplatePack => {
-  return portableTemplatePackSchema.parse(data);
 };

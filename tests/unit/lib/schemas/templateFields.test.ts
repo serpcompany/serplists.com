@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { templatePayloadSchema } from '@functions/api/utils/payloads';
-import { generateSlug, resolveRequestedSlug, truncateSlug } from '@functions/api/utils/slug';
+import { generateSlug, resolveRequestedSlug, truncateSlug, withSlugSuffix } from '@functions/api/utils/slug';
 import { TEMPLATE_SLUG_MAX } from '@/lib/schemas/templateLimits';
-import {
-  appendTemplateSlugSuffix,
-  slugifyTemplateSlug,
-  TEMPLATE_FIELD_LIMITS,
-} from '@/lib/schemas/templateFields';
+import { slugifyTemplateSlug, TEMPLATE_FIELD_LIMITS } from '@/lib/schemas/templateFields';
 
 describe('template slug helpers', () => {
   it('always produces a slug the API accepts, or nothing', () => {
@@ -34,7 +30,7 @@ describe('template slug helpers', () => {
   });
 
   it('shortens the base so a suffixed slug stays within the limit', () => {
-    const slug = appendTemplateSlugSuffix(`${'a'.repeat(150)}-${'b'.repeat(20)}`, '1a2b3c4d');
+    const slug = withSlugSuffix(`${'a'.repeat(150)}-${'b'.repeat(20)}`, '1a2b3c4d', TEMPLATE_SLUG_MAX);
 
     expect(slug.length).toBeLessThanOrEqual(TEMPLATE_FIELD_LIMITS.slug);
     expect(slug.endsWith('-1a2b3c4d')).toBe(true);
@@ -42,7 +38,7 @@ describe('template slug helpers', () => {
   });
 
   it('leaves short slugs whole when adding a suffix', () => {
-    expect(appendTemplateSlugSuffix('launch-checklist', '1a2b3c4d')).toBe(
+    expect(withSlugSuffix('launch-checklist', '1a2b3c4d', TEMPLATE_SLUG_MAX)).toBe(
       'launch-checklist-1a2b3c4d',
     );
   });

@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   checklistTemplateSchema,
   templateBackupSchema,
-  validateTemplate,
   validateBackup,
-  validateTemplateArray
 } from '@/lib/schemas/checklistSchema';
 
 describe('Checklist Schema Validation', () => {
@@ -149,32 +147,6 @@ describe('Checklist Schema Validation', () => {
   });
 
   describe('Validation helper functions', () => {
-    describe('validateTemplate', () => {
-      it('should parse valid template', () => {
-        const validData = {
-          id: 'template-1',
-          title: 'Valid Template',
-          sections: [],
-          userId: 'user-123',
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
-          isPublic: true
-        };
-        
-        expect(() => validateTemplate(validData)).not.toThrow();
-        const result = validateTemplate(validData);
-        expect(result.title).toBe('Valid Template');
-      });
-
-      it('should throw on invalid template', () => {
-        const invalidData = {
-          title: 'Invalid Template'
-        };
-        
-        expect(() => validateTemplate(invalidData)).toThrow();
-      });
-    });
-
     describe('validateBackup', () => {
       it('should parse valid backup', () => {
         const validData = {
@@ -194,49 +166,6 @@ describe('Checklist Schema Validation', () => {
         };
         
         expect(() => validateBackup(invalidData)).toThrow();
-      });
-    });
-
-    describe('validateTemplateArray', () => {
-      it('should parse valid template array', () => {
-        const validData = [
-          {
-            id: 'template-1',
-            title: 'Template 1',
-            sections: [],
-            userId: 'user-123',
-            createdAt: '2024-01-01T00:00:00Z',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isPublic: true
-          },
-          {
-            id: 'template-2',
-            title: 'Template 2',
-            sections: [],
-            userId: 'user-123',
-            createdAt: '2024-01-01T00:00:00Z',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isPublic: false
-          }
-        ];
-        
-        expect(() => validateTemplateArray(validData)).not.toThrow();
-        const result = validateTemplateArray(validData);
-        expect(result).toHaveLength(2);
-      });
-
-      it('should throw on invalid array', () => {
-        const invalidData = [
-          { title: 'Missing required fields' }
-        ];
-        
-        expect(() => validateTemplateArray(invalidData)).toThrow();
-      });
-
-      it('should throw on non-array input', () => {
-        const invalidData = { not: 'an array' };
-        
-        expect(() => validateTemplateArray(invalidData)).toThrow();
       });
     });
   });

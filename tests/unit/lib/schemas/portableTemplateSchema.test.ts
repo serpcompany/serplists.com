@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackSchema,
-  validatePortableTemplatePack,
 } from '@/lib/schemas/checklistSchema';
 
 const aPackWhoseOnlyTaskHas = (contents: unknown[]) => ({
@@ -61,7 +60,7 @@ describe('portableTemplatePackSchema', () => {
   it('rejects media content without a value', () => {
     const data = aPackWhoseOnlyTaskHas([{ type: 'image', value: '' }]);
 
-    expect(() => validatePortableTemplatePack(data)).toThrow();
+    expect(portableTemplatePackSchema.safeParse(data).success).toBe(false);
   });
 
   it('rejects unsupported schema versions at the canonical contract layer', () => {
