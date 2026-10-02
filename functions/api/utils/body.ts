@@ -1,4 +1,7 @@
-export async function readBodyWithinLimit(body: ReadableStream<Uint8Array>, maxBytes: number): Promise<Uint8Array | null> {
+export async function readBodyWithinLimit(
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -16,7 +19,7 @@ export async function readBodyWithinLimit(body: ReadableStream<Uint8Array>, maxB
   }
 }
 
-function concatenated(chunks: readonly Uint8Array[], totalBytes: number): Uint8Array {
+function concatenated(chunks: readonly Uint8Array[], totalBytes: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(totalBytes);
   let offset = 0;
   for (const chunk of chunks) {
