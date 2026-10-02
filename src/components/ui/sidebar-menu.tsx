@@ -7,7 +7,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
 import { Skeleton } from "@/components/ui/skeleton"
-import { useSidebar } from "@/components/ui/sidebar-provider"
+import { useSidebar } from "@/components/ui/use-sidebar"
 import {
   Tooltip,
   TooltipContent,

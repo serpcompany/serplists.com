@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import { z } from 'zod';
 
-import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
+import { buildPortableTemplatePackJsonSchema } from '../../scripts/lib/portableTemplateJsonSchema';
 
 export const portableTemplatePackJsonSchema = () =>
   z.object({ $id: z.string() }).catchall(z.unknown()).parse(buildPortableTemplatePackJsonSchema());

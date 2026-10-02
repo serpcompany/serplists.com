@@ -2,7 +2,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackSchema,
-} from "./checklistSchema";
+} from "../../src/lib/schemas/checklistSchema";
 
 export const PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH = "docs/generated/portable-template-pack.schema.json";
 export const PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_ID = "https://serplists.com/schema/portable-template-pack.schema.json";

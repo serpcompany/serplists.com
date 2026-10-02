@@ -9,7 +9,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
+import { SidebarMenuButton } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/use-sidebar';
 import { useWorkspace, type Workspace } from '@/contexts/WorkspaceContext';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { buildConsoleSettingsPath } from '@/lib/routes';

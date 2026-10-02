@@ -156,9 +156,11 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   `EmptyTitle` and `AlertTitle` render a `div`: put a heading inside when the page needs
   one, as the library's empty state does.
 - shadcn's sidebar is split by responsibility to stay under 500 lines:
-  `sidebar-provider.tsx` (the context, its cookie and the keyboard shortcut),
-  `sidebar-menu.tsx` (the menu parts) and `sidebar.tsx` (the rest), which re-exports the
-  other two. Import from `sidebar`.
+  `sidebar-provider.tsx` (the provider, its cookie and the keyboard shortcut),
+  `use-sidebar.ts` (the context and `useSidebar`), `sidebar-menu.tsx` (the menu parts) and
+  `sidebar.tsx` (the rest), which re-exports the provider and the menu parts. Import the
+  components from `sidebar` and `useSidebar` from `use-sidebar`. The provider reads the phone
+  width with `useMediaQuery`, as the views do.
 - The app's own: `FileUpload` (`file-upload.tsx`, with the upload and its toasts in
   `file-upload-flow.ts`), `EmbedField` ([embed blocks](design-docs/template-content-types.md#embed-blocks)),
   `RunNameDialog` (the [Start a Run dialog](design-docs/ui-screen-inventory.md#start-a-run-dialog)),
@@ -241,7 +243,7 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   header's Outline button opens it in a sheet (`TemplateEditorOutline`), and Preview moves
   into the header's More actions on phones.
 - A layout whose structure (not only its styling) changes at a breakpoint reads the width
-  with `useMediaQuery` (`src/hooks/useMediaQuery.ts`), which renders its server value until
+  with `useMediaQuery` (`src/lib/useMediaQuery.ts`), which renders its server value until
   the browser answers, so the page never mounts both layouts; the editor renders the
   outline's Card or its Sheet this way. Plain CSS breakpoints stay the default.
 - Controls used again and again keep their place. The run page's task footer (Previous,

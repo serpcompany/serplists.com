@@ -25,7 +25,8 @@ Enforced by `pnpm run deps:check` ([ARCHITECTURE.md](../ARCHITECTURE.md)): pages
 components never call `src/lib/api.ts` or `src/lib/api/` at runtime (put the call in a feature model
 or context), `components/ui/` stays presentational, only the route files in `src/app`
 and `src/server` import `functions/`, client code never imports `src/server`, and every
-module must be reachable from a route file in `src/app`. Remaining legacy call sites are
+module must be reachable from a route file in `src/app` or from `next.config.ts`, unused
+primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. Remaining legacy call sites are
 tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 
 Some modules export more than components, which ESLint's fast-refresh check

@@ -41,9 +41,21 @@ const authoredCodeFiles = filesGitTracksOrWouldTrack().filter(
   (file: string) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)),
 );
 
+const pathPattern = z.union([z.string(), z.array(z.string())]).optional();
 const dependencyRules = z
-  .object({ forbidden: z.array(z.object({ name: z.string(), severity: z.string() })) })
+  .object({
+    forbidden: z.array(
+      z.object({
+        name: z.string(),
+        severity: z.string(),
+        from: z.object({ path: pathPattern }).passthrough(),
+        to: z.object({ path: pathPattern, pathNot: pathPattern, reachable: z.boolean().optional() }).passthrough(),
+      }),
+    ),
+  })
   .parse(createRequire(import.meta.url)(path.join(repoRoot, '.dependency-cruiser.cjs'))).forbidden;
+const patternsOf = (pattern: string | string[] | undefined) => (pattern === undefined ? [] : [pattern].flat());
+const REACHABILITY_LEAVES_OUT = ['\\.d\\.ts$', '\\.test\\.tsx?$', '^src/app/', '\\.json$'];
 
 const testFileArguments = (script: string, flag?: string) =>
   [...script.matchAll(flag ? new RegExp(`${flag}\\s+(\\S+\\.test\\.\\w+)`, 'g') : /(?:^|\s)(tests\/\S+\.test\.\w+)/g)]
@@ -100,6 +112,27 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     expect(
       dependencyRules.filter((rule) => rule.severity !== 'error').map((rule) => `${rule.name}: ${rule.severity}`),
       'A dependency rule below "error" never fails deps:check. Make it an error and fix the imports it reports.',
+    ).toEqual([]);
+  });
+
+  it('exempts no module from the reachability rules and carves no module out of a dependency rule', () => {
+    const reachabilityRules = dependencyRules.filter((rule) => rule.to.reachable === false);
+    expect(reachabilityRules.map((rule) => rule.name).sort()).toEqual(['api-code-is-reachable', 'app-code-is-reachable']);
+    for (const rule of reachabilityRules) {
+      expect(
+        patternsOf(rule.to.pathNot).filter((pattern) => !REACHABILITY_LEAVES_OUT.includes(pattern)),
+        `${rule.name} may leave out only declaration files, tests, the route files it starts from and JSON. Delete ` +
+          'the dead module, import it where it is needed, or move code only a script uses to scripts/lib.',
+      ).toEqual([]);
+      expect(patternsOf(rule.from.path)).toEqual(['^src/app/', '^next\\.config\\.ts$']);
+    }
+    expect(
+      dependencyRules.flatMap((rule) =>
+        [...patternsOf(rule.from.path), ...patternsOf(rule.to.path)]
+          .filter((pattern) => pattern.includes('(?!'))
+          .map((pattern) => `${rule.name}: ${pattern}`),
+      ),
+      'A negative lookahead in a rule path exempts the modules it names. Move them where the rule allows them instead.',
     ).toEqual([]);
   });
 

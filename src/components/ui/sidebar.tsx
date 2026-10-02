@@ -15,7 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useSidebar } from "@/components/ui/sidebar-provider"
+import { useSidebar } from "@/components/ui/use-sidebar"
 import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_WIDTH_MOBILE = "18rem"
@@ -332,7 +332,7 @@ export {
   SidebarSeparator,
   SidebarTrigger,
 }
-export { SidebarProvider, useSidebar } from "@/components/ui/sidebar-provider"
+export { SidebarProvider } from "@/components/ui/sidebar-provider"
 export {
   SidebarMenu,
   SidebarMenuAction,

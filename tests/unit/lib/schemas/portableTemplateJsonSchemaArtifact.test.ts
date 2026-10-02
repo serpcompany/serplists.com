@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
-} from '@/lib/schemas/portableTemplateJsonSchema';
+} from '../../../../scripts/lib/portableTemplateJsonSchema';
 
 describe('portable template JSON Schema artifact', () => {
   it('matches the generated schema from the canonical Zod contract', () => {

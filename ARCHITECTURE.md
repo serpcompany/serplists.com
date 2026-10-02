@@ -60,6 +60,10 @@ Shared (imported by both sides)
 - `src/components/ui/` depending on app state, features, pages, or the API client
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
 - runtime code importing tests or devDependencies; circular imports
+- a module in `src/` or `functions/` that no route file in `src/app` and not
+  `next.config.ts` (the security headers) reaches: dead code, with no folder exempt. Code
+  only a script uses lives in `scripts/lib`, as the portable template JSON Schema builder
+  and the README renderers do.
 
 There is no baseline of known violations: every violation fails the check, so fix
 the code rather than the rule.

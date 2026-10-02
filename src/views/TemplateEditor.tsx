@@ -35,7 +35,7 @@ import {
   DashboardLoadingState,
 } from "@/components/dashboard/DashboardContentShell";
 import { PageContainer } from "@/components/layout/page-shell";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import {
   cloneTemplateEditorFormValues,
   rebaseTemplateEditorFormAfterSave,

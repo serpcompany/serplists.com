@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
-} from "../src/lib/schemas/portableTemplateJsonSchema";
+} from "./lib/portableTemplateJsonSchema";
 import { matchesGeneratedText } from "./lib/line-endings.mjs";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);

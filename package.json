@@ -22,7 +22,7 @@
     "comments:check": "node scripts/check-no-comments.mjs",
     "duplicates:check": "jscpd src functions scripts db tests",
     "docs:references": "node scripts/update-references.mjs",
-    "deps:check": "depcruise --config .dependency-cruiser.cjs src functions db",
+    "deps:check": "depcruise --config .dependency-cruiser.cjs src functions db next.config.ts",
     "maintenance:report": "node scripts/maintenance-report.mjs",
     "check:preview:d1-binding": "node scripts/check-preview-d1-binding.mjs",
     "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs --database serp-checklists-db --label production",
