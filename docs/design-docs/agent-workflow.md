@@ -117,7 +117,8 @@ Agents copy whatever patterns exist, including bad ones, so the repo is cleaned 
 small steps every week instead of in occasional big cleanups.
 `.github/workflows/maintenance.yml` runs every Monday at 14:00 UTC (or on demand from
 the Actions tab; scheduled workflows run from the default branch). Both of its jobs
-start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
+check out `staging` with its full history, since the report compares each doc's last edit
+with the code it references, and start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
 referenced code changed since they were edited, stale design docs and plans, files near
 the size limit, and open tech debt.
 
@@ -191,7 +192,9 @@ nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<numbe
   repository's MCP servers out of the review. The model is pinned in `claude_args`, so an
   action update cannot change it silently.
 - Guard: the step after the review fails the job unless Claude posted or updated something
-  on the PR during the run: an inline comment, a review, or the summary. It also fails when
+  on the PR during the run: an inline comment, a review, or the summary, counting from 30
+  seconds before the review started, for clock skew between the runner and GitHub. The
+  doc gardening check uses the same allowance. It also fails when
   the review wrote no log, ended in an error, or ended with subagents still running, and it
   names any denied tool (a warning when the review still posted). It reads the PR with the
   workflow token, which only needs read access. It and the earlier-findings step are inline
