@@ -301,7 +301,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor={importVisibilityId}>Import visibility</FieldLabel>
-            <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
+            <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => {
+              if (value) setImportVisibility(value);
+            }}>
               <SelectTrigger className="w-full sm:w-72" id={importVisibilityId}>
                 <SelectValue placeholder="Choose visibility" />
               </SelectTrigger>

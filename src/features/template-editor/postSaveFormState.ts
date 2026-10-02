@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form";
 
-import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import { templateEditorFormSchema, type TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 export const cloneTemplateEditorFormValues = (
   values: TemplateEditorFormValues,
@@ -29,11 +29,11 @@ export const templateEditorValuesEqual = (left: unknown, right: unknown): boolea
     return false;
   }
 
-  const leftRecord = left as Record<string, unknown>;
-  const rightRecord = right as Record<string, unknown>;
-  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)]);
+  const leftFields = new Map<string, unknown>(Object.entries(left));
+  const rightFields = new Map<string, unknown>(Object.entries(right));
+  const keys = new Set([...leftFields.keys(), ...rightFields.keys()]);
   return Array.from(keys).every((key) =>
-    templateEditorValuesEqual(leftRecord[key], rightRecord[key]),
+    templateEditorValuesEqual(leftFields.get(key), rightFields.get(key)),
   );
 };
 
@@ -52,24 +52,32 @@ export const resolvePostSaveFormState = ({
   current: TemplateEditorFormValues;
   saved: TemplateEditorFormValues;
 }): PostSaveFormState => {
-  const values: Record<string, unknown> = { ...saved };
-  const currentRecord = current as Record<string, unknown>;
-  const submittedRecord = submitted as Record<string, unknown>;
+  const values: TemplateEditorFormValues = { ...saved };
   let keptEdits = false;
 
-  for (const key of Object.keys(currentRecord)) {
-    if (!templateEditorValuesEqual(currentRecord[key], submittedRecord[key])) {
-      values[key] = currentRecord[key];
+  for (const field of TEMPLATE_EDITOR_FIELDS) {
+    if (!templateEditorValuesEqual(current[field], submitted[field])) {
+      copyField(values, current, field);
       keptEdits = true;
     }
   }
 
   return {
     defaults: saved,
-    values: keptEdits ? (values as TemplateEditorFormValues) : saved,
+    values: keptEdits ? values : saved,
     keptEdits,
   };
 };
+
+const TEMPLATE_EDITOR_FIELDS = templateEditorFormSchema.keyof().options;
+
+function copyField<Field extends keyof TemplateEditorFormValues>(
+  target: TemplateEditorFormValues,
+  source: TemplateEditorFormValues,
+  field: Field,
+): void {
+  target[field] = source[field];
+}
 
 type TemplateEditorForm = Pick<
   UseFormReturn<TemplateEditorFormValues>,

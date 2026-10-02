@@ -1,4 +1,4 @@
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
@@ -241,7 +241,7 @@ export const exportPortableTemplatesToJSON = (
     visibility: template.isPublic ? "public" : "private",
     categories: normalizeCategoryList(template.categories),
     tags: normalizeStringList(template.tags),
-    sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
+    sections: toPortableSections(template.sections),
     rules: template.rules,
   }));
   const exported = results.flatMap((result) => (result.success ? [result.data] : []));
@@ -266,6 +266,8 @@ export const exportPortableTemplatesToJSON = (
   };
 };
 
+const portablePackKindSchema = z.object({ kind: z.literal("serplists-template-pack") });
+
 export const downloadBackupFile = (
   backup: TemplateBackupExport | ExportedTemplatePack,
   filename?: string
@@ -274,7 +276,7 @@ export const downloadBackupFile = (
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const defaultFilename =
-    "kind" in backup && backup.kind === "serplists-template-pack"
+    portablePackKindSchema.safeParse(backup).success
       ? `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`
       : `checklist-templates-backup-${new Date().toISOString().split('T')[0]}.json`;
   

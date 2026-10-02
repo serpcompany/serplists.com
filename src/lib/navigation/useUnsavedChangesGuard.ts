@@ -19,7 +19,8 @@ const tokenUniqueAcrossPageLoads = (): string => {
 const isHeldEntry = (state: unknown, held: HeldEntry): boolean =>
   typeof state === 'object' &&
   state !== null &&
-  (state as Record<string, unknown>)[HELD_ENTRY_KEY] === held.token;
+  HELD_ENTRY_KEY in state &&
+  state[HELD_ENTRY_KEY] === held.token;
 
 const isBackPastHeldEntry = (event: PopStateEvent, held: HeldEntry): boolean =>
   !isHeldEntry(event.state, held) && window.location.href === held.href;

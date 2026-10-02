@@ -210,7 +210,9 @@ const Templates = () => {
             <Select
               items={VISIBILITY_FILTER_LABELS}
               value={filterVisibility}
-              onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
+              onValueChange={(value) => {
+                if (value) setFilterVisibility(value);
+              }}
             >
               <SelectTrigger className="w-full" id={`${fieldId}-visibility`}>
                 <SelectValue />
@@ -230,7 +232,9 @@ const Templates = () => {
             <Select
               items={SORT_OPTION_LABELS}
               value={sortBy}
-              onValueChange={(value) => setSortBy(value as SortOption)}
+              onValueChange={(value) => {
+                if (value) setSortBy(value);
+              }}
             >
               <SelectTrigger className="w-full" id={`${fieldId}-sort`}>
                 <SelectValue />

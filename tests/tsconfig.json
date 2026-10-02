@@ -8,6 +8,7 @@
     "../next-env.d.ts",
     "../cloudflare-env.d.ts",
     "../src/js-yaml.d.ts",
+    "../src/css-custom-properties.d.ts",
     "**/*.ts",
     "**/*.tsx",
     "**/*.mts",

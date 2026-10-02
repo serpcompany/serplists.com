@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 
@@ -38,7 +38,7 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
 
   const invitesQuery = useQuery({
     queryKey: queryKeys.teamInvites(userId, activeTeamId ?? undefined),
-    queryFn: () => api.getTeamInvites(activeTeamId as string),
+    queryFn: activeTeamId ? () => api.getTeamInvites(activeTeamId) : skipToken,
     enabled: Boolean(userId && activeTeamId && canManageTeam),
     staleTime: 30 * 1000,
   });

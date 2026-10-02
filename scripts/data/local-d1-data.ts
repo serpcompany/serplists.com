@@ -27,10 +27,13 @@ const operations = {
   },
 } as const;
 
-if (!command || !(command in operations)) {
+const isOperation = (name: string | undefined): name is keyof typeof operations =>
+  name !== undefined && Object.hasOwn(operations, name);
+
+if (!isOperation(command)) {
   throw new Error(
     "Usage: tsx scripts/data/local-d1-data.ts <seed-test|seed-official-login|repair-test-slugs|cleanup|reset-passwords|seed-status> [--persist-to path]",
   );
 }
 
-await withLocalD1(persistPath, operations[command as keyof typeof operations]);
+await withLocalD1(persistPath, operations[command]);

@@ -142,7 +142,9 @@ export function RunsDashboardView({
           <Select
             items={STATUS_FILTER_LABELS}
             value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+            onValueChange={(value) => {
+              if (value) setStatusFilter(value);
+            }}
           >
             <SelectTrigger className="w-full" id={`${fieldId}-status`}>
               <SelectValue />

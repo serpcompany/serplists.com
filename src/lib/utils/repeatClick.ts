@@ -28,12 +28,17 @@ interface ClickTarget {
   removeEventListener: (type: 'click', listener: (event: Event) => void, capture: boolean) => void;
 }
 
+type ClickWithDetail = { readonly type: string; readonly detail?: unknown };
+
+const isRepeatClickEvent = (event: ClickWithDetail): boolean =>
+  typeof event.detail === 'number' && isRepeatClick({ detail: event.detail });
+
 export const ignoreRepeatClicksBriefly = (
   target: ClickTarget,
   schedule: (callback: () => void, ms: number) => unknown = setTimeout,
 ): void => {
   const swallowRepeatClick = (event: Event): void => {
-    if (!isRepeatClick(event as MouseEvent)) return;
+    if (!isRepeatClickEvent(event)) return;
     event.preventDefault();
     event.stopPropagation();
   };

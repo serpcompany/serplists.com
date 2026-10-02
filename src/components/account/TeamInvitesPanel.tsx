@@ -114,7 +114,9 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="team-invite-role">Role</FieldLabel>
-          <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}>
+          <Select value={inviteRole} onValueChange={(value) => {
+            if (value) setInviteRole(value);
+          }}>
             <SelectTrigger className="w-full" id="team-invite-role">
               <SelectValue>{(role: AssignableTeamRole) => formatRole(role)}</SelectValue>
             </SelectTrigger>

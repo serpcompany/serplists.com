@@ -16,7 +16,8 @@ const run = async () => {
   try {
     currentJson = await readFile(outputPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    const fileIsMissing = typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+    if (!fileIsMissing) {
       throw error;
     }
   }
