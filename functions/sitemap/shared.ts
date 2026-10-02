@@ -12,9 +12,8 @@ import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 import { categorySlug } from '../../src/lib/categorySlug';
-import { buildCanonicalUrl, CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigin';
+import { buildCanonicalUrl } from '../../src/lib/seo/siteOrigin';
 
-export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
 const SITEMAP_MAX_PAGE = 50_000;
 
@@ -65,7 +64,7 @@ export const validUsernameCondition = sql<boolean>`
   length(trim(${users.username})) between 3 and 30
   and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.]*'}`;
 
-export const publicTemplateCondition = and(
+const publicTemplateCondition = and(
   eq(templates.is_public, true),
   isNull(templates.deleted_at),
   or(
@@ -204,21 +203,6 @@ export function isValidUsername(value: string): boolean {
 
 export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-}
-
-export function buildInMemoryShardIndex(
-  kind: 'pages' | 'categories',
-  entries: SitemapEntry[],
-  inventoryLastmod?: string | null,
-): SitemapEntry[] {
-  const pages = Math.ceil(entries.length / SITEMAP_PAGE_SIZE);
-  return Array.from({ length: pages }, (_, index) => {
-    const page = index + 1;
-    return {
-      path: `/sitemaps/${kind}/${page}.xml`,
-      lastmod: inventoryLastmod ?? latestLastmod(paginateEntries(entries, page)),
-    };
-  });
 }
 
 export async function contentHash(value: string): Promise<string> {

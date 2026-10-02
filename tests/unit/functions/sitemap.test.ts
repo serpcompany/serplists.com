@@ -8,7 +8,6 @@ import * as pagesSitemapRoute from '@/app/sitemaps/pages/[page]/route';
 import * as legacyStaticSitemapRoute from '@/app/sitemaps/static.xml/route';
 import {
   SITEMAP_PAGE_SIZE,
-  buildInMemoryShardIndex,
   canonicalUrl,
   categorySlug,
   handlePagedDatabaseSitemap,
@@ -114,13 +113,13 @@ describe('public sitemap behavior', () => {
     expect(categorySlug('🚀')).toBe('');
   });
 
-  it('builds deterministic numbered shards at the configured page size', () => {
+  it('builds deterministic numbered shards at the configured page size', async () => {
     const entries = Array.from({ length: SITEMAP_PAGE_SIZE + 1 }, (_, index) => ({
       path: `/page/${index + 1}`,
       lastmod: index === SITEMAP_PAGE_SIZE ? '2031-01-02T03:04:05Z' : '2030-01-02T03:04:05Z',
     }));
 
-    expect(buildInMemoryShardIndex('categories', entries)).toEqual([
+    expect((await planDurableShardIndex('categories', entries, [])).shards).toEqual([
       { path: '/sitemaps/categories/1.xml', lastmod: '2030-01-02T03:04:05.000Z' },
       { path: '/sitemaps/categories/2.xml', lastmod: '2031-01-02T03:04:05.000Z' },
     ]);

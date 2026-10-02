@@ -5,7 +5,6 @@ import {
   isValidTemplateSlug,
   isValidUsername,
   loadCategoryEntries,
-  publicTemplateCondition,
   validTemplateSlugCondition,
   validUsernameCondition,
 } from '../../../functions/sitemap/shared';
@@ -25,18 +24,20 @@ function categoryDatabase(): SqliteD1 {
   `] });
 }
 
-function addPublicTemplate(
+type TemplateOwner = { type: 'user' | 'team'; teamId: string | null; isPublic?: 0 | 1; deletedAt?: string };
+
+function addTemplate(
   db: SqliteD1,
   id: string,
   username: string | null,
   category: string,
-  owner: { type: 'user' | 'team'; teamId: string | null } = { type: 'user', teamId: null },
+  owner: TemplateOwner = { type: 'user', teamId: null },
 ) {
   db.sqlite.prepare('INSERT INTO users (id, username) VALUES (?, ?)').run(`user-${id}`, username);
   db.sqlite.prepare(`
     INSERT INTO templates (id, user_id, owner_type, team_id, is_public, deleted_at, category, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, NULL, ?, '2030-01-01 00:00:00', NULL)
-  `).run(id, `user-${id}`, owner.type, owner.teamId, JSON.stringify([category]));
+    VALUES (?, ?, ?, ?, ?, ?, ?, '2030-01-01 00:00:00', NULL)
+  `).run(id, `user-${id}`, owner.type, owner.teamId, owner.isPublic ?? 1, owner.deletedAt ?? null, JSON.stringify([category]));
 }
 
 async function categoryPaths(db: SqliteD1): Promise<string[]> {
@@ -47,17 +48,17 @@ async function categoryPaths(db: SqliteD1): Promise<string[]> {
 describe('category sitemap entries', () => {
   it('lists a category that a public template with a public owner URL uses', async () => {
     const db = categoryDatabase();
-    addPublicTemplate(db, 't-listed', 'alice', 'Zymurgy Listed');
+    addTemplate(db, 't-listed', 'alice', 'Zymurgy Listed');
 
     expect(await categoryPaths(db)).toContain('/categories/zymurgy-listed/');
   });
 
   it('skips categories whose only templates have owners with no public username', async () => {
     const db = categoryDatabase();
-    addPublicTemplate(db, 't-null', null, 'Zymurgy Null');
-    addPublicTemplate(db, 't-blank', '   ', 'Zymurgy Blank');
-    addPublicTemplate(db, 't-empty', '', 'Zymurgy Empty');
-    addPublicTemplate(db, 't-invalid', 'not a username', 'Zymurgy Invalid');
+    addTemplate(db, 't-null', null, 'Zymurgy Null');
+    addTemplate(db, 't-blank', '   ', 'Zymurgy Blank');
+    addTemplate(db, 't-empty', '', 'Zymurgy Empty');
+    addTemplate(db, 't-invalid', 'not a username', 'Zymurgy Invalid');
 
     const paths = await categoryPaths(db);
     expect(paths.filter((path) => path.startsWith('/categories/zymurgy'))).toEqual([]);
@@ -65,42 +66,39 @@ describe('category sitemap entries', () => {
 
   it('keeps a category when any of its templates has an owner with a public username', async () => {
     const db = categoryDatabase();
-    addPublicTemplate(db, 't-blank', ' ', 'Zymurgy Shared');
-    addPublicTemplate(db, 't-named', 'bob_1', 'Zymurgy Shared');
+    addTemplate(db, 't-blank', ' ', 'Zymurgy Shared');
+    addTemplate(db, 't-named', 'bob_1', 'Zymurgy Shared');
 
     expect(await categoryPaths(db)).toContain('/categories/zymurgy-shared/');
   });
 
   it("lists a category that only an Organization's public Template uses, as the library lists it under its Creator's username", async () => {
     const db = categoryDatabase();
-    addPublicTemplate(db, 't-team', 'alice', 'Zymurgy Procurement', { type: 'team', teamId: 'team-1' });
+    addTemplate(db, 't-team', 'alice', 'Zymurgy Procurement', { type: 'team', teamId: 'team-1' });
 
     expect(await categoryPaths(db)).toContain('/categories/zymurgy-procurement/');
   });
 });
 
 describe('public Template rule for the sitemaps', () => {
-  it('matches public Personal and Organization Templates, not private, deleted or malformed rows', async () => {
+  it('lists the categories of public Personal and Organization Templates, not of private, deleted or malformed rows', async () => {
     const db = categoryDatabase();
-    const insert = db.sqlite.prepare(`
-      INSERT INTO templates (id, user_id, owner_type, team_id, is_public, deleted_at, category, created_at)
-      VALUES (?, 'user-1', ?, ?, ?, ?, '[]', '2030-01-01 00:00:00')
-    `);
-    insert.run('personal', 'user', null, 1, null);
-    insert.run('organization', 'team', 'team-1', 1, null);
-    insert.run('private-organization', 'team', 'team-1', 0, null);
-    insert.run('deleted-organization', 'team', 'team-1', 1, '2030-01-02 00:00:00');
-    insert.run('user-row-with-team', 'user', 'team-1', 1, null);
-    insert.run('team-row-without-team', 'team', null, 1, null);
-    insert.run('team-row-with-blank-team', 'team', '', 1, null);
+    const rows: Array<[string, TemplateOwner]> = [
+      ['personal', { type: 'user', teamId: null }],
+      ['organization', { type: 'team', teamId: 'team-1' }],
+      ['private-organization', { type: 'team', teamId: 'team-1', isPublic: 0 }],
+      ['deleted-organization', { type: 'team', teamId: 'team-1', deletedAt: '2030-01-02 00:00:00' }],
+      ['user-row-with-team', { type: 'user', teamId: 'team-1' }],
+      ['team-row-without-team', { type: 'team', teamId: null }],
+      ['team-row-with-blank-team', { type: 'team', teamId: '' }],
+    ];
+    for (const [id, owner] of rows) addTemplate(db, id, 'alice', `Zymurgy ${id}`, owner);
 
-    const rows = await createDb(apiEnv({ DB: db.binding }))
-      .select({ id: templates.id })
-      .from(templates)
-      .where(publicTemplateCondition)
-      .orderBy(templates.id);
-
-    expect(rows.map((row) => row.id)).toEqual(['organization', 'personal']);
+    const paths = await categoryPaths(db);
+    expect(paths.filter((path) => path.startsWith('/categories/zymurgy')).sort()).toEqual([
+      '/categories/zymurgy-organization/',
+      '/categories/zymurgy-personal/',
+    ]);
   });
 });
 
