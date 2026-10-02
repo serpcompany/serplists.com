@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { capturedGroup } from '../support/elements';
 import { APP_URL } from './support/stack';
 
 const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
@@ -12,7 +13,9 @@ async function fetchHeadWithoutRedirect(request: APIRequestContext, path: string
   const head = html.slice(0, html.indexOf('</head>'));
   const meta = (key: string) =>
     [...head.matchAll(/<meta\s[^>]*>/g)]
-      .map(([tag]) => Object.fromEntries([...tag.matchAll(/([\w:-]+)="([^"]*)"/g)].map((pair) => [pair[1], pair[2]])))
+      .map(([tag]) =>
+        Object.fromEntries([...tag.matchAll(/([\w:-]+)="([^"]*)"/g)].map((pair): [string, string] => [capturedGroup(pair, 1), capturedGroup(pair, 2)])),
+      )
       .filter((attributes) => attributes.name === key || attributes.property === key)
       .map((attributes) => attributes.content);
   return {

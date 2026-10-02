@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { z } from "zod";
 
 import { apiJson, apiRequest } from "./api-requests";
 import { registerNewAccount, uniqueSuffix } from "./sign-in";
@@ -81,35 +82,25 @@ export async function dragAndDropBefore(page: Page, dragged: Locator, target: Lo
   await target.dispatchEvent("drop", { dataTransfer });
 }
 
+const savedTask = z
+  .object({
+    contents: z.array(z.object({ type: z.string().nullish(), value: z.string().nullish() }).passthrough()).optional(),
+    description: z.string().nullish(),
+    title: z.string().nullish(),
+  })
+  .passthrough();
+
+const savedSections = z.array(z.object({ items: z.array(savedTask) }).passthrough());
+
+const aSection = z.object({ items: z.array(z.unknown()) }).passthrough();
+
 export function getTemplateSections(template: Record<string, unknown>) {
   const rawSections = template.sections ?? template.items ?? [];
-  const parsedSections =
-    typeof rawSections === "string" ? JSON.parse(rawSections) : rawSections;
-
-  if (!Array.isArray(parsedSections)) {
-    return [];
-  }
-
-  const firstEntry = parsedSections[0] as { items?: unknown } | undefined;
-  if (firstEntry && Array.isArray(firstEntry.items)) {
-    return parsedSections as Array<{
-      items: Array<{
-        contents?: Array<{ type?: string; value?: string }>;
-        description?: string;
-        title?: string;
-      }>;
-    }>;
-  }
-
-  return [
-    {
-      items: parsedSections as Array<{
-        contents?: Array<{ type?: string; value?: string }>;
-        description?: string;
-        title?: string;
-      }>,
-    },
-  ];
+  const parsed: unknown = typeof rawSections === "string" ? JSON.parse(rawSections) : rawSections;
+  const entries = z.array(z.unknown()).safeParse(parsed);
+  if (!entries.success) return [];
+  if (aSection.safeParse(entries.data[0]).success) return savedSections.parse(entries.data);
+  return [{ items: z.array(savedTask).parse(entries.data) }];
 }
 
 export const ONE_TASK_SECTIONS = [{ id: "section-1", title: "Section", items: [{ id: "item-1", title: "Task" }] }];
