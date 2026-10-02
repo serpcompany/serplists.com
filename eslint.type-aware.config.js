@@ -19,14 +19,7 @@ const typeAwareConfig = [
     languageOptions: {
       parserOptions: { project: TYPE_CHECKED_PROJECTS, tsconfigRootDir: import.meta.dirname },
     },
-  },
-  {
-    files: TYPE_CHECKED_CODE,
     rules: { ...UNSAFE_ANY_RULES, "@typescript-eslint/no-unsafe-type-assertion": "error" },
-  },
-  {
-    files: TYPE_CHECKED_TESTS,
-    rules: UNSAFE_ANY_RULES,
   },
 ];
 

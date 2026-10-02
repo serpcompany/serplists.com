@@ -56,13 +56,12 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
     return names.filter((rule) => !isError(rules[rule]));
   };
 
-  it.each(TYPE_CHECKED_FILES)('refuses unsafe any, external data casts and narrowing type assertions in %s', async (file) => {
-    expect(await rulesTurnedOff(file, [...UNSAFE_ANY_RULES, CAST_RULE, ASSERTION_RULE])).toEqual([]);
-  });
-
-  it.each([...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])('refuses unsafe any and external data casts in the test file %s', async (file) => {
-    expect(await rulesTurnedOff(file, [...UNSAFE_ANY_RULES, CAST_RULE])).toEqual([]);
-  });
+  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])(
+    'refuses unsafe any, external data casts and narrowing type assertions in %s',
+    async (file) => {
+      expect(await rulesTurnedOff(file, [...UNSAFE_ANY_RULES, CAST_RULE, ASSERTION_RULE])).toEqual([]);
+    },
+  );
 
   it.each([...TYPE_CHECKED_FILES, 'scripts/lib/run-tool.mjs', ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
     'refuses external data casts in %s on every commit',
