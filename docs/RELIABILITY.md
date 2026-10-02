@@ -18,7 +18,7 @@ migrations, backups, and R2 storage are in
 | Where | What runs |
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files; the commit-msg hook refuses a `fix:` commit that stages no test |
-| Pre-push hook | `pnpm run verify` |
+| Pre-push hook | `pnpm run verify`, at below-normal CPU priority (`scripts/run-at-low-priority.ts`) |
 | `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects and, with `skipLibCheck` off, the declaration files the repository writes, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), on every pull request and every push to `main` and `staging`; on a pull request, every `fix:` commit must change a test |
 | Browser tests (pull requests only) | `.github/workflows/browser-tests.yml`: the OpenNext build (`build:worker`) and the browser tests against it, smoke on PRs into `staging` and the full suite on PRs into `main`, on the standard `ubuntu-latest` runner. Pushes run neither: they are the slowest and most expensive checks, and a push to `staging` builds again to deploy |
@@ -151,7 +151,22 @@ They are Node code, so their globals are Node's: browser globals such as `window
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
-files, so they stay fast; the push hook runs the full gate. The browser tests workflow checks
+files, so they stay fast; the push hook runs the full gate.
+
+Local checks are kept light, so the machine stays usable while they run:
+- `scripts/run-at-low-priority.ts` starts the push hook's `pnpm run verify` at below-normal
+  CPU priority. Every process it starts inherits that priority, so other programs get the
+  CPU first.
+- On a developer machine, Vitest runs one worker per four CPU threads (`testWorkerLimit` in
+  `scripts/lib/local-test-workers.ts`, set in `vitest.config.ts`).
+  - Its default, one worker per thread minus one, meant 31 workers on a 32-thread PC, each
+    with its own happy-dom. That used every core and several gigabytes, for no gain: the
+    unit suite takes about as long with two workers.
+  - CI keeps Vitest's default, because its runners have few cores and nothing else to run.
+  - `--maxWorkers` on the command line overrides it.
+- `tests/unit/scripts/local-checks-load.test.ts` holds both.
+
+The browser tests workflow checks
 out the full git history (`fetch-depth: 0`), since the build dates sitemap entries from
 `git log`. When a CI failure looks flaky,
 re-run once. If it fails again, treat it as real, and record genuinely flaky tests

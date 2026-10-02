@@ -1,5 +1,8 @@
+import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+
+import { testWorkerLimit } from './scripts/lib/local-test-workers';
 
 process.env['TZ'] = 'UTC';
 
@@ -20,6 +23,8 @@ const NEVER_TEST_FILES = [
   '**/test-results/**',
   'tests/e2e/**',
 ];
+
+const workerLimit = testWorkerLimit(process.env, availableParallelism());
 
 const EVERY_TEST_FILE = {
   globals: true,
@@ -42,6 +47,7 @@ const resolve = {
 export default defineConfig({
   test: {
     ...EVERY_TEST_FILE,
+    ...(workerLimit === null ? {} : { maxWorkers: workerLimit }),
     name: 'node',
     environment: 'node',
     exclude: [...NEVER_TEST_FILES, TESTS_THAT_RENDER_INTO_THE_DOM],
