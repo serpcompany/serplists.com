@@ -25,7 +25,7 @@ import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { findRunCompletionRefusal } from "../utils/run-completion";
 import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
-type RunRow = typeof schema.checklist_runs.$inferSelect;
+type RunRow = typeof schema.checklistRuns.$inferSelect;
 
 export type RunSummaryFields = Partial<Pick<
   RunRow,

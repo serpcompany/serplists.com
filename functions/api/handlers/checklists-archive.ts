@@ -20,7 +20,7 @@ export async function restoreChecklistRun(
   userId: string,
   checklistId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   if (!checklistId || checklistId === 'checklists') {
     return jsonError('Checklist ID required', 400);
@@ -28,8 +28,8 @@ export async function restoreChecklistRun(
 
   const [existingRun] = await db
     .select()
-    .from(checklist_runs)
-    .where(eq(checklist_runs.id, checklistId))
+    .from(checklistRuns)
+    .where(eq(checklistRuns.id, checklistId))
     .limit(1);
 
   if (!existingRun || !(await canViewRunHistory(env, existingRun, userId))) {
@@ -71,8 +71,8 @@ export async function restoreChecklistRun(
     createdAt: now,
   });
   const archivedRun = and(
-    teamId ? eq(checklist_runs.team_id, teamId) : eq(checklist_runs.user_id, userId),
-    isNotNull(checklist_runs.deleted_at),
+    teamId ? eq(checklistRuns.team_id, teamId) : eq(checklistRuns.user_id, userId),
+    isNotNull(checklistRuns.deleted_at),
   );
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, capacity.limit === null
     ? archivedRun
@@ -95,12 +95,12 @@ export async function archiveChecklistRun(
   userId: string,
   checklistId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   const [existingChecklist] = await db
     .select()
-    .from(checklist_runs)
-    .where(eq(checklist_runs.id, checklistId))
+    .from(checklistRuns)
+    .where(eq(checklistRuns.id, checklistId))
     .limit(1);
 
   if (!existingChecklist || !(await canViewRun(env, existingChecklist, userId))) {
@@ -137,8 +137,8 @@ export async function archiveChecklistRun(
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
-    existingChecklist.team_id ? eq(checklist_runs.team_id, existingChecklist.team_id) : eq(checklist_runs.user_id, userId),
-    isNull(checklist_runs.deleted_at),
+    existingChecklist.team_id ? eq(checklistRuns.team_id, existingChecklist.team_id) : eq(checklistRuns.user_id, userId),
+    isNull(checklistRuns.deleted_at),
   ), archiveUpdates, auditEvent));
   if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist not found or unauthorized', 404);

@@ -27,7 +27,7 @@ export async function restoreTemplate(
   userId: string,
   templateId: string,
 ): Promise<Response> {
-  const { templates, audit_events } = schema;
+  const { templates, auditEvents } = schema;
 
   if (!templateId || templateId === 'templates') {
     return jsonError('Template ID required', 400);
@@ -82,7 +82,7 @@ export async function restoreTemplate(
     ? archivedTemplate
     : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
   const restoreResults = await db.batch([
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, stillArchivedWithinLimit)),
+    insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(templates.id, templateId, stillArchivedWithinLimit)),
     db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), stillArchivedWithinLimit)),
   ]);
   if (batchWriteMissed(restoreResults[1])) {
@@ -103,7 +103,7 @@ export async function archiveTemplate(
   userId: string,
   templateId: string,
 ): Promise<Response> {
-  const { templates, audit_events } = schema;
+  const { templates, auditEvents } = schema;
 
   const existingTemplate = await findTemplateById(db, templateId);
 
@@ -142,7 +142,7 @@ export async function archiveTemplate(
     ? and(eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
   const archiveResults = await db.batch([
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
+    insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
     db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
   ]);
   if (batchWriteMissed(archiveResults[1])) {

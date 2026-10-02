@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 
-import { sitemap_profile_revisions, templates, users } from '../../db/schema/index';
+import { sitemapProfileRevisions, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { cachedSitemap, type SitemapContext, type SitemapRevisions } from './cache';
@@ -52,10 +52,10 @@ const selectListedProfiles = (db: Db) => db
     username: users.username,
     created_at: users.created_at,
     updated_at: users.updated_at,
-    profile_revision: sitemap_profile_revisions.revised_at,
+    profile_revision: sitemapProfileRevisions.revised_at,
   })
   .from(users)
-  .leftJoin(sitemap_profile_revisions, eq(sitemap_profile_revisions.user_id, users.id))
+  .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
   .where(validUsernameCondition)
   .orderBy(users.id);
 

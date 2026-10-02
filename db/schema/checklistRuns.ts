@@ -4,7 +4,7 @@ import { teams } from "./teams";
 import { templates } from "./templates";
 import { users } from "./users";
 
-export const checklist_runs = sqliteTable("checklist_runs", {
+export const checklistRuns = sqliteTable("checklist_runs", {
   id: text("id"),
   user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   template_id: text("template_id").references(() => templates.id, { onDelete: "set null" }),

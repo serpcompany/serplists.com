@@ -35,12 +35,12 @@ function runGeneratedSql(db: DatabaseSync, query: BuiltQuery): number {
 }
 
 async function reconcileStatements(expectedRevision: number) {
-  const { audit_events, checklist_runs } = schema;
+  const { auditEvents, checklistRuns } = schema;
   const whereClause = and(
-    eq(checklist_runs.id, 'run-1'),
-    eq(checklist_runs.revision, expectedRevision),
-    eq(checklist_runs.status, 'in_progress'),
-    isNull(checklist_runs.deleted_at),
+    eq(checklistRuns.id, 'run-1'),
+    eq(checklistRuns.revision, expectedRevision),
+    eq(checklistRuns.status, 'in_progress'),
+    isNull(checklistRuns.deleted_at),
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: 'user-1',
@@ -51,8 +51,8 @@ async function reconcileStatements(expectedRevision: number) {
     createdAt: '2026-02-01T00:00:00.000Z',
   });
   return {
-    auditInsert: insertRowWhere(drizzleThatOnlyBuildsSql, audit_events, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
-    runUpdate: drizzleThatOnlyBuildsSql.update(checklist_runs).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
+    auditInsert: insertRowWhere(drizzleThatOnlyBuildsSql, auditEvents, auditEvent, sql`exists (select 1 from ${checklistRuns} where ${whereClause})`),
+    runUpdate: drizzleThatOnlyBuildsSql.update(checklistRuns).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
   };
 }
 

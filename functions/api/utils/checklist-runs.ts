@@ -9,7 +9,7 @@ import { runSourceTemplateUsableSql } from './template-access';
 
 const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
 
-type RunRow = typeof schema.checklist_runs.$inferSelect;
+type RunRow = typeof schema.checklistRuns.$inferSelect;
 export type RunUpdates = Partial<RunRow>;
 type ShareSecretColumn = (typeof SHARE_SECRET_COLUMNS)[number];
 type TemplateVersionFields = { template_version: number; current_template_version: number | null };
@@ -25,14 +25,14 @@ function runResponseColumns() {
     share_expires_at,
     share_used_at,
     ...columns
-  } = getTableColumns(schema.checklist_runs);
+  } = getTableColumns(schema.checklistRuns);
   return columns;
 }
 
 function currentTemplateVersionSql(callerUserId: string | null) {
   return sql<number | null>`(
     SELECT content_version FROM templates
-    WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(callerUserId)}
+    WHERE templates.id = ${schema.checklistRuns.template_id} AND ${runSourceTemplateUsableSql(callerUserId)}
   )`;
 }
 
@@ -63,17 +63,17 @@ export function serializeChecklistRun(row: RunResponseRow) {
 }
 
 export function sharedChecklistRunSelect() {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   return {
-    id: checklist_runs.id,
-    title: checklist_runs.title,
-    items: checklist_runs.items,
-    status: checklist_runs.status,
-    progress: checklist_runs.progress,
-    started_at: checklist_runs.started_at,
-    completed_at: checklist_runs.completed_at,
-    template_version: checklist_runs.template_version,
-    revision: checklist_runs.revision,
+    id: checklistRuns.id,
+    title: checklistRuns.title,
+    items: checklistRuns.items,
+    status: checklistRuns.status,
+    progress: checklistRuns.progress,
+    started_at: checklistRuns.started_at,
+    completed_at: checklistRuns.completed_at,
+    template_version: checklistRuns.template_version,
+    revision: checklistRuns.revision,
     current_template_version: currentTemplateVersionSql(null),
   };
 }
@@ -100,11 +100,11 @@ export async function findRunToUpdate(
   userId: string,
   notFoundMessage: string,
 ): Promise<{ run: RunRow } | { response: Response }> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const [run] = await db
     .select()
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
+    .from(checklistRuns)
+    .where(and(eq(checklistRuns.id, runId), isNull(checklistRuns.deleted_at)))
     .limit(1);
 
   if (!run || !(await canViewRun(env, run, userId))) {
@@ -121,12 +121,12 @@ export function auditedRunUpdate(
   runId: string,
   guard: SQL | undefined,
   updates: Record<string, unknown>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
+  auditEvent: typeof schema.auditEvents.$inferInsert,
 ) {
-  const { audit_events, checklist_runs } = schema;
+  const { auditEvents, checklistRuns } = schema;
   return [
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, runId, guard)),
-    db.update(checklist_runs).set(updates).where(and(eq(checklist_runs.id, runId), guard)),
+    insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(checklistRuns.id, runId, guard)),
+    db.update(checklistRuns).set(updates).where(and(eq(checklistRuns.id, runId), guard)),
   ] as const;
 }
 

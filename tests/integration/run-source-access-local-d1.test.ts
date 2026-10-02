@@ -123,11 +123,11 @@ describe.sequential("run source access against local D1, where a run whose templ
   });
 
   it("keeps the staleness lookup a primary-key read on templates", async () => {
-    const { checklist_runs } = schema;
+    const { checklistRuns } = schema;
     const query = drizzle(d1.env.DB)
       .select(checklistRunSelectFor("user-b"))
-      .from(checklist_runs)
-      .where(and(eq(checklist_runs.user_id, "user-b"), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)))
+      .from(checklistRuns)
+      .where(and(eq(checklistRuns.user_id, "user-b"), isNull(checklistRuns.team_id), isNull(checklistRuns.deleted_at)))
       .toSQL();
     const plan = await d1.env.DB.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).bind(...query.params).all<{ detail: string }>();
     const templateSteps = plan.results.map(({ detail }) => detail).filter((detail) => /\btemplates\b/.test(detail));

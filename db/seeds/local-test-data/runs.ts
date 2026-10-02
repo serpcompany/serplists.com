@@ -1,9 +1,9 @@
-import { checklist_runs } from "../../schema/index";
+import { checklistRuns } from "../../schema/index";
 import type { LocalDb } from "../../../scripts/data/local-d1";
 import { DAY, HOUR, json, type SeedClock } from "./values";
 
 export async function seedTestRuns(db: LocalDb, { at }: SeedClock): Promise<void> {
-  const checklistRunRows: (typeof checklist_runs.$inferInsert)[] = [
+  const checklistRunRows: (typeof checklistRuns.$inferInsert)[] = [
     {
       id: "run-1",
       user_id: "user-1",
@@ -184,6 +184,6 @@ export async function seedTestRuns(db: LocalDb, { at }: SeedClock): Promise<void
     },
   ];
   for (const checklistRun of checklistRunRows) {
-    await db.insert(checklist_runs).values(checklistRun);
+    await db.insert(checklistRuns).values(checklistRun);
   }
 }

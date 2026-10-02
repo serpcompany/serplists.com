@@ -8,8 +8,8 @@ import { limitReachedResponse } from './limit-reached';
 type Db = ReturnType<typeof createDb>;
 export type TemplateInsertValues = typeof schema.templates.$inferInsert;
 export type TemplateUpdateValues = Partial<TemplateInsertValues>;
-export type AuditEventValues = typeof schema.audit_events.$inferInsert;
-export type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
+export type AuditEventValues = typeof schema.auditEvents.$inferInsert;
+export type TemplateVersionValues = typeof schema.templateVersions.$inferInsert;
 
 export type TemplateOwnerContext = { userId: string; teamId: string | null };
 export type TemplateCapacity = { owner: TemplateOwnerContext; limit: number };
@@ -60,7 +60,7 @@ export async function insertTemplateWithHistoryFallback(
   auditEventValues: AuditEventValues,
   capacity?: TemplateCapacity,
 ): Promise<boolean> {
-  const { audit_events, template_versions, templates } = schema;
+  const { auditEvents, templateVersions, templates } = schema;
   const templateId = String(values.id);
 
   const runBatch = (omitColumns: readonly string[]) => {
@@ -68,13 +68,13 @@ export async function insertTemplateWithHistoryFallback(
     return capacity
       ? db.batch([
           insertRowWhere(db, templates, templateValues, templateCapacityAvailableSql(capacity), { omitColumns }),
-          insertRowWhere(db, template_versions, versionValues, rowExistsSql(templates.id, templateId)),
-          insertRowWhere(db, audit_events, auditEventValues, rowExistsSql(templates.id, templateId)),
+          insertRowWhere(db, templateVersions, versionValues, rowExistsSql(templates.id, templateId)),
+          insertRowWhere(db, auditEvents, auditEventValues, rowExistsSql(templates.id, templateId)),
         ])
       : db.batch([
           db.insert(withoutColumns(templates, omitColumns)).values(templateValues),
-          db.insert(template_versions).values(versionValues),
-          db.insert(audit_events).values(auditEventValues),
+          db.insert(templateVersions).values(versionValues),
+          db.insert(auditEvents).values(auditEventValues),
         ]);
   };
 
@@ -111,8 +111,8 @@ export async function updateTemplateWithHistoryFallback(
   versionValues: TemplateVersionValues,
   reconciledRunUpdates: ReconciledRunUpdate[] = [],
 ): Promise<{ updated: boolean; runResults: unknown[] }> {
-  const { audit_events, checklist_runs, template_versions, templates } = schema;
-  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
+  const { auditEvents, checklistRuns, templateVersions, templates } = schema;
+  const auditWritten = rowExistsSql(auditEvents.id, String(auditEventValues.id));
   const templateUpdateIndex = 2;
   const runResultIndexes: number[] = [];
   let nextIndex = templateUpdateIndex + 1;
@@ -124,15 +124,15 @@ export async function updateTemplateWithHistoryFallback(
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
-      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
-      insertRowWhere(db, template_versions, versionValues, auditWritten),
+      insertRowWhere(db, auditEvents, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
+      insertRowWhere(db, templateVersions, versionValues, auditWritten),
       db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
       ...reconciledRunUpdates.flatMap((runUpdate) => [
         ...(runUpdate.auditEvent
-          ? [insertRowWhere(db, audit_events, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
+          ? [insertRowWhere(db, auditEvents, runUpdate.auditEvent, sql`exists (select 1 from ${checklistRuns} where ${runUpdate.whereClause}) and ${auditWritten}`)]
           : []),
         db
-          .update(checklist_runs)
+          .update(checklistRuns)
           .set({
             items: runUpdate.items,
             retired_items: runUpdate.retiredItems,

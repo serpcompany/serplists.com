@@ -106,12 +106,12 @@ async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promis
 async function getOwnedRun(env: Env, userId: string, runId: string) {
   const [run] = await createDb(env)
     .select()
-    .from(schema.checklist_runs)
+    .from(schema.checklistRuns)
     .where(and(
-      eq(schema.checklist_runs.id, runId),
-      eq(schema.checklist_runs.user_id, userId),
-      isNull(schema.checklist_runs.team_id),
-      isNull(schema.checklist_runs.deleted_at),
+      eq(schema.checklistRuns.id, runId),
+      eq(schema.checklistRuns.user_id, userId),
+      isNull(schema.checklistRuns.team_id),
+      isNull(schema.checklistRuns.deleted_at),
     ))
     .limit(1);
   if (!run || run.user_id !== userId || run.team_id !== null || run.deleted_at !== null) {
@@ -131,14 +131,14 @@ export async function getRun(
 }
 
 function runRevisionExistsSql(runId: string, userId: string, revision: number) {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   return sql`exists (
-    select 1 from ${checklist_runs}
-    where ${checklist_runs.id} = ${runId}
-      and ${checklist_runs.user_id} = ${userId}
-      and ${checklist_runs.team_id} is null
-      and ${checklist_runs.revision} = ${revision}
-      and ${checklist_runs.deleted_at} is null
+    select 1 from ${checklistRuns}
+    where ${checklistRuns.id} = ${runId}
+      and ${checklistRuns.user_id} = ${userId}
+      and ${checklistRuns.team_id} is null
+      and ${checklistRuns.revision} = ${revision}
+      and ${checklistRuns.deleted_at} is null
   )`;
 }
 
@@ -208,19 +208,19 @@ export async function updateRun(
   const batchResults = await db.batch([
     insertRowWhere(
       db,
-      schema.audit_events,
+      schema.auditEvents,
       auditEvent,
       runRevisionExistsSql(args.runId, identity.userId, currentRevision),
     ),
-    db.update(schema.checklist_runs)
+    db.update(schema.checklistRuns)
       .set(updates)
       .where(and(
-        eq(schema.checklist_runs.id, args.runId),
-        eq(schema.checklist_runs.user_id, identity.userId),
-        isNull(schema.checklist_runs.team_id),
-        eq(schema.checklist_runs.revision, currentRevision),
-        isNull(schema.checklist_runs.deleted_at),
-        sql`exists (select 1 from ${schema.audit_events} where ${schema.audit_events.id} = ${auditEvent.id})`,
+        eq(schema.checklistRuns.id, args.runId),
+        eq(schema.checklistRuns.user_id, identity.userId),
+        isNull(schema.checklistRuns.team_id),
+        eq(schema.checklistRuns.revision, currentRevision),
+        isNull(schema.checklistRuns.deleted_at),
+        sql`exists (select 1 from ${schema.auditEvents} where ${schema.auditEvents.id} = ${auditEvent.id})`,
       )),
   ]);
   const auditChanges = batchChanges(batchResults[0]);

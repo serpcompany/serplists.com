@@ -1,9 +1,9 @@
-import { audit_events, template_likes, template_versions, usage_analytics } from "../../schema/index";
+import { auditEvents, templateLikes, templateVersions, usageAnalytics } from "../../schema/index";
 import type { LocalDb } from "../../../scripts/data/local-d1";
 import { DAY, HOUR, json, type SeedClock } from "./values";
 
 export async function seedTestActivity(db: LocalDb, { at }: SeedClock): Promise<void> {
-  await db.insert(template_likes).values([
+  await db.insert(templateLikes).values([
     { user_id: "user-2", template_id: "template-1", created_at: at(0) },
     { user_id: "user-3", template_id: "template-1", created_at: at(0) },
     { user_id: "user-4", template_id: "template-1", created_at: at(0) },
@@ -11,7 +11,7 @@ export async function seedTestActivity(db: LocalDb, { at }: SeedClock): Promise<
     { user_id: "user-3", template_id: "template-5", created_at: at(0) },
   ]);
 
-  await db.insert(usage_analytics).values([
+  await db.insert(usageAnalytics).values([
     {
       id: "analytics-1",
       user_id: "user-1",
@@ -42,7 +42,7 @@ export async function seedTestActivity(db: LocalDb, { at }: SeedClock): Promise<
     },
   ]);
 
-  await db.insert(template_versions).values([
+  await db.insert(templateVersions).values([
     {
       id: "team-version-growth-launch-1",
       template_id: "team-template-growth-launch",
@@ -93,7 +93,7 @@ export async function seedTestActivity(db: LocalDb, { at }: SeedClock): Promise<
     },
   ]);
 
-  await db.insert(audit_events).values([
+  await db.insert(auditEvents).values([
     {
       id: "audit-team-growth-created",
       actor_user_id: "user-1",

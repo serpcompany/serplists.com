@@ -71,7 +71,7 @@ async function getRequestAuditMetadata(request?: Request): Promise<{
   };
 }
 
-export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.audit_events.$inferInsert> {
+export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.auditEvents.$inferInsert> {
   const requestMetadata = await getRequestAuditMetadata(input.request);
 
   return {
@@ -95,7 +95,7 @@ export async function buildAuditEventValues(input: AuditEventInput): Promise<typ
 
 export async function buildTemplateVersionValues(
   input: TemplateVersionInput,
-): Promise<typeof schema.template_versions.$inferInsert> {
+): Promise<typeof schema.templateVersions.$inferInsert> {
   const snapshotJson = serializeJson(input.snapshot) ?? "{}";
 
   return {

@@ -13,7 +13,7 @@ export async function shareChecklistRun(
   userId: string,
   runId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   if (!runId || runId === 'run') {
     return jsonError('Checklist run ID required', 400);
@@ -44,8 +44,8 @@ export async function shareChecklistRun(
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
-    run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
-    isNull(checklist_runs.deleted_at),
+    run.team_id ? eq(checklistRuns.team_id, run.team_id) : eq(checklistRuns.user_id, userId),
+    isNull(checklistRuns.deleted_at),
   ), shareUpdates, auditEvent));
   if (batchWriteMissed(batchResults[1])) {
     return jsonError('Checklist run not found', 404);
@@ -65,7 +65,7 @@ export async function stopSharingChecklistRun(
   userId: string,
   runId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   const found = await findRunToUpdate(env, db, runId, userId, 'Checklist run not found');
   if ('response' in found) return found.response;
@@ -77,9 +77,9 @@ export async function stopSharingChecklistRun(
   const now = new Date().toISOString();
   const revokeUpdates = { is_public: false, share_token: null, share_expires_at: null, share_used_at: null, updated_at: now };
   const sharedRun = and(
-    run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
-    eq(checklist_runs.is_public, true),
-    isNull(checklist_runs.deleted_at),
+    run.team_id ? eq(checklistRuns.team_id, run.team_id) : eq(checklistRuns.user_id, userId),
+    eq(checklistRuns.is_public, true),
+    isNull(checklistRuns.deleted_at),
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,

@@ -1,4 +1,4 @@
-import { account, entitlement_overrides, users } from "../../schema/index";
+import { account, entitlementOverrides, users } from "../../schema/index";
 import type { LocalDb } from "../../../scripts/data/local-d1";
 import { DEV_PASSWORD_HASH, TEST_USER_IDS } from "./ids";
 import type { SeedClock } from "./values";
@@ -71,7 +71,7 @@ export async function seedTestPeople(db: LocalDb, { now, at }: SeedClock): Promi
     })),
   );
 
-  await db.insert(entitlement_overrides).values([
+  await db.insert(entitlementOverrides).values([
     {
       user_id: "user-1",
       plan: "pro",

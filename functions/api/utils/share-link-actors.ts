@@ -41,11 +41,11 @@ async function findOutsiders(env: Env, owner: RunOwnerScope, actors: string[]): 
   if (actors.length === 0) return new Set();
   if (!owner.teamId) return new Set(actors.filter((actor) => actor !== owner.userId));
 
-  const { team_members } = schema;
+  const { teamMembers } = schema;
   const members = await createDb(env)
-    .select({ user_id: team_members.user_id })
-    .from(team_members)
-    .where(and(eq(team_members.team_id, owner.teamId), inArray(team_members.user_id, actors), eq(team_members.status, 'active')))
+    .select({ user_id: teamMembers.user_id })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.team_id, owner.teamId), inArray(teamMembers.user_id, actors), eq(teamMembers.status, 'active')))
     .limit(actors.length);
   const memberIds = new Set(members.map((row) => row.user_id));
   return new Set(actors.filter((actor) => !memberIds.has(actor)));

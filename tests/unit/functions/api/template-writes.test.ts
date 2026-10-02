@@ -24,7 +24,7 @@ const versionValues = {
   subject_id: 'user-1',
   snapshot_json: '{}',
   created_at: 'now',
-} satisfies typeof schema.template_versions.$inferInsert;
+} satisfies typeof schema.templateVersions.$inferInsert;
 const auditValues = {
   id: 'audit-1',
   subject_type: 'user',
@@ -33,7 +33,7 @@ const auditValues = {
   resource_id: 'template-1',
   action: 'template.created',
   created_at: 'now',
-} satisfies typeof schema.audit_events.$inferInsert;
+} satisfies typeof schema.auditEvents.$inferInsert;
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 

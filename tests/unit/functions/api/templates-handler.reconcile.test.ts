@@ -353,7 +353,7 @@ describe('Templates Handlers', () => {
       expect(data.reconciledRuns).toBe(1);
       const reconciledEvents = vi.mocked(insertRowWhere).mock.calls.flatMap(([, table, values, condition], call) => {
         const event = auditEventRow.safeParse(values);
-        return table === schema.audit_events && event.success && event.data.action === 'checklist_run.reconciled'
+        return table === schema.auditEvents && event.success && event.data.action === 'checklist_run.reconciled'
           ? [{ call, condition, event: event.data }]
           : [];
       });

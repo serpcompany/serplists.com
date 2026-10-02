@@ -107,8 +107,8 @@ function batchStatements(): Statement[] {
 
 function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: string[]) {
   const statements = batchStatements();
-  expect(statements.some((statement) => statement.kind === 'insert' && statement.table === schema.audit_events)).toBe(false);
-  const auditIndex = statements.findIndex((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
+  expect(statements.some((statement) => statement.kind === 'insert' && statement.table === schema.auditEvents)).toBe(false);
+  const auditIndex = statements.findIndex((statement) => statement.kind === 'insert-select' && statement.table === schema.auditEvents);
   const updateIndex = statements.findIndex((statement) => statement.kind === 'update' && statement.table === table);
   expect(auditIndex).toBeGreaterThanOrEqual(0);
   expect(updateIndex).toBeGreaterThan(auditIndex);
@@ -131,7 +131,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('share-link PUT: a lost revision race returns 409', async () => {
@@ -142,7 +142,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/shared/token-1', 'PUT', { status: 'completed', expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
   });
 
   it('revalidate: a lost revision race returns 409', async () => {
@@ -153,7 +153,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1/revalidate', 'POST', { expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"revision" = ?', '"deleted_at" is null']);
   });
 
   it('run archive: a concurrent archive does not report a second success', async () => {
@@ -162,7 +162,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1', 'DELETE');
 
     expect(result.status).toBe(404);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('run restore: a concurrent restore does not report a second success, answering the not_archived the archive page refreshes on', async () => {
@@ -172,7 +172,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(400);
     expect(result.body.code).toBe('not_archived');
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 
   it('run share: a run archived meanwhile is not shared or audited', async () => {
@@ -181,7 +181,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run/run-1/share', 'POST', {});
 
     expect(result.status).toBe(404);
-    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklistRuns, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('template PUT: a lost version race returns 409 and guards the version row and run updates', async () => {
@@ -196,10 +196,10 @@ describe('audit rows are written only when the guarded write lands', () => {
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
-    const versionInsert = statements.find((statement) => statement.table === schema.template_versions);
+    const versionInsert = statements.find((statement) => statement.table === schema.templateVersions);
     expect(versionInsert?.kind).toBe('insert-select');
     expect(render(queryOf(versionInsert))).toContain('"audit_events"');
-    const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklist_runs);
+    const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklistRuns);
     expect(render(whereOf(runUpdate))).toContain('"audit_events"');
   });
 
@@ -226,7 +226,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     await send(handleTemplates, 'templates/template-1', 'PUT', { expected_version: 3, title: 'Renamed' });
 
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
-    const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
+    const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.auditEvents);
     expect(render(queryOf(auditInsert))).not.toContain('"is_public"');
   });
 

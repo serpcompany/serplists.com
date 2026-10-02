@@ -1,18 +1,18 @@
 import { inArray, or } from "drizzle-orm";
 import {
   account,
-  audit_events,
-  checklist_runs,
-  entitlement_overrides,
+  auditEvents,
+  checklistRuns,
+  entitlementOverrides,
   session,
-  team_entitlement_overrides,
-  team_invites,
-  team_members,
+  teamEntitlementOverrides,
+  teamInvites,
+  teamMembers,
   teams,
-  template_likes,
-  template_versions,
+  templateLikes,
+  templateVersions,
   templates,
-  usage_analytics,
+  usageAnalytics,
   users,
 } from "../../schema/index";
 import type { LocalDb } from "../../../scripts/data/local-d1";
@@ -48,32 +48,32 @@ export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
 
   await db.batch([
     db
-      .delete(checklist_runs)
+      .delete(checklistRuns)
       .where(
         or(
-          inArray(checklist_runs.team_id, testTeamIds),
-          inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
-          inArray(checklist_runs.user_id, testUserIds),
-          inArray(checklist_runs.id, TEST_RUN_IDS),
+          inArray(checklistRuns.team_id, testTeamIds),
+          inArray(checklistRuns.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(checklistRuns.user_id, testUserIds),
+          inArray(checklistRuns.id, TEST_RUN_IDS),
         ),
       ),
     db
-      .delete(template_versions)
+      .delete(templateVersions)
       .where(
         or(
-          inArray(template_versions.id, TEST_VERSION_IDS),
-          inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
-          inArray(template_versions.changed_by_user_id, testUserIds),
+          inArray(templateVersions.id, TEST_VERSION_IDS),
+          inArray(templateVersions.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(templateVersions.changed_by_user_id, testUserIds),
         ),
       ),
     db
-      .delete(audit_events)
+      .delete(auditEvents)
       .where(
         or(
-          inArray(audit_events.subject_id, TEST_TEAM_IDS),
-          inArray(audit_events.subject_id, testTeamIds),
-          inArray(audit_events.id, TEST_AUDIT_IDS),
-          inArray(audit_events.resource_id, [
+          inArray(auditEvents.subject_id, TEST_TEAM_IDS),
+          inArray(auditEvents.subject_id, testTeamIds),
+          inArray(auditEvents.id, TEST_AUDIT_IDS),
+          inArray(auditEvents.resource_id, [
             ...TEST_TEAM_IDS,
             ...TEST_TEAM_TEMPLATE_IDS,
             "team-invite-seed-client-john",
@@ -81,19 +81,19 @@ export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
         ),
       ),
     db
-      .delete(template_likes)
+      .delete(templateLikes)
       .where(
         or(
-          inArray(template_likes.user_id, testUserIds),
-          inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+          inArray(templateLikes.user_id, testUserIds),
+          inArray(templateLikes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
         ),
       ),
     db
-      .delete(usage_analytics)
+      .delete(usageAnalytics)
       .where(
         or(
-          inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
-          inArray(usage_analytics.user_id, testUserIds),
+          inArray(usageAnalytics.id, TEST_ANALYTICS_IDS),
+          inArray(usageAnalytics.user_id, testUserIds),
         ),
       ),
     db
@@ -105,15 +105,15 @@ export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
           inArray(templates.user_id, testUserIds),
         ),
       ),
-    db.delete(team_entitlement_overrides).where(inArray(team_entitlement_overrides.team_id, testTeamIds)),
+    db.delete(teamEntitlementOverrides).where(inArray(teamEntitlementOverrides.team_id, testTeamIds)),
     db
-      .delete(team_invites)
-      .where(or(inArray(team_invites.team_id, testTeamIds), inArray(team_invites.invited_by_user_id, testUserIds))),
+      .delete(teamInvites)
+      .where(or(inArray(teamInvites.team_id, testTeamIds), inArray(teamInvites.invited_by_user_id, testUserIds))),
     db
-      .delete(team_members)
-      .where(or(inArray(team_members.team_id, testTeamIds), inArray(team_members.user_id, testUserIds))),
+      .delete(teamMembers)
+      .where(or(inArray(teamMembers.team_id, testTeamIds), inArray(teamMembers.user_id, testUserIds))),
     db.delete(teams).where(inArray(teams.id, testTeamIds)),
-    db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds)),
+    db.delete(entitlementOverrides).where(inArray(entitlementOverrides.user_id, testUserIds)),
     db.delete(session).where(inArray(session.userId, testUserIds)),
     db.delete(account).where(inArray(account.userId, testUserIds)),
     db.delete(users).where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS))),

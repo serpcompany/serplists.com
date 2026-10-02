@@ -26,7 +26,7 @@ const createKeyBodySchema = z.object({
   permissions: z.array(runKeyPermissionSchema).min(1, "Choose at least one permission").max(8).optional(),
 }).strict();
 
-const safeKeySelection = (personalRunKeys: typeof schema.personal_run_keys) => ({
+const safeKeySelection = (personalRunKeys: typeof schema.personalRunKeys) => ({
   id: personalRunKeys.id,
   name: personalRunKeys.name,
   prefix: personalRunKeys.key_prefix,
@@ -53,14 +53,14 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   const db = createDb(env);
-  const { personal_run_keys } = schema;
+  const { personalRunKeys } = schema;
 
   if (request.method === "GET" && !keyId) {
     const keys = await db
-      .select(safeKeySelection(personal_run_keys))
-      .from(personal_run_keys)
-      .where(eq(personal_run_keys.user_id, userId))
-      .orderBy(sql`${personal_run_keys.revoked_at} is not null`, desc(personal_run_keys.created_at))
+      .select(safeKeySelection(personalRunKeys))
+      .from(personalRunKeys)
+      .where(eq(personalRunKeys.user_id, userId))
+      .orderBy(sql`${personalRunKeys.revoked_at} is not null`, desc(personalRunKeys.created_at))
       .limit(MAX_LISTED_KEYS);
     return json(keys.map((key) => ({
       ...key,
@@ -116,17 +116,17 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   if (request.method === "DELETE" && keyId) {
-    const ownedKey = and(eq(personal_run_keys.id, keyId), eq(personal_run_keys.user_id, userId));
+    const ownedKey = and(eq(personalRunKeys.id, keyId), eq(personalRunKeys.user_id, userId));
     const [revoked] = await db
-      .update(personal_run_keys)
+      .update(personalRunKeys)
       .set({ revoked_at: new Date().toISOString() })
-      .where(and(ownedKey, isNull(personal_run_keys.revoked_at)))
-      .returning({ revokedAt: personal_run_keys.revoked_at });
+      .where(and(ownedKey, isNull(personalRunKeys.revoked_at)))
+      .returning({ revokedAt: personalRunKeys.revoked_at });
     if (revoked?.revokedAt) return json({ id: keyId, revokedAt: revoked.revokedAt });
 
     const [existing] = await db
-      .select({ revokedAt: personal_run_keys.revoked_at })
-      .from(personal_run_keys)
+      .select({ revokedAt: personalRunKeys.revoked_at })
+      .from(personalRunKeys)
       .where(ownedKey)
       .limit(1);
     if (!existing?.revokedAt) return jsonError("Personal run key not found", 404);

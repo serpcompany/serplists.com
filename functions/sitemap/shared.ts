@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { SelectedFields } from 'drizzle-orm/sqlite-core';
 import {
-  sitemap_category_revisions,
-  sitemap_owner_revisions,
-  sitemap_shard_revisions,
+  sitemapCategoryRevisions,
+  sitemapOwnerRevisions,
+  sitemapShardRevisions,
   templates,
   users,
 } from '../../db/schema/index';
@@ -282,28 +282,28 @@ export async function buildDurableShardIndex(
   const db = createDb(env);
   const existing = await db
     .select({
-      page: sitemap_shard_revisions.page,
-      content_hash: sitemap_shard_revisions.content_hash,
-      revised_at: sitemap_shard_revisions.revised_at,
+      page: sitemapShardRevisions.page,
+      content_hash: sitemapShardRevisions.content_hash,
+      revised_at: sitemapShardRevisions.revised_at,
     })
-    .from(sitemap_shard_revisions)
-    .where(eq(sitemap_shard_revisions.kind, kind));
+    .from(sitemapShardRevisions)
+    .where(eq(sitemapShardRevisions.kind, kind));
   const plan = await planDurableShardIndex(kind, entries, existing, familyRevision);
   if (plan.stalePages.length > 0) {
     await db
-      .delete(sitemap_shard_revisions)
+      .delete(sitemapShardRevisions)
       .where(and(
-        eq(sitemap_shard_revisions.kind, kind),
-        inArray(sitemap_shard_revisions.page, plan.stalePages),
+        eq(sitemapShardRevisions.kind, kind),
+        inArray(sitemapShardRevisions.page, plan.stalePages),
       ));
   }
 
   for (const upsert of plan.upserts) {
     await db
-      .insert(sitemap_shard_revisions)
+      .insert(sitemapShardRevisions)
       .values(upsert)
       .onConflictDoUpdate({
-        target: [sitemap_shard_revisions.kind, sitemap_shard_revisions.page],
+        target: [sitemapShardRevisions.kind, sitemapShardRevisions.page],
         set: { content_hash: upsert.content_hash, revised_at: upsert.revised_at },
       });
   }
@@ -355,11 +355,11 @@ export function selectPublicTemplatesOfListedOwners<Fields extends SelectedField
       ...fields,
       created_at: templates.created_at,
       updated_at: templates.updated_at,
-      owner_updated_at: sitemap_owner_revisions.revised_at,
+      owner_updated_at: sitemapOwnerRevisions.revised_at,
     })
     .from(templates)
     .innerJoin(users, eq(users.id, templates.user_id))
-    .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
+    .leftJoin(sitemapOwnerRevisions, eq(sitemapOwnerRevisions.user_id, users.id))
     .where(and(publicTemplateCondition, validUsernameCondition, ...conditions));
 }
 
@@ -396,10 +396,10 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   });
   const categoryRevisions = await db
     .select({
-      category: sitemap_category_revisions.category,
-      revised_at: sitemap_category_revisions.revised_at,
+      category: sitemapCategoryRevisions.category,
+      revised_at: sitemapCategoryRevisions.revised_at,
     })
-    .from(sitemap_category_revisions);
+    .from(sitemapCategoryRevisions);
   let categoryRevisedAt: string | null = null;
   for (const row of categoryRevisions) {
     const categories = parseCategories(row.category).filter((category) => categorySlug(category));

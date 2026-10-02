@@ -2,7 +2,7 @@ import type { schema } from '../db';
 import type { Env } from '../types';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from './team-access';
 
-export type RunAccessFields = Pick<typeof schema.checklist_runs.$inferSelect, 'deleted_at' | 'team_id' | 'user_id'>;
+export type RunAccessFields = Pick<typeof schema.checklistRuns.$inferSelect, 'deleted_at' | 'team_id' | 'user_id'>;
 
 const isArchived = (run: Pick<RunAccessFields, 'deleted_at'>) => Boolean(run.deleted_at);
 

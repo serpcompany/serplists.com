@@ -1,7 +1,7 @@
 import { index, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { users } from "./users";
 
-export const audit_events = sqliteTable("audit_events", {
+export const auditEvents = sqliteTable("audit_events", {
   id: text("id"),
   actor_user_id: text("actor_user_id").references(() => users.id, { onDelete: "set null" }),
   subject_type: text("subject_type").notNull(),

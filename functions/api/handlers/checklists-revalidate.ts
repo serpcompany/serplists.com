@@ -20,7 +20,7 @@ export async function revalidateChecklistRun(
   userId: string,
   checklistId: string,
 ): Promise<Response> {
-  const { checklist_runs, templates } = schema;
+  const { checklistRuns, templates } = schema;
 
   const optionalBody: unknown = await request.json().catch(() => ({}));
   const revalidateBody = z.object({
@@ -102,8 +102,8 @@ export async function revalidateChecklistRun(
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
-    eq(checklist_runs.revision, currentRevision),
-    isNull(checklist_runs.deleted_at),
+    eq(checklistRuns.revision, currentRevision),
+    isNull(checklistRuns.deleted_at),
   ), updates, auditEvent));
 
   if (batchWriteMissed(batchResults[1])) {

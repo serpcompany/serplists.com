@@ -23,7 +23,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   const pathParts = url.pathname.split("/").filter(Boolean);
   const teamsSubpath = pathParts.slice(2);
   const db = createDb(env);
-  const { team_invites, team_members, teams } = schema;
+  const { teamInvites, teamMembers, teams } = schema;
 
   if (request.method === "GET" && teamsSubpath.length === 0) {
     const rows = await db
@@ -36,22 +36,22 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
         created_at: teams.created_at,
         updated_at: teams.updated_at,
         archived_at: teams.archived_at,
-        memberId: team_members.id,
-        role: team_members.role,
-        membershipStatus: team_members.status,
-        joined_at: team_members.joined_at,
+        memberId: teamMembers.id,
+        role: teamMembers.role,
+        membershipStatus: teamMembers.status,
+        joined_at: teamMembers.joined_at,
       })
-      .from(team_members)
-      .leftJoin(teams, eq(teams.id, team_members.team_id))
+      .from(teamMembers)
+      .leftJoin(teams, eq(teams.id, teamMembers.team_id))
       .where(
         and(
-          eq(team_members.user_id, userId),
-          eq(team_members.status, "active"),
+          eq(teamMembers.user_id, userId),
+          eq(teamMembers.status, "active"),
           isNotNull(teams.id),
           isNull(teams.archived_at),
         ),
       )
-      .orderBy(desc(team_members.updated_at));
+      .orderBy(desc(teamMembers.updated_at));
 
     return json(rows);
   }
@@ -98,7 +98,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Invite id required", 400);
     }
 
-    const [invite] = await db.select().from(team_invites).where(eq(team_invites.id, inviteId)).limit(1);
+    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, inviteId)).limit(1);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }

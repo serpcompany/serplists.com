@@ -5,9 +5,9 @@ import { buildAuditEventValues } from "./audit";
 import { allConditions, insertRowWhere } from "./guarded-insert";
 
 type Db = ReturnType<typeof createDb>;
-export type TeamInvite = typeof schema.team_invites.$inferSelect & { id: string };
+export type TeamInvite = typeof schema.teamInvites.$inferSelect & { id: string };
 
-function hasId(invite: typeof schema.team_invites.$inferSelect): invite is TeamInvite {
+function hasId(invite: typeof schema.teamInvites.$inferSelect): invite is TeamInvite {
   return typeof invite.id === "string";
 }
 
@@ -17,18 +17,18 @@ export async function selectPendingInvitesForUser(
   userId: string,
   now: string,
 ): Promise<TeamInvite[]> {
-  const { team_invites, users } = schema;
+  const { teamInvites, users } = schema;
 
   const invites = await db
     .select()
-    .from(team_invites)
+    .from(teamInvites)
     .where(
       and(
-        eq(team_invites.team_id, teamId),
-        sql`lower(${team_invites.email}) = (select lower(${users.email}) from ${users} where ${users.id} = ${userId})`,
-        isNull(team_invites.accepted_at),
-        isNull(team_invites.revoked_at),
-        gt(team_invites.expires_at, now),
+        eq(teamInvites.team_id, teamId),
+        sql`lower(${teamInvites.email}) = (select lower(${users.email}) from ${users} where ${users.id} = ${userId})`,
+        isNull(teamInvites.accepted_at),
+        isNull(teamInvites.revoked_at),
+        gt(teamInvites.expires_at, now),
       ),
     );
   return invites.filter(hasId);
@@ -40,18 +40,18 @@ export async function selectPendingInvitesFromInviter(
   inviterUserId: string,
   now: string,
 ): Promise<TeamInvite[]> {
-  const { team_invites } = schema;
+  const { teamInvites } = schema;
 
   const invites = await db
     .select()
-    .from(team_invites)
+    .from(teamInvites)
     .where(
       and(
-        eq(team_invites.team_id, teamId),
-        eq(team_invites.invited_by_user_id, inviterUserId),
-        isNull(team_invites.accepted_at),
-        isNull(team_invites.revoked_at),
-        gt(team_invites.expires_at, now),
+        eq(teamInvites.team_id, teamId),
+        eq(teamInvites.invited_by_user_id, inviterUserId),
+        isNull(teamInvites.accepted_at),
+        isNull(teamInvites.revoked_at),
+        gt(teamInvites.expires_at, now),
       ),
     );
   return invites.filter(hasId);
@@ -74,9 +74,9 @@ export async function buildInviteRevocation({
   metadata?: Record<string, unknown>;
   guard?: SQL;
 }) {
-  const { audit_events, team_invites } = schema;
-  const revoked = alias(team_invites, "revoked_invite");
-  const loggedRevoke = alias(audit_events, "logged_revoke");
+  const { auditEvents, teamInvites } = schema;
+  const revoked = alias(teamInvites, "revoked_invite");
+  const loggedRevoke = alias(auditEvents, "logged_revoke");
   const auditEvent = await buildAuditEventValues({
     actorUserId,
     subject: { type: "team", id: invite.team_id },
@@ -102,20 +102,20 @@ export async function buildInviteRevocation({
 
   return [
     db
-      .update(team_invites)
+      .update(teamInvites)
       .set({ revoked_at: now, updated_at: now })
       .where(
         and(
-          eq(team_invites.id, invite.id),
-          eq(team_invites.team_id, invite.team_id),
-          isNull(team_invites.accepted_at),
-          isNull(team_invites.revoked_at),
+          eq(teamInvites.id, invite.id),
+          eq(teamInvites.team_id, invite.team_id),
+          isNull(teamInvites.accepted_at),
+          isNull(teamInvites.revoked_at),
           guard,
         ),
       ),
     insertRowWhere(
       db,
-      audit_events,
+      auditEvents,
       auditEvent,
       allConditions(
         revokedNow,

@@ -118,7 +118,7 @@ function serveFromAndWriteBatchesTo(store: Store) {
     for (const statement of statements) {
       if (typeof statement !== 'object' || statement === null || !('table' in statement) || !('values' in statement)) continue;
       if (statement.table === schema.templates) Object.assign(store.template, statement.values);
-      if (statement.table === schema.checklist_runs) Object.assign(store.run, statement.values);
+      if (statement.table === schema.checklistRuns) Object.assign(store.run, statement.values);
     }
     return statements.map(() => ({ meta: { changes: 1 } }));
   });

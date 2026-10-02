@@ -53,7 +53,7 @@ export async function updateTemplateForUser(
   options: TemplateWriteOptions = {},
 ): Promise<Response> {
   const db = createDb(env);
-  const { templates, checklist_runs } = schema;
+  const { templates, checklistRuns } = schema;
 
   const parsed = templateUpdatePayloadSchema.safeParse(body);
   if (!parsed.success) {
@@ -237,26 +237,26 @@ export async function updateTemplateForUser(
     ? []
     : await db
         .select()
-        .from(checklist_runs)
+        .from(checklistRuns)
         .where(
           existingTemplate.owner_type === 'team' && existingTemplate.team_id
             ? and(
-                eq(checklist_runs.template_id, templateId),
-                eq(checklist_runs.team_id, existingTemplate.team_id),
-                eq(checklist_runs.status, 'in_progress'),
-                or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                isNull(checklist_runs.deleted_at),
+                eq(checklistRuns.template_id, templateId),
+                eq(checklistRuns.team_id, existingTemplate.team_id),
+                eq(checklistRuns.status, 'in_progress'),
+                or(eq(checklistRuns.is_public, false), isNull(checklistRuns.is_public)),
+                isNull(checklistRuns.deleted_at),
               )
             : and(
-                eq(checklist_runs.template_id, templateId),
-                eq(checklist_runs.user_id, userId),
-                isNull(checklist_runs.team_id),
-                eq(checklist_runs.status, 'in_progress'),
-                or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                isNull(checklist_runs.deleted_at),
+                eq(checklistRuns.template_id, templateId),
+                eq(checklistRuns.user_id, userId),
+                isNull(checklistRuns.team_id),
+                eq(checklistRuns.status, 'in_progress'),
+                or(eq(checklistRuns.is_public, false), isNull(checklistRuns.is_public)),
+                isNull(checklistRuns.deleted_at),
               ),
         )
-        .orderBy(checklist_runs.created_at);
+        .orderBy(checklistRuns.created_at);
   const activeRuns = matchingRuns.filter((run): run is typeof run & { id: string } =>
     typeof run.id === 'string'
     && run.status === 'in_progress'
@@ -285,11 +285,11 @@ export async function updateTemplateForUser(
       revision,
       updatedAt: now,
       whereClause: and(
-        eq(checklist_runs.id, run.id),
-        eq(checklist_runs.revision, revision),
-        eq(checklist_runs.status, 'in_progress'),
-        or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-        isNull(checklist_runs.deleted_at),
+        eq(checklistRuns.id, run.id),
+        eq(checklistRuns.revision, revision),
+        eq(checklistRuns.status, 'in_progress'),
+        or(eq(checklistRuns.is_public, false), isNull(checklistRuns.is_public)),
+        isNull(checklistRuns.deleted_at),
       ),
       auditEvent: runChanged
         ? await buildAuditEventValues({

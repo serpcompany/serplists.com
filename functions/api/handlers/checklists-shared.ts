@@ -26,15 +26,15 @@ export async function handleSharedChecklist(
   userId: string | null,
 ): Promise<Response> {
   const db = createDb(env);
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const activeShare = and(
-    eq(checklist_runs.share_token, shareToken),
-    eq(checklist_runs.is_public, true),
-    isNull(checklist_runs.deleted_at),
+    eq(checklistRuns.share_token, shareToken),
+    eq(checklistRuns.is_public, true),
+    isNull(checklistRuns.deleted_at),
   );
 
   if (request.method === 'GET') {
-    const [checklist] = await db.select(sharedChecklistRunSelect()).from(checklist_runs).where(activeShare).limit(1);
+    const [checklist] = await db.select(sharedChecklistRunSelect()).from(checklistRuns).where(activeShare).limit(1);
 
     if (!checklist) {
       return jsonError('Shared run not found', 404);
@@ -47,7 +47,7 @@ export async function handleSharedChecklist(
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  const [existingSharedRun] = await db.select().from(checklist_runs).where(activeShare).limit(1);
+  const [existingSharedRun] = await db.select().from(checklistRuns).where(activeShare).limit(1);
 
   if (!existingSharedRun || !existingSharedRun.id) {
     return jsonError('Shared run not found', 404);
@@ -133,7 +133,7 @@ export async function handleSharedChecklist(
   const batchResults = await db.batch(auditedRunUpdate(
     db,
     existingSharedRun.id,
-    and(eq(checklist_runs.revision, currentRevision), activeShare),
+    and(eq(checklistRuns.revision, currentRevision), activeShare),
     updates,
     auditEvent,
   ));

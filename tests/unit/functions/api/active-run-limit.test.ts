@@ -155,7 +155,7 @@ describe('runInsertStatements with a limit', () => {
     const query = runInsert.toSQL();
     const columns = insertedColumns(query.sql);
 
-    expect(columns).toEqual(Object.values(getTableColumns(schema.checklist_runs)).map((column) => column.name));
+    expect(columns).toEqual(Object.values(getTableColumns(schema.checklistRuns)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
     const valueParams = query.params.slice(0, -3);
     const limitGuardParams = query.params.slice(-3);
@@ -170,7 +170,7 @@ describe('runInsertStatements with a limit', () => {
     const query = auditInsert.toSQL();
 
     const columns = insertedColumns(query.sql);
-    expect(columns).toEqual(Object.values(getTableColumns(schema.audit_events)).map((column) => column.name));
+    expect(columns).toEqual(Object.values(getTableColumns(schema.auditEvents)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
     expect(query.params).toEqual([...providedValuesInColumnOrder(columns, auditEvent), 'run-1']);
     expect(query.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);

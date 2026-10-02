@@ -4,46 +4,46 @@ import { createDb, schema } from '../db';
 type Db = ReturnType<typeof createDb>;
 
 export function selectTemplateVersionHistory(db: Db, templateId: string, limit: number) {
-  const { template_versions, users } = schema;
+  const { templateVersions, users } = schema;
 
   return db
     .select({
-      id: template_versions.id,
-      version: template_versions.version,
-      changed_by_user_id: template_versions.changed_by_user_id,
-      content_hash: template_versions.content_hash,
-      change_summary: template_versions.change_summary,
-      created_at: template_versions.created_at,
+      id: templateVersions.id,
+      version: templateVersions.version,
+      changed_by_user_id: templateVersions.changed_by_user_id,
+      content_hash: templateVersions.content_hash,
+      change_summary: templateVersions.change_summary,
+      created_at: templateVersions.created_at,
       actor_email: users.email,
       actor_name: users.name,
       actor_username: users.username,
     })
-    .from(template_versions)
-    .leftJoin(users, eq(users.id, template_versions.changed_by_user_id))
-    .where(eq(template_versions.template_id, templateId))
-    .orderBy(desc(template_versions.version))
+    .from(templateVersions)
+    .leftJoin(users, eq(users.id, templateVersions.changed_by_user_id))
+    .where(eq(templateVersions.template_id, templateId))
+    .orderBy(desc(templateVersions.version))
     .limit(limit);
 }
 
 export function selectAuditEventHistory(db: Db, resourceType: 'template' | 'checklist_run', resourceId: string, limit: number) {
-  const { audit_events, users } = schema;
+  const { auditEvents, users } = schema;
 
   return db
     .select({
-      id: audit_events.id,
-      actor_user_id: audit_events.actor_user_id,
-      action: audit_events.action,
-      metadata_json: audit_events.metadata_json,
-      request_id: audit_events.request_id,
-      created_at: audit_events.created_at,
+      id: auditEvents.id,
+      actor_user_id: auditEvents.actor_user_id,
+      action: auditEvents.action,
+      metadata_json: auditEvents.metadata_json,
+      request_id: auditEvents.request_id,
+      created_at: auditEvents.created_at,
       actor_email: users.email,
       actor_name: users.name,
       actor_username: users.username,
     })
-    .from(audit_events)
-    .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-    .where(and(eq(audit_events.resource_type, resourceType), eq(audit_events.resource_id, resourceId)))
-    .orderBy(desc(audit_events.created_at))
+    .from(auditEvents)
+    .leftJoin(users, eq(users.id, auditEvents.actor_user_id))
+    .where(and(eq(auditEvents.resource_type, resourceType), eq(auditEvents.resource_id, resourceId)))
+    .orderBy(desc(auditEvents.created_at))
     .limit(limit);
 }
 

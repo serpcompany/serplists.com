@@ -171,7 +171,7 @@ describe('run response shape', () => {
   });
 
   it('drops the share columns from a row that has every run column', () => {
-    const everyRunColumn: typeof schema.checklist_runs.$inferSelect = {
+    const everyRunColumn: typeof schema.checklistRuns.$inferSelect = {
       id: 'run-1',
       user_id: 'user-1',
       template_id: 'template-1',
@@ -197,7 +197,7 @@ describe('run response shape', () => {
       revision: 1,
       retired_items: '[]',
     };
-    expect(Object.keys(everyRunColumn).sort()).toEqual(Object.keys(getTableColumns(schema.checklist_runs)).sort());
+    expect(Object.keys(everyRunColumn).sort()).toEqual(Object.keys(getTableColumns(schema.checklistRuns)).sort());
 
     const serialized = serializeChecklistRun({ ...everyRunColumn, current_template_version: null });
 

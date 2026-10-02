@@ -29,7 +29,7 @@ const fakeStripeCustomersTable = vi.hoisted(() => ({
 
 vi.mock("@functions/api/db", async (importOriginal) => {
   const original = await importOriginal<typeof import("@functions/api/db")>();
-  const { stripe_customers, users } = original.schema;
+  const { stripeCustomers, users } = original.schema;
   const insertRow = (row: CustomerRow, onConflict: "fail" | "ignore") => {
     if (fakeStripeCustomersTable.mapping) {
       if (onConflict === "ignore") return Promise.resolve();
@@ -44,7 +44,7 @@ vi.mock("@functions/api/db", async (importOriginal) => {
         where: () => ({
           limit: async () => {
             if (table === users) return [{ email: "user@example.com" }];
-            if (table !== stripe_customers) throw new Error("unexpected table");
+            if (table !== stripeCustomers) throw new Error("unexpected table");
             const wholeRowsWithTheCustomerIdProjection = fakeStripeCustomersTable.mapping
               ? [{ ...fakeStripeCustomersTable.mapping, stripeCustomerId: fakeStripeCustomersTable.mapping.stripe_customer_id }]
               : [];

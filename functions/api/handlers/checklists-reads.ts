@@ -21,12 +21,12 @@ async function canListOrganizationRuns(env: Env, teamId: string, userId: string)
 }
 
 async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checklistId: string): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
   const [checklist] = await db
     .select()
-    .from(checklist_runs)
-    .where(eq(checklist_runs.id, checklistId))
+    .from(checklistRuns)
+    .where(eq(checklistRuns.id, checklistId))
     .limit(1);
 
   if (!checklist || !(await canViewRunHistory(env, checklist, userId))) {
@@ -59,11 +59,11 @@ async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checkl
 }
 
 async function readRun(env: Env, db: Db, userId: string, checklistId: string): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const [checklist] = await db
     .select(checklistRunSelectFor(userId))
-    .from(checklist_runs)
-    .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
+    .from(checklistRuns)
+    .where(and(eq(checklistRuns.id, checklistId), isNull(checklistRuns.deleted_at)))
     .limit(1);
 
   if (!checklist || !(await canViewRun(env, checklist, userId))) {
@@ -74,20 +74,20 @@ async function readRun(env: Env, db: Db, userId: string, checklistId: string): P
 }
 
 async function listRuns(env: Env, db: Db, url: URL, userId: string, archived: boolean): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
   const teamId = url.searchParams.get('teamId');
   if (teamId && !(await canListOrganizationRuns(env, teamId, userId))) {
     return jsonError('Organization not found', 404);
   }
   const ownedByContext = teamId
-    ? eq(checklist_runs.team_id, teamId)
-    : and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id));
+    ? eq(checklistRuns.team_id, teamId)
+    : and(eq(checklistRuns.user_id, userId), isNull(checklistRuns.team_id));
 
   const checklists = await db
     .select(checklistRunSelectFor(userId))
-    .from(checklist_runs)
-    .where(and(ownedByContext, archived ? isNotNull(checklist_runs.deleted_at) : isNull(checklist_runs.deleted_at)))
-    .orderBy(archived ? desc(checklist_runs.updated_at) : desc(checklist_runs.created_at));
+    .from(checklistRuns)
+    .where(and(ownedByContext, archived ? isNotNull(checklistRuns.deleted_at) : isNull(checklistRuns.deleted_at)))
+    .orderBy(archived ? desc(checklistRuns.updated_at) : desc(checklistRuns.created_at));
 
   return json(checklists.map((run) => serializeChecklistRun(run)));
 }

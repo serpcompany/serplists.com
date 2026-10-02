@@ -1,5 +1,5 @@
 import { and, count, eq, inArray, or } from "drizzle-orm";
-import { account, audit_events, entitlement_overrides, templates, users } from "../schema/index";
+import { account, auditEvents, entitlementOverrides, templates, users } from "../schema/index";
 import type { LocalDb } from "../../scripts/data/local-d1";
 import { seedTestActivity } from "./local-test-data/activity";
 import { cleanupLocalTestData } from "./local-test-data/cleanup";
@@ -67,7 +67,7 @@ export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus>
   try {
     const [testUsers, marker, officialTemplate, officialLogin, legacySlugs] = await Promise.all([
       db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
-      db.select({ value: count() }).from(audit_events).where(eq(audit_events.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
+      db.select({ value: count() }).from(auditEvents).where(eq(auditEvents.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
       db
         .select({ value: count() })
         .from(templates)
@@ -130,7 +130,7 @@ export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
     })
     .where(eq(users.id, "serp-user"));
   await db
-    .insert(entitlement_overrides)
+    .insert(entitlementOverrides)
     .values({
       user_id: "serp-user",
       plan: "pro",
@@ -139,7 +139,7 @@ export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
       updated_at: timestamp,
     })
     .onConflictDoUpdate({
-      target: entitlement_overrides.user_id,
+      target: entitlementOverrides.user_id,
       set: {
         plan: "pro",
         expires_at: null,

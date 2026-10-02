@@ -116,11 +116,11 @@ async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: st
   const eventSnapshot = parseSubscriptionSnapshot(object);
   if (!eventSnapshot) return logSkippedEvent(event, "invalid_subscription");
 
-  const { stripe_customers } = schema;
+  const { stripeCustomers } = schema;
   const [row] = await db
-    .select({ user_id: stripe_customers.user_id })
-    .from(stripe_customers)
-    .where(eq(stripe_customers.stripe_customer_id, eventSnapshot.customerId))
+    .select({ user_id: stripeCustomers.user_id })
+    .from(stripeCustomers)
+    .where(eq(stripeCustomers.stripe_customer_id, eventSnapshot.customerId))
     .limit(1);
   const userId = row?.user_id ?? eventSnapshot.metadataUserId;
   if (!userId) return logSkippedEvent(event, "unknown_user");

@@ -23,10 +23,10 @@ export function canUseTemplateAsRunSource(
 }
 
 export function runSourceTemplateUsableSql(callerUserId: string | null): SQL {
-  const { checklist_runs, templates } = schema;
+  const { checklistRuns, templates } = schema;
   return sql`${templates.deleted_at} IS NULL AND (
     ${templates.is_public} = 1
-    OR (${templates.owner_type} = 'team' AND ${templates.team_id} <> '' AND ${templates.team_id} = ${checklist_runs.team_id})
+    OR (${templates.owner_type} = 'team' AND ${templates.team_id} <> '' AND ${templates.team_id} = ${checklistRuns.team_id})
     OR ((${templates.owner_type} <> 'team' OR ${templates.team_id} IS NULL OR ${templates.team_id} = '') AND ${templates.user_id} = ${callerUserId})
   )`;
 }

@@ -79,8 +79,8 @@ describe('limit_reached names the context whose limit was hit, and offers Pro on
     vi.clearAllMocks();
     fake.rows.clear();
     fake.counts.clear();
-    fake.rows.set(schema.team_members, [{ id: 'member-1', team_id: 'org-1', user_id: 'user-1', role: 'owner', status: 'active' }]);
-    fake.counts.set(schema.checklist_runs, 3);
+    fake.rows.set(schema.teamMembers, [{ id: 'member-1', team_id: 'org-1', user_id: 'user-1', role: 'owner', status: 'active' }]);
+    fake.counts.set(schema.checklistRuns, 3);
     fake.counts.set(schema.templates, 1);
     vi.mocked(getSessionUserId).mockResolvedValue('user-1');
     vi.mocked(getEntitlementsForContext).mockResolvedValue(free);
@@ -89,7 +89,7 @@ describe('limit_reached names the context whose limit was hit, and offers Pro on
   it.each(cases)('$name in $context context', async ({ context, resource, handler, path: route, method, body, run, template }) => {
     const personalPlan = context === 'organization' ? pro : free;
     vi.mocked(getEntitlementsForUser).mockResolvedValue(personalPlan);
-    if (run) fake.rows.set(schema.checklist_runs, [run]);
+    if (run) fake.rows.set(schema.checklistRuns, [run]);
     if (template) fake.rows.set(schema.templates, [template]);
 
     const response = await handler(new Request(`http://localhost${route}`, {

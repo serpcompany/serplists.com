@@ -19,7 +19,7 @@ export async function updateChecklistRun(
   userId: string,
   checklistId: string,
 ): Promise<Response> {
-  const { checklist_runs } = schema;
+  const { checklistRuns } = schema;
 
   const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
   if ('response' in read) return read.response;
@@ -93,9 +93,9 @@ export async function updateChecklistRun(
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
-    existingRun.team_id ? eq(checklist_runs.team_id, existingRun.team_id) : eq(checklist_runs.user_id, userId),
-    eq(checklist_runs.revision, currentRevision),
-    isNull(checklist_runs.deleted_at),
+    existingRun.team_id ? eq(checklistRuns.team_id, existingRun.team_id) : eq(checklistRuns.user_id, userId),
+    eq(checklistRuns.revision, currentRevision),
+    isNull(checklistRuns.deleted_at),
   ), updates, auditEvent));
 
   if (batchWriteMissed(batchResults[1])) {

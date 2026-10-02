@@ -32,7 +32,7 @@ export async function updateTeamSettings(
   { db, request, teamId, userId, membership, role }: TeamRouteContext & { role: TeamRole },
   body: unknown,
 ): Promise<Response> {
-  const { audit_events, teams } = schema;
+  const { auditEvents, teams } = schema;
 
   const parsed = updateTeamBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -88,7 +88,7 @@ export async function updateTeamSettings(
   try {
     await db.batch([
       db.update(teams).set(updates).where(and(eq(teams.id, teamId), isNull(teams.archived_at))),
-      db.insert(audit_events).values(auditEvent),
+      db.insert(auditEvents).values(auditEvent),
     ]);
   } catch (error) {
     if (updates.slug && isTeamSlugUniqueViolation(error)) {
@@ -110,30 +110,30 @@ export async function updateTeamSettings(
 export async function listTeamMembers(
   { db, teamId, role }: { db: TeamRouteContext["db"]; teamId: string; role: TeamRole },
 ): Promise<Response> {
-  const { team_members, users } = schema;
+  const { teamMembers, users } = schema;
 
   const memberListWhere = canManageTeam(role)
-    ? eq(team_members.team_id, teamId)
-    : and(eq(team_members.team_id, teamId), eq(team_members.status, "active"));
+    ? eq(teamMembers.team_id, teamId)
+    : and(eq(teamMembers.team_id, teamId), eq(teamMembers.status, "active"));
 
   const rows = await db
     .select({
-      id: team_members.id,
-      team_id: team_members.team_id,
-      user_id: team_members.user_id,
-      role: team_members.role,
-      status: team_members.status,
-      joined_at: team_members.joined_at,
-      created_at: team_members.created_at,
-      updated_at: team_members.updated_at,
+      id: teamMembers.id,
+      team_id: teamMembers.team_id,
+      user_id: teamMembers.user_id,
+      role: teamMembers.role,
+      status: teamMembers.status,
+      joined_at: teamMembers.joined_at,
+      created_at: teamMembers.created_at,
+      updated_at: teamMembers.updated_at,
       email: users.email,
       name: users.name,
       avatar_url: users.avatar_url,
     })
-    .from(team_members)
-    .leftJoin(users, eq(users.id, team_members.user_id))
+    .from(teamMembers)
+    .leftJoin(users, eq(users.id, teamMembers.user_id))
     .where(memberListWhere)
-    .orderBy(desc(team_members.created_at));
+    .orderBy(desc(teamMembers.created_at));
 
   return json(rows);
 }
@@ -142,7 +142,7 @@ export async function listTeamActivity(
   { db, env, teamId }: { db: TeamRouteContext["db"]; env: Env; teamId: string },
   url: URL,
 ): Promise<Response> {
-  const { audit_events, users } = schema;
+  const { auditEvents, users } = schema;
 
   const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
   const activityLimit = Number.isFinite(requestedLimit)
@@ -150,22 +150,22 @@ export async function listTeamActivity(
     : 50;
   const rows = await db
     .select({
-      id: audit_events.id,
-      actor_user_id: audit_events.actor_user_id,
-      resource_type: audit_events.resource_type,
-      resource_id: audit_events.resource_id,
-      action: audit_events.action,
-      metadata_json: audit_events.metadata_json,
-      request_id: audit_events.request_id,
-      created_at: audit_events.created_at,
+      id: auditEvents.id,
+      actor_user_id: auditEvents.actor_user_id,
+      resource_type: auditEvents.resource_type,
+      resource_id: auditEvents.resource_id,
+      action: auditEvents.action,
+      metadata_json: auditEvents.metadata_json,
+      request_id: auditEvents.request_id,
+      created_at: auditEvents.created_at,
       actorEmail: users.email,
       actorName: users.name,
       actorUsername: users.username,
     })
-    .from(audit_events)
-    .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-    .where(and(eq(audit_events.subject_type, "team"), eq(audit_events.subject_id, teamId)))
-    .orderBy(desc(audit_events.created_at))
+    .from(auditEvents)
+    .leftJoin(users, eq(users.id, auditEvents.actor_user_id))
+    .where(and(eq(auditEvents.subject_type, "team"), eq(auditEvents.subject_id, teamId)))
+    .orderBy(desc(auditEvents.created_at))
     .limit(activityLimit);
   const hideActor = await findHiddenShareLinkActors(env, { userId: null, teamId }, rows);
 

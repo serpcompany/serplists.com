@@ -86,10 +86,10 @@ async function upsertOverride(request: Request, env: Env): Promise<Response> {
   const resolvedUserId = idFromUserId ?? idFromEmail;
   if (resolvedUserId === undefined) return jsonError("userId or email required", 400);
 
-  const { entitlement_overrides } = schema;
+  const { entitlementOverrides } = schema;
   const nowIso = new Date().toISOString();
   await db
-    .insert(entitlement_overrides)
+    .insert(entitlementOverrides)
     .values({
       user_id: resolvedUserId,
       plan,
@@ -99,7 +99,7 @@ async function upsertOverride(request: Request, env: Env): Promise<Response> {
       updated_at: nowIso,
     })
     .onConflictDoUpdate({
-      target: entitlement_overrides.user_id,
+      target: entitlementOverrides.user_id,
       set: { plan, expires_at: expiresAt, note, updated_at: nowIso },
     });
 
@@ -117,8 +117,8 @@ async function deleteOverride(env: Env, url: URL): Promise<Response> {
   if (!userId) return jsonError("userId required", 400);
 
   const db = createDb(env);
-  const { entitlement_overrides } = schema;
-  await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
+  const { entitlementOverrides } = schema;
+  await db.delete(entitlementOverrides).where(eq(entitlementOverrides.user_id, userId));
   return json({ success: true });
 }
 

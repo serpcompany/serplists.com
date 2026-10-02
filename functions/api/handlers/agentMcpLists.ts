@@ -73,7 +73,7 @@ export function selectRunPage(
   after: After | undefined,
   limit: number,
 ) {
-  const runs = schema.checklist_runs;
+  const runs = schema.checklistRuns;
   return db
     .select({
       id: runs.id,

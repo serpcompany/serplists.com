@@ -130,12 +130,12 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   }
 
   const db = createDb(env);
-  const { stripe_customers } = schema;
+  const { stripeCustomers } = schema;
 
   const [existingCustomer] = await db
     .select()
-    .from(stripe_customers)
-    .where(eq(stripe_customers.user_id, userId))
+    .from(stripeCustomers)
+    .where(eq(stripeCustomers.user_id, userId))
     .limit(1);
   const storedOpen = await listOpenStoredSubscriptions(db, userId);
 
@@ -321,12 +321,12 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     if (!stripe) return billingUnavailable();
     const { secretKey, proPriceIds } = stripe;
     const db = createDb(env);
-    const { stripe_customers } = schema;
+    const { stripeCustomers } = schema;
 
     const [existingCustomer] = await db
       .select()
-      .from(stripe_customers)
-      .where(eq(stripe_customers.user_id, userId))
+      .from(stripeCustomers)
+      .where(eq(stripeCustomers.user_id, userId))
       .limit(1);
 
     if (!existingCustomer?.stripe_customer_id) {

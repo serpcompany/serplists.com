@@ -1,7 +1,7 @@
 import { index, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { users } from "./users";
 
-export const usage_analytics = sqliteTable(
+export const usageAnalytics = sqliteTable(
   "usage_analytics",
   {
     id: text("id"),

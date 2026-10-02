@@ -33,7 +33,7 @@ const transferTeamOwnerBodySchema = z.object({
 
 export async function transferTeamOwnership(context: TeamRouteContext, body: unknown): Promise<Response> {
   const { db, request, teamId, userId, membership } = context;
-  const { team_members, teams } = schema;
+  const { teamMembers, teams } = schema;
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -52,12 +52,12 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
 
   const [targetMember] = await db
     .select()
-    .from(team_members)
+    .from(teamMembers)
     .where(
       and(
-        eq(team_members.id, parsed.data.memberId),
-        eq(team_members.team_id, teamId),
-        eq(team_members.status, "active"),
+        eq(teamMembers.id, parsed.data.memberId),
+        eq(teamMembers.team_id, teamId),
+        eq(teamMembers.status, "active"),
       ),
     )
     .limit(1);
@@ -96,9 +96,9 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
     createdAt: now,
   });
 
-  const target = alias(team_members, "target_member");
-  const previousOwner = alias(team_members, "previous_owner");
-  const activeOwner = alias(team_members, "active_owner");
+  const target = alias(teamMembers, "target_member");
+  const previousOwner = alias(teamMembers, "previous_owner");
+  const activeOwner = alias(teamMembers, "active_owner");
   const activeTeam = alias(teams, "active_team");
   const targetIsActiveNonOwner = exists(
     db.select({ id: target.id }).from(target).where(
@@ -138,27 +138,27 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
 
   const [, promoteResult] = await db.batch([
     db
-      .update(team_members)
+      .update(teamMembers)
       .set({ role: "admin", updated_at: now })
       .where(
         and(
-          eq(team_members.id, ownerMemberId),
-          eq(team_members.team_id, teamId),
-          eq(team_members.role, "owner"),
-          eq(team_members.status, "active"),
+          eq(teamMembers.id, ownerMemberId),
+          eq(teamMembers.team_id, teamId),
+          eq(teamMembers.role, "owner"),
+          eq(teamMembers.status, "active"),
           targetIsActiveNonOwner,
           teamIsActive,
         ),
       ),
     db
-      .update(team_members)
+      .update(teamMembers)
       .set({ role: "owner", updated_at: now })
       .where(
         and(
-          eq(team_members.id, targetMemberId),
-          eq(team_members.team_id, teamId),
-          eq(team_members.status, "active"),
-          ne(team_members.role, "owner"),
+          eq(teamMembers.id, targetMemberId),
+          eq(teamMembers.team_id, teamId),
+          eq(teamMembers.status, "active"),
+          ne(teamMembers.role, "owner"),
           ownerDemotedNow,
           noActiveOwner,
         ),
@@ -167,19 +167,19 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
       .update(teams)
       .set({ billing_owner_user_id: targetMember.user_id, updated_at: now })
       .where(and(eq(teams.id, teamId), isNull(teams.archived_at), targetPromotedNow())),
-    insertRowWhere(db, schema.audit_events, auditEvent, targetPromotedNow()),
+    insertRowWhere(db, schema.auditEvents, auditEvent, targetPromotedNow()),
   ]);
 
   if (batchWriteMissed(promoteResult)) {
     const [currentOwner] = await db
-      .select({ id: team_members.id })
-      .from(team_members)
+      .select({ id: teamMembers.id })
+      .from(teamMembers)
       .where(
         and(
-          eq(team_members.id, targetMemberId),
-          eq(team_members.team_id, teamId),
-          eq(team_members.role, "owner"),
-          eq(team_members.status, "active"),
+          eq(teamMembers.id, targetMemberId),
+          eq(teamMembers.team_id, teamId),
+          eq(teamMembers.role, "owner"),
+          eq(teamMembers.status, "active"),
         ),
       )
       .limit(1);
@@ -203,7 +203,7 @@ export async function updateTeamMember(
   body: unknown,
 ): Promise<Response> {
   const { db, request, teamId, userId } = context;
-  const { team_members } = schema;
+  const { teamMembers } = schema;
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -215,8 +215,8 @@ export async function updateTeamMember(
 
   const [targetMember] = await db
     .select()
-    .from(team_members)
-    .where(and(eq(team_members.id, memberId), eq(team_members.team_id, teamId)))
+    .from(teamMembers)
+    .where(and(eq(teamMembers.id, memberId), eq(teamMembers.team_id, teamId)))
     .limit(1);
 
   if (!targetMember) {
@@ -252,8 +252,8 @@ export async function updateTeamMember(
     createdAt: now,
   });
 
-  const actor = alias(team_members, "actor_member");
-  const updated = alias(team_members, "updated_member");
+  const actor = alias(teamMembers, "actor_member");
+  const updated = alias(teamMembers, "updated_member");
   const actorManagesTeam = exists(
     db.select({ id: actor.id }).from(actor).where(
       and(
@@ -307,18 +307,18 @@ export async function updateTeamMember(
 
   const [updateResult] = await db.batch([
     db
-      .update(team_members)
+      .update(teamMembers)
       .set(updates)
       .where(
         and(
-          eq(team_members.id, memberId),
-          eq(team_members.team_id, teamId),
-          ne(team_members.role, "owner"),
-          ne(team_members.user_id, userId),
+          eq(teamMembers.id, memberId),
+          eq(teamMembers.team_id, teamId),
+          ne(teamMembers.role, "owner"),
+          ne(teamMembers.user_id, userId),
           actorManagesTeam,
         ),
       ),
-    insertRowWhere(db, schema.audit_events, auditEvent, memberUpdatedNow),
+    insertRowWhere(db, schema.auditEvents, auditEvent, memberUpdatedNow),
     ...inviteRevocations.flat(),
   ]);
 

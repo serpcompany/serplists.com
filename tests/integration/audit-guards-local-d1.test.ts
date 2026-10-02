@@ -200,16 +200,16 @@ describe.sequential("audit rows under concurrent writes (local D1), recorded onl
   });
 
   it("keeps the audit guards and the share-link actor lookup on indexed reads", async () => {
-    const { checklist_runs, team_members, templates } = schema;
+    const { checklistRuns, teamMembers, templates } = schema;
     const plan = async (query: SQL) => {
       const compiled = new SQLiteSyncDialect().sqlToQuery(query);
       const rows = await d1.env.DB.prepare(`EXPLAIN QUERY PLAN ${compiled.sql}`).bind(...compiled.params).all<{ detail: string }>();
       return rows.results.map(({ detail }) => detail);
     };
     const queries = [
-      sql`select ${rowExistsSql(checklist_runs.id, "run-put", and(eq(checklist_runs.revision, 7), isNull(checklist_runs.deleted_at)))}`,
+      sql`select ${rowExistsSql(checklistRuns.id, "run-put", and(eq(checklistRuns.revision, 7), isNull(checklistRuns.deleted_at)))}`,
       sql`select exists (select 1 from ${templates} where ${and(eq(templates.id, "template-put"), eq(templates.version, 3))})`,
-      sql`select ${team_members.user_id} from ${team_members} where ${and(eq(team_members.team_id, "org"), inArray(team_members.user_id, ["a", "b"]))}`,
+      sql`select ${teamMembers.user_id} from ${teamMembers} where ${and(eq(teamMembers.team_id, "org"), inArray(teamMembers.user_id, ["a", "b"]))}`,
     ];
     for (const query of queries) {
       const steps = await plan(query);

@@ -1,4 +1,4 @@
-import { team_entitlement_overrides, team_invites, team_members, teams } from "../../schema/index";
+import { teamEntitlementOverrides, teamInvites, teamMembers, teams } from "../../schema/index";
 import type { LocalDb } from "../../../scripts/data/local-d1";
 import { DAY, HOUR, type SeedClock } from "./values";
 
@@ -24,7 +24,7 @@ export async function seedTestOrganizations(db: LocalDb, { at }: SeedClock): Pro
     },
   ]);
 
-  await db.insert(team_members).values([
+  await db.insert(teamMembers).values([
     {
       id: "team-member-growth-owner-admin",
       team_id: "team-seed-growth",
@@ -91,7 +91,7 @@ export async function seedTestOrganizations(db: LocalDb, { at }: SeedClock): Pro
     },
   ]);
 
-  await db.insert(team_invites).values({
+  await db.insert(teamInvites).values({
     id: "team-invite-seed-client-john",
     team_id: "team-seed-client",
     email: "john@test.com",
@@ -103,7 +103,7 @@ export async function seedTestOrganizations(db: LocalDb, { at }: SeedClock): Pro
     updated_at: at(-12 * HOUR),
   });
 
-  await db.insert(team_entitlement_overrides).values({
+  await db.insert(teamEntitlementOverrides).values({
     team_id: "team-seed-growth",
     plan: "team",
     note: "Seeded premium team workspace for local verification",

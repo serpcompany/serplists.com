@@ -126,7 +126,7 @@ describe('Checklists Handlers', () => {
       'revision', 'started_at', 'status', 'template_version', 'title',
     ];
     const everyColumn = Object.fromEntries(
-      Object.keys(getTableColumns(schema.checklist_runs)).map((column) => [column, `value-${column}`]),
+      Object.keys(getTableColumns(schema.checklistRuns)).map((column) => [column, `value-${column}`]),
     );
     const privateValues = {
       user_id: 'owner-secret-id',

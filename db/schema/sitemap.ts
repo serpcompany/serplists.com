@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const sitemap_revisions = sqliteTable(
+export const sitemapRevisions = sqliteTable(
   "sitemap_revisions",
   {
     kind: text("kind", { enum: ["profiles", "templates", "categories"] }),
@@ -16,7 +16,7 @@ export const sitemap_revisions = sqliteTable(
   ],
 );
 
-export const sitemap_profile_revisions = sqliteTable(
+export const sitemapProfileRevisions = sqliteTable(
   "sitemap_profile_revisions",
   {
     user_id: text("user_id"),
@@ -25,7 +25,7 @@ export const sitemap_profile_revisions = sqliteTable(
   (table) => [primaryKey({ columns: [table.user_id] })],
 );
 
-export const sitemap_owner_revisions = sqliteTable(
+export const sitemapOwnerRevisions = sqliteTable(
   "sitemap_owner_revisions",
   {
     user_id: text("user_id"),
@@ -34,7 +34,7 @@ export const sitemap_owner_revisions = sqliteTable(
   (table) => [primaryKey({ columns: [table.user_id] })],
 );
 
-export const sitemap_category_revisions = sqliteTable(
+export const sitemapCategoryRevisions = sqliteTable(
   "sitemap_category_revisions",
   {
     category: text("category"),
@@ -43,7 +43,7 @@ export const sitemap_category_revisions = sqliteTable(
   (table) => [primaryKey({ columns: [table.category] })],
 );
 
-export const sitemap_shard_revisions = sqliteTable(
+export const sitemapShardRevisions = sqliteTable(
   "sitemap_shard_revisions",
   {
     kind: text("kind").notNull(),

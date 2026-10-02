@@ -32,14 +32,14 @@ async function readOptionalJson(request: Request): Promise<unknown> {
 }
 
 function pendingTeamInviteWhere(teamId: string, inviteId: string, now: string) {
-  const { team_invites } = schema;
+  const { teamInvites } = schema;
 
   return and(
-    eq(team_invites.id, inviteId),
-    eq(team_invites.team_id, teamId),
-    isNull(team_invites.accepted_at),
-    isNull(team_invites.revoked_at),
-    gt(team_invites.expires_at, now),
+    eq(teamInvites.id, inviteId),
+    eq(teamInvites.team_id, teamId),
+    isNull(teamInvites.accepted_at),
+    isNull(teamInvites.revoked_at),
+    gt(teamInvites.expires_at, now),
   );
 }
 
@@ -58,7 +58,7 @@ export async function reissueTeamInviteLink({
   teamId: string;
   userId: string;
 }): Promise<Response> {
-  const { team_invites } = schema;
+  const { teamInvites } = schema;
 
   const parsed = reissueInviteLinkBodySchema.safeParse(await readOptionalJson(request));
   if (!parsed.success) {
@@ -68,13 +68,13 @@ export async function reissueTeamInviteLink({
   const now = new Date().toISOString();
   const [invite] = await db
     .select({
-      id: team_invites.id,
-      email: team_invites.email,
-      role: team_invites.role,
-      expires_at: team_invites.expires_at,
-      invited_by_user_id: team_invites.invited_by_user_id,
+      id: teamInvites.id,
+      email: teamInvites.email,
+      role: teamInvites.role,
+      expires_at: teamInvites.expires_at,
+      invited_by_user_id: teamInvites.invited_by_user_id,
     })
-    .from(team_invites)
+    .from(teamInvites)
     .where(pendingTeamInviteWhere(teamId, inviteId, now))
     .limit(1);
   if (!invite) {
@@ -109,14 +109,14 @@ export async function reissueTeamInviteLink({
   });
   const results = await db.batch([
     db
-      .update(team_invites)
+      .update(teamInvites)
       .set({ token_hash: tokenHash, role, expires_at: expiresAt, invited_by_user_id: userId, updated_at: now })
       .where(and(pendingTeamInviteWhere(teamId, inviteId, now), callerStillManages)),
     insertRowWhere(
       db,
-      schema.audit_events,
+      schema.auditEvents,
       auditEvent,
-      sql`exists (select 1 from ${team_invites} where ${team_invites.id} = ${inviteId} and ${team_invites.token_hash} = ${tokenHash})`,
+      sql`exists (select 1 from ${teamInvites} where ${teamInvites.id} = ${inviteId} and ${teamInvites.token_hash} = ${tokenHash})`,
     ),
   ]);
 
