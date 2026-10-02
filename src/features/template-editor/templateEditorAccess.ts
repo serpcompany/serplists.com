@@ -12,7 +12,7 @@ type AccessContext = {
   billingEnabled: boolean;
 };
 
-export const TEMPLATE_LIMIT_MESSAGE =
+const TEMPLATE_LIMIT_MESSAGE =
   "Template limit reached. Upgrade to create more templates.";
 export const ORGANIZATION_TEMPLATE_PLAN_MESSAGE =
   "This Organization needs a paid plan to create more templates.";

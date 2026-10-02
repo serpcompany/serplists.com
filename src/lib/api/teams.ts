@@ -4,7 +4,6 @@ import {
   createdTeamInviteSchema,
   teamInvitePreviewSchema,
   type CreatedTeamInvite,
-  type TeamInviteDelivery,
 } from "@/lib/schemas/teamInvite";
 import { successResponseSchema } from "@/lib/schemas/apiResponses";
 import { teamActivityEventSchema } from "@/lib/schemas/historyResponses";
@@ -26,14 +25,13 @@ export type { TeamActivityEvent } from "@/lib/schemas/historyResponses";
 export type {
   AcceptedTeamInvite,
   IncomingTeamInvite,
-  TeamDetail,
   TeamInvite,
   TeamMember,
   TeamMemberStatus,
   TeamRole,
   TeamSummary,
 } from "@/lib/schemas/teamResponses";
-export type { CreatedTeamInvite, TeamInviteDelivery };
+export type { CreatedTeamInvite };
 
 const ORGANIZATION_SETTINGS_ACTIVITY_SHOWN = 10;
 

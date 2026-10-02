@@ -13,10 +13,10 @@ import {
   xmlResponse,
 } from './shared';
 
-export type SitemapRevisionKind = (typeof sitemapRevisions.$inferSelect)['kind'];
+type SitemapRevisionKind = (typeof sitemapRevisions.$inferSelect)['kind'];
 export type SitemapRevisions = Map<SitemapRevisionKind, string>;
 
-export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
+async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
   const rows = await createDb(env)
     .select({ kind: sitemapRevisions.kind, revised_at: sitemapRevisions.revised_at })
     .from(sitemapRevisions);

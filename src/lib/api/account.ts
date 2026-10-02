@@ -13,7 +13,7 @@ import {
 } from "@/lib/schemas/accountResponses";
 import { apiFormDataRequest, apiRequest } from "@/lib/api/request";
 
-export type { AgentKey, AgentKeyStatus, CreatedAgentKey } from "@/lib/schemas/accountResponses";
+export type { AgentKey, CreatedAgentKey } from "@/lib/schemas/accountResponses";
 
 export const accountApi = {
   async getAgentKeys() {

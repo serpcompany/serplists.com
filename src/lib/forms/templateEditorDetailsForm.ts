@@ -77,7 +77,7 @@ export const normalizeTemplateEditorSlugForSave = (
   return storedSlug && typed === storedSlug ? storedSlug : slugifyTemplateSlug(typed) || typed;
 };
 
-export const TEMPLATE_SLUG_UNUSABLE_MESSAGE = "URL Slug: use Latin letters or numbers.";
+const TEMPLATE_SLUG_UNUSABLE_MESSAGE = "URL Slug: use Latin letters or numbers.";
 
 export const findTemplateEditorSlugIssue = (
   seoUrl: string,

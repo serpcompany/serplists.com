@@ -16,7 +16,7 @@ import { buildCanonicalUrl, CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigi
 
 export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
-export const SITEMAP_MAX_PAGE = 50_000;
+const SITEMAP_MAX_PAGE = 50_000;
 
 const XML_CACHE_CONTROL = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600';
 
@@ -84,7 +84,7 @@ export const validTemplateSlugCondition = sql<boolean>`
 
 const nonEmptyTemplateCategoryCondition = sql<boolean>`trim(${templates.category}) <> ${''}`;
 
-export function xmlEscape(value: string): string {
+function xmlEscape(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -160,7 +160,7 @@ export function parsePage(value: string | string[] | undefined): number | null {
   return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
-export function latestLastmod(entries: SitemapEntry[]): string | null {
+function latestLastmod(entries: SitemapEntry[]): string | null {
   const timestamps = entries
     .map((entry) => validLastmod(entry.lastmod))
     .filter((value): value is string => value !== null)
@@ -172,7 +172,7 @@ export function mostRecentLastmod(...values: Array<string | null | undefined>): 
   return latestLastmod(values.map((lastmod) => ({ path: '/', lastmod })));
 }
 
-export function paginateEntries<T>(entries: T[], page: number): T[] {
+function paginateEntries<T>(entries: T[], page: number): T[] {
   const offset = (page - 1) * SITEMAP_PAGE_SIZE;
   return entries.slice(offset, offset + SITEMAP_PAGE_SIZE);
 }

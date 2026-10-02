@@ -37,7 +37,7 @@ const itemSchema = z.object({
 }).passthrough();
 const sectionSchema = z.object({ title: text, items: z.array(itemSchema).nullish() }).passthrough();
 
-export const storedSectionsSchema = z.array(sectionSchema);
+const storedSectionsSchema = z.array(sectionSchema);
 
 export function findStoredSectionsIssue(sections: unknown): string | null {
   const result = storedSectionsSchema.safeParse(sections);
@@ -64,7 +64,7 @@ function withoutKeys(record: JsonRecord, keep: (key: string, value: unknown) => 
 
 const isTextOrAbsent = (value: unknown) => value === undefined || value === null || typeof value === "string";
 
-export function sanitizeStoredSubItems(value: unknown): SubTaskRecord[] {
+function sanitizeStoredSubItems(value: unknown): SubTaskRecord[] {
   return subTaskRecordsIn(value).map((subItem) => {
     const { completed, ...rest } = subItem;
     return {
@@ -82,7 +82,7 @@ export function getTaskSubTasks(task: TaskRecord): SubTaskRecord[] {
   return contentRecordsIn(task.contents).filter(isSubTasksBlock).flatMap((content) => subTaskRecordsIn(content.subItems));
 }
 
-export function sanitizeStoredContents(value: unknown): ContentRecord[] {
+function sanitizeStoredContents(value: unknown): ContentRecord[] {
   return contentRecordsIn(value)
     .filter(isKnownContent)
     .map((content) => {

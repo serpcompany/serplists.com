@@ -10,7 +10,7 @@ const normalizeHostname = (hostname: string) => hostname.toLowerCase().replace(/
 const isHostOrSubdomain = (hostname: string, domain: string) =>
   hostname === domain || hostname.endsWith(`.${domain}`);
 
-export const isYoutubeHostname = (hostname: string): boolean => {
+const isYoutubeHostname = (hostname: string): boolean => {
   const host = normalizeHostname(hostname);
   return (
     host === 'youtu.be' ||
@@ -122,12 +122,3 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
 };
 
 export { generateSlug } from '@/lib/utils/slug';
-
-export const isValidUrl = (url: string): boolean => {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};

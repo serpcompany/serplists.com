@@ -39,7 +39,7 @@ export type LoadUserProfileResult =
   | { kind: 'not_found' }
   | { kind: 'error'; message: string };
 
-export const PROFILE_LOAD_ERROR_MESSAGE = 'Unable to load this public profile.';
+const PROFILE_LOAD_ERROR_MESSAGE = 'Unable to load this public profile.';
 
 const normalizeUsername = (value: string | undefined) =>
   value?.trim().toLowerCase() ?? '';

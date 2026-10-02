@@ -43,7 +43,7 @@ const clipyMomentSchema = z.object({ caption: z.unknown(), frameUrl: z.unknown()
 
 const clipyRequestSchema = z.object({ url: z.unknown() }).passthrough();
 
-export type ClipyTemplateDraft = {
+type ClipyTemplateDraft = {
   title: string;
   description: string;
   templateType: 'checklist';
@@ -264,7 +264,7 @@ function selectImages(keyPoints: string[], moments: ClipyMoment[]): Map<number, 
   return selected;
 }
 
-export function buildClipyTemplateDraft(
+function buildClipyTemplateDraft(
   context: ClipyContext,
   source: { id: string; watchUrl: string },
 ): ClipyTemplateDraft {

@@ -31,7 +31,7 @@ export type CreateInviteLinkResult =
 
 const browserOrigin = () => (typeof window === 'undefined' ? '' : window.location.origin);
 
-export function resolveInviteLinkUrl(invite: CreatedTeamInvite, origin = browserOrigin()): string {
+function resolveInviteLinkUrl(invite: CreatedTeamInvite, origin = browserOrigin()): string {
   if (invite.delivery?.mode === 'link') {
     return invite.delivery.inviteUrl;
   }

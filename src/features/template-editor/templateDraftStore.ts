@@ -48,7 +48,7 @@ export const getTemplateDraftKey = ({ userId, teamId }: TemplateDraftOwner): str
 export const getTemplateEditDraftKey = ({ userId, templateId }: TemplateEditDraftOwner): string =>
   `${EDIT_DRAFT_KEY_PREFIX}:${userId}:${templateId}`;
 
-export const getSessionDraftStorage = (): TemplateDraftStorage | null => getSessionStorage() ?? null;
+const getSessionDraftStorage = (): TemplateDraftStorage | null => getSessionStorage() ?? null;
 
 const writeDraft = (
   key: string,

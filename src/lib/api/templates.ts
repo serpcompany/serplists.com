@@ -22,7 +22,6 @@ import { templateHistorySchema, type TemplateHistoryResponse } from "@/lib/schem
 import { apiRequest } from "@/lib/api/request";
 
 export type {
-  HistoryActor as TemplateHistoryActor,
   HistoryEvent as TemplateHistoryEvent,
   TemplateHistoryResponse,
   TemplateHistoryVersion,

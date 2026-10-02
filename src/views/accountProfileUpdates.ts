@@ -22,7 +22,7 @@ export type AccountUpdatePlan =
   | { ok: true; updates: AccountUpdatePayload }
   | { ok: false; error: string };
 
-export const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
+const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
 
 export const buildAccountUpdatePayload = (
   profileData: ProfileDataInput,

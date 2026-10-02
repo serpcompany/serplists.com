@@ -10,7 +10,7 @@ import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 
-export const TEMPLATE_HISTORY_DISPLAY_LIMIT = HISTORY_DISPLAY_LIMIT;
+const TEMPLATE_HISTORY_DISPLAY_LIMIT = HISTORY_DISPLAY_LIMIT;
 
 export type TemplateHistoryTimelineEntry = {
   actorName: string;

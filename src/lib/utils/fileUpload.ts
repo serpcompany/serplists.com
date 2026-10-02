@@ -13,8 +13,6 @@ export type TemplateUploadBucket =
   | 'template-videos'
   | 'template-files';
 
-export type UploadedAssetBucket = TemplateUploadBucket | 'avatars';
-
 export type UploadResult = {
   success: boolean;
   url?: string;

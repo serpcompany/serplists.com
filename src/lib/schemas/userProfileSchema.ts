@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_IMAGE_URL_MAX_LENGTH = 2048;
-export const DISPLAY_USERNAME_MAX_LENGTH = 30;
+const DISPLAY_USERNAME_MAX_LENGTH = 30;
 
 function hasControlCharacters(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {

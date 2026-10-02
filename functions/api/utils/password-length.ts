@@ -19,7 +19,7 @@ const requestBodySchema = z.record(z.unknown());
 
 const bodyField = (body: unknown, field: string): unknown => requestBodySchema.safeParse(body).data?.[field];
 
-export function findMissingNewPassword(path: string, body: unknown): APIError | null {
+function findMissingNewPassword(path: string, body: unknown): APIError | null {
   const field = newPasswordFieldFor(path);
   if (!field) return null;
   const password = bodyField(body, field);
@@ -27,7 +27,7 @@ export function findMissingNewPassword(path: string, body: unknown): APIError | 
   return new APIError("BAD_REQUEST", { message: "Invalid password", code: "INVALID_PASSWORD" });
 }
 
-export function findOverlongNewPassword(path: string, body: unknown): APIError | null {
+function findOverlongNewPassword(path: string, body: unknown): APIError | null {
   const field = newPasswordFieldFor(path);
   if (!field) return null;
   const password = bodyField(body, field);

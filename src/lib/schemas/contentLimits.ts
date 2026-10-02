@@ -13,7 +13,7 @@ import {
 export const TEMPLATE_CONTENT_MAX_BYTES = 768 * 1024;
 export const RUN_CONTENT_MAX_BYTES = 896 * 1024;
 
-export const formatContentSizeLimit = (bytes: number): string => `${Math.floor(bytes / 1024)}KB`;
+const formatContentSizeLimit = (bytes: number): string => `${Math.floor(bytes / 1024)}KB`;
 
 export const TEMPLATE_CONTENT_TOO_LARGE_MESSAGE =
   `Template content is too large (max ${formatContentSizeLimit(TEMPLATE_CONTENT_MAX_BYTES)}). ` +

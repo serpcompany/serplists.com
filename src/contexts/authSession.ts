@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type AuthErrorCode = 'EMAIL_NOT_VERIFIED' | 'UNKNOWN';
+type AuthErrorCode = 'EMAIL_NOT_VERIFIED' | 'UNKNOWN';
 
 export interface AuthActionResult {
   ok: boolean;
@@ -12,14 +12,14 @@ type AuthClientError = { status?: number; code?: string; message?: string } | nu
 export type AuthClientResult = { data?: unknown; error?: AuthClientError } | null | undefined;
 
 export const SIGN_OUT_FAILED_MESSAGE = 'Sign out failed. Check your connection and try again.';
-export const SIGN_OUT_RATE_LIMITED_MESSAGE = 'Sign out failed: too many requests. Wait a moment and try again.';
+const SIGN_OUT_RATE_LIMITED_MESSAGE = 'Sign out failed: too many requests. Wait a moment and try again.';
 
 const hasNoSession = (error: NonNullable<AuthClientError>): boolean =>
   error.status === 401 ||
   (error.status === 400 &&
     (error.code === 'FAILED_TO_GET_SESSION' || /failed to get session/i.test(error.message ?? '')));
 
-export function interpretSignOutResult(result: AuthClientResult): AuthActionResult {
+function interpretSignOutResult(result: AuthClientResult): AuthActionResult {
   const error = result?.error;
   if (!error || hasNoSession(error)) {
     return { ok: true };
@@ -147,7 +147,7 @@ export function applySessionCheck(check: SessionCheck, current: SessionState): S
     : { user: null, session: null, status: 'unavailable' };
 }
 
-export const SESSION_RETRY_DELAYS_MS = [1_000, 3_000];
+const SESSION_RETRY_DELAYS_MS = [1_000, 3_000];
 
 export async function checkSessionWithRetry(
   getSession: () => Promise<AuthClientResult>,

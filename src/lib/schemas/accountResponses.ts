@@ -41,7 +41,6 @@ export const billingStatusSchema = z.object({
 });
 
 export type AgentKey = z.infer<typeof agentKeySchema>;
-export type AgentKeyStatus = AgentKey["status"];
 export type CreatedAgentKey = z.infer<typeof createdAgentKeySchema>;
 export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type BillingStatus = z.infer<typeof billingStatusSchema>;

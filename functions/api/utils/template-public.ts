@@ -1,6 +1,6 @@
 import type { schema } from '../db';
 
-export const PUBLIC_TEMPLATE_FIELDS = [
+const PUBLIC_TEMPLATE_FIELDS = [
   'id',
   'user_id',
   'owner_type',

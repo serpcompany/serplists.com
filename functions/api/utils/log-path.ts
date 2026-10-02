@@ -1,4 +1,4 @@
-export const REDACTED_PATH_TOKEN = ':token';
+const REDACTED_PATH_TOKEN = ':token';
 
 function redactSecretSegments(segments: string[]): string[] | null {
   const [firstAsSent, secondAsSent, thirdAsSent] = segments;

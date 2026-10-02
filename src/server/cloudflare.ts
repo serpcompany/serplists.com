@@ -10,11 +10,6 @@ export async function getWorkerEnv(): Promise<Env> {
   return env;
 }
 
-export async function getWaitUntil(): Promise<(promise: Promise<unknown>) => void> {
-  const { ctx } = await getCloudflareContext({ async: true });
-  return (promise) => ctx.waitUntil(promise);
-}
-
 export async function getRequestOrigin(): Promise<string> {
   const requestHeaders = await headers();
   const host = requestHeaders.get('host') ?? 'localhost';

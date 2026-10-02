@@ -27,7 +27,7 @@ const templateRuleSchema = z.object({
 
 const limits = TEMPLATE_FIELD_LIMITS;
 
-export const templateSlugSchema = z
+const templateSlugSchema = z
   .string()
   .trim()
   .min(1)

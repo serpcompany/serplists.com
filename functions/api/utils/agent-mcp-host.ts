@@ -5,7 +5,7 @@ import { urlOrigin } from "./origin-list";
 
 const MCP_PATH = "/api/mcp";
 
-export function configuredOrigins(env: Env): Set<string> {
+function configuredOrigins(env: Env): Set<string> {
   const origins = new Set<string>();
   for (const value of [env.FRONTEND_URL, ...(env.CORS_ALLOWED_ORIGINS?.split(",") ?? [])]) {
     const origin = urlOrigin(value);

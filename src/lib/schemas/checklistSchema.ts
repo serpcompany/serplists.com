@@ -67,7 +67,7 @@ export const checklistTemplateSchema = z.object({
   tags: z.array(z.string()).optional()
 });
 
-export const checklistTemplateImportSchema = z.object({
+const checklistTemplateImportSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
   ...templateDescriptionFields,
@@ -83,18 +83,6 @@ export const checklistTemplateImportSchema = z.object({
   tags: z.union([z.array(z.string()), z.string()]).optional()
 });
 
-export const checklistRunSchema = z.object({
-  id: z.string(),
-  templateId: z.string(),
-  title: z.string(),
-  status: z.enum(["in_progress", "completed"]),
-  progress: z.number(),
-  sections: z.array(checklistSectionSchema),
-  startedAt: z.string(),
-  completedAt: z.string().optional(),
-  userId: z.string()
-});
-
 export const templateBackupSchema = z.object({
   version: z.string(),
   exportedAt: z.string(),
@@ -107,7 +95,7 @@ export const templateBackupSchema = z.object({
   }).optional()
 });
 
-export const portableChecklistSubItemSchema = z.object({
+const portableChecklistSubItemSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1),
 });
@@ -179,7 +167,7 @@ export const portableChecklistTemplateSchema = z.object({
   rules: z.array(portableTemplateRuleSchema).optional(),
 });
 
-export const portableTemplatePackEnvelopeSchema = z.object({
+const portableTemplatePackEnvelopeSchema = z.object({
   kind: z.literal("serplists-template-pack"),
   schemaVersion: z.string(),
   exportedAt: z.string(),
@@ -203,13 +191,8 @@ export const portableTemplatePackLooseEnvelopeSchema = portableTemplatePackEnvel
   templates: z.array(z.unknown()),
 });
 
-export type ChecklistSubItem = z.infer<typeof checklistSubItemSchema>;
-export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
-export type ChecklistItem = z.infer<typeof checklistItemSchema>;
-export type ChecklistSection = z.infer<typeof checklistSectionSchema>;
 export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
 export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
-export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
 export type PortableTemplateRule = z.infer<typeof portableTemplateRuleSchema>;
 export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplateSchema>;

@@ -3,10 +3,10 @@ import { APIError } from 'better-auth/api';
 import { log } from './logger';
 import { isUniqueViolationOn } from './unique-violation';
 
-export const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
-export const USERNAME_TAKEN_MESSAGE = 'Username is already taken. Please try another.';
+const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
+const USERNAME_TAKEN_MESSAGE = 'Username is already taken. Please try another.';
 
-export function usernameTakenError(): APIError {
+function usernameTakenError(): APIError {
   return new APIError('UNPROCESSABLE_ENTITY', { message: USERNAME_TAKEN_MESSAGE, code: USERNAME_TAKEN_CODE });
 }
 

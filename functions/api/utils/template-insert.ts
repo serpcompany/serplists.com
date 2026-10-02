@@ -18,7 +18,7 @@ import {
 
 type Db = ReturnType<typeof createDb>;
 
-export const TEMPLATE_SLUG_ATTEMPTS = 3;
+const TEMPLATE_SLUG_ATTEMPTS = 3;
 
 export function isTemplateSlugUniqueViolation(error: unknown): boolean {
   return isUniqueViolationOn(error, 'templates.slug');
@@ -60,7 +60,7 @@ export async function findFreeSuffixedSlug(db: Db, slug: string, templateId: str
   return null;
 }
 
-export function templateSlugTakenResponse(): Response {
+function templateSlugTakenResponse(): Response {
   return jsonError('Could not reserve a URL for this template. Try again.', 409, { code: 'slug_taken' });
 }
 

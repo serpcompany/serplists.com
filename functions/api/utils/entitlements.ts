@@ -4,13 +4,13 @@ import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { getStripeBillingConfig } from "./stripe";
 import { isPaidSubscriptionStatus } from "./stripe-subscriptions";
 
-export type Plan = "free" | "pro" | "team";
+type Plan = "free" | "pro" | "team";
 
 export type EntitlementContext =
   | { type: "user"; userId: string }
   | { type: "team"; teamId: string; userId?: string };
 
-export type EntitlementSource =
+type EntitlementSource =
   | "free"
   | "user_override"
   | "team_override"

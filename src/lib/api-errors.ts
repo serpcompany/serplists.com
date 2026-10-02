@@ -74,7 +74,7 @@ export const getLimitContext = (error: ApiError): LimitContext | null => {
 const isPersonalLimitReached = (error: ApiError): boolean =>
   error.code === "limit_reached" && getLimitContext(error) !== "organization";
 
-export const isUpgradeRequiredError = (error: unknown): error is ApiError => {
+const isUpgradeRequiredError = (error: unknown): error is ApiError => {
   if (!isApiError(error) || error.status !== 403) {
     return false;
   }
@@ -86,11 +86,11 @@ export const isEditConflictError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 409 && error.code === "edit_conflict";
 };
 
-export const isBillingUnavailableError = (error: unknown): error is ApiError => {
+const isBillingUnavailableError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.code === "billing_unavailable";
 };
 
-export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
+const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
 };
 

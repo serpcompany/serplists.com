@@ -3,7 +3,7 @@ import type { PortableChecklistTemplate } from "./checklistSchema";
 
 export type PortableSkippedTemplate = { title: string; reason: string };
 
-export function countReferencedUploads(sections: unknown[]): number {
+function countReferencedUploads(sections: unknown[]): number {
   let count = 0;
 
   for (const section of sections) {

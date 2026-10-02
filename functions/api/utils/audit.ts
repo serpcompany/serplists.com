@@ -13,7 +13,7 @@ export type AuditSubject = {
   id: string;
 };
 
-export type AuditResource = {
+type AuditResource = {
   type: "template" | "checklist_run" | "team" | "team_member" | "team_invite";
   id: string;
 };

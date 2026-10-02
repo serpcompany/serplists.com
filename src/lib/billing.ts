@@ -31,7 +31,7 @@ export const getBillingPlanLabel = (plan?: BillingPlan | null): "Free" | "Pro" |
   return null;
 };
 
-export const isPaidBillingPlan = (plan: BillingPlan): boolean => plan === "pro" || plan === "team";
+const isPaidBillingPlan = (plan: BillingPlan): boolean => plan === "pro" || plan === "team";
 
 export type BillingStatusData = {
   billingEnabled?: boolean | undefined;

@@ -1,14 +1,14 @@
 const CLIPY_HOSTS = new Set(['clipy.online', 'www.clipy.online']);
 const CLIPY_VIDEO_PATH = /^\/(?:video|embed)\/([a-zA-Z0-9_-]+)\/?$/;
 
-export const CLIPY_REFERRER = 'm4d8e9p';
-export const CLIPY_UTM_SOURCE = 'serplists.com';
+const CLIPY_REFERRER = 'm4d8e9p';
+const CLIPY_UTM_SOURCE = 'serplists.com';
 
 export function isClipyHost(hostname: string): boolean {
   return CLIPY_HOSTS.has(hostname);
 }
 
-export function isClipyUrl(value: string): boolean {
+function isClipyUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'https:' && CLIPY_HOSTS.has(parsed.hostname);

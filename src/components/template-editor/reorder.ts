@@ -35,7 +35,7 @@ export function moveArrayEntry<T>(items: T[], fromIndex: number, toIndex: number
   return nextItems;
 }
 
-export function describeMove(label: string, toIndex: number, count: number): string {
+function describeMove(label: string, toIndex: number, count: number): string {
   return `Moved ${label} to position ${toIndex + 1} of ${count}`;
 }
 
@@ -84,7 +84,7 @@ export function dropIndicatorClass(edge: "after" | "before" | null): string | un
   return undefined;
 }
 
-export function focusReorderHandle(handleId: string): void {
+function focusReorderHandle(handleId: string): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   window.requestAnimationFrame(() => {
     const handles = document.querySelectorAll<HTMLElement>("[data-reorder-handle]");
@@ -97,7 +97,7 @@ export function focusReorderHandle(handleId: string): void {
   });
 }
 
-export function focusReorderMoveButton(handleId: string, direction: ReorderDirection): void {
+function focusReorderMoveButton(handleId: string, direction: ReorderDirection): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   window.requestAnimationFrame(() => {
     const find = (dir: ReorderDirection) =>

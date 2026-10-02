@@ -42,7 +42,7 @@ export type RunExecutionActionResult =
       code?: string;
     };
 
-export const COMPLETED_RUN_FROZEN_MESSAGE = 'This run is completed, so its tasks can no longer be changed.';
+const COMPLETED_RUN_FROZEN_MESSAGE = 'This run is completed, so its tasks can no longer be changed.';
 
 export const toErrorResult = (
   error: unknown,

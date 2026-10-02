@@ -7,7 +7,7 @@ export const PASSWORD_TOO_LONG_MESSAGE =
   `Password must be at most ${MAX_PASSWORD_BYTES} characters, ` +
   "or fewer if it has emoji or accented letters";
 
-export function passwordByteLength(password: string): number {
+function passwordByteLength(password: string): number {
   return new TextEncoder().encode(password).length;
 }
 

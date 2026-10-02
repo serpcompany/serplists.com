@@ -2,16 +2,16 @@ import { z } from "zod";
 
 const optionalText = z.string().nullish();
 
-export const historyActorSchema = z.object({
+const historyActorSchema = z.object({
   userId: z.string().nullable(),
   email: z.string().nullable(),
   name: z.string().nullable(),
   username: z.string().nullable(),
 });
 
-export const historySubjectSchema = z.object({ type: z.enum(["user", "team"]), id: z.string() });
+const historySubjectSchema = z.object({ type: z.enum(["user", "team"]), id: z.string() });
 
-export const historyEventSchema = z.object({
+const historyEventSchema = z.object({
   id: z.string(),
   action: z.string(),
   createdAt: z.string(),
@@ -20,7 +20,7 @@ export const historyEventSchema = z.object({
   actor: historyActorSchema,
 });
 
-export const templateHistoryVersionSchema = z.object({
+const templateHistoryVersionSchema = z.object({
   id: z.string(),
   version: z.number(),
   action: z.string(),

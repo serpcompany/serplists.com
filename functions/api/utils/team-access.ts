@@ -16,7 +16,7 @@ const roleRank: Record<TeamRole, number> = {
   viewer: 10,
 };
 
-export function isTeamRole(value: unknown): value is TeamRole {
+function isTeamRole(value: unknown): value is TeamRole {
   return typeof value === "string" && (teamRoles as readonly string[]).includes(value);
 }
 
@@ -24,7 +24,7 @@ export function normalizeTeamRole(value: unknown, fallback: TeamRole = "viewer")
   return isTeamRole(value) ? value : fallback;
 }
 
-export function hasTeamRole(role: TeamRole, minimumRole: TeamRole): boolean {
+function hasTeamRole(role: TeamRole, minimumRole: TeamRole): boolean {
   return roleRank[role] >= roleRank[minimumRole];
 }
 
@@ -84,22 +84,6 @@ export async function getActiveTeamMembership(
     .limit(1);
 
   return membership ?? null;
-}
-
-export async function userHasTeamRole(
-  env: Env,
-  teamId: string,
-  userId: string,
-  minimumRole: TeamRole,
-): Promise<{ allowed: boolean; membership: TeamMembership | null; role: TeamRole | null }> {
-  const membership = await getActiveTeamMembership(env, teamId, userId);
-  const role = membership ? normalizeTeamRole(membership.role) : null;
-
-  return {
-    allowed: role ? hasTeamRole(role, minimumRole) : false,
-    membership,
-    role,
-  };
 }
 
 export function activeTeamMemberExists(

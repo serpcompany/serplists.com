@@ -11,7 +11,7 @@ export interface LibraryFilters {
 
 export const DEFAULT_LIBRARY_SORT: DiscoverySort = 'popular';
 
-export const parseLibrarySort = (value: string | null): DiscoverySort =>
+const parseLibrarySort = (value: string | null): DiscoverySort =>
   value === 'recent' || value === 'trending' || value === 'popular'
     ? value
     : DEFAULT_LIBRARY_SORT;

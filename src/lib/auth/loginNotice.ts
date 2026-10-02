@@ -18,7 +18,7 @@ export function buildEmailVerifiedCallbackURL(returnPath: string | null): string
   )}`;
 }
 
-export type VerificationFailureReason =
+type VerificationFailureReason =
   | "token_expired"
   | "invalid_token"
   | "user_not_found"

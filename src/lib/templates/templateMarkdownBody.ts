@@ -6,13 +6,13 @@ const MIN_FENCE_LENGTH = 3;
 const STRUCTURAL_LINE_ESCAPED_OR_NOT = /^\\*(?:#{2,3} |`{3,}serplists:)/;
 const ESCAPED_STRUCTURAL_LINE = /^\\+(?:#{2,3} |`{3,}serplists:)/;
 
-export type TemplateMarkdownBlock = { type: string; body: string };
-export type TemplateMarkdownItem = {
+type TemplateMarkdownBlock = { type: string; body: string };
+type TemplateMarkdownItem = {
   title: string;
   description: string;
   blocks: TemplateMarkdownBlock[];
 };
-export type TemplateMarkdownSection = { title: string; items: TemplateMarkdownItem[] };
+type TemplateMarkdownSection = { title: string; items: TemplateMarkdownItem[] };
 export type TemplateMarkdownBody = {
   description: string;
   sections: TemplateMarkdownSection[];

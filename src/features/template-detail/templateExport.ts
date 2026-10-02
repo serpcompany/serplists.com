@@ -16,7 +16,7 @@ const isUnsafeFilenameCharacter = (character: string): boolean =>
   character.charCodeAt(0) < FIRST_PRINTABLE_CHARACTER_CODE ||
   WINDOWS_RESERVED_FILENAME_CHARACTERS.includes(character);
 
-export const buildTemplateExportFilename = (template: ChecklistTemplate): string => {
+const buildTemplateExportFilename = (template: ChecklistTemplate): string => {
   const base = (template.slug ?? '').trim() || template.id.trim();
   const safeBase = Array.from(base, (character) =>
     isUnsafeFilenameCharacter(character) ? '-' : character,

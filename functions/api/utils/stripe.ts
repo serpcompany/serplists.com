@@ -1,12 +1,6 @@
 import { z } from "zod";
 import type { Env } from "../types";
 
-export type StripeConfig = {
-  secretKey: string;
-  webhookSecret: string;
-  proPriceId: string;
-};
-
 export type StripeBillingConfig = {
   secretKey: string;
   proPriceId: string;
@@ -29,41 +23,16 @@ export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   return { secretKey, proPriceId, proPriceIds };
 }
 
-export function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
+function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) return null;
   return { webhookSecret };
-}
-
-export function getStripeConfig(env: Env): StripeConfig | null {
-  const billing = getStripeBillingConfig(env);
-  const webhook = getStripeWebhookConfig(env);
-  if (!billing || !webhook) return null;
-  return { ...billing, ...webhook };
-}
-
-export function assertStripeBillingConfigured(env: Env): StripeBillingConfig {
-  const config = getStripeBillingConfig(env);
-  if (!config) {
-    throw new Error("Stripe billing is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRO_PRICE_ID.");
-  }
-  return config;
 }
 
 export function assertStripeWebhookConfigured(env: Env): StripeWebhookConfig {
   const config = getStripeWebhookConfig(env);
   if (!config) {
     throw new Error("Stripe webhook is not configured. Set STRIPE_WEBHOOK_SECRET.");
-  }
-  return config;
-}
-
-export function assertStripeConfigured(env: Env): StripeConfig {
-  const config = getStripeConfig(env);
-  if (!config) {
-    throw new Error(
-      "Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_PRO_PRICE_ID."
-    );
   }
   return config;
 }

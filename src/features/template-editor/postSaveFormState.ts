@@ -6,7 +6,7 @@ export const cloneTemplateEditorFormValues = (
   values: TemplateEditorFormValues,
 ): TemplateEditorFormValues => structuredClone(values);
 
-export const templateEditorValuesEqual = (left: unknown, right: unknown): boolean => {
+const templateEditorValuesEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) {
     return true;
   }

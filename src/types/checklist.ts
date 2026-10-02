@@ -32,7 +32,7 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
-export type TemplateRule = PortableTemplateRule;
+type TemplateRule = PortableTemplateRule;
 
 export type ChecklistTemplate = {
   id: string;
@@ -77,8 +77,6 @@ export type TemplateSavePayload = {
   version?: number;
 };
 
-export type { TemplateUpdateResult };
-
 export type RetiredRunSubTask = {
   id: string;
   title: string;
@@ -117,8 +115,6 @@ export type TemplateImportOptions = {
   visibility?: "preserve" | "public" | "private";
 };
 
-export type TemplateExportFormat = "backup" | "portable";
-
 export type TemplateImportFailure = {
   index: number;
   title: string;
@@ -126,7 +122,7 @@ export type TemplateImportFailure = {
   code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "content_too_large" | "insert_failed";
 };
 
-export type TemplateImportSuccess = {
+type TemplateImportSuccess = {
   index: number;
   title: string;
   id: string;

@@ -29,7 +29,7 @@ import {
 import type { ExportedTemplatePack } from "@/lib/schemas/apiTemplates";
 import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 
-export type TemplateImportWarning = {
+type TemplateImportWarning = {
   templateTitle: string;
   message: string;
 };

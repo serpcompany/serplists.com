@@ -54,7 +54,7 @@ const buildCategorySummary = async (): Promise<Response> => {
   return Response.json(buildDiscoveryCategories(templates, Array.from(categoryNames).sort()));
 };
 
-export const loadCategorySummary = cache(async (): Promise<DiscoveryCategory[] | null> => {
+const loadCategorySummary = cache(async (): Promise<DiscoveryCategory[] | null> => {
   try {
     const origin = await getRequestOrigin();
     const response = await withEdgeCache(new Request(origin), CACHE_KEY, CACHE_TTL_SECONDS, buildCategorySummary);

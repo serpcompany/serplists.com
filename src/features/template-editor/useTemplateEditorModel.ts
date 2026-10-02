@@ -60,7 +60,7 @@ export type TemplateEditorLoadResult = {
   ownership?: TemplateOwnership | undefined;
 };
 
-export const buildDefaultTemplateEditorTemplate =
+const buildDefaultTemplateEditorTemplate =
   (): Partial<ChecklistTemplate> => ({});
 
 export const buildTemplateEditorSavedState = (

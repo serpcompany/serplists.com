@@ -44,7 +44,7 @@ export const titleOf = (value: unknown): unknown => (isTitledRecord(value) ? val
 
 export const MAX_RESULT_BYTES = 32 * 1024;
 
-export function utf8ByteLength(text: string): number {
+function utf8ByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
@@ -274,7 +274,7 @@ export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionR
   });
 }
 
-export function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, start: Position): JsonRecord {
+function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, start: Position): JsonRecord {
   const fieldsUnit = 0;
   const firstTaskUnit = 1;
   const section = sectionAt(sections, sectionIndex);
@@ -297,7 +297,7 @@ export function sectionPage(paged: Paged, sections: SectionRecord[], sectionInde
   });
 }
 
-export function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
+function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
   const section = sectionAt(sections, sectionIndex);
   const task = tasksOf(section)[taskIndex];
   const frame = { [paged.key]: paged.ref, ...frameId("sectionId", section.id) };

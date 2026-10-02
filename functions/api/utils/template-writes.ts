@@ -19,12 +19,12 @@ export function isMissingRulesColumnError(error: unknown): boolean {
   return /templates[".]?\.?"?rules|no such column:.*rules|has no column named "?rules\b/i.test(message);
 }
 
-export function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
+function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
   const { rules, ...rest } = values;
   return rest;
 }
 
-export function templatesInContext(owner: TemplateOwnerContext): SQL {
+function templatesInContext(owner: TemplateOwnerContext): SQL {
   const { templates } = schema;
   return owner.teamId
     ? allConditions(eq(templates.owner_type, 'team'), eq(templates.team_id, owner.teamId), isNull(templates.deleted_at))

@@ -37,7 +37,7 @@ const keyAfter = (sortKey: unknown, id: unknown, after: After) =>
 
 const templateSortKey = sql`coalesce(${schema.templates.updated_at}, ${schema.templates.created_at})`;
 
-export function selectTemplatePage(db: ReturnType<typeof createDb>, userId: string, after: After | undefined, limit: number) {
+function selectTemplatePage(db: ReturnType<typeof createDb>, userId: string, after: After | undefined, limit: number) {
   const { templates } = schema;
   return db
     .select({
@@ -66,7 +66,7 @@ export function selectTemplatePage(db: ReturnType<typeof createDb>, userId: stri
     .limit(limit);
 }
 
-export function selectRunPage(
+function selectRunPage(
   db: ReturnType<typeof createDb>,
   userId: string,
   status: "in_progress" | "completed" | undefined,

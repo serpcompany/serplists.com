@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const TEAM_ROLES = ["owner", "admin", "editor", "runner", "viewer"] as const;
+const TEAM_ROLES = ["owner", "admin", "editor", "runner", "viewer"] as const;
 
 const storedTeamRole = z.enum(TEAM_ROLES).catch("viewer");
 const storedAssignableRole = z.enum(["admin", "editor", "runner", "viewer"]).catch("viewer");
@@ -83,7 +83,6 @@ export const transferredTeamOwnershipSchema = z.object({
 export type TeamRole = (typeof TEAM_ROLES)[number];
 export type TeamMemberStatus = z.infer<typeof storedMemberStatus>;
 export type TeamSummary = z.infer<typeof teamSummarySchema>;
-export type TeamDetail = z.infer<typeof teamDetailSchema>;
 export type TeamMember = z.infer<typeof teamMemberSchema>;
 export type TeamInvite = z.infer<typeof teamInviteSchema>;
 export type IncomingTeamInvite = z.infer<typeof incomingTeamInviteSchema>;

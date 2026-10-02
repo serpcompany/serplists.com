@@ -36,5 +36,3 @@ export async function getAuthStatus(): Promise<AuthStatus> {
   const body: unknown = await response.json();
   return authStatusSchema.parse(body);
 }
-
-export type Session = typeof authClient.$Infer.Session;
