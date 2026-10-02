@@ -25,7 +25,6 @@ export type { TeamActivityEvent } from "@/lib/schemas/historyResponses";
 export type {
   AcceptedTeamInvite,
   IncomingTeamInvite,
-  TeamInvite,
   TeamMember,
   TeamMemberStatus,
   TeamRole,

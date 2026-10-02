@@ -21,18 +21,7 @@ import { getTemplateDetailPermissions } from './templatePermissions';
 import { setTemplateVisibility } from './templateVisibility';
 import { useTemplateDetailRecord } from './useTemplateDetailRecord';
 
-export {
-  duplicateOwnedTemplate,
-  saveTemplateToAccount,
-  startTemplateRun,
-  type TemplateDetailActionResult,
-  type TemplateDetailBillingState,
-};
-export {
-  loadTemplateDetailData,
-  type LoadTemplateDetailResult,
-} from './loadTemplateDetail';
-export { resolveShareOwnerTemplate } from './templateDetailApi';
+export type { TemplateDetailBillingState };
 
 type PublicTemplateDetailHookOptions = {
   identifier?: string | undefined;

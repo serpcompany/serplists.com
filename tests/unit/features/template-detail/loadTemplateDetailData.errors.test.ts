@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadTemplateDetailData } from '@/features/template-detail/useTemplateDetailModel';
+import { loadTemplateDetailData } from '@/features/template-detail/loadTemplateDetail';
 import { createApiError } from '@/lib/api-errors';
 
 import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';

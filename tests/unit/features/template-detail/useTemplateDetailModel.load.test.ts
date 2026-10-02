@@ -4,7 +4,7 @@ import { createApiError } from '@/lib/api-errors';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
-import { loadTemplateDetailData, type LoadTemplateDetailResult } from '@/features/template-detail/useTemplateDetailModel';
+import { loadTemplateDetailData, type LoadTemplateDetailResult } from '@/features/template-detail/loadTemplateDetail';
 
 import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
 

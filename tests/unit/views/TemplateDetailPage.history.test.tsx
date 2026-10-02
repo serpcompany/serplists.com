@@ -9,7 +9,7 @@ import {
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 import type { TemplateDetailHistoryState } from '@/features/template-detail/useTemplateDetailModel';
-import type { HistoryActor, HistoryEvent, TemplateHistoryVersion } from '@/lib/schemas/historyResponses';
+import type { HistoryEvent, TemplateHistoryVersion } from '@/lib/schemas/historyResponses';
 
 beforeEach(resetTemplateDetailPageMocks);
 
@@ -19,7 +19,7 @@ const historyOf = ({ events, versions }: { events: HistoryEvent[]; versions: Tem
   isLoading: false,
 });
 
-const actorNamed = (name: string): HistoryActor => ({ userId: null, email: null, name, username: null });
+const actorNamed = (name: string): HistoryEvent['actor'] => ({ userId: null, email: null, name, username: null });
 
 const createdByJohn = (id: string, extra: Partial<HistoryEvent> = {}): HistoryEvent => ({
   action: 'template.created',

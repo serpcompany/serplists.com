@@ -1,7 +1,10 @@
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreatedTeamInvite, TeamInvite } from '@/lib/api';
+import type { z } from 'zod';
+
+import type { CreatedTeamInvite } from '@/lib/api';
+import type { teamInviteSchema } from '@/lib/schemas/teamResponses';
 
 import { deferred } from '../../../support/deferred';
 import { navigation } from '../../../support/nextNavigation';
@@ -28,6 +31,8 @@ const createdInvite: CreatedTeamInvite = {
   invitePath: '/team-invites/token-1/',
   inviteUrl: 'https://serplists.com/team-invites/token-1/',
 };
+
+type TeamInvite = z.infer<typeof teamInviteSchema>;
 
 const pendingInvite: TeamInvite = {
   id: 'invite-1',

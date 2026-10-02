@@ -6,13 +6,9 @@ import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
-import {
-  duplicateOwnedTemplate,
-  resolveShareOwnerTemplate,
-  saveTemplateToAccount,
-  startTemplateRun,
-  type TemplateDetailBillingState,
-} from '@/features/template-detail/useTemplateDetailModel';
+import { duplicateOwnedTemplate, saveTemplateToAccount, startTemplateRun } from '@/features/template-detail/templateActionOutcome';
+import { resolveShareOwnerTemplate } from '@/features/template-detail/templateDetailApi';
+import type { TemplateDetailBillingState } from '@/features/template-detail/useTemplateDetailModel';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 import type { TemplateUpdater } from '@/features/template-detail/useTemplateDetailRecord';
 

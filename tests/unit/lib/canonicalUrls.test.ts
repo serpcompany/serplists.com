@@ -1,4 +1,5 @@
 import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
+import { everyPublicSiteLink } from '../../support/publicSiteLinks';
 import { describe, expect, it } from 'vitest';
 import { capturedGroup, present } from '../../support/elements';
 
@@ -10,7 +11,6 @@ import {
   renderUrlset,
   staticSitemapEntries,
 } from '@functions/sitemap/shared';
-import { publicSiteLinks } from '@/components/layout/publicSiteLinks';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import { getPostRegisterDestination, getPostSignInDestination, withReturnPath } from '@/lib/auth/returnPath';
@@ -75,7 +75,7 @@ const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [
   ['buildTeamInvitePath (API)', buildTeamInvitePath('invite-token')],
 ];
 
-const PUBLIC_SITE_LINK_PATHS = publicSiteLinks
+const PUBLIC_SITE_LINK_PATHS = everyPublicSiteLink
   .filter((link) => !link.external)
   .map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
 

@@ -7,8 +7,6 @@ export const UPLOAD_BUCKETS = [
 
 export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
-export const AVATAR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
-
 type UploadKind = {
   label: string;
   extensions: readonly string[];

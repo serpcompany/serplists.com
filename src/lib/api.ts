@@ -11,7 +11,6 @@ export type {
   CreatedTeamInvite,
   IncomingTeamInvite,
   TeamActivityEvent,
-  TeamInvite,
   TeamMember,
   TeamMemberStatus,
   TeamRole,

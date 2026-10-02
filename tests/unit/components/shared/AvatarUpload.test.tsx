@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
-import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
+import { AVATAR_MIME_TYPES } from '../../../fixtures/avatarTypes';
 
 import { findByAriaLabel, findElement, handlerOf } from '../../../support/elementTree';
 

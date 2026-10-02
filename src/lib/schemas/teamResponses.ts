@@ -84,6 +84,5 @@ export type TeamRole = (typeof TEAM_ROLES)[number];
 export type TeamMemberStatus = z.infer<typeof storedMemberStatus>;
 export type TeamSummary = z.infer<typeof teamSummarySchema>;
 export type TeamMember = z.infer<typeof teamMemberSchema>;
-export type TeamInvite = z.infer<typeof teamInviteSchema>;
 export type IncomingTeamInvite = z.infer<typeof incomingTeamInviteSchema>;
 export type AcceptedTeamInvite = z.infer<typeof acceptedTeamInviteSchema>;

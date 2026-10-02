@@ -47,7 +47,6 @@ export const teamActivityEventSchema = historyEventSchema.extend({
   resource: z.object({ type: z.string(), id: z.string() }),
 });
 
-export type HistoryActor = z.infer<typeof historyActorSchema>;
 export type HistoryEvent = z.infer<typeof historyEventSchema>;
 export type TemplateHistoryVersion = z.infer<typeof templateHistoryVersionSchema>;
 export type TemplateHistoryResponse = z.infer<typeof templateHistorySchema>;

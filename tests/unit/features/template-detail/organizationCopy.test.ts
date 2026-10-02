@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import {
   saveTemplateToAccount,
-} from '@/features/template-detail/useTemplateDetailModel';
+} from '@/features/template-detail/templateActionOutcome';
 import { createApiError } from '@/lib/api-errors';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';

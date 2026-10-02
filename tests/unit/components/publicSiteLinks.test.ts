@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  publicFooterGroups,
-  publicHeaderItems,
-  publicSiteLinks,
-} from '@/components/layout/publicSiteLinks';
+import { publicFooterGroups, publicHeaderItems } from '@/components/layout/publicSiteLinks';
+import { everyPublicSiteLink } from '../../support/publicSiteLinks';
 
 const DOMAINS_CONFIRMED_AS_OURS = ['serp.co', 'serplists.com'];
 
@@ -15,7 +12,7 @@ const isApprovedHost = (hostname: string) =>
 
 describe('public site links in the header and every public footer', () => {
   it('sends external links over https to a domain confirmed to be ours', () => {
-    const external = publicSiteLinks.filter((link) => link.external);
+    const external = everyPublicSiteLink.filter((link) => link.external);
 
     for (const link of external) {
       const url = new URL(link.href);
@@ -25,7 +22,7 @@ describe('public site links in the header and every public footer', () => {
   });
 
   it('keeps internal links as app paths', () => {
-    for (const link of publicSiteLinks.filter((entry) => !entry.external)) {
+    for (const link of everyPublicSiteLink.filter((entry) => !entry.external)) {
       expect(link.href, link.label).toMatch(/^\/(?!\/)/);
     }
   });

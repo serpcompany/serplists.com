@@ -4,7 +4,7 @@ import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateBu
 import { canCopyTemplate } from '@/features/template-detail/templatePermissions';
 import {
   saveTemplateToAccount,
-} from '@/features/template-detail/useTemplateDetailModel';
+} from '@/features/template-detail/templateActionOutcome';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 

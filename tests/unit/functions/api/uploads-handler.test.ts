@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
-import { AVATAR_MIME_TYPES, UPLOAD_BUCKETS } from '@/lib/schemas/uploadTypes';
+import { UPLOAD_BUCKETS } from '@/lib/schemas/uploadTypes';
+import { AVATAR_MIME_TYPES } from '../../../fixtures/avatarTypes';
 import { UPLOAD_MAX_BYTES, type UploadBucket } from '@/lib/schemas/uploadLimits';
 
 vi.mock('@functions/api/utils/session', () => ({

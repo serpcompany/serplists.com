@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   loadTemplateDetailData,
   type LoadTemplateDetailResult,
-} from '@/features/template-detail/useTemplateDetailModel';
+} from '@/features/template-detail/loadTemplateDetail';
 import { createApiError } from '@/lib/api-errors';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 

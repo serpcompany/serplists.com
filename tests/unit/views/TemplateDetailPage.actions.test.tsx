@@ -17,7 +17,7 @@ import { handlerIn } from '../../support/elementTree';
 
 const createdTemplatePayload = z.object({ title: z.string() }).passthrough();
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
-import type { TemplateDetailActionResult } from '@/features/template-detail/useTemplateDetailModel';
+import type { TemplateDetailActionResult } from '@/features/template-detail/templateDetailApi';
 import { toast } from 'sonner';
 import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
