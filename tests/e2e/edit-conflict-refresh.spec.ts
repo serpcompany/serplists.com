@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiRequest } from './support/api-requests';
+import { apiRequest, bodyNotRead } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 async function renameTemplateElsewhere(page: Page, templateId: string, title: string) {
-  const renamed = await apiRequest(page, `/templates/${templateId}`, {
+  const renamed = await apiRequest(page, `/templates/${templateId}`, bodyNotRead, {
     method: 'PUT',
     body: { title, expected_version: 1 },
   });
@@ -14,7 +15,7 @@ async function renameTemplateElsewhere(page: Page, templateId: string, title: st
 test('the visibility switch recovers from an edit conflict without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Conflict QA ${Date.now()}`;
-  const created = await apiRequest<{ id: string }>(page, '/templates', {
+  const created = await apiRequest(page, '/templates', savedTemplateSchema, {
     method: 'POST',
     body: {
       title,
@@ -41,5 +42,5 @@ test('the visibility switch recovers from an edit conflict without a reload', as
   expect((await saved).status()).toBe(200);
   await expect(page.getByText('Template is now public')).toBeVisible();
 
-  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
+  await apiRequest(page, `/templates/${templateId}`, bodyNotRead, { method: 'DELETE' });
 });

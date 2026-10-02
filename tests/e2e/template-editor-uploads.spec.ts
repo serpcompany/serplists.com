@@ -118,7 +118,7 @@ test.describe("template editor regressions", () => {
     await expect
       .poll(async () => {
         const savedTemplate = await findTemplateByTitle(page, templateTitle);
-        const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+        const sections = getTemplateSections(savedTemplate ?? {});
         return sections[0]?.items[0]?.contents?.[0]?.value;
       })
       .toBe(uploadedUrl);
@@ -211,7 +211,7 @@ test.describe("template editor regressions", () => {
     await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
 
     const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
-    const saved = sections[0]?.items[0]?.contents?.[0] as Record<string, unknown> | undefined;
+    const saved = sections[0]?.items[0]?.contents?.[0];
     expect(saved).toEqual(expect.objectContaining({ type: "file", value: externalUrl, uploadType: "url" }));
     expect(saved).not.toHaveProperty("fileName");
     expect(saved).not.toHaveProperty("fileSize");

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
 import {
   createRun,
@@ -15,7 +15,7 @@ import {
 } from './support/run-saves';
 
 async function tickEveryTaskWithoutCompleting(page: Page, runId: string) {
-  await apiJson(page, `/checklists/${runId}`, {
+  await apiJson(page, `/checklists/${runId}`, bodyNotRead, {
     method: 'PUT',
     body: {
       expected_revision: 1,
@@ -100,7 +100,7 @@ test('a fully ticked run that is still in progress can be completed after a relo
 test('a completed run cannot be unticked, privately or through its share link, and its notes stay editable', async ({ page, browser }) => {
   await loginAsAdmin(page);
   const runId = await createRunWithSubTasks(page, `Frozen run QA ${Date.now()}`, true);
-  await apiJson(page, `/checklists/${runId}`, {
+  await apiJson(page, `/checklists/${runId}`, bodyNotRead, {
     method: 'PUT',
     body: {
       completed_at: new Date().toISOString(),

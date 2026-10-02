@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fulfillJson, routeTheApi } from './support/mocked-api';
+import { jsonRecord } from './support/api-bodies';
 
 const AVATAR_URL = 'https://avatars.e2e.test/new-avatar.png';
 const TRANSPARENT_PIXEL_PNG = Buffer.from(
@@ -39,9 +40,9 @@ async function mockProfileApi(page: Page) {
     }
 
     if (path === '/api/auth/update-user' && method === 'POST') {
-      const body = request.postDataJSON() as Record<string, unknown>;
+      const body = jsonRecord.parse(request.postDataJSON());
       updateRequests.push(body);
-      if ('image' in body) user.image = (body.image as string | null) ?? null;
+      if ('image' in body) user.image = typeof body.image === 'string' ? body.image : null;
       if (typeof body.name === 'string') user.name = body.name;
       if (typeof body.username === 'string') user.username = body.username.toLowerCase();
       await fulfillJson(route, { status: true });

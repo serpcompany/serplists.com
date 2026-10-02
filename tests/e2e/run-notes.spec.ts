@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { runShareCreatedSchema } from './support/api-bodies';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { createRun, deleteRun, fetchRunWithSections, openTheRunAt } from './support/run-saves';
@@ -139,7 +140,7 @@ test('completing a run saves an unsaved note and leaves without asking', async (
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(dialogs).toEqual([]);
 
-  const { status, sections } = await fetchRunWithSections<{ notes?: string }>(page, runId);
+  const { status, sections } = await fetchRunWithSections(page, runId);
   const stored = { status, notes: sections.flatMap((section) => section.items.map((item) => item.notes ?? '')) };
   expect(stored).toEqual({ status: 'completed', notes: ['', 'Signed off by QA'] });
 
@@ -149,7 +150,7 @@ test('completing a run saves an unsaved note and leaves without asking', async (
 test('a share-link guest is asked before unsaved task notes are lost', async ({ browser, page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Shared notes leave guard QA ${Date.now()}`);
-  const { shareToken } = await apiJson<{ shareToken: string }>(page, `/checklists/run/${runId}/share`, {
+  const { shareToken } = await apiJson(page, `/checklists/run/${runId}/share`, runShareCreatedSchema, {
     method: 'POST',
     body: {},
   });

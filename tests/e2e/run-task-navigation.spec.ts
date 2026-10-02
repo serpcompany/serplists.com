@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun, openTheRunAtDesktopWidth } from './support/run-saves';
 
@@ -10,7 +11,7 @@ const TASK_HEADER_TUCKED_UNDER_TOP_BAR_PX = 30;
 const textSeveralScreensLong = Array.from({ length: 60 }, (_, index) => `Paragraph ${index + 1} of the task instructions.`).join('\n\n');
 
 async function createRun(page: Page) {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title: `Task navigation QA ${Date.now()}`,

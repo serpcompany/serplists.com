@@ -11,7 +11,8 @@ import {
   mcpToolList,
   mcpToolResponse,
 } from '../support/mcpResponses';
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
+import { jsonRecord } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
 
@@ -326,7 +327,7 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   const createdTemplate = mcpTemplateResult.parse(toolResultOf(created.body).structuredContent).template;
   expect(createdTemplate).toMatchObject({ title, version: 1 });
   const templateId = createdTemplate.id;
-  expect(await apiJson<JsonRecord>(page, `/templates/${encodeURIComponent(templateId)}`)).toMatchObject({
+  expect(await apiJson(page, `/templates/${encodeURIComponent(templateId)}`, jsonRecord)).toMatchObject({
     title,
     is_public: false,
     owner_type: 'user',
@@ -347,9 +348,10 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     version: 2,
   });
 
-  const history = await apiJson<{ events: Array<{ action: string; metadata: JsonRecord | null }> }>(
+  const history = await apiJson(
     page,
     `/templates/${encodeURIComponent(templateId)}/history`,
+    z.object({ events: z.array(z.object({ action: z.string(), metadata: jsonRecord.nullable() }).passthrough()) }).passthrough(),
   );
   expect(history.events.filter((event) => event.metadata?.personalRunKeyName === keyName).map(({ action }) => action).sort())
     .toEqual(['template.created', 'template.updated']);
@@ -359,7 +361,7 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   await expect(page.getByText('Created template v1')).toBeVisible();
   await expect(page.getByText(new RegExp(`^${keyName} via MCP · authorized by `))).toHaveCount(2);
 
-  await apiJson(page, `/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
+  await apiJson(page, `/templates/${encodeURIComponent(templateId)}`, bodyNotRead, { method: 'DELETE' });
   await page.goto('/dashboard/settings/');
   await revokeTheKeyIn(page, keyRow);
 });

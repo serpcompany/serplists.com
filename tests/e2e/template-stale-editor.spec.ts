@@ -1,12 +1,13 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-import { apiJsonAt as api } from './support/api-requests';
+import { apiJsonAt as api, bodyNotRead } from './support/api-requests';
+import { apiTemplateSchema, savedTemplateSchema, templateVersion } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 async function sendTheShareRequestFromAnotherTab(context: BrowserContext, templateId: string, version: number) {
   const sharer = await context.newPage();
   await sharer.goto('/dashboard/templates/');
-  await api(sharer, `/templates/${templateId}`, 'PUT', { is_public: true, expected_version: version });
+  await api(sharer, `/templates/${templateId}`, 'PUT', bodyNotRead, { is_public: true, expected_version: version });
   await sharer.close();
 }
 
@@ -19,12 +20,12 @@ test('an editor opened before a Share cannot make the template private again, ev
   const editor = await context.newPage();
   await loginAsAdmin(editor);
   const title = `Stale editor QA ${Date.now()}`;
-  const created = await api<{ id: string }>(editor, '/templates', 'POST', {
+  const created = await api(editor, '/templates', 'POST', savedTemplateSchema, {
     title,
     sections: [{ id: `stale-${Date.now()}`, title: 'Checklist', items: [{ id: `stale-task-${Date.now()}`, title: 'Check DNS' }] }],
     is_public: false,
   });
-  const loaded = await api<{ version: number }>(editor, `/templates/${created.id}`, 'GET');
+  const loaded = await api(editor, `/templates/${created.id}`, 'GET', templateVersion);
 
   await editor.goto(`/dashboard/templates/${created.id}/edit/`);
   await expect(editor.getByPlaceholder('Enter template name...')).toHaveValue(title);
@@ -36,9 +37,9 @@ test('an editor opened before a Share cannot make the template private again, ev
   await editor.getByRole('button', { name: 'Save' }).click();
 
   await expect(editor.getByText('Template changed since it was loaded. Refresh before saving again.').first()).toBeVisible();
-  const stored = await api<{ is_public: unknown; title: string }>(editor, `/templates/${created.id}`, 'GET');
+  const stored = await api(editor, `/templates/${created.id}`, 'GET', apiTemplateSchema);
   expect(Boolean(stored.is_public)).toBe(true);
   expect(stored.title).toBe(title);
 
-  await api(editor, `/templates/${created.id}`, 'DELETE');
+  await api(editor, `/templates/${created.id}`, 'DELETE', bodyNotRead);
 });

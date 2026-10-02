@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
+import { createdRunSchema, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 async function failGetRequestsUntilRecovered(page: Page, matches: (url: URL) => boolean) {
@@ -20,7 +21,7 @@ async function failGetRequestsUntilRecovered(page: Page, matches: (url: URL) => 
 test('My Templates shows Retry instead of an empty library when the list fails to load', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Load error template ${Date.now()}`;
-  const { id } = await apiJson<{ id: string }>(page, '/templates', {
+  const { id } = await apiJson(page, '/templates', savedTemplateSchema, {
     method: 'POST',
     body: { title, is_public: false, sections: [{ id: 's1', title: 'Section', items: [{ id: 'i1', title: 'Task' }] }] },
   });
@@ -38,13 +39,13 @@ test('My Templates shows Retry instead of an empty library when the list fails t
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible({ timeout: 15_000 });
 
-  await apiJson(page, `/templates/${id}`, { method: 'DELETE' });
+  await apiJson(page, `/templates/${id}`, bodyNotRead, { method: 'DELETE' });
 });
 
 test('My Runs shows Retry instead of an empty list when the runs fail to load', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Load error run ${Date.now()}`;
-  const { id } = await apiJson<{ id: string }>(page, '/checklists', {
+  const { id } = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: { title, sections: [{ id: 's1', title: 'Section', items: [{ id: 'i1', title: 'Task' }] }] },
   });
@@ -59,5 +60,5 @@ test('My Runs shows Retry instead of an empty list when the runs fail to load', 
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByRole('link', { name: title })).toBeVisible({ timeout: 15_000 });
 
-  await apiJson(page, `/checklists/${id}`, { method: 'DELETE' });
+  await apiJson(page, `/checklists/${id}`, bodyNotRead, { method: 'DELETE' });
 });

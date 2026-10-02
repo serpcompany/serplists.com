@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
+import { createdRunSchema, runShareCreatedSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { fulfillJson, routeTheApi } from './support/mocked-api';
 
@@ -288,7 +289,7 @@ test.describe('route structure', () => {
 
     await loginAsAdmin(page);
 
-    const createdRun = await apiJson<{ id?: string }>(page, '/checklists', {
+    const createdRun = await apiJson(page, '/checklists', createdRunSchema, {
       method: 'POST',
       body: {
         title: 'Share Route Verification',
@@ -299,9 +300,10 @@ test.describe('route structure', () => {
     if (!createdRun.id) {
       throw new Error('Run id missing from API response');
     }
-    const { shareToken } = await apiJson<{ shareToken?: string }>(
+    const { shareToken } = await apiJson(
       page,
       `/checklists/run/${createdRun.id}/share`,
+      runShareCreatedSchema,
       { method: 'POST', body: {} },
     );
     if (!shareToken) {

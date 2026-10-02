@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { apiRequest } from "./support/api-requests";
+import { jsonRecord } from "./support/api-bodies";
 import { loginAsAdmin } from "./support/sign-in";
 
 const templatesArrayJson = JSON.stringify([{
@@ -11,7 +12,7 @@ const templatesArrayJson = JSON.stringify([{
 test("template import API returns structured per-template failures for rejected imports", async ({ page }) => {
   await loginAsAdmin(page);
 
-  const result = await apiRequest<Record<string, unknown>>(page, "/templates/backup", {
+  const result = await apiRequest(page, "/templates/backup", jsonRecord, {
     method: "POST",
     body: {
       templates: [

@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson, apiRequest, bodyNotRead, type BodySchema } from './support/api-requests';
+import { createdRunSchema, savedTemplateSchema } from './support/api-bodies';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun } from './support/run-saves';
@@ -18,12 +19,12 @@ async function refuseClipboardWrites(page: Page) {
   });
 }
 
-async function send(page: Page, path: string, method: string, body: unknown) {
-  return apiJson<{ id: string }>(page, path, { method, body });
+async function send<Output>(page: Page, path: string, method: string, schema: BodySchema<Output>, body: unknown) {
+  return apiJson(page, path, schema, { method, body });
 }
 
 async function createRun(page: Page, title: string) {
-  const run = await send(page, '/checklists', 'POST', {
+  const run = await send(page, '/checklists', 'POST', createdRunSchema, {
     title,
     sections: [{ id: 'share', title: 'Section', items: [{ id: 'share-a', title: 'Task A' }] }],
   });
@@ -37,15 +38,15 @@ function footerCloseButton(dialog: Locator) {
 async function createStaleCompletedRun(page: Page, title: string) {
   const sections = (done: boolean, ids: string[]) =>
     [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
-  const template = await send(page, '/templates', 'POST', { title, sections: sections(false, ['stale-a']), is_public: false });
-  const run = await send(page, '/checklists', 'POST', { template_id: template.id, title, status: 'in_progress' });
-  await send(page, `/checklists/${run.id}`, 'PUT', {
+  const template = await send(page, '/templates', 'POST', savedTemplateSchema, { title, sections: sections(false, ['stale-a']), is_public: false });
+  const run = await send(page, '/checklists', 'POST', createdRunSchema, { template_id: template.id, title, status: 'in_progress' });
+  await send(page, `/checklists/${run.id}`, 'PUT', bodyNotRead, {
     expected_revision: 1,
     progress: 100,
     sections: sections(true, ['stale-a']),
     status: 'completed',
   });
-  await send(page, `/templates/${template.id}`, 'PUT', {
+  await send(page, `/templates/${template.id}`, 'PUT', bodyNotRead, {
     title,
     sections: sections(false, ['stale-a', 'stale-b']),
     expected_version: 1,
@@ -124,14 +125,14 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   await expect(row.getByText('Shared snapshot is out of date')).toBeVisible();
 
   await deleteRun(page, runId);
-  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
+  await apiRequest(page, `/templates/${templateId}`, bodyNotRead, { method: 'DELETE' });
 });
 
 test('sharing from the run page keeps unsaved task notes and the open task', async ({ page }) => {
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
   const title = `Share keeps notes QA ${Date.now()}`;
-  const { id: runId } = await send(page, '/checklists', 'POST', {
+  const { id: runId } = await send(page, '/checklists', 'POST', createdRunSchema, {
     title,
     sections: [{ id: 'keep', title: 'Section', items: [
       { id: 'keep-a', title: 'Task A' },

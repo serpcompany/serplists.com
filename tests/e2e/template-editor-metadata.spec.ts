@@ -131,7 +131,7 @@ test.describe("template editor regressions", () => {
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
       const saved = await findTemplateByTitle(page, `${title} saved`);
       expect(JSON.stringify(saved?.sections)).toContain("https://example.com/doc.pdf");
-      const contents = getTemplateSections(saved as Record<string, unknown>)[0]?.items[0]?.contents;
+      const contents = getTemplateSections(saved ?? {})[0]?.items[0]?.contents;
       expect(contents).toContainEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
     } finally {
       await page.unrouteAll({ behavior: "wait" });

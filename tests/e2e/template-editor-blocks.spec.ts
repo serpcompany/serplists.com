@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { apiJson, apiRequest } from "./support/api-requests";
+import { apiJson, apiRequest, bodyNotRead } from "./support/api-requests";
+import { createdRunSchema } from "./support/api-bodies";
 import { loginAsAdmin } from "./support/sign-in";
 import {
   addABlock,
@@ -13,7 +14,7 @@ import {
 } from "./support/template-editor";
 
 async function createRun(page: Page, body: Record<string, unknown>) {
-  return (await apiJson<{ id: string }>(page, "/checklists", { method: "POST", body })).id;
+  return (await apiJson(page, "/checklists", createdRunSchema, { method: "POST", body })).id;
 }
 
 test.describe("template editor regressions", () => {
@@ -231,7 +232,7 @@ test.describe("template editor regressions", () => {
     await expect(itsOneSubTaskCheckbox).toBeVisible();
     await expect(page.getByText("Check title", { exact: true })).toBeVisible();
 
-    await apiRequest(page, `/checklists/${runId}`, { method: "DELETE" });
+    await apiRequest(page, `/checklists/${runId}`, bodyNotRead, { method: "DELETE" });
     await deleteTemplate(page, templateId);
   });
 

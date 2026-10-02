@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun } from './support/run-saves';
 
 const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
 
 async function createRun(page: Page, videos: string[]) {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title: `Task videos QA ${Date.now()}`,

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
 import { answerRunStartsAtActiveRunLimit, reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from './support/billing';
 import { loginAsAdmin, registerNewAccount, uniqueSuffix } from './support/sign-in';
 import { startARunFromTheFirstStartRun } from './support/run-saves';
@@ -29,7 +29,7 @@ async function registerFreeAccount(page: Page) {
 }
 
 async function reachFreeTemplateLimit(page: Page) {
-  await apiJson(page, '/templates', { method: 'POST', body: { title: 'First template', is_public: false, sections: [] } });
+  await apiJson(page, '/templates', bodyNotRead, { method: 'POST', body: { title: 'First template', is_public: false, sections: [] } });
 }
 
 test.afterEach(async ({ page }) => {

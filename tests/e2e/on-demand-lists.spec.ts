@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { apiRunSchema, createdRunSchema, sectionsOfStoredItems } from './support/api-bodies';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
@@ -19,7 +20,7 @@ test('starts a run from a public template page opened directly', async ({ page }
 test('keeps toggled tasks and advances on a run opened from the runs dashboard', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Toggle QA ${Date.now()}`;
-  const { id: runId } = await apiJson<{ id: string }>(page, '/checklists', {
+  const { id: runId } = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title,
@@ -45,9 +46,8 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
   await expect(page.getByRole('heading', { name: 'Second task' })).toBeVisible();
   await completeTask();
 
-  type Sections = Array<{ items: Array<{ isCompleted?: boolean }> }>;
-  const run = await apiJson<{ items: string | Sections }>(page, `/checklists/${runId}`);
-  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Sections;
+  const run = await apiJson(page, `/checklists/${runId}`, apiRunSchema);
+  const sections = sectionsOfStoredItems(run.items);
   const completed = sections.flatMap((section) => section.items.map((item) => item.isCompleted === true));
   expect(completed).toEqual([true, true]);
   await deleteRun(page, runId);

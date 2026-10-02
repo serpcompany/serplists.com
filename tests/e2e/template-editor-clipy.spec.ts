@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { loginAsAdmin } from "./support/sign-in";
+import { jsonRecord } from "./support/api-bodies";
 
 test.describe("template editor regressions", () => {
   test('reviews, edits, previews, and explicitly publishes a generated Clipy draft', async ({ page }) => {
@@ -11,7 +12,7 @@ test.describe("template editor regressions", () => {
         await route.continue();
         return;
       }
-      createPayload = route.request().postDataJSON() as Record<string, unknown>;
+      createPayload = jsonRecord.parse(route.request().postDataJSON());
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ id: 'clipy-template-1', slug: 'reviewed-clipy-checklist' }),

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { z } from "zod";
 
 import { firstOf } from "../support/elements";
-import { apiJson } from "./support/api-requests";
+import { apiJson, bodyNotRead } from "./support/api-requests";
 import { loginAsAdmin } from "./support/sign-in";
 import {
   createTemplate,
@@ -32,13 +33,14 @@ async function headerShowedNewTemplate(page: Page) {
 }
 
 async function addATaskFromAnotherTab(page: Page, templateId: string) {
-  const template = await apiJson<{ sections: Array<{ items: unknown[] }>; version: number }>(
+  const template = await apiJson(
     page,
     `/templates/${templateId}`,
+    z.object({ sections: z.array(z.object({ items: z.array(z.unknown()) }).passthrough()), version: z.number() }).passthrough(),
   );
   const { sections } = template;
   firstOf(sections).items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
-  await apiJson(page, `/templates/${templateId}`, {
+  await apiJson(page, `/templates/${templateId}`, bodyNotRead, {
     method: "PUT",
     body: { sections, expected_version: template.version },
   });

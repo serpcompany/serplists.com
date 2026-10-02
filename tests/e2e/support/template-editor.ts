@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 
-import { apiJson, apiRequest } from "./api-requests";
+import { apiJson, apiRequest, bodyNotRead } from "./api-requests";
+import { jsonRecords, savedTemplateSchema } from "./api-bodies";
 import { registerNewAccount, uniqueSuffix } from "./sign-in";
 
 const PASSWORD = "Aa!template-editor-password-12345";
@@ -21,16 +22,16 @@ export async function registerAccount(page: Page) {
 }
 
 export async function findTemplateByTitle(page: Page, title: string) {
-  const templates = await apiJson<Array<Record<string, unknown>>>(page, "/templates?scope=personal");
+  const templates = await apiJson(page, "/templates?scope=personal", jsonRecords);
   return templates.find((template) => template.title === title) ?? null;
 }
 
 export async function deleteTemplate(page: Page, templateId: string) {
-  await apiRequest(page, `/templates/${templateId}`, { method: "DELETE" });
+  await apiRequest(page, `/templates/${templateId}`, bodyNotRead, { method: "DELETE" });
 }
 
 export async function createTemplate(page: Page, body: Record<string, unknown>) {
-  return (await apiJson<{ id: string }>(page, "/templates", { method: "POST", body })).id;
+  return (await apiJson(page, "/templates", savedTemplateSchema, { method: "POST", body })).id;
 }
 
 export async function createTwoTaskTemplate(page: Page, title: string) {

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
 import { fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
-type InviteRequest = {
-  email: string;
-  role?: string;
-};
+const inviteRequest = z.object({ email: z.string(), role: z.string().optional() }).passthrough();
+
+type InviteRequest = z.output<typeof inviteRequest>;
 
 async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfer?: boolean } = {}) {
   const inviteRequests: InviteRequest[] = [];
@@ -96,7 +96,7 @@ async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfe
     }
 
     if (path === '/api/teams/team-1/invites' && request.method() === 'POST') {
-      const payload = request.postDataJSON() as InviteRequest;
+      const payload = inviteRequest.parse(request.postDataJSON());
       const invitePath = '/team-invites/e2e-token/';
       const inviteUrl = new URL(invitePath, page.url()).toString();
       inviteRequests.push(payload);

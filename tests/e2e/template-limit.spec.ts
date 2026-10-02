@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { dismissTheNextConfirm } from "./support/navigation";
 import { apiJson } from "./support/api-requests";
+import { savedTemplateSchema } from "./support/api-bodies";
 import { reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from "./support/billing";
 import { registerNewAccount, uniqueSuffix } from "./support/sign-in";
 
@@ -18,7 +19,7 @@ async function registerFreeAccount(page: Page) {
 }
 
 async function createTemplateViaApi(page: Page, title: string): Promise<string> {
-  const template = await apiJson<{ id: string }>(page, "/templates", {
+  const template = await apiJson(page, "/templates", savedTemplateSchema, {
     method: "POST",
     body: { title, is_public: false, sections: [] },
   });

@@ -98,7 +98,7 @@ test.describe("template editor regressions", () => {
     expect(Number(expectedVersionsSent[1])).toBeGreaterThan(Number(expectedVersionsSent[0]));
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    const sections = getTemplateSections(savedTemplate ?? {});
     expect(sections[0]?.items.map((item) => item.description)).toEqual([
       "Sent with the first save, then more",
       "Typed into another task",

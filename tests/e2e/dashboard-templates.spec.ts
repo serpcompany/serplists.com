@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { apiRequest } from './support/api-requests';
+import { apiRequest, bodyNotRead } from './support/api-requests';
 import { answerRunStartsAtActiveRunLimit, countCheckoutsSentTo } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 import { runIdInTheUrl } from './support/run-saves';
@@ -42,7 +42,7 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${templateTitle} - `);
 
   const runId = runIdInTheUrl(page);
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+  await apiRequest(page, `/checklists/${runId}`, bodyNotRead, { method: 'DELETE' });
 });
 
 test('grid cards name the actions menu and never focus the hidden Start Run shortcut', async ({ page }) => {

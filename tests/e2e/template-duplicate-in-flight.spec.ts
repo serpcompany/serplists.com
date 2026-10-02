@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { z } from 'zod';
 
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
+import { apiTemplateRows, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 const isTemplatesEndpoint = (url: URL) => url.pathname.endsWith('/api/templates');
@@ -9,7 +10,7 @@ const isTemplatesEndpoint = (url: URL) => url.pathname.endsWith('/api/templates'
 test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Duplicate in flight ${Date.now()}`;
-  const created = await apiJson<{ id: string }>(page, '/templates', {
+  const created = await apiJson(page, '/templates', savedTemplateSchema, {
     method: 'POST',
     body: {
       title,
@@ -59,13 +60,13 @@ test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${copy.id}/$`));
     expect(copyRequests).toBe(1);
 
-    const own = await apiJson<Array<{ id: string; title: string }>>(page, '/templates?scope=personal');
+    const own = await apiJson(page, '/templates?scope=personal', apiTemplateRows);
     expect(own.filter((row) => row.title === `${title} Copy`)).toHaveLength(1);
   } finally {
     releaseCopy();
     await page.unroute(isTemplatesEndpoint);
     for (const id of [created.id, ...copyIds]) {
-      await apiJson(page, `/templates/${id}`, { method: 'DELETE' });
+      await apiJson(page, `/templates/${id}`, bodyNotRead, { method: 'DELETE' });
     }
   }
 });

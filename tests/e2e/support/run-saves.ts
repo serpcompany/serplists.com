@@ -1,9 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './api-requests';
+import { apiJson, apiRequest, bodyNotRead } from './api-requests';
+import { apiRunSchema, createdRunSchema, sectionsOfStoredItems } from './api-bodies';
 
 export async function postRun(page: Page, body: Record<string, unknown>) {
-  return (await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body })).id;
+  return (await apiJson(page, '/checklists', createdRunSchema, { method: 'POST', body })).id;
 }
 
 export async function createRun(page: Page, title: string) {
@@ -17,22 +18,21 @@ export async function createRun(page: Page, title: string) {
 }
 
 export async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+  await apiRequest(page, `/checklists/${runId}`, bodyNotRead, { method: 'DELETE' });
 }
 
-export async function fetchRunWithSections<Task>(page: Page, runId: string) {
-  const run = await apiJson<{ status: string; title: string; items: unknown }>(page, `/checklists/${runId}`);
-  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Task[] }>;
-  return { ...run, sections };
+export async function fetchRunWithSections(page: Page, runId: string) {
+  const run = await apiJson(page, `/checklists/${runId}`, apiRunSchema);
+  return { ...run, sections: sectionsOfStoredItems(run.items) };
 }
 
 export async function readRun(page: Page, runId: string) {
-  const { status, sections } = await fetchRunWithSections<{ isCompleted?: boolean }>(page, runId);
+  const { status, sections } = await fetchRunWithSections(page, runId);
   return { status, completed: sections.flatMap((section) => section.items.map((item) => item.isCompleted === true)) };
 }
 
 export async function tickElsewhere(page: Page, runId: string, ticked: { a: boolean; b: boolean }) {
-  await apiJson(page, `/checklists/${runId}`, {
+  await apiJson(page, `/checklists/${runId}`, bodyNotRead, {
     method: 'PUT',
     body: {
       expected_revision: 1,

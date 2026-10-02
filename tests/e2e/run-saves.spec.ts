@@ -54,8 +54,7 @@ test('ticking a task another session already ticked does not untick it', async (
 });
 
 async function readTaskA(page: Page, runId: string) {
-  type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
-  const { sections } = await fetchRunWithSections<Task>(page, runId);
+  const { sections } = await fetchRunWithSections(page, runId);
   const task = firstOf(firstOf(sections).items);
   return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
 }

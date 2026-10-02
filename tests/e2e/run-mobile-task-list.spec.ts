@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun, openTheRunAt, openTheRunAtDesktopWidth } from './support/run-saves';
 
 async function createRun(page: Page) {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title: `Mobile task list QA ${Date.now()}`,

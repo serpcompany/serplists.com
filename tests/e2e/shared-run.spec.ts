@@ -2,19 +2,13 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { z } from 'zod';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
+import { apiRunSchema, createdRunSchema, runShareCreatedSchema, sectionsOfStoredItems } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun } from './support/run-saves';
 
-type StoredRun = {
-  progress: number;
-  items: string | Array<{ items: Array<{ title: string; isCompleted?: boolean }> }>;
-};
-
 async function readOwnerRun(page: Page, runId: string) {
-  const run = await apiJson<StoredRun>(page, `/checklists/${runId}`);
-  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{
-    items: Array<{ title: string; isCompleted?: boolean }>;
-  }>;
+  const run = await apiJson(page, `/checklists/${runId}`, apiRunSchema);
+  const sections = sectionsOfStoredItems(run.items);
   return {
     progress: run.progress,
     tasks: sections.flatMap((section) => section.items.map((item) => `${item.title}:${item.isCompleted === true}`)),
@@ -22,8 +16,8 @@ async function readOwnerRun(page: Page, runId: string) {
 }
 
 async function createSharedRun(page: Page, run: { title: string; sections: unknown[] }) {
-  const { id: runId } = await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body: run });
-  const { shareToken } = await apiJson<{ shareToken: string }>(page, `/checklists/run/${runId}/share`, {
+  const { id: runId } = await apiJson(page, '/checklists', createdRunSchema, { method: 'POST', body: run });
+  const { shareToken } = await apiJson(page, `/checklists/run/${runId}/share`, runShareCreatedSchema, {
     method: 'POST',
     body: {},
   });
@@ -113,7 +107,7 @@ test('a share-link guest is told what they may do, completes the Run and stays o
   await expect(guest).toHaveURL(new RegExp(`/share/${shareToken}/$`));
   await expect(guest.getByText('Completed', { exact: true })).toBeVisible();
   await expect(guest.getByRole('checkbox', { name: 'Mark "Task A" complete' })).toBeDisabled();
-  await expect.poll(async () => (await apiJson<{ status: string }>(page, `/checklists/${runId}`)).status).toBe('completed');
+  await expect.poll(async () => (await apiJson(page, `/checklists/${runId}`, apiRunSchema)).status).toBe('completed');
 
   await guestContext.close();
   await deleteRun(page, runId);

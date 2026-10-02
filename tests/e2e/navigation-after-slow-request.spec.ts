@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
 import { countCheckoutsSentTo } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
@@ -10,7 +11,7 @@ import { deleteTemplate } from './support/template-editor';
 const LATE_NAVIGATION_WINDOW_MS = 500;
 
 async function createTemplateViaApi(page: Page, title: string): Promise<string> {
-  const template = await apiJson<{ id: string }>(page, '/templates', {
+  const template = await apiJson(page, '/templates', savedTemplateSchema, {
     method: 'POST',
     body: {
       is_public: false,

@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJson, bodyNotRead } from './support/api-requests';
 import {
   openAccountMenu,
   signOutFromTheAccountMenu as signOut,
@@ -19,7 +19,7 @@ async function openSignedInTab(page: Page) {
 }
 
 async function replaceSessionCookieWithoutSigningOut(page: Page, email: string) {
-  await apiJson(page, '/auth/sign-in/email', {
+  await apiJson(page, '/auth/sign-in/email', bodyNotRead, {
     method: 'POST',
     body: { email, password: 'password123' },
   });

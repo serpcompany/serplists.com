@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson, apiRequest, bodyNotRead } from './support/api-requests';
+import { createdRunSchema } from './support/api-bodies';
 import { navigateInApp } from './support/navigation';
 import { signOutFromTheAccountMenu as signOut, submitTheSignInForm, type TestUser } from './support/sign-in';
 import { runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
@@ -11,7 +12,7 @@ async function signIn(page: Page, user: TestUser) {
 }
 
 async function createRun(page: Page, title: string): Promise<string> {
-  const run = await apiJson<{ id: string }>(page, '/checklists', {
+  const run = await apiJson(page, '/checklists', createdRunSchema, {
     method: 'POST',
     body: {
       title,
@@ -29,7 +30,7 @@ async function startRunFromTemplate(page: Page, templatePath: string): Promise<s
 }
 
 async function deleteRuns(page: Page, runIds: string[]) {
-  await Promise.all(runIds.map((id) => apiRequest(page, `/checklists/${id}`, { method: 'DELETE' })));
+  await Promise.all(runIds.map((id) => apiRequest(page, `/checklists/${id}`, bodyNotRead, { method: 'DELETE' })));
 }
 
 test('a user who signs in after another on the same tab never sees the other user\'s runs, even after a run start refreshes the lists', async ({ page }) => {

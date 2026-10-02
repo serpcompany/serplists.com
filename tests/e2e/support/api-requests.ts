@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext, type Page, type Request } from '@playwright/test';
+import { z } from 'zod';
 
 import { API_BASE_URL } from './stack';
 
@@ -42,6 +43,12 @@ type PageOrBrowserContext = { request: APIRequestContext };
 
 export type ApiResult<T> = { status: number; ok: boolean; body: T | null };
 
+export type BodySchema<Output> = z.ZodType<Output, z.ZodTypeDef, unknown>;
+
+export const bodyNotRead = z.unknown();
+
+const jsonRecord = z.record(z.unknown());
+
 type ApiInit = { method?: string; body?: unknown };
 
 type PageFetchInit = { method?: string; headers?: Record<string, string>; body?: string; credentials?: RequestCredentials };
@@ -49,29 +56,38 @@ type PageFetchInit = { method?: string; headers?: Record<string, string>; body?:
 function parseBody(text: string): unknown {
   if (text === '') return null;
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(text);
   } catch {
     return null;
   }
 }
 
-export async function apiRequest<T = unknown>(
+export async function apiRequest<Output>(
   owner: PageOrBrowserContext,
   path: string,
+  schema: BodySchema<Output>,
   { method = 'GET', body }: ApiInit = {},
-): Promise<ApiResult<T>> {
+): Promise<ApiResult<Output>> {
   const response = await owner.request.fetch(`${API_BASE_URL}${path}`, {
     method,
     ...(body === undefined ? {} : { data: body }),
   });
-  const text = await response.text();
-  return { status: response.status(), ok: response.ok(), body: parseBody(text) as T | null };
+  const parsed = parseBody(await response.text());
+  return { status: response.status(), ok: response.ok(), body: parsed === null ? null : schema.parse(parsed) };
 }
 
-export async function apiJson<T = unknown>(owner: PageOrBrowserContext, path: string, init: ApiInit = {}): Promise<T> {
-  const { status, ok, body } = await apiRequest<T>(owner, path, init);
-  if (!ok) throw new Error(`${init.method ?? 'GET'} ${path} failed: ${status}`);
-  return body as T;
+export async function apiJson<Output>(
+  owner: PageOrBrowserContext,
+  path: string,
+  schema: BodySchema<Output>,
+  init: ApiInit = {},
+): Promise<Output> {
+  const response = await owner.request.fetch(`${API_BASE_URL}${path}`, {
+    method: init.method ?? 'GET',
+    ...(init.body === undefined ? {} : { data: init.body }),
+  });
+  if (!response.ok()) throw new Error(`${init.method ?? 'GET'} ${path} failed: ${response.status()}`);
+  return schema.parse(parseBody(await response.text()));
 }
 
 export async function fetchFromThePageUnderTest(page: Page, url: string, init: PageFetchInit = {}): Promise<ApiResult<unknown>> {
@@ -85,10 +101,16 @@ export async function fetchFromThePageUnderTest(page: Page, url: string, init: P
   return { status, ok, body: parseBody(text) };
 }
 
-export async function apiJsonAt<T = unknown>(owner: PageOrBrowserContext, path: string, method: string, body?: unknown): Promise<T> {
-  return apiJson<T>(owner, path, { method, body });
+export async function apiJsonAt<Output>(
+  owner: PageOrBrowserContext,
+  path: string,
+  method: string,
+  schema: BodySchema<Output>,
+  body?: unknown,
+): Promise<Output> {
+  return apiJson(owner, path, schema, { method, body });
 }
 
 export async function apiRecord(owner: PageOrBrowserContext, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(owner, path, { method, body });
+  return apiJson(owner, path, jsonRecord, { method, body });
 }

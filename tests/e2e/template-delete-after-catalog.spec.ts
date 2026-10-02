@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
+import { jsonRecords } from './support/api-bodies';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { confirmTheTemplateDelete, createOneTaskTemplate } from './support/template-editor';
@@ -54,7 +55,7 @@ test('a deleted public template stays off the library while the edge still serve
 
   const title = `Catalog edge delete ${Date.now()}`;
   const templateId = await createOneTaskTemplate(page, title, true);
-  const ownRows = await apiJson<Array<Record<string, unknown>>>(page, '/templates?scope=personal');
+  const ownRows = await apiJson(page, '/templates?scope=personal', jsonRecords);
   const rowTheLibraryCanList = ownRows.find((row) => row.id === templateId);
   expect(rowTheLibraryCanList?.owner_username).toBeTruthy();
   const catalog = await serveTheEdgeCopyFromBeforeTheDelete(page, templateId, rowTheLibraryCanList);

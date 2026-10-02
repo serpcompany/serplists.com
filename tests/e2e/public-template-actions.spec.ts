@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiRequest } from './support/api-requests';
+import { apiRequest, bodyNotRead } from './support/api-requests';
 import { loginAs, type TestUser } from './support/sign-in';
 
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
@@ -55,7 +55,7 @@ test('a double click on the header Start Run opens the dialog, and one on its St
   expect(runCreates).toHaveLength(1);
 
   const runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+  await apiRequest(page, `/checklists/${runId}`, bodyNotRead, { method: 'DELETE' });
 });
 
 test('Start Run sends a visitor who is not signed in to sign in', async ({ page }) => {
