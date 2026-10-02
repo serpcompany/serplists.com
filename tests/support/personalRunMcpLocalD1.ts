@@ -10,6 +10,9 @@ import { platformProxyOnLocalD1, runToolInRepo } from "../integration/local-d1-h
 import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { firstOf } from "./elements";
 import { jsonObject, readJson } from "./readJson";
+import { apiEnv } from "./apiEnv";
+import { optionalRecordIn, recordIn } from "./mcpResponses";
+import type { Env } from "@functions/api/types";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -25,7 +28,7 @@ export type TestEnv = {
 export type JsonRecord = Record<string, unknown>;
 
 let platform: PlatformProxy<TestEnv> | undefined;
-export let env: TestEnv;
+export let env: Env;
 let persistPath = "";
 export let rawKey = "";
 export const keyId = "key-user-a";
@@ -72,7 +75,7 @@ export function mcpRequest(method: string, params?: unknown, id: number | undefi
 }
 
 export async function callTool(name: string, args: JsonRecord = {}, id = 1): Promise<Response> {
-  return handleAgentMcp(mcpRequest("tools/call", { name, arguments: args }, id), env as never);
+  return handleAgentMcp(mcpRequest("tools/call", { name, arguments: args }, id), env);
 }
 
 export async function bodyOf(response: Response): Promise<JsonRecord> {
@@ -80,11 +83,12 @@ export async function bodyOf(response: Response): Promise<JsonRecord> {
 }
 
 export function toolPayload(body: JsonRecord): JsonRecord {
-  return ((body.result as JsonRecord).structuredContent ?? {}) as JsonRecord;
+  return optionalRecordIn(recordIn(body.result).structuredContent) ?? {};
 }
 
 export function toolError(body: JsonRecord): string | undefined {
-  return (toolPayload(body).error as string | undefined);
+  const { error } = toolPayload(body);
+  return typeof error === "string" ? error : undefined;
 }
 
 export const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -189,7 +193,7 @@ async function startLocalD1Holding(migrationNames: string[]): Promise<void> {
   );
   runToolInRepo("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", migrationsSqlPath]);
   platform = await platformProxyOnLocalD1<TestEnv>(persistPath);
-  env = { DB: platform.env.DB, PERSONAL_RUN_MCP_ENABLED: "true" };
+  env = apiEnv({ DB: platform.env.DB, PERSONAL_RUN_MCP_ENABLED: "true" });
   await seedPreMigrationData();
 }
 

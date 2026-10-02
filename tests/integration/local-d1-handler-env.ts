@@ -4,11 +4,11 @@ import path from "node:path";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { NO_DEV_VARS_OR_DOTENV_FILES } from "../../scripts/data/local-d1";
 import { execTool, REPO_ROOT } from "../../scripts/lib/run-tool.mjs";
-
-export type LocalD1HandlerEnv = { DB: D1Database; BETTER_AUTH_SECRET: string };
+import { apiEnv } from "../support/apiEnv";
+import type { Env } from "@functions/api/types";
 
 export type LocalD1 = {
-  env: LocalD1HandlerEnv;
+  env: Env;
   dispose: () => Promise<void>;
 };
 
@@ -42,7 +42,7 @@ export async function startLocalD1(tempDirectoryPrefix: string): Promise<LocalD1
   }
 
   return {
-    env: { DB: platform.env.DB, BETTER_AUTH_SECRET: "local-d1-better-auth-secret-32-chars!!" },
+    env: apiEnv({ DB: platform.env.DB, BETTER_AUTH_SECRET: "local-d1-better-auth-secret-32-chars!!" }),
     dispose: async () => {
       await platform.dispose();
       rmSync(persistPath, { recursive: true, force: true });

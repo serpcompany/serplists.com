@@ -3,6 +3,8 @@ import { z } from 'zod';
 import apiWorker from '../../functions/api/[[route]].ts';
 import { apiErrorBody, readJson } from '../support/readJson';
 import { wranglerEnvVars } from '../support/wranglerToml';
+import { apiEnv, withoutVars } from '../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const healthBody = z.object({ status: z.string() }).passthrough();
 const authStatusBody = z
@@ -13,21 +15,21 @@ const authStatusBody = z
   })
   .passthrough();
 
-function buildEnv(overrides?: Record<string, unknown>) {
-  return {
+function buildEnv(overrides: Partial<Env> = {}) {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
-  } as any;
+  });
 }
 
-function productionEnv(overrides?: Record<string, unknown>) {
+function productionEnv(overrides: Partial<Env> = {}) {
   return buildEnv({
     AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
     ...overrides,
   });
 }
 
-const NO_AUTH_EMAIL_PROVIDER = { RESEND_API_KEY: undefined, USESEND_API_KEY: undefined };
+const NO_AUTH_EMAIL_PROVIDER = ['RESEND_API_KEY', 'USESEND_API_KEY'] as const;
 
 const postJson = (url: string, body: Record<string, unknown>) =>
   new Request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -74,10 +76,7 @@ describe('API Worker (no-wrangler integration)', () => {
   it('GET /api/health works with legacy JWT_SECRET when BETTER_AUTH_SECRET is missing', async () => {
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/health'),
-      buildEnv({
-        BETTER_AUTH_SECRET: undefined,
-        JWT_SECRET: 'legacy-fallback-secret-32-chars-minimum!!',
-      })
+      withoutVars(buildEnv({ JWT_SECRET: 'legacy-fallback-secret-32-chars-minimum!!' }), ['BETTER_AUTH_SECRET'])
     );
 
     expect(response.status).toBe(200);
@@ -181,18 +180,14 @@ describe('API Worker (no-wrangler integration)', () => {
   it('fails production sign-up email flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
       postJson("https://serplists.com/api/auth/sign-up/email", { email: "new-user@example.com", password: "password123456", name: "New User" }),
-      productionEnv(NO_AUTH_EMAIL_PROVIDER)
+      withoutVars(productionEnv(), NO_AUTH_EMAIL_PROVIDER)
     );
 
     await expectAuthEmailUnavailable(response);
   });
 
   it('refuses sign-up before Better Auth creates an account when verification is required but email cannot be sent', async () => {
-    const envWithNoDatabaseForBetterAuthToReach = buildEnv({
-      AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
-      RESEND_API_KEY: undefined,
-      USESEND_API_KEY: undefined,
-    });
+    const envWithNoDatabaseForBetterAuthToReach = withoutVars(buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "true" }), NO_AUTH_EMAIL_PROVIDER);
 
     const response = await apiWorker.fetch(
       postJson("http://localhost/api/auth/sign-up/email", { email: "new-user@example.com", password: "password123456", name: "New User" }),
@@ -207,14 +202,14 @@ describe('API Worker (no-wrangler integration)', () => {
   it('fails password reset flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
       postJson("http://localhost/api/auth/request-password-reset", { email: "existing-user@example.com", redirectTo: "http://localhost:8080/reset-password" }),
-      buildEnv(NO_AUTH_EMAIL_PROVIDER)
+      withoutVars(buildEnv(), NO_AUTH_EMAIL_PROVIDER)
     );
 
     await expectAuthEmailUnavailable(response);
   });
 
   it('reports auth email unavailable in auth status when no provider is configured', async () => {
-    await expectTheAuthStatus('http://localhost/api/auth/status', buildEnv(NO_AUTH_EMAIL_PROVIDER), {
+    await expectTheAuthStatus('http://localhost/api/auth/status', withoutVars(buildEnv(), NO_AUTH_EMAIL_PROVIDER), {
       emailAuthAvailable: false,
       emailVerificationRequired: false,
       accountRegistrationAvailable: true,
@@ -230,7 +225,7 @@ describe('API Worker (no-wrangler integration)', () => {
   });
 
   it('reports account registration unavailable on production when no auth email provider is configured', async () => {
-    await expectTheAuthStatus('https://serplists.com/api/auth/status', productionEnv(NO_AUTH_EMAIL_PROVIDER), {
+    await expectTheAuthStatus('https://serplists.com/api/auth/status', withoutVars(productionEnv(), NO_AUTH_EMAIL_PROVIDER), {
       emailAuthAvailable: false,
       emailVerificationRequired: true,
       accountRegistrationAvailable: false,

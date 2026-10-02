@@ -58,7 +58,7 @@ async function call(path: string, method: string, userId: string | null, body?: 
   const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }), d1.env as never);
+  }), d1.env);
   return { status: response.status, body: await readJson(response, jsonObject) };
 }
 

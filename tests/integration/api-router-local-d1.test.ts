@@ -29,7 +29,7 @@ function send(path: string, options: SendOptions = {}): Promise<Response> {
     headers,
     ...(body === undefined ? {} : { body }),
   });
-  return apiWorker.fetch(request, d1.env as never);
+  return apiWorker.fetch(request, d1.env);
 }
 
 const asOwner = (path: string, options: SendOptions = {}) => send(path, { ...options, cookie: ownerCookie });

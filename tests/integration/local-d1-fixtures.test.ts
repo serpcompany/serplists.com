@@ -36,6 +36,7 @@ import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
 import { platformProxyOnLocalD1, runToolInRepo } from "./local-d1-handler-env";
+import { apiEnv } from "../support/apiEnv";
 
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn() }));
 
@@ -427,7 +428,7 @@ describe("local Drizzle fixture commands", () => {
 
       const platform = await platformProxyOnLocalD1<{ DB: D1Database }>(persistPath);
       try {
-        const env = { DB: platform.env.DB } as unknown as Parameters<typeof handleTemplates>[1];
+        const env = apiEnv({ DB: platform.env.DB });
         const url = "http://localhost/api/templates/team-template-growth-launch";
         const load = async () => {
           const response = await handleTemplates(new Request(url), env);

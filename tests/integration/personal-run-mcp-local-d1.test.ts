@@ -24,6 +24,9 @@ import {
   insertPersonalRunKeyWithinCap,
   MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../../functions/api/utils/personal-run-key";
+import { optionalRecordIn, recordIn, recordsIn, textIn } from "../support/mcpResponses";
+import { storedSectionsIn } from "../support/storedJson";
+import { contentAt, subTaskAt, taskIn } from "../support/elements";
 
 let runId = "";
 
@@ -105,8 +108,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       permissions: '["templates:read","runs:read","runs:write"]',
     });
 
-    const toolsBody = await bodyOf(await handleAgentMcp(mcpRequest("tools/list"), env as never));
-    expect(((toolsBody.result as JsonRecord).tools as JsonRecord[]).map(({ name }) => name)).toEqual([
+    const toolsBody = await bodyOf(await handleAgentMcp(mcpRequest("tools/list"), env));
+    expect(recordsIn(recordIn(toolsBody.result).tools).map(({ name }) => name)).toEqual([
       "list_templates",
       "get_template",
       "start_run",
@@ -116,7 +119,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     ]);
 
     const listBody = await bodyOf(await callTool("list_templates"));
-    expect((toolPayload(listBody).templates as JsonRecord[]).map(({ id }) => id)).toEqual(["template-a"]);
+    expect(recordsIn(toolPayload(listBody).templates).map(({ id }) => id)).toEqual(["template-a"]);
 
     const foreignTemplate = await bodyOf(await callTool("start_run", { templateId: "template-b" }));
     expect(toolError(foreignTemplate)).toBe("template_not_found");
@@ -129,9 +132,9 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       templateId: "template-a",
       title: "Local D1 MCP Trial",
     }));
-    const startedRun = toolPayload(startBody).run as JsonRecord;
+    const startedRun = recordIn(toolPayload(startBody).run);
     expect(startedRun).toMatchObject({ title: "Local D1 MCP Trial", revision: 1, progress: 0 });
-    runId = startedRun.id as string;
+    runId = textIn(startedRun.id);
 
     const noteBody = await bodyOf(await callTool("update_run", {
       runId,
@@ -160,12 +163,12 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       revision: 3,
       progress: 33,
     });
-    const sections = JSON.parse(storedRun.items as string);
-    expect(sections[0].items[0]).toMatchObject({
+    const sections = storedSectionsIn(storedRun.items);
+    expect(taskIn(sections, 0, 0)).toMatchObject({
       notes: "Verified against the disposable local D1 database.",
       isCompleted: false,
     });
-    expect(sections[0].items[0].contents[0].subItems[0].isCompleted).toBe(true);
+    expect(subTaskAt(contentAt(taskIn(sections, 0, 0), 0), 0).isCompleted).toBe(true);
 
     const history = await rows<JsonRecord>(
       "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? ORDER BY created_at",
@@ -239,7 +242,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       });
       const body = await bodyOf(response);
       expect(response.status).toBe(200);
-      expect((body.error as JsonRecord | undefined)?.code).toBe(-32603);
+      expect(optionalRecordIn(body.error)?.code).toBe(-32603);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_test_mcp_audit").run();
     }
@@ -278,7 +281,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)
       .run();
-    const denied = await handleAgentMcp(mcpRequest("tools/list"), env as never);
+    const denied = await handleAgentMcp(mcpRequest("tools/list"), env);
     expect(denied.status).toBe(401);
 
     await env.DB.prepare(`
@@ -314,7 +317,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
 
     const parallelCreatesPastTheCap = MAX_ACTIVE_PERSONAL_RUN_KEYS + 2;
     const results = await Promise.all(
-      Array.from({ length: parallelCreatesPastTheCap }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
+      Array.from({ length: parallelCreatesPastTheCap }, (_, index) => insertPersonalRunKeyWithinCap(env, record(index))),
     );
     expect(results.filter(Boolean)).toHaveLength(MAX_ACTIVE_PERSONAL_RUN_KEYS);
     expect(await rows("SELECT id FROM personal_run_keys WHERE user_id = 'cap-user' AND revoked_at IS NULL"))
@@ -323,8 +326,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T05:00:00.000Z", "cap-key-0")
       .run();
-    expect(await insertPersonalRunKeyWithinCap(env as never, record(20))).toBe(true);
-    expect(await insertPersonalRunKeyWithinCap(env as never, record(21))).toBe(false);
+    expect(await insertPersonalRunKeyWithinCap(env, record(20))).toBe(true);
+    expect(await insertPersonalRunKeyWithinCap(env, record(21))).toBe(false);
     expect(await rows("SELECT permissions FROM personal_run_keys WHERE id = 'cap-key-20'"))
       .toEqual([{ permissions: '["runs:read"]' }]);
   });

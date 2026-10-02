@@ -66,3 +66,5 @@ export const recordsIn = (value: unknown) => z.array(jsonObject).parse(value);
 export const optionalRecordIn = (value: unknown) => (value === undefined ? undefined : recordIn(value));
 
 export const textIn = (value: unknown) => z.string().parse(value);
+
+export const numberIn = (value: unknown) => z.number().parse(value);

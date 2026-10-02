@@ -59,7 +59,7 @@ async function seed() {
 
 async function listAs(userId: string, query = ""): Promise<Record<string, RunRow>> {
   vi.mocked(getSessionUserId).mockResolvedValue(userId);
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists${query}`), d1.env as never);
+  const response = await handleChecklists(new Request(`http://localhost/api/checklists${query}`), d1.env);
   expect(response.status).toBe(200);
   const runs = await readJson(response, runRows);
   return Object.fromEntries(runs.map((run) => [run.id, run]));
@@ -70,7 +70,7 @@ async function revalidateAs(userId: string, runId: string) {
   return handleChecklists(new Request(`http://localhost/api/checklists/${runId}/revalidate`, {
     method: "POST",
     body: JSON.stringify({ expected_revision: 1 }),
-  }), d1.env as never);
+  }), d1.env);
 }
 
 async function storedItems(runId: string): Promise<string> {

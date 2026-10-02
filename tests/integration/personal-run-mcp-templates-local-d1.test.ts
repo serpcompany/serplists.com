@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
-import { elementAt, firstOf, onlyElement } from "../support/elements";
+import { elementAt, firstOf, onlyElement, present } from "../support/elements";
 import {
   bodyOf,
   byteLength,
@@ -24,6 +24,9 @@ import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-r
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
 import { readRunInFull } from "../support/runPages";
 import { readTemplateInFull } from "../support/templatePages";
+import { objectContaining } from "../support/asymmetricMatchers";
+import { numberIn, optionalRecordIn, recordIn, recordsIn, textIn } from "../support/mcpResponses";
+import { jsonRecordIn, jsonRecordsIn, storedSections, storedSectionsIn } from "../support/storedJson";
 
 describe.sequential("Personal Run Key MCP against real local D1", () => {
   beforeAll(startLocalD1WithARunKeyForUserA, 60_000);
@@ -75,7 +78,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     await env.DB.batch(importedInOneRequestAndNeverEdited);
 
     const payload = toolPayload(await bodyOf(await callTool("list_templates", {}, 71)));
-    const ids = (payload.templates as JsonRecord[]).map(({ id }) => id);
+    const ids = recordsIn(payload.templates).map(({ id }) => id);
 
     expect(ids.slice(0, 2)).toEqual(["imported-b", "imported-a"]);
     expect(ids).toContain("template-a");
@@ -83,7 +86,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(byteLength(payload)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
 
     const nextPageWithTheOldestEdits = toolPayload(await bodyOf(await callTool("list_templates", { cursor: payload.nextCursor }, 72)));
-    expect((nextPageWithTheOldestEdits.templates as JsonRecord[]).map(({ id }) => id))
+    expect(recordsIn(nextPageWithTheOldestEdits.templates).map(({ id }) => id))
       .toEqual(["edited-004", "edited-003", "edited-002", "edited-001", "edited-000"]);
     expect(nextPageWithTheOldestEdits).not.toHaveProperty("nextCursor");
   });
@@ -118,27 +121,27 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       sections,
       tags: ["harness"],
     }));
-    const created = toolPayload(createBody).template as JsonRecord;
+    const created = recordIn(toolPayload(createBody).template);
     expect(created).toMatchObject({ title: "Agent Harness Setup", version: 1, tags: ["harness"] });
-    const templateId = created.id as string;
+    const templateId = textIn(created.id);
     const [storedTemplate] = await rows<JsonRecord>(
       "SELECT user_id, owner_type, team_id, is_public FROM templates WHERE id = ?",
       templateId,
     );
     expect(storedTemplate).toEqual({ user_id: "user-a", owner_type: "user", team_id: null, is_public: 0 });
 
-    const createdSection = firstOf(created.sections as JsonRecord[]);
-    const createdTask = firstOf(createdSection.items as JsonRecord[]);
+    const createdSection = firstOf(recordsIn(created.sections));
+    const createdTask = firstOf(recordsIn(createdSection.items));
     expect(typeof createdSection.id).toBe("string");
     expect(typeof createdTask.id).toBe("string");
 
     const startBody = await bodyOf(await callTool("start_run", { templateId }));
-    const templateRunId = (toolPayload(startBody).run as JsonRecord).id as string;
+    const templateRunId = textIn(recordIn(toolPayload(startBody).run).id);
     await callTool("update_run", {
       runId: templateRunId,
       expectedRevision: 1,
       operation: "set_task_completed",
-      taskId: createdTask.id as string,
+      taskId: textIn(createdTask.id),
       completed: true,
     });
 
@@ -147,13 +150,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       expectedVersion: 1,
       sections: [{ ...createdSection, items: [createdTask, { title: "Verify" }] }],
     }));
-    const updated = toolPayload(updateBody).template as JsonRecord;
+    const updated = recordIn(toolPayload(updateBody).template);
     expect(updated.version).toBe(2);
-    expect((firstOf(updated.sections as JsonRecord[]).items as JsonRecord[]).map(({ title }) => title))
+    expect(recordsIn(firstOf(recordsIn(updated.sections)).items).map(({ title }) => title))
       .toEqual(["Install", "Verify"]);
 
     const runBody = await bodyOf(await callTool("get_run", { runId: templateRunId }));
-    const runTasks = firstOf((toolPayload(runBody).run as JsonRecord).sections as JsonRecord[]).items as JsonRecord[];
+    const runTasks = recordsIn(firstOf(recordsIn(recordIn(toolPayload(runBody).run).sections)).items);
     expect(runTasks.map(({ title, isCompleted }) => ({ title, isCompleted: isCompleted === true }))).toEqual([
       { title: "Install", isCompleted: true },
       { title: "Verify", isCompleted: false },
@@ -193,7 +196,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     ]);
 
     const publicRead = await bodyOf(await callTool("get_template", { templateId: "template-public" }));
-    expect((toolPayload(publicRead).template as JsonRecord).title).toBe("Published SOP");
+    expect(recordIn(toolPayload(publicRead).template).title).toBe("Published SOP");
     const publicWrite = await bodyOf(await callTool("update_template", {
       templateId: "template-public",
       expectedVersion: 1,
@@ -204,8 +207,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const viaQuery = await bodyOf(await handleAgentMcp(mcpRequest("tools/call", {
       name: "create_template",
       arguments: { title: "Created with teamId query", sections },
-    }, 1, "/api/mcp?teamId=team-a"), env as never));
-    const viaQueryId = (toolPayload(viaQuery).template as JsonRecord).id;
+    }, 1, "/api/mcp?teamId=team-a"), env));
+    const viaQueryId = recordIn(toolPayload(viaQuery).template).id;
     expect(await rows("SELECT owner_type, team_id, is_public FROM templates WHERE id = ?", viaQueryId)).toEqual([
       { owner_type: "user", team_id: null, is_public: 0 },
     ]);
@@ -219,7 +222,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
 
     for (const extra of [{ is_public: true }, { teamId: "team-a" }, { visibility: "public" }]) {
       const body = await bodyOf(await callTool("create_template", { title: "Escalation", sections, ...extra }));
-      expect(((body.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
+      expect(recordIn(recordIn(body.error).data).code).toBe("invalid_arguments");
     }
 
     expect(await rows(
@@ -254,15 +257,15 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       sections,
     })));
     expect(created.sectionsOmitted).toBe(true);
-    const templateId = (created.template as JsonRecord).id as string;
+    const templateId = textIn(recordIn(created.template).id);
 
     const resultBytes: number[] = [];
     const readTool = async (args: JsonRecord) => {
       const body = await bodyOf(await callTool("get_template", args));
-      const result = body.result as JsonRecord;
+      const result = recordIn(body.result);
       expect(result.isError).toBeUndefined();
       resultBytes.push(new TextEncoder().encode(JSON.stringify(result.structuredContent)).byteLength);
-      return result.structuredContent as JsonRecord;
+      return recordIn(result.structuredContent);
     };
 
     const { template, results } = await readTemplateInFull(readTool, templateId);
@@ -270,9 +273,9 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(template.sections).toEqual(sections);
     expect(Math.max(...resultBytes)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     expect(results.length).toBeLessThan(RUN_KEY_REQUESTS_PER_MINUTE / 3);
-    expect(results.some((result) => (result.part as JsonRecord | undefined)?.of === "task")).toBe(true);
-    expect(results.some((result) => typeof (result.section as JsonRecord | undefined)?.firstTask === "number")).toBe(true);
-    const guideCursor = (await readTool({ templateId, sectionId: "guide" })).nextCursor as string;
+    expect(results.some((result) => optionalRecordIn(result.part)?.of === "task")).toBe(true);
+    expect(results.some((result) => typeof optionalRecordIn(result.section)?.firstTask === "number")).toBe(true);
+    const guideCursor = textIn((await readTool({ templateId, sectionId: "guide" })).nextCursor);
     expect(typeof guideCursor).toBe("string");
 
     const update = async (args: JsonRecord) => toolPayload(await bodyOf(await callTool("update_template", { templateId, ...args })));
@@ -287,7 +290,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       beforeTaskId: "guide-long",
       task: { title: "Read the summary first" },
     });
-    const insertedId = inserted.taskId as string;
+    const insertedId = textIn(inserted.taskId);
     expect(insertedId).toMatch(/^item_/);
     expect(inserted.task).toEqual({ id: insertedId, title: "Read the summary first" });
 
@@ -306,25 +309,25 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const staleRead = await bodyOf(await callTool("get_template", { templateId, cursor: guideCursor }));
     expect(toolError(staleRead)).toBe("edit_conflict");
 
-    const templateWithOnlyThoseFourChanges = structuredClone(sections);
-    const checks = elementAt(templateWithOnlyThoseFourChanges, 1).items as JsonRecord[];
-    checks[7] = { ...checks[7], title: "Check the pager" };
-    (firstOf(templateWithOnlyThoseFourChanges).items as JsonRecord[]).splice(1, 0, { id: insertedId, title: "Read the summary first" });
-    templateWithOnlyThoseFourChanges.push(templateWithOnlyThoseFourChanges.shift() as JsonRecord);
-    (elementAt(templateWithOnlyThoseFourChanges, 1).items as JsonRecord[]).splice(3, 1);
+    const templateWithOnlyThoseFourChanges = storedSections.parse(structuredClone(sections));
+    const checks = elementAt(templateWithOnlyThoseFourChanges, 1).items;
+    checks[7] = { ...elementAt(checks, 7), title: "Check the pager" };
+    firstOf(templateWithOnlyThoseFourChanges).items.splice(1, 0, { id: insertedId, title: "Read the summary first" });
+    templateWithOnlyThoseFourChanges.push(present(templateWithOnlyThoseFourChanges.shift(), "the guide section"));
+    elementAt(templateWithOnlyThoseFourChanges, 1).items.splice(3, 1);
     const stored = onlyElement(await rows<JsonRecord>("SELECT items, version FROM templates WHERE id = ?", templateId));
     expect(stored.version).toBe(5);
-    expect(JSON.parse(stored.items as string)).toEqual(templateWithOnlyThoseFourChanges);
+    expect(storedSectionsIn(stored.items)).toEqual(templateWithOnlyThoseFourChanges);
 
     const outline = await readTool({ templateId });
-    expect((outline.outline as JsonRecord[]).map(({ id }) => id).at(-1)).toBe("guide");
+    expect(recordsIn(outline.outline).map(({ id }) => id).at(-1)).toBe("guide");
     expect(await readTool({ templateId, taskId: insertedId })).toMatchObject({ sectionId: "guide", task: { id: insertedId } });
 
     const history = await rows<JsonRecord>(
       "SELECT metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? AND action = 'template.updated' ORDER BY created_at",
       templateId,
     );
-    expect(history.map(({ metadata_json }) => (JSON.parse(String(metadata_json)) as JsonRecord).operation))
+    expect(history.map(({ metadata_json }) => jsonRecordIn(metadata_json).operation))
       .toEqual(["replace_task", "insert_task", "move_section", "remove_task"]);
   }, 60_000);
 
@@ -348,7 +351,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       calls += 1;
       const body = await bodyOf(await handleAgentMcp(
         mcpRequest("tools/call", { name, arguments: args }, calls, "/api/mcp", runKeyOfItsOwnForTheLongRead.key),
-        env as never,
+        env,
       ));
       expect(body.error, `${name}: ${JSON.stringify(body.error)}`).toBeUndefined();
       const payload = toolPayload(body);
@@ -362,14 +365,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     };
 
     const created = await tool("create_template", { title: "Incident Runbook", sections: sectionsAbout1KbUnderTheTemplateLimit() });
-    const templateId = (created.template as JsonRecord).id as string;
+    const templateId = textIn(recordIn(created.template).id);
     const started = await tool("start_run", { templateId, title: "Incident drill" });
     expect(started).toMatchObject({ run: { title: "Incident drill", revision: 1 }, sectionsOmitted: true });
-    const runId = (started.run as JsonRecord).id as string;
+    const runId = textIn(recordIn(started.run).id);
     let revision = 1;
     const update = async (args: JsonRecord) => {
       const result = await tool("update_run", { runId, expectedRevision: revision, ...args });
-      revision = (result.run as JsonRecord).revision as number;
+      revision = numberIn(recordIn(result.run).revision);
       return result;
     };
     const storedRun = async () => onlyElement(await rows<JsonRecord>(
@@ -385,32 +388,32 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     ];
     let version = 1;
     for (const operation of removalsOfTheNotedSectionAndTaskTheRunKeepsAsRetiredWork) {
-      version = ((await tool("update_template", { templateId, expectedVersion: version, ...operation })).template as JsonRecord).version as number;
+      version = numberIn(recordIn((await tool("update_template", { templateId, expectedVersion: version, ...operation })).template).version);
     }
     revision = Number((await storedRun()).revision);
     expect(revision).toBe(5);
 
     for (let area = 1; ; area += 1) {
-      const roomLeftAbove1KbUnderTheRunLimit = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(JSON.parse(String((await storedRun()).items)));
+      const roomLeftAbove1KbUnderTheRunLimit = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(storedSectionsIn((await storedRun()).items));
       if (roomLeftAbove1KbUnderTheRunLimit < 1_000) break;
       const notes = notesWithinUtf16Units(Math.min(MAX_TASK_NOTES_LENGTH, Math.floor(roomLeftAbove1KbUnderTheRunLimit / 1.1)));
       await update({ operation: "set_task_notes", taskId: `area-${area}-0`, notes });
     }
     const stored = await storedRun();
-    const storedSections = JSON.parse(String(stored.items)) as JsonRecord[];
-    const storedRetired = JSON.parse(String(stored.retired_items)) as JsonRecord[];
-    expect(contentSaveBytes(storedSections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
-    expect(contentSaveBytes(storedSections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES - 4 * 1024);
+    const storedRunSections = storedSectionsIn(stored.items);
+    const storedRetired = jsonRecordsIn(stored.retired_items);
+    expect(contentSaveBytes(storedRunSections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
+    expect(contentSaveBytes(storedRunSections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES - 4 * 1024);
     expect(storedRetired.map(({ kind }) => kind)).toEqual(["section", "item"]);
 
     const before = calls;
     const { run, results } = await readRunInFull((args) => tool("get_run", args), runId);
     expect(run).toMatchObject({ id: runId, title: "Incident drill", revision, templateVersion: 3 });
-    expect(run.sections).toEqual(storedSections);
+    expect(run.sections).toEqual(storedRunSections);
     expect(run.retiredItems).toEqual(storedRetired);
-    const parts = new Set(results.flatMap((result) => (result.part ? [(result.part as JsonRecord).of] : [])));
+    const parts = new Set(results.flatMap((result) => (result.part ? [recordIn(result.part).of] : [])));
     expect(parts).toEqual(new Set(["task", "retiredItem"]));
-    expect(results.some((result) => typeof (result.section as JsonRecord | undefined)?.firstTask === "number")).toBe(true);
+    expect(results.some((result) => typeof optionalRecordIn(result.section)?.firstTask === "number")).toBe(true);
     expect(calls - before).toBe(results.length);
     expect(results.length).toBeLessThan(80);
     const staleCursor = results.find((result) => typeof result.nextCursor === "string")?.nextCursor;
@@ -419,14 +422,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const ticked = await update({ operation: "set_task_completed", taskId: "check-100", completed: true });
     expect(ticked).toMatchObject({ sectionId: "checks", taskId: "check-100", task: { id: "check-100", isCompleted: true } });
     const noted = await update({ operation: "set_task_notes", taskId: "guide-long", notes: "Read the summary first." });
-    expect(noted).toEqual({ run: expect.objectContaining({ id: runId, revision }), sectionId: "guide", taskId: "guide-long", taskOmitted: true });
+    expect(noted).toEqual({ run: objectContaining({ id: runId, revision }), sectionId: "guide", taskId: "guide-long", taskOmitted: true });
     expect(await call("get_run", { runId, cursor: staleCursor })).toMatchObject({
       error: "edit_conflict",
       details: { currentRevision: revision },
     });
 
-    const after = JSON.parse(String((await storedRun()).items)) as JsonRecord[];
-    const task = (sectionIndex: number, taskId: string) => ((elementAt(after, sectionIndex).items as JsonRecord[]).find(({ id }) => id === taskId));
+    const after = storedSectionsIn((await storedRun()).items);
+    const task = (sectionIndex: number, taskId: string) => elementAt(after, sectionIndex).items.find(({ id }) => id === taskId);
     expect(task(1, "check-100")).toMatchObject({ isCompleted: true });
     expect(task(0, "guide-long")).toMatchObject({ notes: "Read the summary first." });
     expect(await call("get_run", { runId, taskId: "check-100" })).toMatchObject({ sectionId: "checks", task: { isCompleted: true } });
