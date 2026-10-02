@@ -52,12 +52,12 @@ describe('getTemplateRecencyTime', () => {
   });
 
   describe('in a time zone far from UTC', () => {
-    const zoneBefore = process.env.TZ;
+    const zoneBefore = process.env['TZ'];
     beforeEach(() => {
-      process.env.TZ = 'Asia/Tokyo';
+      process.env['TZ'] = 'Asia/Tokyo';
     });
     afterEach(() => {
-      process.env.TZ = zoneBefore;
+      process.env['TZ'] = zoneBefore;
     });
 
     it('reads an ISO timestamp with a T and no zone as UTC, as D1 stores times, not as local time', () => {

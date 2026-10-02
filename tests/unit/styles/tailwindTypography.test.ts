@@ -61,8 +61,8 @@ describe('Tailwind typography for markdown blocks, without which Preflight strip
   });
 
   it('does not wrap inline code in literal backticks', () => {
-    expect(winningDeclarationsFor('.prose :where(code)::before').content).toBe('none');
-    expect(winningDeclarationsFor('.prose :where(code)::after').content).toBe('none');
+    expect(winningDeclarationsFor('.prose :where(code)::before')['content']).toBe('none');
+    expect(winningDeclarationsFor('.prose :where(code)::after')['content']).toBe('none');
   });
 
   it('shows task list checkboxes without bullets', () => {

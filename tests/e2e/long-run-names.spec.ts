@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { apiRecord as callApi } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { apiRunSchema, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 const TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES = 160;
@@ -9,13 +10,13 @@ test('Start Run on a public template with a 160-character title creates the run 
   await loginAsAdmin(page);
   const stamp = String(Date.now());
   const title = `Long ${stamp} `.padEnd(TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES, 'x');
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title,
     slug: `long-run-name-${stamp}`,
     is_public: true,
     sections: [{ id: 'long-section', title: 'Section', items: [{ id: 'long-item', title: 'Task' }] }],
   });
-  const templateId = String(created.id);
+  const templateId = created.id;
   let runId: string | undefined;
 
   try {
@@ -25,7 +26,7 @@ test('Start Run on a public template with a 160-character title creates the run 
     await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
     runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
 
-    const run = await callApi(page, 'GET', `/checklists/${runId}`);
+    const run = await apiJsonAt(page, `/checklists/${runId}`, 'GET', apiRunSchema);
     expect(String(run.title).length).toBeLessThanOrEqual(TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES);
     expect(String(run.title).startsWith(`Long ${stamp}`)).toBe(true);
   } finally {

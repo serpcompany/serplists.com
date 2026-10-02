@@ -8,7 +8,7 @@ const get = (request: APIRequestContext, path: string, headers: Record<string, s
   request.get(`${APP_URL}${path}`, { headers, maxRedirects: 0 });
 
 const redirectTargetOf = (response: { headers(): Record<string, string> }, base = APP_URL) =>
-  new URL(response.headers().location ?? '', base).href;
+  new URL(response.headers()['location'] ?? '', base).href;
 
 const PAGES = [
   '/',

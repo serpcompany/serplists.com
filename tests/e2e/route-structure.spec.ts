@@ -163,7 +163,7 @@ test.describe('route structure', () => {
     for (const path of ['/run/run-1?from=email', '/run/run-1/?from=email']) {
       const response = await request.get(path, { maxRedirects: 0 });
       expect(response.status(), path).toBe(308);
-      const location = new URL(response.headers().location ?? '', API_BASE_URL);
+      const location = new URL(response.headers()['location'] ?? '', API_BASE_URL);
       expect(`${location.pathname}${location.search}`, path).toBe('/dashboard/runs/run-1/?from=email');
     }
   });

@@ -4,7 +4,7 @@ import { username } from 'better-auth/plugins';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
 import { betterAuthLogger } from '@functions/api/utils/better-auth-logger';
-import { jsonRecordIn } from '../../../support/storedJson';
+import { logLineIn } from '../../../support/storedJson';
 
 const BASE_URL = 'http://localhost:8788';
 const VICTIM = 'victim@example.com';
@@ -63,11 +63,11 @@ describe('betterAuthLogger', () => {
     betterAuthLogger.log('error', 'INTERNAL_SERVER_ERROR', queryError);
 
     expectStructuredAndClean(captured, [VICTIM, 'sess_SECRET_TOKEN']);
-    const entry = jsonRecordIn(firstOf(captured).line);
+    const entry = logLineIn(firstOf(captured).line);
     expect(firstOf(captured).method).toBe('error');
     expect(entry).toMatchObject({ level: 'error', detail: 'INTERNAL_SERVER_ERROR', errorName: 'DrizzleQueryError' });
-    expect(entry.errorMessage).toContain('Failed query: select "id" from "session"');
-    expect(entry.errorCause).toContain('Network connection lost');
+    expect(entry['errorMessage']).toContain('Failed query: select "id" from "session"');
+    expect(entry['errorCause']).toContain('Network connection lost');
   });
 
   it('handles an Error passed as the message', () => {

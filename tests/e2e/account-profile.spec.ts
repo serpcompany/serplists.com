@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
 import { fulfillJson, routeTheApi } from './support/mocked-api';
-import { jsonRecord } from './support/api-bodies';
+
+const updateUserBody = z.object({ image: z.unknown(), name: z.unknown(), username: z.unknown() }).passthrough();
 
 const AVATAR_URL = 'https://avatars.e2e.test/new-avatar.png';
 const TRANSPARENT_PIXEL_PNG = Buffer.from(
@@ -40,7 +42,7 @@ async function mockProfileApi(page: Page) {
     }
 
     if (path === '/api/auth/update-user' && method === 'POST') {
-      const body = jsonRecord.parse(request.postDataJSON());
+      const body = updateUserBody.parse(request.postDataJSON());
       updateRequests.push(body);
       if ('image' in body) user.image = typeof body.image === 'string' ? body.image : null;
       if (typeof body.name === 'string') user.name = body.name;

@@ -149,7 +149,7 @@ const allowedToolsIn = (file: string) =>
     .flatMap((job) => job.steps ?? [])
     .filter((step) => step.uses?.startsWith('anthropics/claude-code-action'))
     .flatMap((step) => {
-      const list = /--allowedTools\s+"([^"]*)"/.exec(String(step.with?.claude_args ?? ''))?.[1] ?? '';
+      const list = /--allowedTools\s+"([^"]*)"/.exec(String(step.with?.['claude_args'] ?? ''))?.[1] ?? '';
       return list.split(',').map((tool) => tool.trim()).filter(Boolean);
     });
 

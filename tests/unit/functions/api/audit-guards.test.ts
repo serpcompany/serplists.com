@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { firstOf, present } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
-import { jsonObject, readJson } from '../../../support/readJson';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+import type { StoredRow } from '../../../support/d1Doubles';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQL } from 'drizzle-orm';
+import { SQL } from 'drizzle-orm';
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -12,9 +13,26 @@ import { updateTemplateForUser } from '@functions/api/handlers/template-update';
 import { getSessionUserId } from '@functions/api/utils/session';
 
 type Statement =
-  | { kind: 'update'; table: unknown; values: Record<string, unknown>; where: SQL }
-  | { kind: 'insert'; table: unknown; values: Record<string, unknown> }
+  | { kind: 'update'; table: unknown; values: StoredRow | undefined; where: SQL }
+  | { kind: 'insert'; table: unknown; values: StoredRow }
   | { kind: 'insert-select'; table: unknown; query: SQL };
+
+const builtStatements: Statement[] = [];
+
+function sqlIn(value: unknown): SQL {
+  if (value instanceof SQL) return value;
+  throw new Error(`Expected a drizzle SQL expression, but got ${typeof value}.`);
+}
+
+function queryOf(statement: Statement | undefined): SQL {
+  if (statement?.kind !== 'insert-select') throw new Error(`Expected an INSERT ... SELECT, but got ${statement?.kind ?? 'nothing'}.`);
+  return statement.query;
+}
+
+function whereOf(statement: Statement | undefined): SQL {
+  if (statement?.kind !== 'update') throw new Error(`Expected an UPDATE, but got ${statement?.kind ?? 'nothing'}.`);
+  return statement.where;
+}
 
 const dialect = new SQLiteSyncDialect();
 const render = (value: SQL) => dialect.sqlToQuery(value).sql;
@@ -63,31 +81,32 @@ async function send(handler: typeof handleChecklists, path: string, method: stri
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), mockEnv);
-  return { status: response.status, body: await readJson(response, jsonObject) };
+  return { status: response.status, body: await readJson(response, apiErrorBody) };
 }
 
 function recordTheStatementsEachWriteBuilds() {
-  dbMocks.insertChain.values.mockImplementation((values: Record<string, unknown>) => ({
-    kind: 'insert',
-    table: dbMocks.db.insert.mock.lastCall?.[0],
-    values,
-  }));
-  dbMocks.insertChain.select.mockImplementation((query: unknown) => ({
-    kind: 'insert-select',
-    table: dbMocks.db.insert.mock.lastCall?.[0],
-    query,
-  }));
-  dbMocks.updateChain.where.mockImplementation((where: unknown) => ({
-    kind: 'update',
-    table: dbMocks.db.update.mock.lastCall?.[0],
-    values: dbMocks.updateChain.set.mock.lastCall?.[0],
-    where,
-  }));
+  builtStatements.length = 0;
+  const built = (statement: Statement) => {
+    builtStatements.push(statement);
+    return statement;
+  };
+  dbMocks.insertChain.values.mockImplementation((values) =>
+    built({ kind: 'insert', table: dbMocks.db.insert.mock.lastCall?.[0], values }));
+  dbMocks.insertChain.select.mockImplementation((query) =>
+    built({ kind: 'insert-select', table: dbMocks.db.insert.mock.lastCall?.[0], query: sqlIn(query) }));
+  dbMocks.updateChain.where.mockImplementation((where) =>
+    built({
+      kind: 'update',
+      table: dbMocks.db.update.mock.lastCall?.[0],
+      values: dbMocks.updateChain.set.mock.lastCall?.[0],
+      where: sqlIn(where),
+    }));
 }
 
 function batchStatements(): Statement[] {
   expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
-  return firstOf(dbMocks.db.batch.mock.calls)[0] as Statement[];
+  return firstOf(dbMocks.db.batch.mock.calls)[0].map((passed) =>
+    present(builtStatements.find((statement) => statement === passed), 'a statement the test recorded being built'));
 }
 
 function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: string[]) {
@@ -97,7 +116,7 @@ function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: strin
   const updateIndex = statements.findIndex((statement) => statement.kind === 'update' && statement.table === table);
   expect(auditIndex).toBeGreaterThanOrEqual(0);
   expect(updateIndex).toBeGreaterThan(auditIndex);
-  const guard = render((statements[auditIndex] as { query: SQL }).query);
+  const guard = render(queryOf(statements[auditIndex]));
   for (const fragment of guardFragments) expect(guard).toContain(fragment);
   return statements;
 }
@@ -183,9 +202,9 @@ describe('audit rows are written only when the guarded write lands', () => {
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
     const versionInsert = statements.find((statement) => statement.table === schema.template_versions);
     expect(versionInsert?.kind).toBe('insert-select');
-    expect(render((versionInsert as { query: SQL }).query)).toContain('"audit_events"');
+    expect(render(queryOf(versionInsert))).toContain('"audit_events"');
     const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklist_runs);
-    expect(render((runUpdate as { where: SQL }).where)).toContain('"audit_events"');
+    expect(render(whereOf(runUpdate))).toContain('"audit_events"');
   });
 
   it('Run Key template edit: a template published meanwhile is not edited or audited', async () => {
@@ -201,7 +220,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     );
 
     expect(response.status).toBe(409);
-    expect((await readJson(response, jsonObject)).code).toBe('edit_conflict');
+    expect((await readJson(response, apiErrorBody)).code).toBe('edit_conflict');
     expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
   });
 
@@ -212,7 +231,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
     const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
-    expect(render((auditInsert as { query: SQL }).query)).not.toContain('"is_public"');
+    expect(render(queryOf(auditInsert))).not.toContain('"is_public"');
   });
 
   it('template archive: a concurrent archive does not report a second success', async () => {

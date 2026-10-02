@@ -13,12 +13,12 @@ const ECMASCRIPT_DATE_TIME_FORMAT = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d
 
 const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
 
-const originalTz = process.env.TZ;
+const originalTz = process.env['TZ'];
 beforeAll(() => {
-  process.env.TZ = ZONE_FAR_FROM_UTC;
+  process.env['TZ'] = ZONE_FAR_FROM_UTC;
 });
 afterAll(() => {
-  process.env.TZ = originalTz;
+  process.env['TZ'] = originalTz;
 });
 
 describe('parseDbTimestamp', () => {

@@ -1,5 +1,6 @@
 import { assert, describe, expect, it } from 'vitest';
 import { elementAt } from '../../support/elements';
+import { isContentRecord } from '@/lib/schemas/jsonRecords';
 
 import { templatePackModules } from '@/data/public-template-packs';
 import { renderStaticHeaders } from '@/lib/http/securityHeaders';
@@ -28,12 +29,11 @@ const collectPackVideoValues = (): string[] => {
       node.forEach(visit);
       return;
     }
-    if (!node || typeof node !== 'object') return;
-    const record = node as Record<string, unknown>;
-    if (record.type === 'video' && typeof record.value === 'string') {
-      values.push(record.value);
+    if (!isContentRecord(node)) return;
+    if (node.type === 'video' && typeof node.value === 'string') {
+      values.push(node.value);
     }
-    Object.values(record).forEach(visit);
+    Object.values(node).forEach(visit);
   };
   Object.values(templatePackModules).forEach(visit);
   return values;

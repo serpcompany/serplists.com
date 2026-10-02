@@ -21,6 +21,8 @@ export const slugBody = z.object({ slug: z.string() }).passthrough();
 export const importBody = z
   .object({
     imported: z.number(),
+    total: z.unknown(),
+    successes: z.unknown(),
     failed: z.array(z.object({ index: z.number(), code: z.string(), reason: z.string() }).passthrough()),
   })
   .passthrough();

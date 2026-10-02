@@ -52,8 +52,8 @@ describe('the staging deploy', () => {
   });
 
   it('builds as staging, kept out of search engines, with Agent Access shown', () => {
-    expect(deployJob.env.SITE_ENV).toBe('staging');
-    expect(deployJob.env.NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED).toBe('true');
+    expect(deployJob.env['SITE_ENV']).toBe('staging');
+    expect(deployJob.env['NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED']).toBe('true');
     expect(indexOfStepRunning('pnpm run build:worker')).toBeGreaterThan(-1);
   });
 
@@ -77,7 +77,7 @@ describe('the staging deploy', () => {
     for (const command of ['node scripts/verify-deployment.mjs', 'node scripts/check-site-standards.mjs "$DEPLOY_URL" staging']) {
       const probe = steps.find((step) => step.run?.trim() === command);
       assert.exists(probe, `no step runs ${command}`);
-      expect(probe.env?.DEPLOY_URL).toBe('${{ steps.deploy.outputs.url }}');
+      expect(probe.env?.['DEPLOY_URL']).toBe('${{ steps.deploy.outputs.url }}');
       expect(steps.indexOf(probe)).toBeGreaterThan(deployIndex);
     }
   });

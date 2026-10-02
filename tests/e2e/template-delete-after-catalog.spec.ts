@@ -2,12 +2,16 @@ import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
-import { jsonRecords } from './support/api-bodies';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { confirmTheTemplateDelete, createOneTaskTemplate } from './support/template-editor';
 
-const catalogRowsSchema = z.array(z.record(z.unknown()));
+interface CatalogRow extends Record<string, unknown> {
+  id?: unknown;
+  owner_username?: unknown;
+}
+
+const catalogRowsSchema = z.array(z.record(z.unknown()).transform((row): CatalogRow => row));
 
 async function loadThePublicCatalogFromTheRunsPage(page: Page) {
   const catalogLoaded = page.waitForResponse((response) => response.url().includes('/api/templates?scope=public'));
@@ -55,7 +59,7 @@ test('a deleted public template stays off the library while the edge still serve
 
   const title = `Catalog edge delete ${Date.now()}`;
   const templateId = await createOneTaskTemplate(page, title, true);
-  const ownRows = await apiJson(page, '/templates?scope=personal', jsonRecords);
+  const ownRows = await apiJson(page, '/templates?scope=personal', catalogRowsSchema);
   const rowTheLibraryCanList = ownRows.find((row) => row.id === templateId);
   expect(rowTheLibraryCanList?.owner_username).toBeTruthy();
   const catalog = await serveTheEdgeCopyFromBeforeTheDelete(page, templateId, rowTheLibraryCanList);

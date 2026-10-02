@@ -1,24 +1,25 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiRecord as callApi } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { apiTemplateSchema, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try again.';
 
 async function createPublicTemplate(page: Page, label: string) {
   const stamp = Date.now();
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Share stale ${label} ${stamp}`,
     is_public: true,
     sections: [{ id: `share-stale-section-${stamp}`, title: 'Section', items: [{ id: `share-stale-item-${stamp}`, title: 'Task' }] }],
   });
-  return String(created.id);
+  return created.id;
 }
 
 async function openPublicDetail(page: Page, templateId: string) {
   await page.goto(`/dashboard/templates/${templateId}/`);
   await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
-  return callApi(page, 'GET', `/templates/${templateId}`);
+  return apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
 }
 
 async function expectShareToReportTheConflict(page: Page) {
@@ -47,13 +48,13 @@ test('Share gives no link after the template was made private elsewhere, and pub
 
     await expectShareToReportTheConflict(page);
     await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-    const stored = await callApi(page, 'GET', `/templates/${templateId}`);
+    const stored = await apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
     expect(Boolean(stored.is_public)).toBe(false);
 
     const { dialog, link } = await shareAndOpenTheLink(page);
     await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${String(loaded.slug)}/$`));
     const shareUrl = await link.inputValue();
-    const republished = await callApi(page, 'GET', `/templates/${templateId}`);
+    const republished = await apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
     expect(Boolean(republished.is_public)).toBe(true);
 
     await dialog.getByRole('button', { name: 'Close' }).first().click();

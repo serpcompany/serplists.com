@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, sendToAFreshApiWorker, silenceLogs } from '../../../support/apiRouter';
 import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
 import { apiEnv, withoutVars, type OptionalEnvVar } from '../../../support/apiEnv';
@@ -37,7 +38,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
 
   async function expectAuthErrorBody(response: Response, status: number, code?: string) {
     expect(response.status).toBe(status);
-    const body = await readJson(response, betterAuthErrorBody);
+    const body = await readJson(response, betterAuthErrorBody.extend({ error: z.unknown(), retryAfterSeconds: z.unknown() }));
     expect(typeof body.message).toBe('string');
     expect(body.message.trim()).not.toBe('');
     expect(body.error).toBe(body.message);

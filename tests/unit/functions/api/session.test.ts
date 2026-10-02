@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
 import { sessionCookieFrom } from '../../../support/betterAuth';
 import { apiEnv } from '../../../support/apiEnv';
+import type { StoredRow } from '../../../support/d1Doubles';
 import { z } from 'zod';
 
 const BASE_URL = 'http://localhost:8788';
@@ -13,7 +14,7 @@ const TEST_SECRET = 'test-better-auth-secret-32-chars-minimum!!';
 const env = apiEnv({ BETTER_AUTH_SECRET: TEST_SECRET });
 
 function realBetterAuthWithDefaultSessionsOnAnInMemoryDatabase() {
-  const db: Record<'user' | 'session' | 'account' | 'verification', Record<string, unknown>[]> = { user: [], session: [], account: [], verification: [] };
+  const db: Record<'user' | 'session' | 'account' | 'verification', StoredRow[]> = { user: [], session: [], account: [], verification: [] };
   const auth = betterAuth({
     baseURL: BASE_URL,
     basePath: '/api/auth',

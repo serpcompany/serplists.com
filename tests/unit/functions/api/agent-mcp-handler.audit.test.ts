@@ -26,7 +26,9 @@ describe("personal run MCP handler", () => {
 
     async function recordedAudit() {
       expect(buildAuditEventValues).toHaveBeenCalledOnce();
-      return firstOf(vi.mocked(buildAuditEventValues).mock.results).value as ReturnType<typeof buildAuditEventValues>;
+      const result = firstOf(vi.mocked(buildAuditEventValues).mock.results);
+      if (result.type !== "return") throw new Error(`buildAuditEventValues did not return: ${result.type}`);
+      return result.value;
     }
 
     function expectCompact(payload: string | null | undefined) {
@@ -70,8 +72,8 @@ describe("personal run MCP handler", () => {
       for (const payload of [audit.before_json, audit.after_json, audit.diff_json]) expectCompact(payload);
       const diff = jsonRecordIn(audit.diff_json ?? "{}");
       expect(diff).toEqual(objectContaining({ operation, revision: { from: 4, to: 5 } }));
-      expect(diff.progress).toEqual({ from: 0, to: anyInstanceOf(Number) });
-      if ("taskId" in fields) expect(diff.taskId).toBe("task-1");
+      expect(diff["progress"]).toEqual({ from: 0, to: anyInstanceOf(Number) });
+      if ("taskId" in fields) expect(diff["taskId"]).toBe("task-1");
       if (operation === "set_task_notes") {
         expect(diff).toEqual(objectContaining({ notesLength: 20_000 }));
         expect(audit.diff_json).not.toContain("nnnn");

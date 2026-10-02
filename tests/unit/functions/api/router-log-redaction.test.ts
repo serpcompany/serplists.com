@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 import { apiEnv } from '../../../support/apiEnv';
 import type { Env } from '@functions/api/types';
-import { jsonRecordIn } from '../../../support/storedJson';
+import { logLineIn } from '../../../support/storedJson';
 
 const SECRET = 'SECRETTOKEN123';
 const MODULES = {
@@ -47,7 +47,7 @@ describe('API router log path redaction', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
   });
 
   function loggedPaths(): string[] {
-    return lines.map((line) => jsonRecordIn(line).path).filter((path) => path !== undefined).map(String);
+    return lines.map((line) => logLineIn(line)['path']).filter((path) => path !== undefined).map(String);
   }
 
   it.each([
@@ -92,7 +92,7 @@ describe('API router log path redaction', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
     expect(response.status).toBe(500);
     const logged = lines.join('\n');
     for (const value of [SECRET, email, 'params:']) expect(logged).not.toContain(value);
-    const apiError = lines.map((line) => jsonRecordIn(line)).find((entry) => entry.message === 'api_error');
+    const apiError = lines.map((line) => logLineIn(line)).find((entry) => entry.message === 'api_error');
     expect(apiError).toMatchObject({
       errorName: 'DrizzleQueryError',
       errorMessage: 'D1_ERROR: Network connection lost',

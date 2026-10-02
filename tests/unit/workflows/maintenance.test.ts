@@ -76,21 +76,21 @@ const deniedCommit = {
 describe('weekly doc gardening workflow', () => {
   it('keeps subagents in the foreground and leaves the repository MCP servers out', () => {
     expect(gardenStep?.id).toBe('garden');
-    expect(gardenStep?.env?.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
-    expect(String(gardenStep?.with?.claude_args)).toContain('--strict-mcp-config');
+    expect(gardenStep?.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
+    expect(String(gardenStep?.with?.['claude_args'])).toContain('--strict-mcp-config');
   });
 
   it('adds no attribution to the commits and PRs it makes', () => {
     const settings = z
       .object({ attribution: z.object({ commit: z.literal(false), pr: z.literal(false) }) })
-      .safeParse(JSON.parse(String(gardenStep?.with?.settings ?? '{}')));
+      .safeParse(JSON.parse(String(gardenStep?.with?.['settings'] ?? '{}')));
     expect(settings.success).toBe(true);
   });
 
   it('runs a guard after Claude that reads its log and the open PRs', () => {
     expect(guard?.run).toBeTruthy();
     expect(guardIndex).toBeGreaterThan(gardenIndex);
-    expect(guard?.env?.GITHUB_TOKEN).toBe('${{ github.token }}');
+    expect(guard?.env?.['GITHUB_TOKEN']).toBe('${{ github.token }}');
     const startIndex = steps.findIndex((step) => step.run?.includes('GARDENING_STARTED_AT='));
     expect(startIndex).toBeGreaterThan(-1);
     expect(startIndex).toBeLessThan(gardenIndex);

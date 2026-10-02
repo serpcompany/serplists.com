@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { jsonObject, readJson } from "../support/readJson";
+import { z } from "zod";
+import { readJson } from "../support/readJson";
+import { runHistorySchema } from "../../src/lib/schemas/historyResponses";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
 vi.mock("../../functions/api/utils/session", () => ({
@@ -53,13 +55,15 @@ async function seed() {
   ]);
 }
 
+const runRouteBody = z.object({ shareToken: z.unknown(), code: z.unknown(), template_version: z.unknown() }).passthrough();
+
 async function call(path: string, method: string, userId: string | null, body?: unknown) {
   vi.mocked(getSessionUserId).mockResolvedValue(userId);
   const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), d1.env);
-  return { status: response.status, body: await readJson(response, jsonObject) };
+  return { status: response.status, body: await readJson(response, runRouteBody) };
 }
 
 async function auditActions(): Promise<string[]> {
@@ -86,7 +90,7 @@ describe.sequential("run sharing against local D1", () => {
   it("turns the link off with one audit event even when stopped twice, keeps the run's progress, and allows revalidation again", async () => {
     const share = await call("run/run-1/share", "POST", "owner", {});
     expect(share.status).toBe(200);
-    const token = share.body.shareToken as string;
+    const token = z.string().parse(share.body.shareToken);
     expect((await call(`shared/${token}`, "GET", null)).status).toBe(200);
     expect((await call("run-1/revalidate", "POST", "owner", { expected_revision: 1 })).body.code).toBe("shared_run_conflict");
 
@@ -143,7 +147,7 @@ describe.sequential("run sharing against local D1", () => {
     const history = await call("org-run/history", "GET", "member");
     expect(history.status).toBe(200);
     expect(JSON.stringify(history.body)).not.toContain("free@example.test");
-    const actors = (history.body.events as Array<{ actor: { userId: string | null } }>).map((event) => event.actor.userId);
+    const actors = runHistorySchema.parse(history.body).events.map((event) => event.actor.userId);
     expect(actors.sort()).toEqual([null, null, "member"].sort());
   });
 

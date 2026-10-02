@@ -10,7 +10,9 @@ import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 import { objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 
-const exportBody = z.object({ templates: z.array(z.record(z.unknown())) }).passthrough();
+const exportBody = z
+  .object({ version: z.unknown(), templates: z.array(z.object({ version: z.unknown() }).passthrough()) })
+  .passthrough();
 const importFailedError = apiErrorBody.extend({
   details: z.object({ imported: z.number(), failed: z.array(z.unknown()) }).passthrough(),
 });

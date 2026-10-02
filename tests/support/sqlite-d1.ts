@@ -31,7 +31,7 @@ export function everyMigrationSql(): string[] {
   return readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map(readMigration);
 }
 
-function toSqliteValue(value: unknown): SQLInputValue {
+export function toSqliteValue(value: unknown): SQLInputValue {
   if (value === undefined || value === null) return null;
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") return value;

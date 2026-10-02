@@ -60,8 +60,8 @@ const filesJscpdLists = () => {
   const lines = stripVTControlCharacters(listing.stdout).split(/\r?\n/);
   const skipped = new Map<string, string>();
   for (const line of lines) {
-    const skip = /^File (?<file>.+) skipped! (?<reason>.+)$/.exec(line)?.groups;
-    if (skip?.file && skip.reason) skipped.set(skip.file, skip.reason);
+    const { file, reason } = /^File (?<file>.+) skipped! (?<reason>.+)$/.exec(line)?.groups ?? {};
+    if (file && reason) skipped.set(file, reason);
   }
   return { read: new Set(lines.filter(isUnder)), skipped };
 };

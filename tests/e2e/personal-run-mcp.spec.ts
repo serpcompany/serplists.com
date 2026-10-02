@@ -351,7 +351,15 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   const history = await apiJson(
     page,
     `/templates/${encodeURIComponent(templateId)}/history`,
-    z.object({ events: z.array(z.object({ action: z.string(), metadata: jsonRecord.nullable() }).passthrough()) }).passthrough(),
+    z
+      .object({
+        events: z.array(
+          z
+            .object({ action: z.string(), metadata: z.object({ personalRunKeyName: z.unknown() }).passthrough().nullable() })
+            .passthrough(),
+        ),
+      })
+      .passthrough(),
   );
   expect(history.events.filter((event) => event.metadata?.personalRunKeyName === keyName).map(({ action }) => action).sort())
     .toEqual(['template.created', 'template.updated']);

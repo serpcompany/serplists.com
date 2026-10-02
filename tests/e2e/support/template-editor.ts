@@ -85,13 +85,23 @@ export async function dragAndDropBefore(page: Page, dragged: Locator, target: Lo
 
 const savedTask = z
   .object({
-    contents: z.array(z.object({ type: z.string().nullish(), value: z.string().nullish() }).passthrough()).optional(),
+    contents: z
+      .array(
+        z
+          .object({
+            type: z.string().nullish(),
+            value: z.string().nullish(),
+            subItems: z.array(z.object({ title: z.string() }).passthrough()).optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
     description: z.string().nullish(),
     title: z.string().nullish(),
   })
   .passthrough();
 
-const savedSections = z.array(z.object({ items: z.array(savedTask) }).passthrough());
+const savedSections = z.array(z.object({ title: z.string().nullish(), items: z.array(savedTask) }).passthrough());
 
 const aSection = z.object({ items: z.array(z.unknown()) }).passthrough();
 

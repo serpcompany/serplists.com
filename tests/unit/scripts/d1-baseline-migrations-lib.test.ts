@@ -144,8 +144,8 @@ describe('package.json baseline scripts', () => {
 describe('d1-baseline-migrations CLI dry runs, which never call wrangler without --execute', () => {
   function dryRun(args: string[], env: Record<string, string> = {}) {
     const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
-    delete childEnv.CLOUDFLARE_ENV;
-    if (!env.D1_DATABASE_NAME) delete childEnv.D1_DATABASE_NAME;
+    delete childEnv['CLOUDFLARE_ENV'];
+    if (!env['D1_DATABASE_NAME']) delete childEnv['D1_DATABASE_NAME'];
     return spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'd1-baseline-migrations.mjs'), ...args], {
       cwd: repoRoot,
       encoding: 'utf8',

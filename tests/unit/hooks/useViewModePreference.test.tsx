@@ -10,7 +10,7 @@ const fakeDom = aFakeDomForEachTest();
 
 describe('useViewModePreference', () => {
   it('shows a choice made in one component in every other component showing the same preference', async () => {
-    const shown: Record<string, ViewMode> = {};
+    const shown: { toolbar?: ViewMode; list?: ViewMode } = {};
     let chooseInToolbar: ((value: ViewMode) => void) | undefined;
     function Toolbar() {
       const [viewMode, setViewMode] = useViewModePreference({ surface: 'dashboard-templates', userId: 'user-1' });

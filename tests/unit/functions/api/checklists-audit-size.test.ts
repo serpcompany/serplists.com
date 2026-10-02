@@ -61,7 +61,7 @@ function expectCompactAudit(toggledId: string) {
     expect(snapshot).not.toHaveProperty('share_token');
   }
   const diff = jsonRecordIn(audit.diff_json);
-  expect(diff.items).toEqual(objectContaining({ completed: [toggledId] }));
+  expect(diff['items']).toEqual(objectContaining({ completed: [toggledId] }));
 }
 
 describe('run audit rows stay small, since an oversized one would fail every save of the run it shares a D1 batch with', () => {
@@ -110,7 +110,7 @@ describe('run audit rows stay small, since an oversized one would fail every sav
       .passthrough()
       .parse(firstOf(dbMocks.insertChain.values.mock.calls)[0]);
     expect(encoder.encode(audit.before_json + audit.after_json + audit.diff_json).byteLength).toBeLessThan(ROW_BUDGET_BYTES);
-    expect(jsonRecordIn(audit.diff_json).retired_items).toEqual({ count: 0 });
+    expect(jsonRecordIn(audit.diff_json)['retired_items']).toEqual({ count: 0 });
   });
 
   it('and history responses never return the full copies that older rows still hold', async () => {

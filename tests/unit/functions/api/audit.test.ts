@@ -6,7 +6,7 @@ import { firstOf, valueAt } from '../../../support/elements';
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
 import { insertRowWhere } from '@functions/api/utils/guarded-insert';
-import { SqliteD1 } from '../../../support/sqlite-d1';
+import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
 import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 import { apiEnv } from '../../../support/apiEnv';
 import { recordsIn } from '../../../support/mcpResponses';
@@ -15,7 +15,6 @@ import { jsonRecordIn } from '../../../support/storedJson';
 const drizzleThatOnlyBuildsSql = createDb(apiEnv());
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
-type SqlParam = string | number | null;
 
 function migratedDatabase(): DatabaseSync {
   const { sqlite: db } = new SqliteD1();
@@ -32,7 +31,7 @@ function migratedDatabase(): DatabaseSync {
 
 function runGeneratedSql(db: DatabaseSync, query: BuiltQuery): number {
   const { sql: text, params } = query.toSQL();
-  return Number(db.prepare(text).run(...(params as SqlParam[])).changes);
+  return Number(db.prepare(text).run(...params.map(toSqliteValue)).changes);
 }
 
 async function reconcileStatements(expectedRevision: number) {
@@ -58,7 +57,7 @@ async function reconcileStatements(expectedRevision: number) {
 }
 
 const events = (db: DatabaseSync) =>
-  db.prepare(`SELECT action, resource_id, metadata_json FROM audit_events`).all() as Array<Record<string, string>>;
+  db.prepare(`SELECT action, resource_id, metadata_json FROM audit_events`).all();
 
 describe('insertRowWhere for an audit event', () => {
   it('records the event when the guarded write applies', async () => {
@@ -70,7 +69,7 @@ describe('insertRowWhere for an audit event', () => {
     expect(events(db)).toEqual([
       objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
-    expect(firstOf(recordsIn(jsonRecordIn(valueAt(firstOf(events(db)), 'metadata_json')).retired)).id).toBe('item-dns');
+    expect(firstOf(recordsIn(jsonRecordIn(valueAt(firstOf(events(db)), 'metadata_json'))['retired'])).id).toBe('item-dns');
   });
 
   it('records nothing when the guarded write misses because someone saved the run after it was read', async () => {
@@ -182,7 +181,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
       diff: { items: JSON.stringify(after) },
     }));
 
-    expect(jsonRecordIn(values.diff_json ?? '{}').items).toEqual({
+    expect(jsonRecordIn(values.diff_json ?? '{}')['items']).toEqual({
       sections: 1,
       items: 4,
       completed: ['c/c1'],
@@ -211,7 +210,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
 
     const marker = jsonRecordIn(values.metadata_json ?? '{}');
     expect(marker).toEqual({ truncated: true, bytes: anyInstanceOf(Number), sha256: stringMatching(/^[0-9a-f]{64}$/) });
-    expect(marker.bytes).toBeGreaterThan(90_000);
+    expect(marker['bytes']).toBeGreaterThan(90_000);
     expect(bytes(values.metadata_json)).toBeLessThan(200);
   });
 

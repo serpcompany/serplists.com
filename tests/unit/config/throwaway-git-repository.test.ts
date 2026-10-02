@@ -40,13 +40,13 @@ describe('a throwaway git repository in a test', () => {
     const cleanCheckout = directory('checkout');
     execFileSync('git', ['init', '-q'], { cwd: cleanCheckout, env: throwawayRepositoryEnvironment() });
     const throwaway = directory('throwaway');
-    const previousGitDir = process.env.GIT_DIR;
-    process.env.GIT_DIR = path.join(cleanCheckout, '.git');
+    const previousGitDir = process.env['GIT_DIR'];
+    process.env['GIT_DIR'] = path.join(cleanCheckout, '.git');
     try {
       createRepositoryWithAnIdentity(throwaway, throwawayRepositoryEnvironment());
     } finally {
-      if (previousGitDir === undefined) delete process.env.GIT_DIR;
-      else process.env.GIT_DIR = previousGitDir;
+      if (previousGitDir === undefined) delete process.env['GIT_DIR'];
+      else process.env['GIT_DIR'] = previousGitDir;
     }
 
     expect(configOf(cleanCheckout)).not.toContain('user.name=');

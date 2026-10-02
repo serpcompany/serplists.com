@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
 import { firstOf } from '../../../support/elements';
 import { getTableColumns } from 'drizzle-orm';
-import { dbMocks, mockEnv, resetChecklistsHandlerMocks, runBody, successBody } from '../../../support/checklistsHandler';
+import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
+import { apiRunSchema, runSavedSchema, runShareCreatedSchema } from '@/lib/schemas/apiRuns';
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -29,7 +31,7 @@ function theOrganizationRunAndAMember(role: string) {
 }
 
 async function expectShareCreated(response: Response, audit: Record<string, unknown>) {
-  const data = await readJson(response, runBody);
+  const data = await readJson(response, runShareCreatedSchema);
 
   expect(response.status).toBe(200);
   expect(data.id).toBe('run-1');
@@ -84,7 +86,7 @@ describe('Checklists Handlers', () => {
     ]);
 
     const response = await handleChecklists(apiRequest('checklists/shared/shared-run'), mockEnv);
-    const data = await readJson(response, runBody);
+    const data = await readJson(response, apiRunSchema);
 
     expect(response.status).toBe(200);
     expect(data.id).toBe('shared-run');
@@ -160,7 +162,7 @@ describe('Checklists Handlers', () => {
     for (const value of Object.values(privateValues)) expect(text).not.toContain(value);
     expect(text).not.toContain('retired-secret-note');
     expect(data).toMatchObject({ revision: 4, template_version: 1, current_template_version: 2, is_stale: true, is_public: true });
-    const columnsReadFromD1 = Object.keys((dbMocks.db.select.mock.calls[0] as unknown[])[0] as object);
+    const columnsReadFromD1 = Object.keys(z.record(z.unknown()).parse(firstOf(dbMocks.db.select.mock.calls)[0]));
     expect(columnsReadFromD1.sort()).toEqual(sharedRunKeys.filter((key) => key !== 'is_stale' && key !== 'is_public'));
   });
 
@@ -173,7 +175,7 @@ describe('Checklists Handlers', () => {
       status: 'completed',
       expected_revision: 3,
     }), mockEnv);
-    const data = await readJson(response, successBody);
+    const data = await readJson(response, runSavedSchema);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);

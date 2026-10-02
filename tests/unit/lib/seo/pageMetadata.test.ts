@@ -5,6 +5,12 @@ import { buildPageJsonLd, buildPageMetadata, type PageSeo } from '@/lib/seo/page
 
 const allText = (seo: PageSeo) => JSON.stringify([buildPageMetadata(seo), buildPageJsonLd(seo)]);
 
+interface PageJsonLd extends Record<string, unknown> {
+  url?: unknown;
+  publisher?: unknown;
+  datePublished?: unknown;
+}
+
 describe('page metadata URL', () => {
   it('names the production URL of the page path in the canonical link, og:url and JSON-LD', () => {
     const seo: PageSeo = { title: 'SEO', path: '/categories/seo/' };
@@ -12,7 +18,8 @@ describe('page metadata URL', () => {
 
     expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/seo/');
     expect(metadata.openGraph?.url).toBe('https://serplists.com/categories/seo/');
-    expect(buildPageJsonLd(seo).url).toBe('https://serplists.com/categories/seo/');
+    const jsonLd: PageJsonLd = buildPageJsonLd(seo);
+    expect(jsonLd.url).toBe('https://serplists.com/categories/seo/');
   });
 
   it('never carries a query string or hash into the canonical URL', () => {
@@ -50,7 +57,7 @@ describe('page metadata branding', () => {
   });
 
   it('names the site as the publisher of an article', () => {
-    const jsonLd = buildPageJsonLd({ title: 'Audit', type: 'article', publishedTime: '2026-01-01' });
+    const jsonLd: PageJsonLd = buildPageJsonLd({ title: 'Audit', type: 'article', publishedTime: '2026-01-01' });
 
     expect(jsonLd['@type']).toBe('Article');
     expect(jsonLd.publisher).toEqual({ '@type': 'Organization', name: APP_BRAND_NAME });

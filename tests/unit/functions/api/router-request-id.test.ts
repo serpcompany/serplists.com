@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 import { readJson } from '../../../support/readJson';
 import { apiEnv } from '../../../support/apiEnv';
-import { jsonRecordIn } from '../../../support/storedJson';
+import { logLineIn } from '../../../support/storedJson';
 import type { Env } from '@functions/api/types';
 
 const requestIdBody = z.object({ requestId: z.string() }).passthrough();
@@ -47,7 +47,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
 
     const response = await apiWorker.fetch(new Request('http://localhost/api/templates'), buildEnv());
 
-    const logged = lines.map((line) => jsonRecordIn(line));
+    const logged = lines.map((line) => logLineIn(line));
     expect(logged.find((entry) => entry.message === 'handler_line')?.requestId).toBe(response.headers.get('X-Request-Id'));
   });
 

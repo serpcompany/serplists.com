@@ -215,9 +215,8 @@ test.describe("template editor regressions", () => {
     await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
 
     const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
-    expect((sections[0] as { title?: string }).title).toBe("Section 1");
-    const subItems = (sections[0]?.items[0]?.contents?.[0] as { subItems?: Array<{ title: string }> })
-      ?.subItems;
+    expect(sections[0]?.title).toBe("Section 1");
+    const subItems = sections[0]?.items[0]?.contents?.[0]?.subItems;
     expect(subItems?.map((subItem) => subItem.title)).toEqual(["Check title"]);
 
     const templateId = String(savedTemplate?.id);

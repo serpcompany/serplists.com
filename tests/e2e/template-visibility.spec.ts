@@ -1,16 +1,17 @@
 import { expect, test } from '@playwright/test';
 
-import { apiRecord as callApi } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { apiTemplateSchema, savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 test('shows Public after Share follows a switch to Private, and accepts the next change', async ({ page }) => {
   await loginAsAdmin(page);
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Visibility QA ${Date.now()}`,
     is_public: true,
     sections: [{ id: 'visibility-section', title: 'Section', items: [{ id: 'visibility-item', title: 'Task' }] }],
   });
-  const templateId = String(created.id);
+  const templateId = created.id;
 
   try {
     await page.goto(`/dashboard/templates/${templateId}/`);
@@ -32,7 +33,7 @@ test('shows Public after Share follows a switch to Private, and accepts the next
     await visibilitySwitch.click();
     await expect(page.getByText('Template is now private')).toBeVisible();
     await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'false');
-    const saved = await callApi(page, 'GET', `/templates/${templateId}`);
+    const saved = await apiJsonAt(page, `/templates/${templateId}`, 'GET', apiTemplateSchema);
     expect(Boolean(saved.is_public)).toBe(false);
   } finally {
     await callApi(page, 'DELETE', `/templates/${templateId}`);

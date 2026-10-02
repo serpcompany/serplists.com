@@ -39,6 +39,8 @@ export interface McpRecord extends Record<string, unknown> {
   code?: unknown;
   data?: unknown;
   message?: unknown;
+  protocolVersion?: unknown;
+  serverInfo?: unknown;
 }
 
 const mcpRecord = jsonObject.transform((record): McpRecord => record);
@@ -90,7 +92,9 @@ export const mcpArgumentsError = mcpErrorResponse.extend({
   }).passthrough(),
 });
 
-export const mcpRunResult = z.object({ run: z.object({ id: z.string(), revision: z.number() }).passthrough() }).passthrough();
+export const mcpRunResult = z
+  .object({ run: z.object({ id: z.string(), revision: z.number(), progress: z.unknown() }).passthrough() })
+  .passthrough();
 
 export const mcpTemplateResult = z.object({
   template: z.object({ id: z.string(), version: z.number() }).passthrough(),

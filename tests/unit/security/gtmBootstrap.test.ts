@@ -29,7 +29,7 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
       },
     },
   };
-  const window: Record<string, unknown> = {
+  const window: { location: { pathname: string; search: string; href: string }; dataLayer?: unknown } = {
     location: { pathname, search, href: `https://serplists.com${pathname}${search}` },
   };
   const document = {
@@ -44,7 +44,7 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
     decodeURIComponent,
   });
 
-  return { insertedSources, dataLayer: window.dataLayer as unknown[] | undefined };
+  return { insertedSources, dataLayer: Array.isArray(window.dataLayer) ? window.dataLayer : undefined };
 }
 
 const tagManagerInTheRootLayoutTree = (siteEnv: string | undefined) =>

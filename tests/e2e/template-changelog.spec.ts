@@ -1,18 +1,19 @@
 import { expect, test } from '@playwright/test';
 
-import { apiRecord as callApi } from './support/api-requests';
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 
 test('the Changelog shows Share without a reload, and archive and restore next to versions', async ({ page }) => {
   await loginAsAdmin(page);
   const stamp = Date.now();
-  const created = await callApi(page, 'POST', '/templates', {
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
     title: `Changelog ${stamp}`,
     slug: `changelog-${stamp}`,
     is_public: false,
     sections: [{ id: 'log-section', title: 'Section', items: [{ id: 'log-item', title: 'Task' }] }],
   });
-  const templateId = String(created.id);
+  const templateId = created.id;
 
   try {
     await page.goto(`/dashboard/templates/${templateId}/`);

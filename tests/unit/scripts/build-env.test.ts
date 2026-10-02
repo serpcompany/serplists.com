@@ -10,9 +10,9 @@ describe('production build environment', () => {
   it('does not load .dev.vars into the production build', () => {
     const { scripts } = parseJsonText(readFileSync('package.json', 'utf8'), z.object({ scripts: z.record(z.string()) }).passthrough());
 
-    expect(scripts.build).toContain('next build');
-    expect(scripts.build).not.toContain('.dev.vars');
-    expect(scripts.build).not.toContain('dotenv');
+    expect(scripts['build']).toContain('next build');
+    expect(scripts['build']).not.toContain('.dev.vars');
+    expect(scripts['build']).not.toContain('dotenv');
   });
 
   it('does not seed an API URL into new .dev.vars files', () => {

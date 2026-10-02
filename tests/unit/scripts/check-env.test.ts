@@ -10,8 +10,8 @@ const cwdWithoutDevVars = mkdtempSync(path.join(tmpdir(), 'check-env-'));
 
 function checkEnv(overrides: Record<string, string>) {
   const env: NodeJS.ProcessEnv = {
-    PATH: process.env.PATH,
-    SystemRoot: process.env.SystemRoot,
+    PATH: process.env['PATH'],
+    SystemRoot: process.env['SystemRoot'],
     NODE_ENV: 'test',
     AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',

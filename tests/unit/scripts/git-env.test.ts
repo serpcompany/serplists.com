@@ -38,7 +38,7 @@ describe('git repository overrides', () => {
     const cleaned = withoutGitRepositoryOverrides(env);
 
     expect(GIT_REPOSITORY_OVERRIDES.filter((name) => name in cleaned)).toEqual([]);
-    expect([cleaned.PATH, cleaned.GIT_AUTHOR_DATE]).toEqual(['/bin', '2026-10-01T00:00:00Z']);
+    expect([cleaned['PATH'], cleaned['GIT_AUTHOR_DATE']]).toEqual(['/bin', '2026-10-01T00:00:00Z']);
   });
 
   it('keeps a fixture repository apart from the one a git hook names, which a plain GIT_DIR would commit into', () => {
@@ -63,7 +63,7 @@ describe('git repository overrides', () => {
     forgetGitRepositoryOverrides(env);
 
     expect(GIT_REPOSITORY_OVERRIDES.filter((name) => env[name] !== undefined)).toEqual([]);
-    expect(env.HOME).toBe('/home/test');
+    expect(env['HOME']).toBe('/home/test');
     expect(GIT_REPOSITORY_OVERRIDES.filter((name) => process.env[name] !== undefined)).toEqual([]);
   });
 });

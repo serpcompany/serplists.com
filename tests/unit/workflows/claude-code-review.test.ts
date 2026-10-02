@@ -28,7 +28,7 @@ const workflowSchema = z.object({
 const steps = workflowSchema.parse(readWorkflowFile('.github/workflows/claude-code-review.yml')).jobs.review.steps;
 const reviewIndex = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
 const reviewStep = elementAt(steps, reviewIndex);
-const claudeArgs = String(reviewStep.with?.claude_args ?? '');
+const claudeArgs = String(reviewStep.with?.['claude_args'] ?? '');
 
 const findGuard = () => {
   const outputRef = `steps.${reviewStep.id}.outputs.execution_file`;
@@ -117,8 +117,8 @@ const deniedGhPrView = {
 describe('Claude code review workflow', () => {
   it('runs the repository review skill, from the base branch, with every tool it uses', () => {
     expect(reviewStep.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
-    expect(reviewStep.with?.prompt, 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
-    expect(reviewStep.with?.plugins).toBeUndefined();
+    expect(reviewStep.with?.['prompt'], 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
+    expect(reviewStep.with?.['plugins']).toBeUndefined();
     const allowList = claudeArgs.match(/--allowedTools\s+"([^"]+)"/)?.[1] ?? '';
     const allowed = new Set(allowList.split(',').map((tool) => tool.trim()));
 
@@ -129,7 +129,7 @@ describe('Claude code review workflow', () => {
   });
 
   it('keeps subagents in the foreground, so the review ends only after they report', () => {
-    expect(reviewStep.env?.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
+    expect(reviewStep.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
   });
 
   it('gives Claude and its subagents the rules outside the checkout', () => {
@@ -141,7 +141,7 @@ describe('Claude code review workflow', () => {
     expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
     const rules = elementAt(steps, rulesStep);
-    expect(rules.env?.BASE_REF, 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
+    expect(rules.env?.['BASE_REF'], 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
     expect(rules.run).toContain('git show FETCH_HEAD:AGENTS.md');
     expect(rules.run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
     expect(rules.run).not.toMatch(/\bcat AGENTS\.md/);
@@ -252,7 +252,7 @@ describe('Claude code review workflow', () => {
   });
 });
 
-const findingsIndex = steps.findIndex((step) => step.env?.CONTEXT_FILE !== undefined);
+const findingsIndex = steps.findIndex((step) => step.env?.['CONTEXT_FILE'] !== undefined);
 const findingsStep = steps[findingsIndex];
 
 const runFindings = (pullRequest: PullRequest) =>
