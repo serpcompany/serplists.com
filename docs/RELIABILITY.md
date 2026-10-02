@@ -698,7 +698,11 @@ Common failures:
     `apiRunSchema`, `runShareCreatedSchema` and others, re-exported from
     `tests/e2e/support/api-bodies.ts`, whose modules import only Zod), a schema of its own, or
     `bodyNotRead` when it reads only the status. `sectionsOfStoredItems(run.items)` in the same
-    file parses a run's stored sections.
+    file parses a run's stored sections. A mocked API reply that the app parses is built
+    through the schema the client reads it with (`updatedTeamSchema.parse({...})` in
+    `team-settings-conflicts.spec.ts`). The client refuses a reply it cannot read, so a mock
+    that drifts from what the API sends fails when it is built, with Zod's message, not as a
+    missing toast.
   - An asymmetric matcher inside an expected object comes from
     `tests/support/asymmetricMatchers.ts` (`objectContaining`, `stringMatching`,
     `anyInstanceOf` and the rest), typed `unknown`: Vitest types `expect.objectContaining()`

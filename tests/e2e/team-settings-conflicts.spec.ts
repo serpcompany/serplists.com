@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { updatedTeamSchema } from './support/api-bodies';
 import { fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 type Member = {
@@ -34,6 +35,21 @@ const editorMember: Member = {
   status: 'active',
   user_id: 'user-editor',
 };
+
+const savedOrganization = updatedTeamSchema.parse({
+  success: true,
+  team: {
+    id: 'team-1',
+    name: 'Acme Ops',
+    slug: 'acme-team',
+    billing_owner_user_id: 'user-owner',
+    created_by_user_id: 'user-owner',
+    created_at: '2026-09-01T00:00:00.000Z',
+    updated_at: '2026-10-02T00:00:00.000Z',
+    archived_at: null,
+    membership: { id: 'member-current', role: 'owner', status: 'active' },
+  },
+});
 
 async function mockOrganizationApi(page: Page, state: MockState) {
   await routeTheApi(page, async ({ route, url, path, method }) => {
@@ -214,7 +230,7 @@ test('Save Organization stays disabled until a field changes and sends only what
     invites: [],
     requests: [],
     respond: (method, path) => (method === 'PUT' && path === '/api/teams/team-1'
-      ? { status: 200, body: { success: true, team: { id: 'team-1', name: 'Acme Ops', slug: 'acme-team' } } }
+      ? { status: 200, body: savedOrganization }
       : null),
   };
   const updateBodies: unknown[] = [];

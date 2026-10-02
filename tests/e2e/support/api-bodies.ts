@@ -5,6 +5,7 @@ import { apiTemplateSchema } from '../../../src/lib/schemas/apiTemplates';
 
 export { apiTemplateSchema };
 export { savedTemplateSchema } from '../../../src/lib/schemas/apiTemplates';
+export { updatedTeamSchema } from '../../../src/lib/schemas/teamResponses';
 
 export const jsonRecord = z.record(z.unknown());
 
