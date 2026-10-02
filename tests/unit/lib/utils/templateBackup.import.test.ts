@@ -1,12 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { contentAt, firstOf, sectionAt, subTaskAt, taskAt } from '../../../support/elements';
-import {
-  exportTemplatesToJSON,
-  generateUniqueIds,
-  prepareTemplatesForImport,
-  countImportPublicTemplates,
-  resolveImportIsPublic,
-} from '@/lib/utils/templateBackup';
+import { prepareTemplatesForImport, countImportPublicTemplates } from '@/lib/utils/templateBackup';
+import { generateUniqueIds, resolveImportIsPublic } from '@/lib/utils/templateImportPrep';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
 
 describe('Template Backup Utilities', () => {
@@ -259,16 +254,6 @@ describe('Template Backup Utilities', () => {
       
       const result = generateUniqueIds([template]);
       expect(taskAt(firstOf(result), 0, 0).contents).toBeUndefined();
-    });
-
-    it('should handle very large template collections', () => {
-      const largeCollection = Array(100).fill(null).map((_, i) => 
-        createMockTemplate({ id: `template-${i}` })
-      );
-      
-      const backup = exportTemplatesToJSON(largeCollection);
-      expect(backup.templates).toHaveLength(100);
-      expect(backup.metadata?.totalTemplates).toBe(100);
     });
 
     it('should handle special characters in template data', () => {

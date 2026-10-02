@@ -178,28 +178,6 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
-export const exportTemplatesToJSON = (
-  templates: ChecklistTemplate[], 
-  exportedBy?: string
-): TemplateBackupExport => {
-  const publicTemplates = templates.filter(t => t.isPublic);
-  const privateTemplates = templates.filter(t => !t.isPublic);
-
-  const backup: TemplateBackupExport = {
-    version: "1.0.0",
-    exportedAt: new Date().toISOString(),
-    exportedBy,
-    templates,
-    metadata: {
-      totalTemplates: templates.length,
-      publicTemplates: publicTemplates.length,
-      privateTemplates: privateTemplates.length
-    }
-  };
-
-  return backup;
-};
-
 export const exportPortableTemplatesToJSON = (
   templates: ChecklistTemplate[],
   exportedBy?: string
@@ -261,36 +239,6 @@ export const downloadBackupFile = (
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-};
-
-export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Failed to read file"));
-        return;
-      }
-      try {
-        const data: unknown = JSON.parse(reader.result);
-        const validatedBackup = validateBackup(data);
-        resolve(validatedBackup);
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          reject(new Error("Invalid JSON file format"));
-        } else {
-          reject(new Error(`Backup validation failed: ${formatValidationError(error)}`));
-        }
-      }
-    };
-    
-    reader.onerror = () => {
-      reject(new Error("Failed to read file"));
-    };
-    
-    reader.readAsText(file);
-  });
 };
 
 const parsePortablePackTemplates = (
@@ -362,20 +310,6 @@ const readFileText = (file: File): Promise<string> =>
     reader.readAsText(file);
   });
 
-export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
-  const jsonString = await readFileText(file);
-
-  try {
-    const data: unknown = JSON.parse(jsonString);
-    return parseTemplatesFromData(data);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error("Invalid JSON file format");
-    }
-    throw error;
-  }
-};
-
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
   const sourceString = await readFileText(file);
 
@@ -408,9 +342,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
 
 export {
   countImportPublicTemplates,
-  generateUniqueIds,
   IMPORT_VISIBILITY_LABELS,
   prepareTemplatesForImport,
-  resolveImportIsPublic,
   type ImportVisibility,
 } from "./templateImportPrep";

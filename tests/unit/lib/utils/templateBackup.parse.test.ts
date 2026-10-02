@@ -1,48 +1,13 @@
 import { expectThePortableSeoFieldsAndOneRule } from '../../../support/portableTemplateChecks';
 import { describe, it, expect } from 'vitest';
 import { contentAt, elementAt, firstOf } from '../../../support/elements';
-import { parseBackupFile, parseTemplatesFromData, parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
+import { parseTemplatesFromData, parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import { TemplateBackup } from '@/lib/schemas/checklistSchema';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
 import { jsonFile, TITLE_REQUIRED_RULE } from '../../../fixtures/jsonFile';
 
 describe('Template Backup Utilities', () => {
-  describe('parseBackupFile', () => {
-    it('should parse valid backup file', async () => {
-      const validBackup: TemplateBackup = {
-        version: '1.0.0',
-        exportedAt: '2024-01-01T00:00:00Z',
-        templates: [createMockTemplate()]
-      };
-      
-      const file = jsonFile(validBackup, 'backup.json');
-      
-      const result = await parseBackupFile(file);
-      
-      expect(result.version).toBe('1.0.0');
-      expect(result.templates).toHaveLength(1);
-    });
-
-    it('should reject invalid JSON', async () => {
-      const file = new File(['invalid json'], 'backup.json', {
-        type: 'application/json'
-      });
-      
-      await expect(parseBackupFile(file)).rejects.toThrow('Invalid JSON file format');
-    });
-
-    it('should reject invalid backup structure', async () => {
-      const invalidBackup = {
-        templates: 'not an array'
-      };
-      
-      const file = jsonFile(invalidBackup, 'backup.json');
-      
-      await expect(parseBackupFile(file)).rejects.toThrow('Backup validation failed');
-    });
-  });
-
-  describe('parseTemplatesFromJSON', () => {
+  describe('parseTemplatesFromFile with a JSON file', () => {
     it('should parse backup format', async () => {
       const backup: TemplateBackup = {
         version: '1.0.0',
@@ -52,7 +17,7 @@ describe('Template Backup Utilities', () => {
       
       const file = jsonFile(backup, 'backup.json');
       
-      const result = await parseTemplatesFromJSON(file);
+      const result = await parseTemplatesFromFile(file);
       
       expect(result.templates).toHaveLength(1);
       expect(firstOf(result.templates).title).toBe('Test Template');
@@ -66,7 +31,7 @@ describe('Template Backup Utilities', () => {
       
       const file = jsonFile(templates, 'templates.json');
       
-      const result = await parseTemplatesFromJSON(file);
+      const result = await parseTemplatesFromFile(file);
       
       expect(result.templates).toHaveLength(2);
       expect(elementAt(result.templates, 1).title).toBe('Second Template');
@@ -96,7 +61,7 @@ describe('Template Backup Utilities', () => {
 
       const file = jsonFile(portablePack, 'portable.json');
 
-      const result = await parseTemplatesFromJSON(file);
+      const result = await parseTemplatesFromFile(file);
 
       expectThePortableSeoFieldsAndOneRule(firstOf(result.templates));
     });
@@ -129,7 +94,7 @@ describe('Template Backup Utilities', () => {
 
       const file = jsonFile(templates, 'templates.json');
 
-      const result = await parseTemplatesFromJSON(file);
+      const result = await parseTemplatesFromFile(file);
 
       expect(result.warnings).toHaveLength(1);
       expect(firstOf(result.warnings).message).toMatch(/uploaded asset/i);
@@ -141,7 +106,7 @@ describe('Template Backup Utilities', () => {
         type: 'application/json'
       });
       
-      await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Invalid JSON file format');
+      await expect(parseTemplatesFromFile(file)).rejects.toThrow('Invalid JSON file format');
     });
 
     it('should reject invalid template structure', async () => {
@@ -153,7 +118,7 @@ describe('Template Backup Utilities', () => {
         type: 'application/json'
       });
       
-      await expect(parseTemplatesFromJSON(file)).rejects.toThrow(
+      await expect(parseTemplatesFromFile(file)).rejects.toThrow(
         'Template validation failed: Template 1 > title: Required',
       );
     });

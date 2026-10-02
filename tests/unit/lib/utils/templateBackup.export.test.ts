@@ -1,44 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { contentAt, firstOf, subTaskAt, taskAt } from '../../../support/elements';
-import { exportTemplatesToJSON, parseTemplatesFromJSON, prepareTemplatesForImport } from '@/lib/utils/templateBackup';
+import { parseTemplatesFromFile, prepareTemplatesForImport } from '@/lib/utils/templateBackup';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
 import { jsonFile } from '../../../fixtures/jsonFile';
 
 describe('Template Backup Utilities', () => {
-  describe('exportTemplatesToJSON', () => {
-    it('should export templates with metadata', () => {
-      const templates = [
-        createMockTemplate({ isPublic: true }),
-        createMockTemplate({ id: 'template-2', isPublic: false }),
-        createMockTemplate({ id: 'template-3', isPublic: true })
-      ];
-      
-      const backup = exportTemplatesToJSON(templates, 'test@example.com');
-      
-      expect(backup.version).toBe('1.0.0');
-      expect(backup.exportedBy).toBe('test@example.com');
-      expect(backup.templates).toHaveLength(3);
-      expect(backup.metadata?.totalTemplates).toBe(3);
-      expect(backup.metadata?.publicTemplates).toBe(2);
-      expect(backup.metadata?.privateTemplates).toBe(1);
-    });
-
-    it('should handle empty template array', () => {
-      const backup = exportTemplatesToJSON([]);
-      
-      expect(backup.templates).toHaveLength(0);
-      expect(backup.metadata?.totalTemplates).toBe(0);
-    });
-
-    it('should include ISO timestamp', () => {
-      const backup = exportTemplatesToJSON([createMockTemplate()]);
-      
-      expect(backup.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-    });
-  });
-
-  describe('Import/Export Round Trip', () => {
-    it('should maintain data integrity through export and import', async () => {
+  describe('importing a backup file, the format the app exported before portable packs', () => {
+    it('keeps the content, categories and tags of each Template', async () => {
       const originalTemplates = [
         createMockTemplate({
           title: 'Complex Template',
@@ -73,10 +41,16 @@ describe('Template Backup Utilities', () => {
         })
       ];
       
-      const backup = exportTemplatesToJSON(originalTemplates, 'test@example.com');
+      const backup = {
+        version: '1.0.0',
+        exportedAt: '2024-01-01T00:00:00.000Z',
+        exportedBy: 'test@example.com',
+        templates: originalTemplates,
+        metadata: { totalTemplates: 1, publicTemplates: 1, privateTemplates: 0 },
+      };
       const backupFile = jsonFile(backup, 'backup.json');
 
-      const importedTemplates = await parseTemplatesFromJSON(backupFile);
+      const importedTemplates = await parseTemplatesFromFile(backupFile);
       const preparedTemplates = prepareTemplatesForImport(importedTemplates.templates, 'new-user');
 
       expect(firstOf(preparedTemplates).title).toBe('Complex Template');

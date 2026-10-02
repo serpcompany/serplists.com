@@ -11,7 +11,7 @@ import {
 } from '@/components/checklist-library/discovery-utils';
 import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { normalizeTemplateEditorDetailsForSave } from '@/lib/forms/templateEditorDetailsForm';
-import { parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
+import { parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const template = (id: string, categories: string[]): ChecklistTemplate => ({
@@ -75,7 +75,7 @@ describe('category lists at the write boundary', () => {
       { type: 'application/json' },
     );
 
-    const result = await parseTemplatesFromJSON(file);
+    const result = await parseTemplatesFromFile(file);
 
     expect(firstOf(result.templates).categories).toEqual(['SEO', 'Travel']);
   });

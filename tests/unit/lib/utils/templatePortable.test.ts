@@ -6,7 +6,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
-  parseTemplatesFromJSON,
+  parseTemplatesFromFile,
 } from '@/lib/utils/templateBackup';
 import { jsonFile, TITLE_REQUIRED_RULE } from '../../../fixtures/jsonFile';
 
@@ -92,7 +92,7 @@ describe('portable template utilities', () => {
     };
 
     const file = jsonFile(portablePack, 'portable.json');
-    const result = await parseTemplatesFromJSON(file);
+    const result = await parseTemplatesFromFile(file);
 
     expect(result.templates).toHaveLength(1);
     expect(firstOf(result.templates).title).toBe('Imported Portable Template');
@@ -122,7 +122,7 @@ describe('portable template utilities', () => {
     };
 
     const file = jsonFile(portablePack, 'portable.json');
-    await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Unsupported portable template schema version');
+    await expect(parseTemplatesFromFile(file)).rejects.toThrow('Unsupported portable template schema version');
   });
 
   it('uses a portable default filename for portable template packs', () => {
