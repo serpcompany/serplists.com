@@ -260,6 +260,28 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the last small items (c1cf8a0d..e04d8855). TD-29, TD-70 to TD-75 and
+  TD-77 are closed.
+  - Bugs fixed:
+    - A guest save on a shared run copied one id-less Sub-task's completion onto
+      another, when the stored run held entries the page drops (c1cf8a0d).
+    - In Node, a request body without Content-Length became unusable once its clone was
+      garbage-collected. The router now reads the body once (68c500e3).
+    - Profile cards dropped a Template's type, so a recipe showed the checklist icon
+      (4de7279e).
+  - Simplifications:
+    - one API Template mapper;
+    - one owner-access helper;
+    - content ids are strings;
+    - three unreachable guards removed.
+  - `tsconfig.declarations.json` type-checks the repository's own declaration files with
+    `skipLibCheck` off, in `pnpm run typecheck`.
+  - DOM tests use the real Base UI overlays and wait for them to close. 22 repeated runs
+    of the affected files had no flakes.
+  - New tracker rows:
+    - TD-79: Sub-task ids;
+    - TD-80: the generated env declarations;
+    - TD-81: a dialog close button that needs the owner.
 - 2026-10-01: phase 4, dead code (dd14418b..49366e5a).
   - `deadcode:check` runs knip in `check:repo` and takes about 3 s.
     - `knip.json` names only the entry points no plugin sees, plus the two allowed
