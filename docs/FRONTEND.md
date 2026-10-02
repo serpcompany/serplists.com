@@ -430,8 +430,10 @@ How the editor's models load, save, keep drafts and decide who may edit:
   details are dropped, and every content block in the template gets its own id (uploads
   find their block by id, so a repeated id, even `1` beside `"1"`, gets a new one). The editor builds the form from the
   stored sections the API returns, not the display mapper's copy, which drops what no
-  page renders. A loaded template can always be saved without losing content. Save
-  validation errors inside the outline name the section, task, and content block.
+  page renders. A loaded template can always be saved without losing content. Before a
+  save the editor checks only the details' limits (`validateTemplateEditorFormForSave`):
+  the outline holds only values its schema accepts, since stored content is coerced on
+  load and a restored draft or a Clipy draft is parsed with the same schema.
 - An image, video, or file block's `fileName` and `fileSize` describe the file its
   value points to: an upload, or a linked file an author named (`uploadType: "url"`).
   Typing in the URL field writes the value with `withMediaValue`

@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { firstOf, sectionAt, taskAt } from "../../../support/elements";
+import { taskAt } from "../../../support/elements";
 
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import {
   buildTemplateEditorFormValues,
   templateEditorFormSchema,
-  validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
 import { apiTemplateSchema } from "@/lib/schemas/apiTemplates";
 
@@ -96,21 +95,5 @@ describe("buildTemplateEditorFormValues with content stored before the API check
     );
     expect(new Set(ids).size).toBe(3);
     expect(ids[0]).toBe("1");
-  });
-});
-
-describe("validateTemplateEditorFormForSave", () => {
-  it("names the section, task, and block of an invalid content block", () => {
-    const values = buildTemplateEditorFormValues({ title: "T" });
-    sectionAt(values, 0).items.push({
-      id: "item-1",
-      title: "Task",
-      contents: [{ id: "c1", type: "file", value: "https://example.com/doc.pdf", fileSize: Number.NaN }],
-    });
-
-    const errors = validateTemplateEditorFormForSave(values);
-
-    expect(errors).toHaveLength(1);
-    expect(firstOf(errors).message).toMatch(/^Section 1, task 1, content block 1: /);
   });
 });

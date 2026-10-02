@@ -17,8 +17,7 @@ export function sectionFallbackTitle(sectionIndex: number): string {
   return `Section ${sectionIndex + 1}`;
 }
 
-const displayTitle = (title: unknown): string =>
-  typeof title === "string" ? title.trim() : "";
+const displayTitle = (title: string): string => title.trim();
 
 export function getSectionDisplayTitle(
   section: Pick<ChecklistSection, "title">,

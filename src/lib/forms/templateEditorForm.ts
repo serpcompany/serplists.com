@@ -272,35 +272,14 @@ export function normalizeTemplateEditorFormForSave(
   };
 }
 
-const describeTemplateEditorIssueLocation = (path: Array<string | number>): string | null => {
-  const [sections, sectionIndex, items, itemIndex, contents, contentIndex] = path;
-  if (sections !== "sections" || typeof sectionIndex !== "number") {
-    return null;
-  }
-
-  const parts = [`Section ${sectionIndex + 1}`];
-  if (items === "items" && typeof itemIndex === "number") {
-    parts.push(`task ${itemIndex + 1}`);
-  }
-  if (contents === "contents" && typeof contentIndex === "number") {
-    parts.push(`content block ${contentIndex + 1}`);
-  }
-  return parts.join(", ");
-};
-
 export function validateTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
 ): Array<{ type: "validation"; message: string }> {
-  const result = templateEditorFormSchema.safeParse(values);
+  const result = templateEditorDetailsSchema.safeParse(values);
   if (result.success) {
     return [];
   }
 
-  const messages = new Set(
-    result.error.issues.map((issue) => {
-      const location = describeTemplateEditorIssueLocation(issue.path);
-      return location ? `${location}: ${issue.message}` : issue.message;
-    }),
-  );
+  const messages = new Set(result.error.issues.map((issue) => issue.message));
   return Array.from(messages, (message) => ({ type: "validation" as const, message }));
 }
