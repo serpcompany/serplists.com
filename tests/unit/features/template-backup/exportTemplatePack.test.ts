@@ -98,7 +98,7 @@ describe("exportTemplatePack with public templates in an Organization, whose cat
   });
 
   it("adds each public template once, even when the page list is empty, as one that failed to load or predates a teammate's template is", async () => {
-    const serverPack = JSON.parse(JSON.stringify(buildPortableTemplatePack(
+    const serverPack: unknown = JSON.parse(JSON.stringify(buildPortableTemplatePack(
       [stored('org-guide', 'Org guide'), stored('launch-qa', 'Launch QA')],
       'admin@example.com',
     )));

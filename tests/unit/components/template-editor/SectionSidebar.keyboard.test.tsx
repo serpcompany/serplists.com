@@ -1,7 +1,7 @@
 import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { get } from 'react-hook-form';
-import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { firstOf } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
@@ -11,10 +11,18 @@ import { createFormControlMountedLikeUseForm } from '../../../support/editorForm
 import { findAllElements, findDomElement, withComponentsRenderedOneLevel } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted(() => ({
-  form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
-  setValue: null as unknown as (...args: unknown[]) => void,
+const harness = vi.hoisted((): { form: EditorForm | null; setValue: Mock<(...args: unknown[]) => void> } => ({
+  form: null,
+  setValue: vi.fn(),
 }));
+
+type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
+
+function editorForm(): EditorForm {
+  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
+  return harness.form;
+}
+
 
 vi.mock('react-hook-form', async (importOriginal) =>
   (await import('../../../support/reactHookFormMock')).reactHookFormWatching(
@@ -24,7 +32,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
       useFormContext: () => ({
         control: {},
         getValues: (name?: string) =>
-          name ? valueAt(name) : harness.form.getValues(),
+          name ? valueAt(name) : editorForm().getValues(),
         setValue: harness.setValue,
       }),
       useFieldArray: ({ name }: { name: string }) => {
@@ -36,7 +44,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
           move: (from: number, to: number) => {
             const next = [...values];
             next.splice(to, 0, ...next.splice(from, 1));
-            harness.form.setValue(name as 'sections', next as never, { shouldDirty: true });
+            editorForm().setValue(name as 'sections', next as never, { shouldDirty: true });
           },
         };
       },
@@ -62,8 +70,8 @@ function createForm(): void {
       },
       { id: 's2', title: 'Second section', items: [{ id: 'c', title: 'Task C', contents: [] }] },
     ],
-  }) as unknown as typeof harness.form;
-  const setValue = harness.form.setValue as (...args: unknown[]) => void;
+  });
+  const setValue = editorForm().setValue as (...args: unknown[]) => void;
   harness.setValue = vi.fn((...args: unknown[]) => setValue(...args));
 }
 
@@ -99,9 +107,9 @@ function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
 }
 
 const sectionTitles = () =>
-  (harness.form.getValues('sections') as Array<{ title: string }>).map((section) => section.title);
+  (editorForm().getValues('sections') as Array<{ title: string }>).map((section) => section.title);
 const taskIds = (sectionIndex: number) =>
-  (get(harness.form.getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
+  (get(editorForm().getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
 
 function liveRegionText(tree: React.ReactNode): string {
   const region = findDomElement(tree, (element) => element.props['aria-live'] === 'polite');
@@ -120,7 +128,7 @@ describe('SectionSidebar keyboard reordering', () => {
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(sectionTitles()).toEqual(['Second section', 'First section']);
-    expect((harness.form.getValues('sections') as Array<{ id: string }>).map((section) => section.id)).toEqual(['s2', 's1']);
+    expect((editorForm().getValues('sections') as Array<{ id: string }>).map((section) => section.id)).toEqual(['s2', 's1']);
     expect(selection.onSelectSection).toHaveBeenCalledWith(0);
     expect(liveRegionText(render())).toBe('Moved Second section to position 1 of 2');
   });
@@ -218,6 +226,6 @@ describe('SectionSidebar title rename in place', () => {
     doubleClickTitle('Task B');
     typeAndPress('Ship it', 'Enter');
 
-    expect(get(harness.form.getValues(), 'sections.0.items.1.title')).toBe('Ship it');
+    expect(get(editorForm().getValues(), 'sections.0.items.1.title')).toBe('Ship it');
   });
 });

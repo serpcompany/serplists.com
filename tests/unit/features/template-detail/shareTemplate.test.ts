@@ -8,6 +8,8 @@ import { shareTemplateToPublic } from '@/features/template-detail/shareTemplate'
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 
 import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+import type { TemplateUpdater } from '@/features/template-detail/useTemplateDetailRecord';
+import { present } from '../../../support/elements';
 
 const ORIGIN = 'https://serplists.com';
 const SHARED_AT_ALICES_LINK = { kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/camping-checklist/` };
@@ -226,7 +228,7 @@ describe('shareTemplateToPublic', () => {
   it('publishes again after the switch made the template private, with a version the server accepts', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
     const shown = buildTemplate({ isPublic: true });
-    const onVisibilityChange = vi.fn();
+    const onVisibilityChange = vi.fn<(update: TemplateUpdater) => void>();
     await setTemplateVisibility({
       apiClient,
       canEdit: true,
@@ -234,7 +236,7 @@ describe('shareTemplateToPublic', () => {
       onTemplateChange: onVisibilityChange,
       template: shown,
     });
-    const afterSwitch = onVisibilityChange.mock.calls[0]?.[0](shown) as ChecklistTemplate;
+    const afterSwitch = present(present(onVisibilityChange.mock.calls[0], 'the visibility update')[0](shown), 'the template after the switch');
     const onShare = vi.fn();
 
     const result = await share(apiClient, { onTemplateChange: onShare, template: afterSwitch });

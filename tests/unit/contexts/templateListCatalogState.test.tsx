@@ -8,12 +8,15 @@ import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
 import { createTestQueryClient } from '../../fixtures/queryClient';
 import type { TemplatesProviderWorkspace } from '../../support/templatesProviderHarness';
+import type { api } from '@/lib/api';
 
-const mockGetTemplates = vi.fn();
+type GetTemplates = (typeof api)['getTemplates'];
+
+const mockGetTemplates = vi.fn<GetTemplates>();
 const workspaceState = { isWorkspaceLoading: false };
 
 vi.mock('@/lib/api', () => ({
-  api: { getTemplates: (...args: unknown[]) => mockGetTemplates(...args) },
+  api: { getTemplates: (...args: Parameters<GetTemplates>) => mockGetTemplates(...args) },
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({

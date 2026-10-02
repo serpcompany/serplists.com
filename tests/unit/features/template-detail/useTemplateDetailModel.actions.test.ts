@@ -16,6 +16,7 @@ import {
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 
 import { apiClientThatClones, templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+import type { CreateTemplate } from '@/features/template-detail/templateActionOutcome';
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -78,7 +79,7 @@ describe('template detail actions', () => {
 
   const saveALibraryAndAnApiTemplateInto = async (teamId: string | undefined) => {
     const apiClient = apiClientThatClones();
-    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+    const createTemplate = vi.fn<CreateTemplate>().mockResolvedValue(buildTemplate({ id: 'created-1' }));
     const save = (template: ChecklistTemplate) =>
       saveTemplateToAccount({
         apiClient,

@@ -9,8 +9,8 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 import { firstOf } from '../../support/elements';
+import { typeThroughTheFieldsOwnOnChange } from '../../support/fakeDomRoots';
 
 import Categories from '@/views/Categories';
 import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
@@ -111,14 +111,6 @@ const fieldNamedByItsLabel = (container: FakeNode, labelText: string) => {
     container,
     (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
   ) as FakeElement[]);
-};
-
-const propsReactKeepsOnAField = z.object({ onChange: z.function().args(z.unknown()) }).passthrough();
-
-const typeThroughTheFieldsOwnOnChange = async (field: FakeElement, value: string) => {
-  const [, props] = Object.entries(field).find(([key]) => key.startsWith('__reactProps$')) ?? [];
-  const { onChange } = propsReactKeepsOnAField.parse(props);
-  await act(async () => onChange({ target: { value }, currentTarget: { value } }));
 };
 
 describe('Categories page search', () => {

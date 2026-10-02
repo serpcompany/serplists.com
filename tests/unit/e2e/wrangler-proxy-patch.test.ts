@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 import type { AddressInfo, Socket } from 'node:net';
 import path from 'node:path';
 import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { parseJsonText } from '../../support/storedJson';
 
 const KEEP_ALIVE_TIMEOUT_DISABLED = 0;
 const PAST_A_NODE_SERVERS_DEFAULT_IDLE_CLOSE_MS = 6_500;
@@ -14,10 +16,11 @@ type UserWorkerRelays = { relay(message: ProxyMessage): Promise<ProxyMessage>; c
 
 const require = createRequire(import.meta.url);
 const wranglerDir = path.dirname(require.resolve('wrangler/package.json'));
-const { version } = JSON.parse(readFileSync(path.join(wranglerDir, 'package.json'), 'utf8')) as { version: string };
-const { pnpm } = JSON.parse(readFileSync('package.json', 'utf8')) as {
-  pnpm?: { patchedDependencies?: Record<string, string> };
-};
+const { version } = parseJsonText(readFileSync(path.join(wranglerDir, 'package.json'), 'utf8'), z.object({ version: z.string() }).passthrough());
+const { pnpm } = parseJsonText(
+  readFileSync('package.json', 'utf8'),
+  z.object({ pnpm: z.object({ patchedDependencies: z.record(z.string()).optional() }).passthrough().optional() }).passthrough(),
+);
 const relayModule = path.join(wranglerDir, 'wrangler-dist', 'serplists-user-worker-relay.js');
 
 function createEchoingWorker() {
@@ -97,7 +100,7 @@ describe('the relay between the dev proxy and the worker', () => {
             resolve({
               status: res.statusCode,
               setCookie: res.headers['set-cookie'] ?? [],
-              json: JSON.parse(text) as Record<string, string>,
+              json: parseJsonText(text, z.record(z.string())),
               socket,
             });
           });

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionStatus } from '@/contexts/authSession';
 import { NotFoundLayout } from '@/components/NotFoundLayout';
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer, FakeElement, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -31,9 +31,9 @@ const shellAfterMountingAt = async (pathname: string, sessionStatus: SessionStat
   const root = createRoot(container);
   try {
     await act(async () => root.render(<NotFoundLayout>Missing</NotFoundLayout>));
-    return (container.firstChild as unknown as { getAttribute: (name: string) => string | null }).getAttribute(
-      'data-shell',
-    );
+    const shell = container.firstChild;
+    if (!(shell instanceof FakeElement)) throw new Error('NotFoundLayout rendered no element');
+    return shell.getAttribute('data-shell');
   } finally {
     act(() => root.unmount());
     restoreGlobals();

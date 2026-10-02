@@ -1,5 +1,4 @@
 import React from 'react';
-import { get } from 'react-hook-form';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { elementAt, firstOf } from '../../../support/elements';
 
@@ -11,10 +10,18 @@ import { createFormControlMountedLikeUseForm } from '../../../support/editorForm
 import { findAllElements, findDomElement, type AnyElement } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted(() => ({
-  form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
-  move: null as unknown as (from: number, to: number) => void,
+const harness = vi.hoisted((): { form: EditorForm | null; move: (from: number, to: number) => void } => ({
+  form: null,
+  move: () => {},
 }));
+
+type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
+
+function editorForm(): EditorForm {
+  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
+  return harness.form;
+}
+
 
 vi.mock('react', async (importOriginal) =>
   (await import('../../../support/reactHookStubs')).reactKeepingStateBetweenRenders(importOriginal, { useId: () => 'blocks', useContext: () => null }),
@@ -25,7 +32,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
     importOriginal,
     harness,
     ({ valueAt }) => ({
-      useFormContext: () => harness.form,
+      useFormContext: () => editorForm(),
       useFieldArray: ({ name }: { name: string }) => ({
         fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
           (content) => ({ ...content, fieldId: `field-${content.id}` }),
@@ -36,7 +43,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
           harness.move(from, to);
           const next = [...((valueAt(name) ?? []) as TemplateEditorContent[])];
           next.splice(to, 0, ...next.splice(from, 1));
-          harness.form.setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
+          editorForm().setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
         },
       }),
     }),
@@ -80,7 +87,7 @@ function createForm(): void {
         ],
       },
     ],
-  }) as unknown as typeof harness.form;
+  });
 }
 
 function render(): React.ReactNode {
@@ -88,7 +95,7 @@ function render(): React.ReactNode {
 }
 
 const contentIds = () =>
-  (get(harness.form.getValues(), CONTENT_PATH) as TemplateEditorContent[]).map((content) => content.id);
+  (editorForm().getValues(CONTENT_PATH) ?? []).map((content) => content.id);
 
 const keyEvent = (key: string) => ({
   key,
@@ -170,7 +177,7 @@ describe('ContentEditor block reordering', () => {
 
     expect(harness.move).toHaveBeenCalledWith(2, 0);
     expect(contentIds()).toEqual(['c-subs', 'c-text', 'c-image']);
-    expect(get(harness.form.getValues(), `${CONTENT_PATH}.0.subItems`)).toEqual([
+    expect(editorForm().getValues(`${CONTENT_PATH}.0.subItems`)).toEqual([
       expect.objectContaining({ id: 'sub-1', title: 'Laptop' }),
     ]);
     expect(findAllElements(render(), (element) => element.props['data-drop-indicator'] !== undefined)).toEqual([]);

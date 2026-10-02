@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 import { accessHook as fake } from "../../../support/templateEditorAccessHook";
 
@@ -23,7 +23,7 @@ const LEAVING_FOR_STRIPE = true;
 const CHECKOUT_NOT_STARTED = false;
 
 const pageshow = (persisted: boolean) => Object.assign(new Event("pageshow"), { persisted });
-const values = { title: "Second template", description: "", sections: [] } as unknown as TemplateEditorFormValues;
+const values: TemplateEditorFormValues = buildTemplateEditorFormValues({ title: "Second template", description: "", sections: [] });
 const options = {
   isCreate: true,
   getValues: () => values,

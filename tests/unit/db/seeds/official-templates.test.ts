@@ -3,6 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { pathsOfLiteralBackslashN } from "../../../support/literalBackslashN";
 import { SqliteD1 } from "../../../support/sqlite-d1";
+import { z } from "zod";
+import { parseJsonText } from "../../../support/storedJson";
 
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
 
@@ -18,7 +20,15 @@ function officialRowsAsSqliteStoresTheSeed(): OfficialRow[] {
   );
 }
 
-type Section = { items: Array<{ id: string; contents?: Array<{ type: string; value: string }> }> };
+const seededSections = z.array(
+  z
+    .object({
+      items: z.array(
+        z.object({ id: z.string(), contents: z.array(z.object({ type: z.string(), value: z.string() }).passthrough()).optional() }).passthrough(),
+      ),
+    })
+    .passthrough(),
+);
 
 const rows = officialRowsAsSqliteStoresTheSeed();
 
@@ -27,7 +37,7 @@ describe("official Template seed", () => {
     expect(rows.length).toBeGreaterThanOrEqual(5);
     expect(rows.map((row) => row.id)).toContain("serp-template-technical-seo-audit");
     for (const row of rows) {
-      const sections = JSON.parse(row.items) as Section[];
+      const sections = parseJsonText(row.items, seededSections);
       expect(Array.isArray(sections)).toBe(true);
       expect(sections.length).toBeGreaterThan(0);
     }
@@ -42,7 +52,7 @@ describe("official Template seed", () => {
 
   it("keeps multi-line text blocks on separate lines", () => {
     const audit = rows.find((row) => row.id === "serp-template-technical-seo-audit");
-    const sections = JSON.parse(audit?.items ?? "[]") as Section[];
+    const sections = parseJsonText(audit?.items ?? "[]", seededSections);
     const robots = sections.flatMap((section) => section.items).find((item) => item.id === "t-1");
     const text = robots?.contents?.find((content) => content.type === "text")?.value ?? "";
 

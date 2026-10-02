@@ -16,15 +16,16 @@ import { serializeSharedChecklistRun } from '@functions/api/utils/checklist-runs
 import { apiRunSchema } from '@/lib/schemas/apiRuns';
 import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
 import { objectContaining } from '../../../support/asymmetricMatchers';
+import { buildRun } from '../../../fixtures/runExecutionFixtures';
 
 const run = (completed: string[]): ChecklistRun =>
-  ({
+  buildRun({
     id: 'run-1',
     sections: [
       { id: 's1', title: 'One', items: ['a', 'b'].map((id) => ({ id, title: id, isCompleted: completed.includes(id) })) },
       { id: 's2', title: 'Two', items: ['c', 'd'].map((id) => ({ id, title: id, isCompleted: completed.includes(id) })) },
     ],
-  }) as unknown as ChecklistRun;
+  });
 
 describe('getNextSelectedItemId', () => {
   it('moves to the next unfinished task, across sections', () => {
@@ -159,8 +160,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
       },
     ],
   });
-  const runOf = (...items: ChecklistItem[]): ChecklistRun =>
-    ({ id: 'run-1', sections: [{ id: 's1', title: 'One', items }] }) as unknown as ChecklistRun;
+  const runOf = (...items: ChecklistItem[]): ChecklistRun => buildRun({ id: 'run-1', sections: [{ id: 's1', title: 'One', items }] });
 
   it('counts tasks and sub-tasks separately', () => {
     const counts = countRunExecutionItems(runOf(task('a', [false, false, false]), task('b', [false, false, false]), task('c', [false, false, false])));
@@ -198,7 +198,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
     const zero = { progress: 0, subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 0 };
     expect(countRunExecutionItems(null)).toEqual(zero);
     expect(countRunExecutionItems(runOf())).toEqual(zero);
-    expect(countRunExecutionItems({ id: 'run-1', sections: [] } as unknown as ChecklistRun)).toEqual(zero);
+    expect(countRunExecutionItems(buildRun({ id: 'run-1', sections: [] }))).toEqual(zero);
   });
 
   it('weights progress the same way as the API that stores it', () => {
@@ -217,7 +217,7 @@ describe('countRunExecutionItems, which counts top-level tasks as the task list 
 
 describe('areAllRunItemsCompleted', () => {
   const withSubTask = (subTaskDone: boolean): ChecklistRun =>
-    ({
+    buildRun({
       id: 'run-1',
       sections: [{
         id: 's1',
@@ -229,7 +229,7 @@ describe('areAllRunItemsCompleted', () => {
           contents: [{ id: 'c1', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Tagline', isCompleted: subTaskDone }] }],
         }],
       }],
-    }) as unknown as ChecklistRun;
+    });
 
   it('is false while a ticked task still has an unfinished Sub-task', () => {
     expect(areAllRunItemsCompleted(withSubTask(false))).toBe(false);

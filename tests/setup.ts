@@ -14,7 +14,7 @@ const localStorageThatKeepsNothing = {
 global.localStorage = localStorageThatKeepsNothing;
 
 class TextOnlyFileReader {
-  onload: ((event: any) => void) | null = null;
+  onload: ((event: { target: { result: string } }) => void) | null = null;
   onerror: (() => void) | null = null;
   result: string | null = null;
 
@@ -41,5 +41,5 @@ class TextOnlyFileReader {
 }
 
 if (typeof FileReader === 'undefined') {
-  (global as any).FileReader = TextOnlyFileReader;
+  Object.assign(globalThis, { FileReader: TextOnlyFileReader });
 }

@@ -1,13 +1,15 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { queryKeys } from '@/lib/queryKeys';
 
 import { createFakeContainer, dispatch, FakeElement, findAll } from '../../fixtures/fakeDom';
-import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
+import { aFakeDomForEachTest, typeThroughTheFieldsOwnOnChange } from '../../support/fakeDomRoots';
+import { present } from '../../support/elements';
+import type { api } from '@/lib/api';
 
 type TeamWorkspace = {
   id: string;
@@ -19,20 +21,31 @@ type TeamWorkspace = {
   slug: string | null;
 };
 
-const workspace = vi.hoisted(() => ({
-  active: null as unknown as TeamWorkspace,
+type UpdateTeam = (typeof api)['updateTeam'];
+
+type WorkspaceDouble = {
+  active: TeamWorkspace | null;
+  patchTeam: Mock<(teamId: string, patch: Partial<TeamWorkspace>) => void>;
+  refreshTeams: Mock<() => Promise<void>>;
+  updateTeam: Mock<UpdateTeam>;
+};
+
+const workspace = vi.hoisted((): WorkspaceDouble => ({
+  active: null,
   patchTeam: vi.fn(),
   refreshTeams: vi.fn(),
   updateTeam: vi.fn(),
 }));
+
+const activeTeam = () => present(workspace.active, 'the active Organization');
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'owner@example.com' } }),
 }));
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
-    activeTeamId: workspace.active.teamId,
-    activeWorkspace: workspace.active,
+    activeTeamId: activeTeam().teamId,
+    activeWorkspace: activeTeam(),
     canManageTeam: true,
     createTeam: vi.fn(),
     isTeamWorkspace: true,
@@ -40,7 +53,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     refreshTeams: workspace.refreshTeams,
     rememberTeam: vi.fn(),
     selectWorkspace: vi.fn(),
-    teams: [workspace.active],
+    teams: [activeTeam()],
   }),
 }));
 vi.mock('@/lib/api', () => ({
@@ -48,7 +61,7 @@ vi.mock('@/lib/api', () => ({
     getTeamActivity: vi.fn().mockResolvedValue([]),
     getTeamInvites: vi.fn().mockResolvedValue([]),
     getTeamMembers: vi.fn().mockResolvedValue([]),
-    updateTeam: (...args: unknown[]) => workspace.updateTeam(...args),
+    updateTeam: (...args: Parameters<UpdateTeam>) => workspace.updateTeam(...args),
   },
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
@@ -68,7 +81,7 @@ const acme = (overrides: Partial<TeamWorkspace> = {}): TeamWorkspace => ({
 });
 
 const rebuildActiveWorkspaceWithPatch = (_teamId: string, patch: Partial<TeamWorkspace>) => {
-  workspace.active = { ...workspace.active, ...patch };
+  workspace.active = { ...activeTeam(), ...patch };
 };
 
 let root: Root | null = null;
@@ -116,14 +129,7 @@ const byId = (id: string) => {
 const nameField = () => byId('team-settings-name');
 const slugField = () => byId('team-settings-slug');
 
-const typeInto = async (field: FakeElement, value: string) => {
-  const propsKey = Object.keys(field).find((key) => key.startsWith('__reactProps$'));
-  const props = propsKey ? (field as unknown as Record<string, { onChange?: (event: unknown) => void }>)[propsKey] : null;
-  if (!props?.onChange) throw new Error('The field has no onChange');
-  await act(async () => {
-    props.onChange?.({ target: { value }, currentTarget: { value } });
-  });
-};
+const typeInto = typeThroughTheFieldsOwnOnChange;
 
 const saveButton = () => {
   const [button] = findAll(
@@ -183,7 +189,17 @@ describe('TeamSettingsSection keeps what the user typed in the Organization name
   });
 
   it('shows what the server saved after Save, even when it adjusted the slug, leaving nothing to save', async () => {
-    workspace.updateTeam.mockResolvedValue({ team: { id: 'team-1', name: 'Acme Marketing', slug: 'acme-mkt-2' } });
+    workspace.updateTeam.mockResolvedValue({
+      success: true,
+      team: {
+        id: 'team-1',
+        name: 'Acme Marketing',
+        slug: 'acme-mkt-2',
+        created_at: '2026-01-01T00:00:00.000Z',
+        created_by_user_id: 'user-1',
+        membership: { id: 'member-1', status: 'active', role: 'owner' },
+      },
+    });
     await mount();
     await typeInto(nameField(), ' Acme Marketing ');
     await typeInto(slugField(), 'acme-mkt');

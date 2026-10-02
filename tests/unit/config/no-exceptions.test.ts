@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
 import { walkFiles } from '../../../scripts/lib/repo-files.mjs';
 import { onlyElement } from '../../support/elements';
+import { isError, rulesFor } from '../../support/eslintConfig';
 
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
@@ -48,19 +49,23 @@ const testFileArguments = (script: string, flag?: string) =>
     .map(([, file]) => file)
     .sort();
 
+const maxLinesOptions = z.tuple([
+  z.unknown(),
+  z.object({ max: z.number().optional(), skipBlankLines: z.boolean().optional(), skipComments: z.boolean().optional() }).passthrough(),
+]);
+
 describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   it('holds every authored JavaScript and TypeScript file to the same 500-line limit', async () => {
     const eslint = new ESLint({ cwd: repoRoot });
     const exempt: string[] = [];
     for (const file of authoredCodeFiles) {
-      const rule = (await eslint.calculateConfigForFile(file))?.rules?.['max-lines'];
-      const options = Array.isArray(rule) ? rule[1] : undefined;
+      const rule = (await rulesFor(eslint, file))['max-lines'];
+      const options = maxLinesOptions.safeParse(rule).data?.[1];
       const held =
-        Array.isArray(rule) &&
-        rule[0] === 2 &&
+        isError(rule) &&
         options?.max === MAX_LINES &&
-        options?.skipBlankLines !== true &&
-        options?.skipComments !== true;
+        options.skipBlankLines !== true &&
+        options.skipComments !== true;
       if (!held) exempt.push(`${file}: ${JSON.stringify(rule ?? 'not linted')}`);
     }
 

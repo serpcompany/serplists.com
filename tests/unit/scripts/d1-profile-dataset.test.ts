@@ -15,7 +15,6 @@ import {
   scenarios,
   UPDATE_TEMPLATE,
 } from "../../../scripts/d1-profile-lib";
-import type { LocalDb } from "../../../scripts/data/local-d1";
 import { SqliteD1 } from "../../support/sqlite-d1";
 
 const session = vi.hoisted(() => ({ userId: null as string | null }));
@@ -23,6 +22,7 @@ vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn(async (
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { apiEnv } from "../../support/apiEnv";
 
 const smallTemplateCount = 100;
 const small: DatasetCounts = {
@@ -36,11 +36,11 @@ const small: DatasetCounts = {
   templateVersions: smallTemplateCount,
   analytics: 20,
 };
-const env = (d1: SqliteD1) => ({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
+const env = (d1: SqliteD1) => apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
 async function buildDataset(counts: DatasetCounts) {
   const d1 = new SqliteD1();
-  await seedLocalTestData(drizzle(d1.binding, { schema }) as unknown as LocalDb);
+  await seedLocalTestData(drizzle(d1.binding, { schema }));
   d1.sqlite.exec(buildSyntheticSql(counts));
   return d1;
 }

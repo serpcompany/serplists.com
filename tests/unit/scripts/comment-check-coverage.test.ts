@@ -13,6 +13,7 @@ import {
   findComments,
   WORKFLOWS_AWAITING_A_PERSON,
 } from '../../../scripts/check-no-comments-lib.mjs';
+import { isError, rulesFor } from '../../support/eslintConfig';
 
 const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
 const COMMENT_CHECK_COMMAND = 'node scripts/check-no-comments.mjs';
@@ -47,8 +48,7 @@ describe('the comment checks', { timeout: 60_000 }, () => {
     const eslint = new ESLint();
     const unchecked: string[] = [];
     for (const file of repositoryFiles.filter((path) => commentCheckOf(path) === 'ESLint')) {
-      const rule = (await eslint.calculateConfigForFile(file))?.rules?.['serplists/no-comments'];
-      if (!Array.isArray(rule) || rule[0] !== 2) unchecked.push(file);
+      if (!isError((await rulesFor(eslint, file))['serplists/no-comments'])) unchecked.push(file);
     }
 
     expect(

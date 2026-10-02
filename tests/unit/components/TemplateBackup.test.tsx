@@ -15,22 +15,32 @@ type BillingQueryResult = {
   refetch: () => Promise<unknown>;
 };
 
-const mocks = vi.hoisted(() => ({
-  billingQuery: null as unknown as BillingQueryResult,
-  exportInFlight: false,
-  templateListOptions: [] as unknown[],
-  templateLists: {
-    allTemplates: [] as Array<Record<string, unknown>>,
-    templatesError: null as unknown,
-    templatesLoading: false,
-  },
-  workspace: {
-    activeTeamId: undefined as string | undefined,
-    activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
-    canEditTemplates: true,
-    isTeamWorkspace: false,
-  },
-}));
+const mocks = vi.hoisted(() => {
+  const billingQueryStillLoading: BillingQueryResult = {
+    error: null,
+    fetchStatus: 'fetching',
+    isError: false,
+    isLoading: true,
+    isPending: true,
+    refetch: async () => undefined,
+  };
+  return {
+    billingQuery: billingQueryStillLoading,
+    exportInFlight: false,
+    templateListOptions: [] as unknown[],
+    templateLists: {
+      allTemplates: [] as Array<Record<string, unknown>>,
+      templatesError: null as unknown,
+      templatesLoading: false,
+    },
+    workspace: {
+      activeTeamId: undefined as string | undefined,
+      activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
+      canEditTemplates: true,
+      isTeamWorkspace: false,
+    },
+  };
+});
 
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),

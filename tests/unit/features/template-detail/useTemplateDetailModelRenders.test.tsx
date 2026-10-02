@@ -243,7 +243,7 @@ describe('template detail visibility switch after an edit conflict, whose stale 
     await act(async () => {
       await expect(latest().setVisibility(true)).resolves.toEqual({ kind: 'ok' });
     });
-    expect(apiMock.updateTemplate.mock.calls.map(([, body]) => body)).toEqual([
+    expect(apiMock.updateTemplate.mock.calls.map(([, body]): unknown => body)).toEqual([
       { expected_version: 3, is_public: true },
       { expected_version: 4, is_public: true },
     ]);

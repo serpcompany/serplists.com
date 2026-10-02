@@ -1,6 +1,5 @@
 import '../../../support/mockedR2Uploads';
-import { get } from 'react-hook-form';
-import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { api } from '@/lib/api';
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
@@ -16,11 +15,21 @@ import { deferred } from '../../../support/deferred';
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
 import { findByAriaLabel, findElement, findElementOf, findFileInput } from '../../../support/elementTree';
 
-const harness = vi.hoisted(() => ({
-  form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
-  editorSetValueSpy: null as unknown as (...args: unknown[]) => void,
-  pendingUploadsFromContext: null as unknown,
-}));
+const harness = vi.hoisted(
+  (): { form: EditorForm | null; editorSetValueSpy: Mock<(...args: unknown[]) => void>; pendingUploadsFromContext: unknown } => ({
+    form: null,
+    editorSetValueSpy: vi.fn(),
+    pendingUploadsFromContext: null,
+  }),
+);
+
+type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
+
+function editorForm(): EditorForm {
+  if (!harness.form) throw new Error('The test made no editor form: call createForm() first');
+  return harness.form;
+}
+
 
 vi.mock('react', async (importOriginal) =>
   (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
@@ -36,7 +45,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
     importOriginal,
     harness,
     ({ valueAt }) => ({
-      useFormContext: () => ({ ...harness.form, setValue: harness.editorSetValueSpy }),
+      useFormContext: () => ({ ...editorForm(), setValue: harness.editorSetValueSpy }),
       useFieldArray: ({ name }: { name: string }) => ({
         fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
           (content) => ({ ...content, fieldId: content.id }),
@@ -69,8 +78,8 @@ function createForm(contents: Array<Partial<TemplateEditorContent>>): void {
         items: [{ id: 'i1', title: 'Task', contents: contents as TemplateEditorContent[] }],
       },
     ],
-  }) as unknown as typeof harness.form;
-  const setValue = harness.form.setValue as (...args: unknown[]) => void;
+  });
+  const setValue = editorForm().setValue as (...args: unknown[]) => void;
   harness.editorSetValueSpy = vi.fn((...args: unknown[]) => setValue(...args));
 }
 
@@ -101,7 +110,7 @@ function holdTheUpload(): (uploaded: UploadedFile) => void {
 }
 
 function contentAt(index: number): TemplateEditorContent | undefined {
-  return get(harness.form.getValues(), `${CONTENT_PATH}.${index}`);
+  return editorForm().getValues(`${CONTENT_PATH}.${index}`);
 }
 
 describe('ContentEditor media uploads', () => {
@@ -157,12 +166,12 @@ describe('ContentEditor media uploads', () => {
   it('writes a finished upload to its own block after a block was inserted above it during the upload', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
     const finishUpload = holdTheUpload();
-    const textBlockInsertedAbove = { id: 'c0', type: 'text', value: 'Intro' };
+    const textBlockInsertedAbove: TemplateEditorContent = { id: 'c0', type: 'text', value: 'Intro' };
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     const blockBeingUploadedTo = contentAt(0);
     assert.exists(blockBeingUploadedTo);
-    harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, [
+    editorForm().setValue(CONTENT_PATH, [
       textBlockInsertedAbove,
       blockBeingUploadedTo,
     ]);
@@ -180,11 +189,11 @@ describe('ContentEditor media uploads', () => {
     const finishUpload = holdTheUpload();
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
-    harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, []);
+    editorForm().setValue(CONTENT_PATH, []);
     finishUpload({ url: UPLOADED_URL, fileName: 'photo.png', fileSize: 123 });
     await pending;
 
-    expect(get(harness.form.getValues(), CONTENT_PATH)).toEqual([]);
+    expect(editorForm().getValues(CONTENT_PATH)).toEqual([]);
   });
 
   it('counts the upload as pending for the editor until it finishes, which keeps Save disabled and guards leaving', async () => {
