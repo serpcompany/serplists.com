@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.js`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -76,11 +76,12 @@ The tests' tsconfig turns it off until a later round of the
 [harness hardening plan](exec-plans/active/harness-hardening.md).
 
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
-`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules and
-`@typescript-eslint/no-unsafe-type-assertion`, which read types from the app, API and node
-projects ([repository checks](#repository-checks)). Type information makes a run about 2.4
-times as long (50 s against 21 s for `eslint .` on the owner's machine), so the pre-commit
-hook and editors use `eslint.config.js` alone and the type-aware rules fail at
+`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
+app, API, node and tests projects, and `@typescript-eslint/no-unsafe-type-assertion` on app,
+API, script and database code ([repository checks](#repository-checks)). Type information
+makes a run about four times as long: 85 to 91 s against 22 s for `eslint .` on the owner's
+machine, of which the tests project adds about 35 s (the run took 52 to 54 s without it). So
+the pre-commit hook and editors use `eslint.config.js` alone and the type-aware rules fail at
 `pnpm run verify` (the push hook) and in CI.
 
 `eslint.config.js` holds every `.js`, `.mjs` and `.cjs` file to ESLint's recommended JavaScript
@@ -204,7 +205,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 - **External data is parsed at the boundary.** A cast trusts a guessed shape, so data from
   outside the code is parsed with a Zod schema where it arrives:
   - `serplists/no-external-data-casts` (`scripts/eslint-rules/no-external-data-casts.mjs`)
-    refuses, in `src/`, `functions/`, `scripts/` and `db/`, a cast (`as T` or `<T>`) of
+    refuses, in `src/`, `functions/`, `scripts/` and `db/` and in every test file (`tests/`,
+    its unit and integration tests, browser specs, support and fixtures, and the tests beside
+    the code in `src/`), a cast (`as T` or `<T>`) of
     `JSON.parse(...)`, a response body (`.json()`, awaited or not, and `.json<T>()`), a
     `getItem(...)` result, `event.data` or `message.data`, `request.formData()` or a form's
     `get()`/`getAll()`, and every `as unknown as T`. Widening to `unknown` is allowed. Each
@@ -212,22 +215,28 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `parse` or `safeParse` for the rest, Drizzle's `$inferSelect` for D1 rows.
   - The type-aware rules `no-unsafe-assignment`, `no-unsafe-member-access`, `no-unsafe-call`,
     `no-unsafe-return` and `no-unsafe-argument` refuse an `any` flowing on uncast, as in
-    `const data: Foo = await response.json()`, in the TypeScript files of the same folders
-    (`eslint.type-aware.config.js`, run by `pnpm run lint`). The `.mjs` scripts are not
-    type-checked, so of these checks only the cast rule reads them, beside ESLint's
-    recommended JavaScript rules ([quality gates](#quality-gates)).
-  - `@typescript-eslint/no-unsafe-type-assertion`, in the same config and folders, refuses an
+    `const data: Foo = await response.json()`, in the TypeScript files of the same folders and
+    of `tests/`, whose types come from `tests/tsconfig.json` (`eslint.type-aware.config.js`,
+    run by `pnpm run lint`). The `.mjs` scripts and tests are not type-checked, so of these
+    checks only the cast rule reads them, beside ESLint's recommended JavaScript rules
+    ([quality gates](#quality-gates)). Tests are held to `no-explicit-any` and
+    `no-this-alias` as app code is: no override turns them off for test files.
+  - `@typescript-eslint/no-unsafe-type-assertion`, in the same config and app folders, refuses an
     `as` that narrows a type, whatever the value: a cast from `unknown` or `any`, from a
     union to one member, or from `string` to a literal. Narrow instead: a type guard, `in`,
     `instanceof`, a Zod parse, `skipToken` for a TanStack query that waits for an id, a guard
     that throws an error naming what is missing, or the null check a Base UI `Select`'s
     `onValueChange` needs. An `as` that widens or names the same type is allowed.
-  - Tests join in a later round of the
-    [harness hardening plan](exec-plans/active/harness-hardening.md); until then they read
-    responses with `readJson(response, schema)` from `tests/support/readJson.ts`.
+  - Tests parse what they read the same way: response bodies with `readJson(response,
+    schema)`, stored JSON columns with `tests/support/storedJson.ts`, and browser specs through
+    request helpers that take a schema ([testing conventions](#testing-conventions)). The
+    assertion rule does not cover tests yet: a later round of the
+    [harness hardening plan](exec-plans/active/harness-hardening.md) adds it.
   - `tests/unit/scripts/no-external-data-casts-rule.test.ts` covers the rule, and
     `tests/unit/config/external-data-boundaries.test.ts` fails if `pnpm run lint` stops using
-    the type-aware config or a folder loses the rules, the assertion rule included.
+    the type-aware config, a folder loses the rules (the assertion rule included), a test file
+    loses the cast rule or the `no-unsafe-*` rules, or a test file gets `no-explicit-any` or
+    `no-this-alias` turned off.
 - **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
   that scans the code:
   - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the
@@ -473,13 +482,17 @@ Common failures:
     (see the API handler tests below), and harnesses that run it:
     - API handlers: `apiHandlerMocks.ts` and the modules for each area
       (`templatesHandler.ts`, `checklistsHandler.ts`, `teamsHandler.ts`, `agentMcpHandler.ts`,
-      `portableTemplatesHandler.ts`), `mockedSession.ts`, `apiEnv.ts`, `apiRouter.ts`, and
-      `sqlite-d1.ts` for SQL.
+      `portableTemplatesHandler.ts`), `mockedSession.ts`, `apiEnv.ts`, `apiRouter.ts`,
+      `sqlite-d1.ts` for SQL, `d1Doubles.ts` and `r2Bucket.ts` for D1 and R2 stand-ins, and
+      `storedJson.ts` to read what a handler stored.
+    - Reading what the code under test returns: `readJson.ts`, `mcpResponses.ts`,
+      `asymmetricMatchers.ts`, `thrownError.ts`, and `eslintConfig.ts` for an ESLint config's
+      rules.
     - Next.js and the server: `mockedNextNavigation.ts`, `mockedServerContext.ts`,
       `builtRoutes.ts` and `sitemapRoutes.ts`.
     - The app's contexts and hooks: `appShellInPlace.tsx` (the auth, Templates and workspace
-      contexts around a page), `mockedPersonalWorkspace.ts`, `mockedWorkspaceRoles.ts`,
-      `mockedTemplateLibrary.ts`, `mockedDashboardTemplatesModel.ts`, `mockedR2Uploads.ts` and
+      contexts around a page), `hookDoubles.ts`, `mockedPersonalWorkspace.ts`,
+      `mockedWorkspaceRoles.ts`, `mockedTemplateLibrary.ts`, `mockedDashboardTemplatesModel.ts`, `mockedR2Uploads.ts` and
       `uploadMocks.ts`.
     - Components called without a DOM: `reactHookStubs.ts`, `reactHooksKeptBetweenRenders.ts`,
       `reactHookFormMock.ts`, `hookStateSlots.ts` and `elementTree.ts`.
@@ -498,8 +511,8 @@ Common failures:
       rules: `ruleTester.ts`.
   - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
     template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
-    (`billing.ts`), API calls (`api-requests.ts`), a mocked API (`mocked-api.ts`) and
-    navigation (`navigation.ts`).
+    (`billing.ts`), API calls (`api-requests.ts`) and the schemas of what they read
+    (`api-bodies.ts`), a mocked API (`mocked-api.ts`) and navigation (`navigation.ts`).
 - **Tests that make their own git repositories.** The unit test setup (`tests/setup.ts`)
   clears git's repository variables (`GIT_DIR` and the like) before any test runs.
   - Inside a git hook git sets them: the pre-push hook runs `pnpm run verify`, and in a linked
@@ -524,24 +537,65 @@ Common failures:
   `.tsx` file next to a `.ts` file of the same name is in no include: TypeScript keeps only
   the `.ts` one, so the test names it.
 - Read a response body with `readJson(response, schema)` from `tests/support/readJson.ts`,
-  which parses it with Zod and returns it typed, so the test checks the shape it reads
-  instead of trusting a cast. A schema names the fields the test reads and ends each object
-  in `.passthrough()`: a plain `z.object()` drops the fields it does not list, and a
-  `toEqual()` on the result would then pass for a body with more. The file also holds
+  which parses it with Zod and returns the schema's output type (`ResponseSchema`, as the
+  app's `apiRequest` takes), so the test checks the shape it reads instead of trusting a cast.
+  A schema names the fields the test reads and ends each object in `.passthrough()`: a plain
+  `z.object()` drops the fields it does not list, and a `toEqual()` on the result would then
+  pass for a body with more. The file also holds
   `jsonObject`, `jsonObjects`, the API's error body (`apiErrorBody`, from `jsonError()` and
   `authJsonError()`) and Better Auth's (`betterAuthErrorBody`). A test that only compares the
   whole body may pass `await response.json()` straight to `expect()`.
   - The MCP endpoint's JSON-RPC bodies, tool results and paged lists have schemas in
     `tests/support/mcpResponses.ts`; `toolBody()` and `rpcErrorBody()`
     (`tests/support/agentMcpHandler.ts`) and `callToolWithAFreshRunKey()`
-    (`tests/support/agentMcpOnSqlite.ts`) read with them.
-  - Browser specs run in Playwright, which cannot load Vitest, so they parse with the schema
-    itself (`schema.parse(await response.json())`) and import only modules that do not
-    import Vitest, such as `mcpResponses.ts`.
+    (`tests/support/agentMcpOnSqlite.ts`) read with them. A field of a JSON record is read with
+    `recordIn`, `recordsIn`, `optionalRecordIn`, `textIn` or `numberIn` from the same file,
+    never with `as JsonRecord`. These parse a copy, so a test that changes an object in place
+    keeps its own reference to it.
+  - What a handler stored (a D1 row's `items`, `retired_items` or audit JSON, a log line) is
+    parsed with `tests/support/storedJson.ts`: `storedSectionsIn(column)` for checklist
+    sections, `jsonRecordIn` and `jsonRecordsIn` for other JSON, and `parseJsonText(text,
+    schema)` for any other shape. The Drizzle chain mocks (`tests/support/drizzleChainMocks.ts`)
+    record each `set()` and `values()` row as `Record<string, unknown>`, so a test reads a
+    stored column through these instead of trusting `any`.
+  - Browser specs run in Playwright, which cannot load Vitest, so they import only modules
+    that do not import Vitest. The request helpers in `tests/e2e/support/api-requests.ts`
+    take a schema, as `readJson()` does: `apiRequest(page, path, schema, init)`,
+    `apiJson(page, path, schema, init)` and `apiJsonAt(page, path, method, schema, body)`
+    parse the body with it, and `apiRecord()` parses a JSON record. Each call passes the
+    app's schema for the body it reads (`createdRunSchema`, `savedTemplateSchema`,
+    `apiRunSchema`, `runShareCreatedSchema` and others, re-exported from
+    `tests/e2e/support/api-bodies.ts`, whose modules import only Zod), a schema of its own, or
+    `bodyNotRead` when it reads only the status. `sectionsOfStoredItems(run.items)` in the same
+    file parses a run's stored sections.
+  - An asymmetric matcher inside an expected object comes from
+    `tests/support/asymmetricMatchers.ts` (`objectContaining`, `stringMatching`,
+    `anyInstanceOf` and the rest), typed `unknown`: Vitest types `expect.objectContaining()`
+    and its kin as `any`, which `no-unsafe-assignment` refuses as an object property. An error
+    a test matches by its fields is read with `errorThrownBy(action)` from
+    `tests/support/thrownError.ts`.
 - Fixtures and mocks have the types of what the code under test receives, with no casts:
   - `apiEnv(vars)` (`tests/support/apiEnv.ts`) is a complete `Env`. Its `DB` and
     `R2_UPLOADS` throw, naming the binding, when the code under test uses them; pass the one
-    it needs (a `SqliteD1` binding, a fake bucket) in `vars`.
+    it needs (a `SqliteD1` binding, an `InMemoryR2Bucket` from `tests/support/r2Bucket.ts`) in
+    `vars`. A var a test leaves out is left out with `withoutVars(env, names)`, not set to
+    `undefined`; a D1 that fails is a `D1DatabaseThatThrows`. The local D1 harnesses
+    (`tests/integration/local-d1-handler-env.ts`, `tests/support/personalRunMcpLocalD1.ts`)
+    hand handlers an `Env` built the same way.
+  - A test double of a platform type implements it. `SqliteD1` implements `D1Database`, its
+    statements extend `D1StatementDouble` from `tests/support/d1Doubles.ts`, and a D1 fake with
+    canned answers extends `D1StatementDouble` and `D1DatabaseDouble` from the same file;
+    `InMemoryR2Bucket` implements `R2Bucket`. D1's `all<T>()`, `first<T>()` and `raw<T>()` and
+    R2's `json<T>()` promise a row type nothing checks, in the platform as in the doubles, so
+    the doubles declare those generic signatures as overloads over an implementation that
+    returns what it read. A `Request` that must hand over a form as is subclasses `Request`.
+  - React DOM's `createRoot` accepts the fake DOM's `FakeElement` in the tests' program:
+    `tests/fixtures/fakeDom.ts` adds it to the `Container` type React's types leave open for
+    that. A component's React props on a fake element are read with
+    `typeThroughTheFieldsOwnOnChange()` (`tests/support/fakeDomRoots.ts`).
+  - A hook mocked with `vi.mock` gets a typed mock: `vi.fn<HookDouble<typeof useHook>>()`
+    (`tests/support/hookDoubles.ts`) returns a `Partial` of the hook's result, so each field a
+    test sets is checked against the hook while the rest stay out.
   - A fixture sets every field its type requires, even one the code under test ignores. A
     mock gets the parameters it is called with (`vi.fn((options: BetterAuthOptions) => ...)`),
     so `mock.calls` is typed, and a stand-in for a client has every method of the client's
@@ -564,7 +618,10 @@ Common failures:
     and a parameter that defaults to `null` then accepts only `null`. `tests/tsconfig.json`
     turns `allowJs` off, so `pnpm run typecheck` fails on an import that has none.
   - A test of what a JavaScript caller may pass but the declared types rule out is a
-    `.test.mjs` file (`tests/unit/scripts/run-tool-from-javascript.test.mjs`).
+    `.test.mjs` file (`tests/unit/scripts/run-tool-from-javascript.test.mjs`). So is a test of
+    content stored before the API checked every write, which the types also rule out
+    (`tests/unit/components/ContentRenderer-stored-content.test.mjs`,
+    `tests/unit/lib/forms/templateEditorForm.storedContent.test.mjs`).
   - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars
     `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
     complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.
@@ -664,7 +721,8 @@ Common failures:
   version with `pnpm patch wrangler@<version>`, edit the extracted package, and run
   `pnpm patch-commit <dir>`, which also records the patch's new hash in `pnpm-lock.yaml`.
 - Specs set up and read their data with `apiRequest()` or `apiJson()` from
-  `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
+  `tests/e2e/support/api-requests.ts`, passing the schema of the body they read (see above):
+  they call the API through Playwright's request
   client with the page's cookies, so no CORS preflight runs, no `page.route()` stub catches
   the call, and a failure names the request instead of `TypeError: Failed to fetch`. When
   how the browser itself sends a request is what the test checks (a CORS preflight, say),

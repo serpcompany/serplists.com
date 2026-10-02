@@ -55,7 +55,9 @@ often miss:
   quick-fill buttons), and move inside the app with `navigateInApp()` from
   `tests/e2e/support/navigation.ts`.
 - Set up and read data with `apiRequest()` or `apiJson()` from
-  `tests/e2e/support/api-requests.ts`, not with a fetch inside `page.evaluate()`.
+  `tests/e2e/support/api-requests.ts`, not with a fetch inside `page.evaluate()`. Each call passes
+  the schema of the body it reads (the app's own, from `tests/e2e/support/api-bodies.ts`, or
+  `bodyNotRead`), so a spec never trusts a guessed shape.
 - Use only the data `seed-test` creates (`db/seeds/local.ts`) and the bundled Templates, or create
   what the spec needs in the spec.
 - Keep `localhost`: `127.0.0.1` drops the session cookie.
