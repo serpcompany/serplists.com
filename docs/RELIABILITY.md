@@ -75,6 +75,15 @@ gives. The app's `NEXT_PUBLIC_` variables are declared on `NodeJS.ProcessEnv`
 The tests' tsconfig turns it off until a later round of the
 [harness hardening plan](exec-plans/active/harness-hardening.md).
 
+No project takes JavaScript into its program untyped: the app's tsconfig sets `allowJs: false`
+(Next.js adds its suggested `allowJs: true` only when the key is missing), the node and API
+projects leave it at TypeScript's default of off, and the tests' tsconfig turns it off too.
+`skipLibCheck` stays on in every project: without it `tsc` reports more than 1,300 errors in
+declaration files the repository cannot edit (miniflare's, better-auth's, Drizzle's MySQL and
+SingleStore builders, `lib.dom.d.ts` against the Workers types, the generated
+`cloudflare-env.d.ts` and Next.js's `.next/types`). The authored declaration files
+(`src/*.d.ts`, the `.d.mts` files beside the scripts) check clean with it off.
+
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
 `eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
 app, API, node and tests projects, and `@typescript-eslint/no-unsafe-type-assertion` on app,

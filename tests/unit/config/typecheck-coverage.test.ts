@@ -90,6 +90,15 @@ describe('pnpm run typecheck', () => {
     ).toEqual([]);
   });
 
+  it('takes no JavaScript into a project untyped', () => {
+    expect(
+      tsconfigsTypecheckRuns.filter((tsconfig) => parsedTsconfig(tsconfig).options.allowJs === true),
+      'These tsconfigs set allowJs, so a JavaScript module joins the program with the types TypeScript infers from ' +
+        'its code. Set "allowJs": false (Next.js writes its suggested true only when the key is missing) and give the ' +
+        'module a .d.mts beside it, or convert it to TypeScript.',
+    ).toEqual([]);
+  });
+
   it('type-checks every TypeScript file the repository holds', () => {
     const typeChecked = new Set(tsconfigsTypecheckRuns.flatMap(filesTheTsconfigIncludes));
 
