@@ -1,9 +1,10 @@
-import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { firstOf } from "../../../support/elements";
-import { jsonRecordIn, storedSectionsIn } from "../../../support/storedJson";
+import { logLineIn, storedSectionsIn } from "../../../support/storedJson";
+import { sqlExpression } from "../../../support/drizzleSql";
+import { toSqliteValue } from "../../../support/sqlite-d1";
 import { recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { z } from "zod";
 import {
@@ -28,8 +29,8 @@ describe("personal run MCP handler", () => {
 
   it("lists never-edited templates by when they were created, not after every edited one", async () => {
     await handleAgentMcp(mcpToolCall("list_templates"), env);
-    const orderBy = firstOf(dbMocks.selectChain.orderBy.mock.calls).map((part: unknown) =>
-      new SQLiteSyncDialect().sqlToQuery(part as SQL));
+    const orderBy = firstOf(dbMocks.selectChain.orderBy.mock.calls).map((part) =>
+      new SQLiteSyncDialect().sqlToQuery(sqlExpression(part)));
 
     const realSqlite = new DatabaseSync(":memory:");
     realSqlite.exec('create table "templates" ("id" text, "created_at" text, "updated_at" text)');
@@ -40,9 +41,9 @@ describe("personal run MCP handler", () => {
     insert.run("imported-a", "2025-05-05T00:00:00.000Z", null);
     insert.run("imported-b", "2025-05-05T00:00:00.000Z", null);
     const ordered = realSqlite
-      .prepare(`select "id" from "templates" order by ${orderBy.map((part: { sql: string }) => part.sql).join(", ")}`)
-      .all(...orderBy.flatMap((part: { params: unknown[] }) => part.params as string[]))
-      .map((row) => row.id);
+      .prepare(`select "id" from "templates" order by ${orderBy.map((part) => part.sql).join(", ")}`)
+      .all(...orderBy.flatMap((part) => part.params.map(toSqliteValue)))
+      .map(({ id }) => id);
     realSqlite.close();
 
     expect(ordered).toEqual(["created-today", "edited-recently", "imported-b", "imported-a", "edited-long-ago"]);
@@ -117,7 +118,7 @@ describe("personal run MCP handler", () => {
       expect(body.result.isError).toBeUndefined();
       expect(body.result.structuredContent.template).toEqual(objectContaining({ id: "template-1", version: 1 }));
       const created = dbMocks.insertChain.values.mock.calls.map(([values]) => values)
-        .find((values: JsonRecord) => values.owner_type === "user" && typeof values.slug === "string");
+        .find((values) => values.owner_type === "user" && typeof values.slug === "string");
       expect(created).toEqual(objectContaining({ is_public: false, team_id: null, user_id: "user-1" }));
     });
 
@@ -151,7 +152,7 @@ describe("personal run MCP handler", () => {
           template: { id: anyInstanceOf(String), title: "Release SOP", version: 1 },
           sectionsOmitted: true,
         });
-        expect(warn.mock.calls.map(([line]) => jsonRecordIn(line).message)).toContain("mcp_template_reload_error");
+        expect(warn.mock.calls.map(([line]) => logLineIn(line).message)).toContain("mcp_template_reload_error");
       } finally {
         warn.mockRestore();
       }

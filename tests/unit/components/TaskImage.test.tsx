@@ -5,7 +5,7 @@ import { assert, describe, expect, it, vi } from 'vitest';
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
 import { UserContentImage } from '@/components/shared/UserContentImage';
-import { findElement } from '../../support/elementTree';
+import { findElement, handlerOf } from '../../support/elementTree';
 
 describe('TaskImageView', () => {
   it('reports a failed load without touching the img src, however often the error fires', () => {
@@ -17,7 +17,7 @@ describe('TaskImageView', () => {
     assert.exists(img);
 
     const target = { src: 'https://cdn.example.com/missing.png' };
-    const onError = (img.props as { onError: (event: unknown) => void }).onError;
+    const onError = handlerOf(img, 'onError');
     for (let attempt = 0; attempt < 3; attempt += 1) {
       onError({ currentTarget: target, target });
     }

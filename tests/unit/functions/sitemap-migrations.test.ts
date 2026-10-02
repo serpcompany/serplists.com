@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import type { StoredRow } from '../../support/d1Doubles';
+import { present } from '../../support/elements';
 
 const migration = (name: string) => readFileSync(
   new URL(`../../../db/migrations/${name}`, import.meta.url),
@@ -33,13 +35,13 @@ describe('sitemap revision migrations', () => {
 
     db.exec(migration('0023_add_sitemap_revision_state.sql'));
 
-    const seeded = db.prepare(
+    const seeded: StoredRow = present(db.prepare(
       `SELECT revised_at FROM sitemap_profile_revisions WHERE user_id = 'u1'`,
-    ).get() as { revised_at: string };
+    ).get(), 'the revision row');
     expect(seeded.revised_at).toBe('2026-09-04 05:00:00');
-    const templateFamily = db.prepare(
+    const templateFamily: StoredRow = present(db.prepare(
       `SELECT revised_at FROM sitemap_revisions WHERE kind = 'templates'`,
-    ).get() as { revised_at: string };
+    ).get(), 'the revision row');
     expect(templateFamily.revised_at).toBe('2026-09-04 05:00:00');
 
     db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
@@ -57,15 +59,15 @@ describe('sitemap revision migrations', () => {
     expect(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ revised_at: '2000-01-01 00:00:00.000' });
 
     db.exec(`UPDATE users SET username='alice_new', name='Alice New', avatar_url='https://example.com/a.png' WHERE id='u1'`);
-    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map((row) => row.kind)).toEqual([
+    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map(({ kind }) => kind)).toEqual([
       'categories', 'profiles', 'templates',
     ]);
-    expect((db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get() as { revised_at: string }).revised_at).not.toBe('2000-01-01 00:00:00.000');
+    expect(present<StoredRow>(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get(), 'the revision row').revised_at).not.toBe('2000-01-01 00:00:00.000');
 
     db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
     db.exec(`UPDATE sitemap_owner_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
     db.exec(`UPDATE users SET avatar_url='https://example.com/profile-only.png' WHERE id='u1'`);
-    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map((row) => row.kind)).toEqual(['profiles']);
+    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map(({ kind }) => kind)).toEqual(['profiles']);
     expect(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ revised_at: '2000-01-01 00:00:00.000' });
 
     db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
@@ -75,10 +77,10 @@ describe('sitemap revision migrations', () => {
 
     const revisedKinds = db.prepare(
       `SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`,
-    ).all().map((row) => row.kind);
-    const profileRevision = db.prepare(
+    ).all().map(({ kind }) => kind);
+    const profileRevision: StoredRow = present(db.prepare(
       `SELECT revised_at FROM sitemap_profile_revisions WHERE user_id = 'u1'`,
-    ).get() as { revised_at: string };
+    ).get(), 'the revision row');
 
     expect(revisedKinds).toEqual(['categories', 'profiles', 'templates']);
     expect(profileRevision.revised_at).not.toBe('2000-01-01 00:00:00.000');
@@ -119,7 +121,7 @@ describe('sitemap revision migrations', () => {
       db.exec(write);
       return db.prepare(
         `SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`,
-      ).all().map((row) => row.kind);
+      ).all().map(({ kind }) => kind);
     };
 
     const profilesOnly = ['profiles'];

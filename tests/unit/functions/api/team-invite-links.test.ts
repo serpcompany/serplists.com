@@ -9,7 +9,9 @@ import { jsonObject, readJson } from "../../../support/readJson";
 import { sha256Hex } from "@functions/api/utils/crypto";
 import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
-const inviteLinkBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
+const inviteLinkBody = z
+  .object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string(), delivery: z.unknown() })
+  .passthrough();
 const inviteBody = z.object({ role: z.string() }).passthrough();
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
@@ -170,8 +172,8 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
-    expect(data.inviteToken).toBeUndefined();
-    expect(data.inviteUrl).toBeUndefined();
+    expect(data).not.toHaveProperty('inviteToken');
+    expect(data).not.toHaveProperty('inviteUrl');
   });
 
   it("does not create a second invite when posting to an invite's subpath", async () => {

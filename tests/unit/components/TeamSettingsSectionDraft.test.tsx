@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { queryKeys } from '@/lib/queryKeys';
 
-import { createFakeContainer, dispatch, FakeElement, findAll } from '../../fixtures/fakeDom';
+import { createFakeContainer, dispatch, elementOf, FakeElement, findAll } from '../../fixtures/fakeDom';
 import { aFakeDomForEachTest, typeThroughTheFieldsOwnOnChange } from '../../support/fakeDomRoots';
 import { present } from '../../support/elements';
 import type { api } from '@/lib/api';
@@ -122,8 +122,7 @@ const mount = async () => {
 
 const byId = (id: string) => {
   const [node] = findAll(container, (entry) => entry instanceof FakeElement && entry.getAttribute('id') === id);
-  if (!node) throw new Error(`No element with id ${id}`);
-  return node as FakeElement & { value?: string };
+  return elementOf(node, `the element with id ${id}`);
 };
 
 const nameField = () => byId('team-settings-name');
@@ -136,8 +135,7 @@ const saveButton = () => {
     container,
     (node) => node.nodeName === 'BUTTON' && node.textContent.startsWith('Sav'),
   );
-  if (!button) throw new Error('No Save Organization button');
-  return button as FakeElement;
+  return elementOf(button, 'the Save Organization button');
 };
 
 describe('TeamSettingsSection keeps what the user typed in the Organization name and slug when the context rebuilds the active Organization object', () => {

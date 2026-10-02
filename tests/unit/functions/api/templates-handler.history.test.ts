@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { elementAt, firstOf } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
@@ -10,6 +10,7 @@ import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const historyBody = z
   .object({
+    subject: z.unknown(),
     versions: z.array(z.object({ version: z.number(), metadata: z.unknown() }).passthrough()),
     events: z.array(z.record(z.unknown())),
   })
@@ -124,7 +125,7 @@ describe('Templates Handlers', () => {
     const [, , versionsLimit, eventsLimit] = dbMocks.selectChain.limit.mock.calls.map(([limit]) => limit);
     expect(versionsLimit).toBe(8);
     expect(eventsLimit).toBe(8);
-    const eventColumns = (dbMocks.db.select.mock.calls[3] as unknown[])[0] as Record<string, unknown>;
+    const eventColumns = z.record(z.unknown()).parse(elementAt(dbMocks.db.select.mock.calls, 3)[0]);
     expect(eventColumns).toHaveProperty('metadata_json');
     expect(eventColumns).not.toHaveProperty('diff_json');
     const versionOrder = columnNamesIn(firstOf(dbMocks.selectChain.orderBy.mock.calls)[0]);

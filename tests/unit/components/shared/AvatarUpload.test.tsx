@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
 
-import { findByAriaLabel, findElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, handlerOf } from '../../../support/elementTree';
 
 vi.mock('react', async (importOriginal) =>
   (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
@@ -51,13 +51,11 @@ function render(onAvatarUpdate = vi.fn()) {
     input,
     selectFile: (file: File) => {
       const target = { files: [file], value: 'C:\\fakepath\\file' };
-      return (input.props.onChange as (event: unknown) => Promise<void>)({ target }).then(
-        () => target,
-      );
+      return Promise.resolve(handlerOf(input, 'onChange')({ target })).then(() => target);
     },
     remove: () => {
       assert.exists(removeButton, 'the Remove avatar button');
-      return (removeButton.props.onClick as () => Promise<void>)();
+      return handlerOf(removeButton, 'onClick')();
     },
   };
 }
@@ -76,7 +74,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockResolvedValue({
       data: null,
       error: { status: 429, statusText: 'Too Many Requests', message: 'Too many requests' },
-    } as never);
+    });
     const view = render();
 
     await view.selectFile(png());
@@ -104,7 +102,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockImplementation((async () => {
       order.push('updateUser');
       return { data: { status: true }, error: null };
-    }) as never);
+    }));
     vi.mocked(api.deleteFromR2).mockImplementation(async (key: string) => {
       order.push(`delete:${key}`);
       return { success: true };
@@ -124,7 +122,7 @@ describe('AvatarUpload', () => {
     vi.mocked(authClient.updateUser).mockResolvedValue({
       data: null,
       error: { status: 500, statusText: 'Internal Server Error' },
-    } as never);
+    });
     const view = render();
 
     await view.remove();
@@ -136,7 +134,7 @@ describe('AvatarUpload', () => {
   });
 
   it('deletes the avatar file after removing it from the account', async () => {
-    vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null } as never);
+    vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
     const view = render();
 
     await view.remove();
@@ -160,7 +158,7 @@ describe('AvatarUpload', () => {
 
   describe('clears the file input after every attempt, since a file input fires no change event for the file it already holds', () => {
     beforeEach(() => {
-      vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null } as never);
+      vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
     });
 
     it('after the upload fails', async () => {
@@ -176,7 +174,7 @@ describe('AvatarUpload', () => {
       vi.mocked(authClient.updateUser).mockResolvedValue({
         data: null,
         error: { status: 500, statusText: 'Internal Server Error' },
-      } as never);
+      });
 
       const target = await render().selectFile(png());
 

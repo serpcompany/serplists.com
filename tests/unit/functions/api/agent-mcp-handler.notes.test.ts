@@ -1,4 +1,5 @@
 import { assert, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { firstOf, valueAt } from "../../../support/elements";
 import { storedSectionsIn } from "../../../support/storedJson";
 import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "../../../support/agentMcpHandler";
@@ -31,7 +32,7 @@ describe("personal run MCP handler", () => {
       const { tools } = (await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList)).result;
       const updateRun = tools.find((tool) => tool.name === "update_run");
       assert.exists(updateRun);
-      expect(updateRun.inputSchema.properties.notes).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
+      expect(valueAt(updateRun.inputSchema.properties, "notes")).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
       for (const text of [updateRun.description, valueAt(updateRun.inputSchema.properties, "notes").description]) {
         expect(text).toContain("at most 20,000 characters and 30KB (30,720 bytes of UTF-8)");
       }
@@ -54,7 +55,7 @@ describe("personal run MCP handler", () => {
         task: objectContaining({ id: "task-1", notes }),
       });
 
-      const stored = firstOf(dbMocks.updateChain.set.mock.calls)[0].items as string;
+      const stored = z.string().parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items);
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: stored, revision: 2 })]);
       const read = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", taskId: "task-1" }), env));
       expect(read.result.structuredContent).toEqual({

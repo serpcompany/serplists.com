@@ -3,6 +3,7 @@ import { contentAt, elementAt, firstOf, subTaskAt, taskIn } from '../../../suppo
 
 import { calculateRunProgress, reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
+import { storedSections } from '../../../support/storedJson';
 
 describe('work that moves to another section or task, which keeps its run state since ids are unique across the Template', () => {
   const x = { id: 'x', title: 'Call vendor', isCompleted: true, notes: 'called vendor' };
@@ -162,14 +163,15 @@ describe('work that moves to another section or task, which keeps its run state 
       ] },
       { id: 'C', title: 'C', items: [{ id: 'c1', title: 'c1', isCompleted: true }] },
     ];
-    type Entry = { id: string; isCompleted?: unknown; notes?: unknown; contents?: Array<{ subItems?: Entry[] }> };
-    const notesAndOwnCompletionById = (sections: Array<{ items: Entry[] }>) => new Map(sections.flatMap((section) => section.items.flatMap((item) => {
-      const subItems = (item.contents ?? []).flatMap((content) => content.subItems ?? []);
-      return [
-        [item.id, { notes: item.notes, ...(subItems.length > 0 ? {} : { isCompleted: item.isCompleted }) }],
-        ...subItems.map((subItem) => [subItem.id, { isCompleted: subItem.isCompleted }]),
-      ] as Array<[string, Record<string, unknown>]>;
-    })));
+    type Completion = { notes?: unknown; isCompleted?: unknown };
+    const notesAndOwnCompletionById = (sections: unknown) => new Map(storedSections.parse(sections).flatMap((section) =>
+      section.items.flatMap((item): Array<[unknown, Completion]> => {
+        const subItems = (item.contents ?? []).flatMap((content) => content.subItems ?? []);
+        return [
+          [item.id, { notes: item.notes, ...(subItems.length > 0 ? {} : { isCompleted: item.isCompleted }) }],
+          ...subItems.map((subItem): [unknown, Completion] => [subItem.id, { isCompleted: subItem.isCompleted }]),
+        ];
+      })));
     const layout = (sections: Record<string, Record<string, string[]>>) => Object.entries(sections).map(([sectionId, items]) => ({
       id: sectionId,
       title: sectionId,
@@ -188,11 +190,11 @@ describe('work that moves to another section or task, which keeps its run state 
 
     for (const rearranged of rearrangements) {
       const result = reconcileRunSections(run, layout(rearranged), []);
-      for (const [id, after] of notesAndOwnCompletionById(result.sections as Array<{ items: Entry[] }>)) {
+      for (const [id, after] of notesAndOwnCompletionById(result.sections)) {
         const had = before.get(id);
-        assert.exists(had, id);
-        expect(after.notes, id).toBe(had.notes);
-        if ('isCompleted' in after && 'isCompleted' in had) expect(after.isCompleted, id).toBe(had.isCompleted);
+        assert.exists(had, String(id));
+        expect(after.notes, String(id)).toBe(had.notes);
+        if ('isCompleted' in after && 'isCompleted' in had) expect(after.isCompleted, String(id)).toBe(had.isCompleted);
       }
       expect(result.retired).toEqual([]);
     }

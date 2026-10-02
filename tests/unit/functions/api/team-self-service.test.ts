@@ -1,5 +1,5 @@
 import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
-import type { SQL } from "drizzle-orm";
+import { sqlExpression } from "../../../support/drizzleSql";
 import { beforeEach, describe, expect, it } from "vitest";
 import { firstOf } from "../../../support/elements";
 import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
@@ -7,7 +7,7 @@ import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHa
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
 import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
-import { jsonRecordIn } from "../../../support/storedJson";
+import { parseJsonText } from "../../../support/storedJson";
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -61,7 +61,7 @@ function expectNoWrites() {
 function conditionalAuditQuery() {
   expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
-  return new SQLiteAsyncDialect().sqlToQuery(firstOf(dbMocks.insertChain.select.mock.calls)[0] as SQL);
+  return new SQLiteAsyncDialect().sqlToQuery(sqlExpression(firstOf(dbMocks.insertChain.select.mock.calls)[0]));
 }
 
 const previewRequest = (token = "invite-token") =>
@@ -102,7 +102,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const body = await response.text();
 
     expect(response.status).toBe(403);
-    expect(jsonRecordIn(body).code).toBe("invite_email_mismatch");
+    expect(parseJsonText(body, apiErrorBody).code).toBe("invite_email_mismatch");
     expect(body).not.toContain("Acme Corp");
     expect(body).not.toContain("owner@example.com");
     expectNoWrites();
@@ -239,7 +239,7 @@ describe("Organization invite decline", () => {
     const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
-    expect(data.success).toBeUndefined();
+    expect(data).not.toHaveProperty("success");
   });
 
   it("does not let another account decline the invite", async () => {
@@ -326,7 +326,7 @@ describe("Leaving an Organization", () => {
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("membership_changed");
-    expect(data.success).toBeUndefined();
+    expect(data).not.toHaveProperty("success");
   });
 
   it("asks the owner to transfer ownership first", async () => {

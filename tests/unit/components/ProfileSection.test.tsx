@@ -6,7 +6,7 @@ import { firstOf } from '../../support/elements';
 
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
-import { findElement } from '../../support/elementTree';
+import { findElement, handlerOf } from '../../support/elementTree';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, refreshProfile: vi.fn() }),
@@ -81,7 +81,7 @@ describe('ProfileSection', () => {
     ['username', 'johnny!', { username: 'johnny' }],
   ])('applies a keystroke in %s to the latest profile, so typing never undoes an avatar change made since the render', (id, typed, change) => {
     const renderedProfile = { email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' };
-    const onProfileDataChange = vi.fn();
+    const onProfileDataChange = vi.fn<React.ComponentProps<typeof ProfileSection>['onProfileDataChange']>();
     const section = ProfileSection({
       profileData: renderedProfile,
       savedUsername: 'john',
@@ -92,9 +92,10 @@ describe('ProfileSection', () => {
     });
     const field = findElement(section, (element) => element.props.id === id);
 
-    (field?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: typed } });
+    handlerOf(field, 'onChange')({ target: { value: typed } });
 
-    const update = firstOf(onProfileDataChange.mock.calls)[0] as (current: typeof renderedProfile) => typeof renderedProfile;
+    const update = firstOf(onProfileDataChange.mock.calls)[0];
+    if (typeof update !== 'function') throw new Error('The field set the profile without reading the latest one');
     const withNewAvatar = { ...renderedProfile, avatar_url: 'https://cdn.example.com/new-avatar.png' };
     expect(update(withNewAvatar)).toEqual({ ...withNewAvatar, ...change });
   });

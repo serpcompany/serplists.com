@@ -1,13 +1,17 @@
 import React from 'react';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
-import { elementAt, firstOf } from '../../../support/elements';
+import { elementAt, present } from '../../../support/elements';
 
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
 import { SubItemsEditor } from '@/components/template-editor/content-types/SubItemsEditor';
-import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
-import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
-import { findAllElements, findDomElement, type AnyElement } from '../../../support/elementTree';
+import {
+  createFormControlMountedLikeUseForm,
+  editorContentsIn,
+  editorFormOf,
+  type EditorForm,
+} from '../../../support/editorFormControl';
+import { findAllElements, findDomElement, findElementOf, handlerOf, type AnyElement } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
 const harness = vi.hoisted((): { form: EditorForm | null; move: (from: number, to: number) => void } => ({
@@ -31,16 +35,15 @@ vi.mock('react-hook-form', async (importOriginal) =>
     ({ valueAt }) => ({
       useFormContext: () => editorForm(),
       useFieldArray: ({ name }: { name: string }) => ({
-        fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
-          (content) => ({ ...content, fieldId: `field-${content.id}` }),
-        ),
+        fields: editorContentsIn(valueAt(name)).map((content) => ({ ...content, fieldId: `field-${content.id}` })),
         append: vi.fn(),
         remove: vi.fn(),
         move: (from: number, to: number) => {
           harness.move(from, to);
-          const next = [...((valueAt(name) ?? []) as TemplateEditorContent[])];
+          const next = editorContentsIn(valueAt(name));
           next.splice(to, 0, ...next.splice(from, 1));
-          editorForm().setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
+          if (name !== CONTENT_PATH) throw new Error(`The test moves only the blocks at ${CONTENT_PATH}, not ${name}.`);
+          editorForm().setValue(name, next, { shouldDirty: true });
         },
       }),
     }),
@@ -53,7 +56,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 const HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS = new Set(['ReorderHandle', 'ReorderHint']);
 const isAHooklessComponentThatRendersButtons = (element: AnyElement) =>
-  HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS.has((element.type as { name: string }).name);
+  typeof element.type === 'function' && HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS.has(element.type.name);
 
 const findRenderedDomElement = (tree: React.ReactNode, predicate: (element: AnyElement) => boolean) =>
   findDomElement(tree, predicate, isAHooklessComponentThatRendersButtons);
@@ -145,7 +148,7 @@ describe('ContentEditor block reordering', () => {
 
   it('moves a block up with the arrow key and keeps its id', () => {
     const event = keyEvent('ArrowUp');
-    (handle(render(), 'Drag Image block').props.onKeyDown as (event: unknown) => void)(event);
+    handlerOf(handle(render(), 'Drag Image block'), 'onKeyDown')(event);
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(harness.move).toHaveBeenCalledWith(1, 0);
@@ -155,22 +158,22 @@ describe('ContentEditor block reordering', () => {
   });
 
   it('does not move the first block up or the last block down', () => {
-    (handle(render(), 'Drag Text block').props.onKeyDown as (event: unknown) => void)(keyEvent('ArrowUp'));
-    (handle(render(), 'Drag Sub-tasks block').props.onKeyDown as (event: unknown) => void)(keyEvent('ArrowDown'));
+    handlerOf(handle(render(), 'Drag Text block'), 'onKeyDown')(keyEvent('ArrowUp'));
+    handlerOf(handle(render(), 'Drag Sub-tasks block'), 'onKeyDown')(keyEvent('ArrowDown'));
 
     expect(harness.move).not.toHaveBeenCalled();
     expect(contentIds()).toEqual(['c-text', 'c-image', 'c-subs']);
   });
 
   it('moves a block dragged onto another block', () => {
-    (handle(render(), 'Drag Sub-tasks block').props.onDragStart as (event: unknown) => void)(dragEvent());
+    handlerOf(handle(render(), 'Drag Sub-tasks block'), 'onDragStart')(dragEvent());
 
     const over = dragEvent();
-    (blockDropTarget(render(), 0).props.onDragOver as (event: unknown) => void)(over);
+    handlerOf(blockDropTarget(render(), 0), 'onDragOver')(over);
     expect(over.preventDefault).toHaveBeenCalled();
     expect(findAllElements(render(), (element) => element.props['data-drop-indicator'] === 'content-before')).toHaveLength(1);
 
-    (blockDropTarget(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
+    handlerOf(blockDropTarget(render(), 0), 'onDrop')(dragEvent());
 
     expect(harness.move).toHaveBeenCalledWith(2, 0);
     expect(contentIds()).toEqual(['c-subs', 'c-text', 'c-image']);
@@ -182,24 +185,24 @@ describe('ContentEditor block reordering', () => {
 
   it('puts the dragged block in the drag data as the drag starts, since Firefox starts no drag without data', () => {
     const start = dragEvent();
-    (handle(render(), 'Drag Sub-tasks block').props.onDragStart as (event: unknown) => void)(start);
+    handlerOf(handle(render(), 'Drag Sub-tasks block'), 'onDragStart')(start);
 
     expect(start.dataTransfer.setData).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a drag that did not start on one of its block handles', () => {
     const over = dragEvent();
-    (blockDropTarget(render(), 0).props.onDragOver as (event: unknown) => void)(over);
-    (blockDropTarget(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
+    handlerOf(blockDropTarget(render(), 0), 'onDragOver')(over);
+    handlerOf(blockDropTarget(render(), 0), 'onDrop')(dragEvent());
 
     expect(over.preventDefault).not.toHaveBeenCalled();
     expect(harness.move).not.toHaveBeenCalled();
   });
 
   it('renders the moved sub-task list at its new index under a new key, so its field array, named by that index, remounts instead of keeping a stale name', () => {
-    const before = firstOf(findAllElements(render(), (element) => element.type === SubItemsEditor));
-    (handle(render(), 'Drag Sub-tasks block').props.onKeyDown as (event: unknown) => void)(keyEvent('ArrowUp'));
-    const after = firstOf(findAllElements(render(), (element) => element.type === SubItemsEditor));
+    const before = present(findElementOf(render(), SubItemsEditor), 'the sub-task list');
+    handlerOf(handle(render(), 'Drag Sub-tasks block'), 'onKeyDown')(keyEvent('ArrowUp'));
+    const after = present(findElementOf(render(), SubItemsEditor), 'the sub-task list');
 
     expect(before.props.contentIndex).toBe(2);
     expect(after.props.contentIndex).toBe(1);

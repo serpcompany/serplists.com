@@ -13,6 +13,7 @@ import {
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 import { navigation } from '../../support/nextNavigation';
+import { lastOf } from '../../support/elements';
 
 beforeEach(resetTemplateDetailPageMocks);
 
@@ -115,7 +116,7 @@ describe('TemplateDetail page', () => {
       expect(listOptions).toEqual(expect.objectContaining({ workspace: false }));
       expect(listOptions).not.toEqual(expect.objectContaining({ catalog: true }));
     }
-    const options = mockUseTemplateDetailModel.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    const [options] = lastOf(mockUseTemplateDetailModel.mock.calls);
     expect(options.mode).toBe('private');
     expect(options.identifier).toBe('tpl-1');
     expect(options).not.toHaveProperty('workspaceTemplates');

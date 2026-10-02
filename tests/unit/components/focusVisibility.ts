@@ -54,10 +54,10 @@ export function textOf(node: MarkupNode): string {
 }
 
 const classTokens = (node: MarkupNode): string[] =>
-  (node.attrs.class ?? '').split(/\s+/).filter(Boolean);
+  (node.attrs['class'] ?? '').split(/\s+/).filter(Boolean);
 
 const isFocusable = (node: MarkupNode): boolean => {
-  if (node.attrs.tabindex === '-1' || 'disabled' in node.attrs) return false;
+  if (node.attrs['tabindex'] === '-1' || 'disabled' in node.attrs) return false;
   if (node.tag === 'a') return 'href' in node.attrs;
   return ['button', 'input', 'select', 'textarea'].includes(node.tag) || 'tabindex' in node.attrs;
 };

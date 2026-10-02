@@ -6,7 +6,7 @@ import { elementAt, firstOf, sectionAt } from '../../../support/elements';
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import type { TemplateEditorSection } from '@/lib/forms/templateEditorForm';
 
-import { findAllElements } from '../../../support/elementTree';
+import { findAllElements, handlerOf } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
 const harness = vi.hoisted(() => {
@@ -69,12 +69,12 @@ function toggleLabels(tree: React.ReactNode): string[] {
   return findAllElements(tree, (element) => {
     const label = element.props['aria-label'];
     return typeof label === 'string' && /^(Collapse|Expand) /.test(label);
-  }).map((element) => element.props['aria-label'] as string);
+  }).map((element) => String(element.props['aria-label']));
 }
 
 function clickToggle(tree: React.ReactNode, label: string): void {
   const button = firstOf(findAllElements(tree, (element) => element.props['aria-label'] === label));
-  (button.props.onClick as () => void)();
+  handlerOf(button, 'onClick')();
 }
 
 describe('SectionSidebar section expansion', () => {

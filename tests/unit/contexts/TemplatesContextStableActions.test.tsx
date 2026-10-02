@@ -79,7 +79,7 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['runs', 'user-1', 'personal'], [privateRun]);
     const { context } = mountProvider(queryClient);
-    const before = actionsOf(context());
+    const before = new Map(Object.entries(actionsOf(context())));
     const runsBefore = context().runs;
     expect(runsBefore).toEqual([privateRun]);
 
@@ -91,7 +91,7 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
     expect(context().runs).not.toBe(runsBefore);
     expect(firstOf(context().runs).isPublic).toBe(true);
     for (const [name, action] of Object.entries(actionsOf(context()))) {
-      expect(action, name).toBe(before[name as keyof typeof before]);
+      expect(action, name).toBe(before.get(name));
     }
   });
 
@@ -99,7 +99,7 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['runs', 'user-1', 'personal'], [privateRun]);
     const { context, rerender } = mountProvider(queryClient);
-    const before = actionsOf(context());
+    const before = new Map(Object.entries(actionsOf(context())));
     const templatesBefore = context().allTemplates;
 
     providerWorkspace.activeTeamId = 'team-1';
@@ -108,7 +108,7 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
 
     expect(context().allTemplates).not.toBe(templatesBefore);
     for (const [name, action] of Object.entries(actionsOf(context()))) {
-      expect(action, name).toBe(before[name as keyof typeof before]);
+      expect(action, name).toBe(before.get(name));
     }
   });
 });

@@ -7,7 +7,7 @@ import { Link } from '@/components/navigation/Link';
 import { subscribeToNavigations } from '@/lib/navigation/navigationSignal';
 import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
-import { click, createFakeContainer, dispatch, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
+import { click, createFakeContainer, dispatch, elementOf, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 
@@ -102,7 +102,7 @@ describe('Link prefetching on intent, not when the link scrolls into view', () =
     });
   };
   const prefetchOf = (label: string) =>
-    (findByText(container, 'A', label) as FakeElement).getAttribute('data-prefetch');
+    elementOf(findByText(container, 'A', label), label).getAttribute('data-prefetch');
 
   it('does not prefetch a link that is only on screen', async () => {
     await mountLinks();

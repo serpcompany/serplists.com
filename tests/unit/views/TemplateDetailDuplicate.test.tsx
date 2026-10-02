@@ -8,14 +8,17 @@ import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 import {
   click,
+  elementOf,
   FakeElement,
   findAll,
   type FakeNode,
 } from '../../fixtures/fakeDom';
+import { present } from '../../support/elements';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 const { createTemplate, template } = vi.hoisted(() => ({
   createTemplate: vi.fn(),
-  template: { current: null as unknown },
+  template: { current: null as ChecklistTemplate | null },
 }));
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
@@ -23,7 +26,7 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
   const { duplicateOwnedTemplate } = await import('@/features/template-detail/templateActionOutcome');
   return {
     useTemplateDetailModel: (options: { canEditTemplates: boolean; teamId?: string; userId?: string }) => {
-      const current = template.current as ReturnType<typeof buildV0DemoPrivateTemplate>;
+      const current = present(template.current, 'the template the test opened');
       return {
         billingState: { billingEnabled: true, isLoading: false, isPro: true },
         duplicateTemplate: () =>
@@ -99,8 +102,7 @@ const duplicateOrDuplicatingItem = (container: FakeNode) => {
       node.getAttribute('role') === 'menuitem' &&
       node.textContent.startsWith('Duplicat'),
   );
-  if (!item) throw new Error('No Duplicate menu item');
-  return item as FakeElement;
+  return elementOf(item, 'the Duplicate menu item');
 };
 
 describe('TemplateDetail Duplicate while a copy is being made, which a repeated POST /api/templates would make twice', () => {

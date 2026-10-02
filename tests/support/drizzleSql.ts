@@ -1,3 +1,10 @@
+import { SQL } from 'drizzle-orm';
+
+export function sqlExpression(value: unknown): SQL {
+  if (value instanceof SQL) return value;
+  throw new Error(`Expected a drizzle SQL expression, but got ${typeof value}.`);
+}
+
 interface SqlNode {
   name?: unknown;
   queryChunks?: unknown;

@@ -7,12 +7,12 @@ import {
   selectRunHistoryPreview,
 } from '@/features/run-execution/runHistory';
 
-const event = (index: number): TemplateHistoryEvent =>
-  ({
-    id: `event-${index}`,
-    action: 'checklist_run.updated',
-    createdAt: '2026-07-03T12:00:00.000Z',
-  }) as TemplateHistoryEvent;
+const event = (index: number): TemplateHistoryEvent => ({
+  id: `event-${index}`,
+  action: 'checklist_run.updated',
+  createdAt: '2026-07-03T12:00:00.000Z',
+  actor: { userId: null, email: null, name: null, username: null },
+});
 
 const response = (count: number): ChecklistRunHistoryResponse => ({
   checklistId: 'run-1',

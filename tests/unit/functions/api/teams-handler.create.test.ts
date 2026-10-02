@@ -6,7 +6,8 @@ import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
-const teamBody = z.object({ slug: z.string() }).passthrough();
+const teamBody = z.object({ slug: z.string(), role: z.unknown() }).passthrough();
+const createdTeamAudit = z.object({ team: z.object({ slug: z.string() }).passthrough() }).passthrough();
 
 const createRequest = (body: unknown) => new Request("http://localhost/api/teams", { method: "POST", body: JSON.stringify(body) });
 
@@ -109,7 +110,7 @@ describe("Teams handler", () => {
       return auditMocks.buildAuditEventValues.mock.calls
         .map(([input]) => input)
         .filter((input) => input.action === "team.created")
-        .map((input) => (input.after as { team: { slug: string } }).team.slug);
+        .map((input) => createdTeamAudit.parse(input.after).team.slug);
     }
 
     it("retries a name-derived slug that another request took and records the slug it wrote", async () => {

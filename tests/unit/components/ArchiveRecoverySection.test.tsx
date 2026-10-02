@@ -14,7 +14,7 @@ import { createTestQueryClient } from '../../fixtures/queryClient';
 const workspace = vi.hoisted(() => ({
   activeTeamId: undefined as string | undefined,
   loading: false,
-  role: undefined as string | undefined,
+  role: undefined as OrganizationRole | undefined,
   scope: 'personal',
 }));
 
@@ -28,7 +28,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
     activeTeamId: workspace.activeTeamId,
     getPermissions: (teamId?: string) =>
-      getResourcePermissions(teamId, () => workspace.role as OrganizationRole | undefined),
+      getResourcePermissions(teamId, () => workspace.role),
     isWorkspaceLoading: workspace.loading,
     workspaceScopeId: workspace.scope,
   }),
@@ -117,7 +117,7 @@ describe('ArchiveRecoverySection restore by role', () => {
     expect(shown.runs).toBe(1);
   });
 
-  it.each([
+  it.each<[OrganizationRole | undefined, number, number]>([
     ['owner', 1, 1],
     ['admin', 1, 1],
     ['editor', 1, 0],

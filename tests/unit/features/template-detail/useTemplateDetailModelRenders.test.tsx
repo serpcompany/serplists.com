@@ -86,7 +86,7 @@ const Probe = ({ options }: { options: UseTemplateDetailModelOptions }) => {
 };
 
 const render = async (options: UseTemplateDetailModelOptions) => {
-  root ??= createRoot(createFakeContainer() as never);
+  root ??= createRoot(createFakeContainer());
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>

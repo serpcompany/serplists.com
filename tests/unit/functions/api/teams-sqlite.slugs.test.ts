@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { asUser, auditActions, createdAt, d1, expectOneActiveOwnerAndClose, openTheSeededOrganization } from "../../../support/teamsSqlite";
-import { jsonRecordIn } from "../../../support/storedJson";
-import { recordIn } from "../../../support/mcpResponses";
+import { z } from "zod";
+import { parseJsonText } from "../../../support/storedJson";
+
+const createdTeamSnapshot = z.object({ team: z.object({ slug: z.unknown() }).passthrough() }).passthrough();
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -44,7 +46,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(created.status).toBe(200);
       expect(created.data?.slug).toMatch(/^marketing-[0-9a-f]{8}$/);
       const createdAudit = d1.rows<{ after_json: string }>("SELECT after_json FROM audit_events WHERE action = 'team.created'");
-      expect(createdAudit.map(({ after_json }) => recordIn(jsonRecordIn(after_json).team).slug)).toEqual([created.data?.slug]);
+      expect(createdAudit.map(({ after_json }) => parseJsonText(after_json, createdTeamSnapshot).team.slug)).toEqual([created.data?.slug]);
       expect(d1.rows("SELECT id FROM team_members WHERE user_id = 'new-user' AND role = 'owner'")).toHaveLength(1);
     });
 

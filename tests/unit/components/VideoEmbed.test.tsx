@@ -1,8 +1,9 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { NativeVideoView, VideoEmbed } from '@/components/shared/VideoEmbed';
+import { handlerOf, isElement } from '../../support/elementTree';
 
 describe('VideoEmbed', () => {
   it('frames a YouTube watch URL through the allowlisted embed player', () => {
@@ -41,7 +42,11 @@ describe('VideoEmbed', () => {
     expect(markup).not.toContain('<source');
     expect(markup).toContain('Your browser does not support embedded video.');
 
-    const player = (url: string) => NativeVideoView({ failed: false, onFail: vi.fn(), url }) as React.ReactElement;
+    const player = (url: string) => {
+      const element = NativeVideoView({ failed: false, onFail: vi.fn(), url });
+      assert(isElement(element), 'the player is an element');
+      return element;
+    };
     expect(player('https://cdn.example.com/a.mp4').type).toBe('video');
     expect(player('https://cdn.example.com/a.mp4').key).toBe('https://cdn.example.com/a.mp4');
     expect(player('https://cdn.example.com/b.mp4').key).toBe('https://cdn.example.com/b.mp4');
@@ -63,19 +68,18 @@ describe('NativeVideoView, which also gets video pages such as Vimeo or Loom lin
 
   it('reports a load failure from the player that loads the URL, but not an error after it loaded', () => {
     const onFail = vi.fn();
-    const video = NativeVideoView({ failed: false, onFail, url: pageUrl }) as React.ReactElement<{
-      onError: (event: unknown) => void;
-      src: string;
-    }>;
+    const video = NativeVideoView({ failed: false, onFail, url: pageUrl });
+    assert(isElement(video), 'the player is an element');
+    const onError = handlerOf(video, 'onError');
     expect(video.type).toBe('video');
     expect(video.props.src).toBe(pageUrl);
     const errorWhilePlayingAfterTheConnectionDropped = { currentTarget: { readyState: 3 } };
     const errorBeforeAnythingLoaded = { currentTarget: { readyState: 0 } };
 
-    video.props.onError(errorWhilePlayingAfterTheConnectionDropped);
+    onError(errorWhilePlayingAfterTheConnectionDropped);
     expect(onFail).not.toHaveBeenCalled();
 
-    video.props.onError(errorBeforeAnythingLoaded);
+    onError(errorBeforeAnythingLoaded);
     expect(onFail).toHaveBeenCalledTimes(1);
   });
 });

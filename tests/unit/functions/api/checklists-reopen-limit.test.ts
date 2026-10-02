@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbMocks, FREE_PLAN, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { apiRequest } from '../../../support/apiRequest';
-import { jsonObject, readJson } from '../../../support/readJson';
+import { z } from 'zod';
+import { readJson } from '../../../support/readJson';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+
+const reopenBody = z.object({ code: z.unknown(), details: z.unknown() }).passthrough();
 
 const membership = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' };
 const sections = [{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }];
@@ -41,11 +44,11 @@ const ownTemplate = {
 
 async function send(path: string, method: string, body: unknown) {
   const response = await handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
-  return { response, data: await readJson(response, jsonObject) };
+  return { response, data: await readJson(response, reopenBody) };
 }
 
 function expectLimitReached(
-  result: { response: Response; data: Record<string, unknown> },
+  result: { response: Response; data: { code?: unknown; details?: unknown } },
   context: 'personal' | 'organization' = 'personal',
 ) {
   expect(result.response.status).toBe(403);

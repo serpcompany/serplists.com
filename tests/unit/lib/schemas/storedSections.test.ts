@@ -5,6 +5,7 @@ import {
   findStoredSectionsIssue,
   sanitizeStoredSections,
 } from '@/lib/schemas/storedSections';
+import { sectionRecordsIn, taskRecordsIn } from '@/lib/schemas/jsonRecords';
 import { malformedSectionsStoredBeforeValidation } from '../../../fixtures/malformedSections';
 
 const withContent = (content: unknown) => [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', contents: [content] }] }];
@@ -75,7 +76,7 @@ describe('sanitizeStoredSections', () => {
   });
 
   it('turns a malformed Sub-task list into an empty one and a non-text value into empty text', () => {
-    const section = firstOf(sanitizeStoredSections([{
+    const section = firstOf(sectionRecordsIn(sanitizeStoredSections([{
       id: 's1',
       title: 'Launch',
       items: [{ id: 'i1', title: 'Task', contents: [
@@ -84,9 +85,9 @@ describe('sanitizeStoredSections', () => {
         { type: 'poll', value: 'dropped' },
         'dropped',
       ] }],
-    }]));
+    }])));
 
-    expect(firstOf(section.items as Array<Record<string, unknown>>).contents).toEqual([
+    expect(firstOf(taskRecordsIn(section.items)).contents).toEqual([
       { type: 'subItems', value: '', subItems: [] },
       { type: 'text', value: '' },
     ]);

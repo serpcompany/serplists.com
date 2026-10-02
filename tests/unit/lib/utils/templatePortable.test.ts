@@ -149,7 +149,7 @@ describe('portable template utilities', () => {
       });
 
       const portablePack = exportPortableTemplatesToJSON([createTemplate()], 'john@test.com');
-      downloadBackupFile(portablePack as never);
+      downloadBackupFile(portablePack);
 
       expect(link.download).toMatch(/^serplists-template-pack-\d{4}-\d{2}-\d{2}\.json$/);
       expect(click).toHaveBeenCalledTimes(1);

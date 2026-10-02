@@ -59,7 +59,7 @@ describe("personal run MCP handler", () => {
       ]),
     });
 
-    const taskContents = z.object({ contents: z.tuple([jsonObject, jsonObject]) }).passthrough();
+    const taskContents = z.object({ contents: z.tuple([jsonObject, z.object({ subItems: z.unknown() }).passthrough()]) }).passthrough();
     const tasksOf = z.object({ items: z.array(jsonObject).min(1) }).passthrough();
     const runWithRetiredWork = z.object({
       run: z.object({

@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
 import { assert, describe, expect, it, vi } from 'vitest';
 
+import { DashboardPageHeader } from '@/components/dashboard/DashboardContentShell';
 import { RunPageHeader } from '@/components/run-execution/RunPageHeader';
 import { Button } from '@/components/ui/button';
 
-import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { findAllElements, findElementOf, handlerOf } from '../../../support/elementTree';
 
 type HeaderProps = Parameters<typeof RunPageHeader>[0];
 
@@ -32,13 +32,14 @@ const headerProps = (overrides: Partial<HeaderProps> = {}): HeaderProps => ({
 });
 
 const clickButton = (props: HeaderProps, label: string, detail: number) => {
-  const header = RunPageHeader(props) as AnyElement;
+  const header = findElementOf(RunPageHeader(props), DashboardPageHeader);
+  assert.exists(header, 'the page header');
   const [button] = findAllElements(
-    header.props.actions as ReactNode,
+    header.props.actions,
     (element) => element.type === Button && [element.props.children].flat().includes(label),
   );
   assert.exists(button, label);
-  (button.props.onClick as (event: { detail: number }) => void)({ detail });
+  handlerOf(button, 'onClick')({ detail });
 };
 
 describe("RunPageHeader rename buttons, which take each other's place under the pointer", () => {

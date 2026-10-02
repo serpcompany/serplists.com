@@ -14,6 +14,7 @@ import {
   type TemplateDetailBillingState,
 } from '@/features/template-detail/useTemplateDetailModel';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
+import type { TemplateUpdater } from '@/features/template-detail/useTemplateDetailRecord';
 
 import { apiClientThatClones, templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
 import type { CreateTemplate } from '@/features/template-detail/templateActionOutcome';
@@ -313,12 +314,12 @@ describe("resolveShareOwnerTemplate, since cached template lists keep the owner'
 
 describe('setTemplateVisibility', () => {
   const visibilityClient = (updateTemplate: Mock) => templateDetailApiClient({ updateTemplate });
-  const applyChange = (onTemplateChange: ReturnType<typeof vi.fn>, current: ChecklistTemplate) =>
-    (onTemplateChange.mock.calls[0]?.[0] as (value: ChecklistTemplate | null) => ChecklistTemplate | null)(current);
+  const applyChange = (onTemplateChange: Mock<(update: TemplateUpdater) => void>, current: ChecklistTemplate) =>
+    firstOf(onTemplateChange.mock.calls)[0](current);
 
   it('sends only the visibility flag and version guard, never the template content', async () => {
     const apiClient = visibilityClient(vi.fn().mockResolvedValue({ version: 4 }));
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = vi.fn<(update: TemplateUpdater) => void>();
     const template = buildTemplate({ isPublic: false, version: 4 });
 
     await setTemplateVisibility({ apiClient, canEdit: true, isPublic: true, onTemplateChange, template });
@@ -330,7 +331,7 @@ describe('setTemplateVisibility', () => {
 
   it('keeps the next toggle on the version the server returned', async () => {
     const apiClient = visibilityClient(vi.fn().mockResolvedValue({ version: 7 }));
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = vi.fn<(update: TemplateUpdater) => void>();
     const template = buildTemplate({ version: 6 });
 
     await setTemplateVisibility({ apiClient, canEdit: true, isPublic: false, onTemplateChange, template });

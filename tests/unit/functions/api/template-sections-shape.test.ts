@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf, sectionAt } from '../../../support/elements';
 import { z } from 'zod';
 import { readJson } from '../../../support/readJson';
-import { apiEnv } from '../../../support/apiEnv';
+import { apiEnvOn } from '../../../support/apiEnv';
 import { sectionRecordsIn, taskRecordsIn } from '@/lib/schemas/jsonRecords';
 
 import { normalizeSectionsPayload } from '@functions/api/utils/payloads';
@@ -80,7 +80,7 @@ describe('saving a Template whose first section has items: null', () => {
   const createdAt = '2026-01-01T00:00:00.000Z';
   let d1: SqliteD1;
 
-  const env = () => apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
+  const env = () => apiEnvOn(d1);
   const call = async (method: string, path: string, body?: unknown) => {
     const response = await handleTemplates(new Request(`http://localhost/api/templates${path}`, {
       method,

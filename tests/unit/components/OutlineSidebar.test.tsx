@@ -69,7 +69,7 @@ describe('OutlineSidebar row actions', () => {
     );
     assert.exists(taskRemove, 'the Remove Send welcome email button');
     for (const className of [...reveal, 'focus-visible:opacity-100']) {
-      expect(taskRemove.attrs.class).toContain(className);
+      expect(taskRemove.attrs['class']).toContain(className);
     }
   });
 });

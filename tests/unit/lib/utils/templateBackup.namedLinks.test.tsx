@@ -5,7 +5,7 @@ import { firstOf, taskAt } from '../../../support/elements';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
-import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from '@/lib/schemas/checklistSchema';
+import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION, portableChecklistTemplateSchema } from '@/lib/schemas/checklistSchema';
 import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 import { parseTemplatesFromData, parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import type { ChecklistItemContent, ChecklistTemplate } from '@/types/checklist';
@@ -81,7 +81,7 @@ describe('importing a linked file its author named without the uploadType a hand
   });
 
   it('marks it in a Markdown file', async () => {
-    const markdown = renderTemplateMarkdown(templateWith(namedLinksWithoutUploadType.slice(0, 1)) as never);
+    const markdown = renderTemplateMarkdown(portableChecklistTemplateSchema.parse(templateWith(namedLinksWithoutUploadType.slice(0, 1))));
 
     const { templates } = await parseTemplatesFromFile(
       new File([markdown], 'template.md', { type: 'text/markdown' }),

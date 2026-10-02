@@ -6,7 +6,7 @@ const stubHistory = () => {
   const received: Array<Record<string, unknown> | null> = [];
   const replaceState = vi.fn((state: Record<string, unknown> | null) => {
     received.push(state);
-    if (state) state.__NA = true;
+    if (state) state['__NA'] = true;
   });
   vi.stubGlobal('window', {
     history: { replaceState },

@@ -39,12 +39,12 @@ const STORED_AT_8_30_PM_UTC_ON_JULY_5 = '2026-07-05 20:30:00';
 const withNarrowNoBreakSpacesAsSpaces = (text: string) => text.replace(/\u202f/g, ' ');
 
 describe('TemplateDetail dates', () => {
-  const originalTz = process.env.TZ;
+  const originalTz = process.env['TZ'];
   beforeEach(() => {
-    process.env.TZ = ZONE_FAR_FROM_UTC;
+    process.env['TZ'] = ZONE_FAR_FROM_UTC;
   });
   afterEach(() => {
-    process.env.TZ = originalTz;
+    process.env['TZ'] = originalTz;
   });
 
   it('reads zoneless timestamps as UTC and never shows Invalid Date', () => {

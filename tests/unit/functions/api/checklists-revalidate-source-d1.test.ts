@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { sessionMocks } from "../../../support/mockedSession";
-import { jsonObject, readJson } from "../../../support/readJson";
-import { SqliteD1 } from "../../../support/sqlite-d1";
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
+import { apiEnvOn } from "../../../support/apiEnv";
+import type { StoredRow } from "../../../support/d1Doubles";
+import { present } from "../../../support/elements";
+import { readJson } from "../../../support/readJson";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+
+const revalidateBody = z.object({ error: z.unknown(), code: z.unknown() }).passthrough();
 
 const NOW = "2026-09-28T00:00:00.000Z";
 const RUN_ITEMS = JSON.stringify([{ id: "s1", title: "Public", items: [{ id: "i1", title: "Public step", isCompleted: true }] }]);
@@ -41,13 +47,15 @@ describe("revalidate refusals on the migrated tables, which tell a gone run from
         method: "POST",
         body: JSON.stringify({ expected_revision: 1 }),
       }),
-      { DB: database.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" } as never,
+      apiEnvOn(database),
     );
-    return { status: response.status, body: await readJson(response, jsonObject) };
+    return { status: response.status, body: await readJson(response, revalidateBody) };
   };
 
-  const storedItems = (runId: string) =>
-    (database.sqlite.prepare("SELECT items FROM checklist_runs WHERE id = ?").get(runId) as { items: string }).items;
+  const storedItems = (runId: string) => {
+    const row: StoredRow = present(database.sqlite.prepare("SELECT items FROM checklist_runs WHERE id = ?").get(runId), runId);
+    return row.items;
+  };
 
   beforeEach(() => {
     database = new SqliteD1();

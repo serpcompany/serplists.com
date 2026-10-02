@@ -94,7 +94,7 @@ async function scalar(sql: string, ...bindings: unknown[]): Promise<number> {
   return row?.value ?? 0;
 }
 
-function expectOneWinner({ statuses, bodies }: { statuses: number[]; bodies: Record<string, unknown>[] }) {
+function expectOneWinner({ statuses, bodies }: { statuses: number[]; bodies: { code?: unknown }[] }) {
   expect(statuses.filter((status) => status === 200)).toHaveLength(1);
   expect(statuses.filter((status) => status === 403)).toHaveLength(PARALLEL - 1);
   for (const [index, body] of bodies.entries()) {

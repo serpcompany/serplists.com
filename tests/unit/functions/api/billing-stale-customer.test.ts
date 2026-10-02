@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { elementAt, firstOf } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
 import "../../../support/checkoutWithoutARateLimit";
@@ -13,6 +13,8 @@ import {
   stripeSubscription as stripeSubscriptionFor,
 } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
+import { readJson } from "../../../support/readJson";
+import { billingStatusSchema } from "@/lib/schemas/accountResponses";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 
 import { handleBilling } from "@functions/api/handlers/billing";
@@ -23,7 +25,7 @@ const USER_ID = "user-1";
 const WEBHOOK_SECRET = "whsec_stale";
 
 let d1: SqliteD1;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
 let staleCustomerListAnswer: "missing" | "empty" | "error";
 let subscriptionsStripeCanRetrieve: Map<string, Record<string, unknown>>;
 let subscriptionRetrieveFails: boolean;
@@ -44,12 +46,11 @@ type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey
 
 function calls(): Call[] {
   return fetchMock.mock.calls.map(([url, init]) => {
-    const request = init as RequestInit & { headers?: Record<string, string> };
     return {
-      method: request.method ?? "GET",
+      method: init?.method ?? "GET",
       url: String(url),
-      form: new URLSearchParams(String(request.body ?? "")),
-      idempotencyKey: request.headers?.["Idempotency-Key"],
+      form: new URLSearchParams(String(init?.body ?? "")),
+      idempotencyKey: new Headers(init?.headers).get("Idempotency-Key") ?? undefined,
     };
   });
 }
@@ -67,10 +68,10 @@ function storedCustomer(): string | undefined {
 
 const post = (path: "checkout" | "portal") => postToBilling(env(), path);
 
-async function billingStatus(): Promise<Record<string, unknown>> {
+async function billingStatus() {
   const response = await handleBilling(new Request("http://localhost/api/billing/status"), env());
   expect(response.status).toBe(200);
-  return response.json();
+  return readJson(response, billingStatusSchema.passthrough());
 }
 
 const storeSubscription = (id: string, customerId: string, status: string, priceId = "price_other_mode") =>

@@ -71,9 +71,9 @@ const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
 
 const isHidden = ({ attrs }: MarkupElement): boolean =>
   attrs['aria-hidden'] === 'true' ||
-  attrs.type === 'hidden' ||
+  attrs['type'] === 'hidden' ||
   'hidden' in attrs ||
-  /(^|\s)hidden(\s|$)/.test(attrs.class ?? '');
+  /(^|\s)hidden(\s|$)/.test(attrs['class'] ?? '');
 
 export const findControls = (html: string): MarkupElement[] =>
   [...findFields(html), ...findButtons(html), ...findOtherElementsWithWidgetRole(html)].filter(
@@ -92,8 +92,8 @@ export const accessibleName = (html: string, element: MarkupElement): string => 
     return labelledBy.split(/\s+/).map((id) => textOfId(html, id)).join(' ').trim();
   }
   if (element.attrs['aria-label']?.trim()) return element.attrs['aria-label'].trim();
-  const id = element.attrs.id;
-  const label = id ? findLabels(html).find((candidate) => candidate.attrs.for === id) : undefined;
+  const id = element.attrs['id'];
+  const label = id ? findLabels(html).find((candidate) => candidate.attrs['for'] === id) : undefined;
   if (label?.text) return label.text;
   return element.tag === 'button' ? element.text : '';
 };
@@ -120,7 +120,7 @@ export const findUnnamedControls = (html: string): string[] =>
 export const findLabelsNotBoundToOneElement = (html: string): string[] =>
   findLabels(html)
     .filter((label) => {
-      const target = label.attrs.for;
+      const target = label.attrs['for'];
       if (!target) return true;
       return [...html.matchAll(/\bid="([^"]*)"/g)].filter((match) => match[1] === target).length !== 1;
     })

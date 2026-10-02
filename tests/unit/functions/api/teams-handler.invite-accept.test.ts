@@ -5,7 +5,9 @@ import { auditMocks, dbMocks, inAMinute, mockEnv, resetTeamsHandlerMocks, teamMe
 import { handleTeams } from "@functions/api/handlers/teams";
 import { anyInstanceOf, anything, objectContaining } from "../../../support/asymmetricMatchers";
 
-const joinedTeamBody = z.object({ teamId: z.string(), memberId: z.string(), team: z.record(z.unknown()) }).passthrough();
+const joinedTeamBody = z
+  .object({ teamId: z.string(), memberId: z.string(), role: z.unknown(), team: z.record(z.unknown()) })
+  .passthrough();
 
 const ACCEPT_BY_TOKEN = "http://localhost/api/teams/invites/invite-token/accept";
 const ACCEPT_BY_ID = "http://localhost/api/teams/invites/pending/invite-1/accept";

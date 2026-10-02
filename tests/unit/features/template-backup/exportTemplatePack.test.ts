@@ -7,8 +7,10 @@ import {
 } from '@/features/template-backup/exportTemplatePack';
 import { getAccessFailure } from '@/lib/api-errors';
 import { createSingleFlight } from '@/lib/utils/singleFlight';
-import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
+import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
+import type { ExportedTemplatePack } from '@/lib/schemas/apiTemplates';
 import { buildPortableTemplatePack } from '@functions/api/utils/template-portable';
+import { firstOf } from '../../../support/elements';
 
 const pack = (templates: unknown[]) => ({
   kind: 'serplists-template-pack',
@@ -16,7 +18,7 @@ const pack = (templates: unknown[]) => ({
 });
 
 const buildDependencies = (response: unknown, catalog: unknown[] = []) => ({
-  download: vi.fn(),
+  download: vi.fn<(pack: ExportedTemplatePack) => void>(),
   exportBackup: vi.fn().mockResolvedValue(response),
   loadPublicCatalog: vi.fn().mockResolvedValue(catalog),
 });
@@ -113,7 +115,7 @@ describe("exportTemplatePack with public templates in an Organization, whose cat
       dependencies,
     );
 
-    const downloaded = dependencies.download.mock.calls[0]?.[0] as PortableTemplatePack;
+    const downloaded = portableTemplatePackSchema.parse(firstOf(dependencies.download.mock.calls)[0]);
     expect(downloaded.templates.map((entry) => entry.slug)).toEqual(['org-guide', 'launch-qa', 'community']);
     expect(downloaded.manifest?.totalTemplates).toBe(3);
     expect(result).toEqual({ exported: 3, skipped: [] });

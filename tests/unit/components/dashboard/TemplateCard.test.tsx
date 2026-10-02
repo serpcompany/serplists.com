@@ -38,7 +38,7 @@ const renderCard = (overrides: Partial<ChecklistTemplate> = {}) => parseMarkup(r
 
 function keyboardButtons(root: MarkupNode) {
   return findTags(root, 'button').filter(
-    (button) => button.attrs.tabindex !== '-1' && !('disabled' in button.attrs),
+    (button) => button.attrs['tabindex'] !== '-1' && !('disabled' in button.attrs),
   );
 }
 
@@ -79,7 +79,7 @@ describe('TemplateCard (My Templates grid)', () => {
     );
 
     expect(overlayButton).toBeDefined();
-    expect(overlayButton?.attrs.tabindex).toBe('-1');
+    expect(overlayButton?.attrs['tabindex']).toBe('-1');
     expect(overlayButton?.parent?.attrs['aria-hidden']).toBe('true');
   });
 });

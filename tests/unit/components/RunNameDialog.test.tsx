@@ -11,7 +11,7 @@ import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { DOUBLE_CLICK_MS } from '@/lib/utils/repeatClick';
 
-import { findElement } from '../../support/elementTree';
+import { findElement, handlerOf } from '../../support/elementTree';
 import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
 
 type DialogProps = Parameters<typeof RunNameDialog>[0];
@@ -28,8 +28,8 @@ const mountDialog = (initial: Partial<DialogProps> = {}) => {
     return {
       input,
       tree,
-      submit: () => (form?.props.onSubmit as (event: { preventDefault: () => void }) => void)({ preventDefault: () => undefined }),
-      type: (value: string) => (input?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value } }),
+      submit: () => handlerOf(form, 'onSubmit')({ preventDefault: () => undefined }),
+      type: (value: string) => handlerOf(input, 'onChange')({ target: { value } }),
     };
   };
   return { onConfirm, render };
@@ -97,8 +97,6 @@ describe('RunNameDialog', () => {
 });
 
 describe('RunNameDialog, which a double click on a Start Run button opens', () => {
-  type OpenChange = (open: boolean, details: { reason: string; cancel: () => void }) => void;
-
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -112,11 +110,11 @@ describe('RunNameDialog, which a double click on a Start Run button opens', () =
     const dialog = mountDialog({ onOpenChange });
     const { tree } = dialog.render();
     const content = findElement(tree, (element) => element.type === DialogContent);
-    (content?.props.ref as (node: unknown) => void)({});
+    handlerOf(content, 'ref')({});
     const pressOutside = () => {
       const cancel = vi.fn();
       const root = findElement(dialog.render().tree, (element) => element.type === Dialog);
-      (root?.props.onOpenChange as OpenChange)(false, { reason: 'outside-press', cancel });
+      handlerOf(root, 'onOpenChange')(false, { reason: 'outside-press', cancel });
       return cancel;
     };
     return { dialog, onOpenChange, pressOutside };
@@ -146,7 +144,7 @@ describe('RunNameDialog, which a double click on a Start Run button opens', () =
     const startRun = findElement(dialog.render().tree, (element) => element.props.type === 'submit');
     const click = (detail: number) => {
       const event = { detail, preventDefault: vi.fn() };
-      (startRun?.props.onClick as (event: unknown) => void)(event);
+      handlerOf(startRun, 'onClick')(event);
       return event.preventDefault;
     };
 

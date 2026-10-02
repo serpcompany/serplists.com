@@ -1,29 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { sessionMocks } from "../../../support/mockedSession";
-import { jsonObject, readJson } from "../../../support/readJson";
-import { SqliteD1 } from "../../../support/sqlite-d1";
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { apiEnvOn } from "../../../support/apiEnv";
 import { objectContaining } from "../../../support/asymmetricMatchers";
+import { present } from "../../../support/elements";
+import { readJson } from "../../../support/readJson";
+import { SqliteD1 } from "../../../support/sqlite-d1";
+
+const restoreBody = z.object({ code: z.unknown() }).passthrough();
 
 const NOW = "2026-09-28T00:00:00.000Z";
 const ITEMS = JSON.stringify([{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }]);
 
 describe("restore of an item that is not archived, on the migrated tables", () => {
   let database: SqliteD1;
-  const env = () => ({ DB: database.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
+  const env = () => apiEnvOn(database);
 
   const exec = (query: string, ...params: Array<string | number | null>) =>
     database.sqlite.prepare(query).run(...params);
 
   const post = async (handler: typeof handleTemplates, path: string) => {
     const response = await handler(new Request(`http://localhost/api/${path}`, { method: "POST" }), env());
-    return { status: response.status, body: await readJson(response, jsonObject) };
+    return { status: response.status, body: await readJson(response, restoreBody) };
   };
 
-  const auditCount = (action: string) =>
-    (database.sqlite.prepare("SELECT count(*) AS value FROM audit_events WHERE action = ?").get(action) as { value: number }).value;
+  const auditCount = (action: string) => {
+    const { value } = present(database.sqlite.prepare("SELECT count(*) AS value FROM audit_events WHERE action = ?").get(action), "the audit count");
+    return value;
+  };
 
   beforeEach(() => {
     database = new SqliteD1();

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplateBackup } from '@/components/TemplateBackup';
+import type { useTemplateLists } from '@/contexts/TemplatesContext';
 
 type BillingQueryResult = {
   data?: { billingEnabled?: boolean; plan: 'free' | 'pro' | 'team' };
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => {
   return {
     billingQuery: billingQueryStillLoading,
     exportInFlight: false,
-    templateListOptions: [] as unknown[],
+    templateListOptions: [] as Array<Parameters<typeof useTemplateLists>[0]>,
     templateLists: {
       allTemplates: [] as Array<Record<string, unknown>>,
       templatesError: null as unknown,
@@ -56,7 +57,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplateLists: (options?: unknown) => {
+  useTemplateLists: (options?: Parameters<typeof useTemplateLists>[0]) => {
     mocks.templateListOptions.push(options);
     return {
       allTemplates: mocks.templateLists.allTemplates,
@@ -189,7 +190,7 @@ describe('TemplateBackup template lists', () => {
 
     expect(mocks.templateListOptions.length).toBeGreaterThan(0);
     for (const options of mocks.templateListOptions) {
-      expect((options as { catalog?: boolean } | undefined)?.catalog).not.toBe(true);
+      expect(options?.catalog).not.toBe(true);
     }
   });
 });

@@ -16,7 +16,7 @@ export {
 vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
   (await import('./guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
-export const createdBody = z.object({ id: z.string() }).passthrough();
+export const createdBody = z.object({ id: z.string(), slug: z.unknown() }).passthrough();
 export const slugBody = z.object({ slug: z.string() }).passthrough();
 export const importBody = z
   .object({

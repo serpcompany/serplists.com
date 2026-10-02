@@ -64,8 +64,16 @@ describe("resolveTemplateSaveFailureNotice", () => {
 });
 
 describe("template limit pre-check", () => {
-  const template = (overrides: Partial<ChecklistTemplate>): ChecklistTemplate =>
-    ({ id: "t", title: "T", sections: [], ...overrides }) as ChecklistTemplate;
+  const template = (overrides: Partial<ChecklistTemplate>): ChecklistTemplate => ({
+    id: "t",
+    title: "T",
+    sections: [],
+    userId: "u0",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    isPublic: false,
+    ...overrides,
+  });
 
   it("counts only the active context's own templates", () => {
     const templates = [

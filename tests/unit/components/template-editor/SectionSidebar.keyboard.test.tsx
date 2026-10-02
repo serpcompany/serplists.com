@@ -1,17 +1,23 @@
 import '../../../support/sectionSidebarHooks';
 import React from 'react';
-import { get } from 'react-hook-form';
+import { z } from 'zod';
 import { assert, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { firstOf } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
 
-import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
-import { findAllElements, findDomElement, withComponentsRenderedOneLevel } from '../../../support/elementTree';
+import {
+  createFormControlMountedLikeUseForm,
+  editorFormOf,
+  editorItemsIn,
+  editorSectionsIn,
+  type EditorForm,
+} from '../../../support/editorFormControl';
+import { findAllElements, findDomElement, handlerOf, withComponentsRenderedOneLevel } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted((): { form: EditorForm | null; setValue: Mock<(...args: unknown[]) => void> } => ({
+const harness = vi.hoisted((): { form: EditorForm | null; setValue: Mock<EditorForm['setValue']> } => ({
   form: null,
   setValue: vi.fn(),
 }));
@@ -33,7 +39,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
         setValue: harness.setValue,
       }),
       useFieldArray: ({ name }: { name: string }) => {
-        const values = (valueAt(name) ?? []) as Array<{ id: string }>;
+        const values = z.array(z.object({ id: z.string() }).passthrough()).parse(valueAt(name) ?? []);
         return {
           fields: values.map((value) => ({ ...value, fieldId: `field-${value.id}` })),
           append: vi.fn(),
@@ -41,7 +47,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
           move: (from: number, to: number) => {
             const next = [...values];
             next.splice(to, 0, ...next.splice(from, 1));
-            editorForm().setValue(name as 'sections', next as never, { shouldDirty: true });
+            moveTheFieldArray(name, next);
           },
         };
       },
@@ -53,6 +59,16 @@ const selection = {
   onSelectSection: vi.fn(),
   onSelectItem: vi.fn(),
 };
+
+function moveTheFieldArray(name: string, next: unknown[]) {
+  if (name === 'sections') {
+    editorForm().setValue('sections', editorSectionsIn(next), { shouldDirty: true });
+    return;
+  }
+  const sectionIndex = /^sections\.(\d+)\.items$/.exec(name)?.[1];
+  if (sectionIndex === undefined) throw new Error(`The test moves the sections and their tasks, not ${name}.`);
+  editorForm().setValue(`sections.${Number(sectionIndex)}.items`, editorItemsIn(next), { shouldDirty: true });
+}
 
 function createForm(): void {
   harness.form = createFormControlMountedLikeUseForm({
@@ -68,8 +84,7 @@ function createForm(): void {
       { id: 's2', title: 'Second section', items: [{ id: 'c', title: 'Task C', contents: [] }] },
     ],
   });
-  const setValue = editorForm().setValue as (...args: unknown[]) => void;
-  harness.setValue = vi.fn((...args: unknown[]) => setValue(...args));
+  harness.setValue = vi.fn(editorForm().setValue);
 }
 
 function render(props: { selectedSectionIndex?: number; selectedItemIndex?: number | null } = {}): React.ReactNode {
@@ -97,16 +112,12 @@ function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
     shiftKey: false,
     preventDefault: vi.fn(),
   };
-  const onKeyDown = handle.props.onKeyDown as ((event: unknown) => void) | undefined;
-  expect(onKeyDown).toBeTypeOf('function');
-  onKeyDown?.(event);
+  handlerOf(handle, 'onKeyDown')(event);
   return event;
 }
 
-const sectionTitles = () =>
-  (editorForm().getValues('sections') as Array<{ title: string }>).map((section) => section.title);
-const taskIds = (sectionIndex: number) =>
-  (get(editorForm().getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
+const sectionTitles = () => editorForm().getValues('sections').map((section) => section.title);
+const taskIds = (sectionIndex: number) => editorForm().getValues(`sections.${sectionIndex}.items`).map((item) => item.id);
 
 function liveRegionText(tree: React.ReactNode): string {
   const region = findDomElement(tree, (element) => element.props['aria-live'] === 'polite');
@@ -191,7 +202,7 @@ describe('SectionSidebar title rename in place', () => {
       render(),
       (element) => element.type === 'button' && element.props.children === title,
     ));
-    (button.props.onDoubleClick as () => void)();
+    handlerOf(button, 'onDoubleClick')();
   };
 
   const titleField = () => {
@@ -199,8 +210,8 @@ describe('SectionSidebar title rename in place', () => {
   };
 
   const typeAndPress = (text: string, key: string) => {
-    (titleField().props.onChange as (event: { target: { value: string } }) => void)({ target: { value: text } });
-    (titleField().props.onKeyDown as (event: { key: string }) => void)({ key });
+    handlerOf(titleField(), 'onChange')({ target: { value: text } });
+    handlerOf(titleField(), 'onKeyDown')({ key });
   };
 
   it("opens a field with the section's title on a double click and keeps the typed title on Enter", () => {
@@ -223,6 +234,6 @@ describe('SectionSidebar title rename in place', () => {
     doubleClickTitle('Task B');
     typeAndPress('Ship it', 'Enter');
 
-    expect(get(editorForm().getValues(), 'sections.0.items.1.title')).toBe('Ship it');
+    expect(editorForm().getValues('sections.0.items.1.title')).toBe('Ship it');
   });
 });

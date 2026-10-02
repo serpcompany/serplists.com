@@ -7,7 +7,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: nul
 import { PublicMobileNav } from '@/components/layout/PublicMobileNav';
 import { Sheet } from '@/components/ui/sheet';
 
-import { findElement } from '../../support/elementTree';
+import { findElement, handlerOf } from '../../support/elementTree';
 import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
 
 const renderSheet = () => {
@@ -17,7 +17,7 @@ const renderSheet = () => {
 };
 
 const openSheet = () => {
-  (renderSheet().props.onOpenChange as (open: boolean) => void)(true);
+  handlerOf(renderSheet(), 'onOpenChange')(true);
   expect(renderSheet().props.open).toBe(true);
 };
 

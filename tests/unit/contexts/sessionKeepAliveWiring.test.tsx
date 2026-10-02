@@ -1,12 +1,14 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { startSessionKeepAlive as StartSessionKeepAlive } from '@/contexts/sessionSync';
+import { firstOf } from '../../support/elements';
 
 
 const { getSession, keepAlive, signOut, startSessionKeepAlive, stopKeepAlive, withoutBrowserListeners } = vi.hoisted(() => ({
   getSession: vi.fn(),
   keepAlive: vi.fn(),
   signOut: vi.fn(),
-  startSessionKeepAlive: vi.fn(),
+  startSessionKeepAlive: vi.fn<typeof StartSessionKeepAlive>(),
   stopKeepAlive: vi.fn(),
   withoutBrowserListeners: {
     openChannel: () => null,
@@ -55,7 +57,7 @@ describe('AuthProvider session keep-alive, without which a session expires while
     expect(auth().isAuthenticated).toBe(true);
     expect(startSessionKeepAlive).toHaveBeenCalledTimes(1);
     expect(startSessionKeepAlive).toHaveBeenCalledWith(keepAlive);
-    const [startedWith] = startSessionKeepAlive.mock.calls[0] as [() => unknown];
+    const [startedWith] = firstOf(startSessionKeepAlive.mock.calls);
     startedWith();
     expect(keepAlive).toHaveBeenCalledTimes(1);
     expect(stopKeepAlive).not.toHaveBeenCalled();

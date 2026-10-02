@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { elementAt, firstOf, present, taskIn } from "../../../support/elements";
+import { elementAt, firstOf, present, taskIn, valueAt } from "../../../support/elements";
 import { dbMocks, env, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
@@ -61,7 +61,7 @@ const templateRow = (sections: unknown[], overrides: JsonRecord = {}): JsonRecor
   ...overrides,
 });
 
-const resultOf = (body: JsonRecord) => mcpToolResult.parse(body.result);
+const resultOf = (body: { result?: unknown }) => mcpToolResult.parse(body.result);
 
 function everySelectReads(row: JsonRecord) {
   dbMocks.selectChain.limit.mockResolvedValue([row]);
@@ -81,7 +81,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     expect(Object.keys(schema("get_template").properties)).toEqual(["templateId", "sectionId", "taskId", "cursor"]);
     expect(schema("get_template").required).toEqual(["templateId"]);
     const update = schema("update_template");
-    expect(update.properties.operation).toMatchObject({
+    expect(valueAt(update.properties, "operation")).toMatchObject({
       enum: ["replace_section", "insert_section", "move_section", "remove_section", "replace_task", "insert_task", "move_task", "remove_task"],
     });
     expect(update.required).toEqual(["templateId", "expectedVersion"]);
@@ -91,7 +91,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
   it("warns that sections, accepted for a template of any size, replaces the whole checklist, and to edit a template read in pages by part", async () => {
     const { tools } = mcpToolList.parse((await send("tools/list")).body).result;
     const update = present(tools.find((tool) => tool.name === "update_template"), "update_template");
-    const sections = present(update.inputSchema.properties.sections, "the sections argument");
+    const sections = valueAt(update.inputSchema.properties, "sections");
 
     expect(update.description).toContain(
       "sections, which replaces the whole checklist: any section, task, or subtask it leaves out is removed.",

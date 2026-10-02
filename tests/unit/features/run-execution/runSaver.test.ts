@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
@@ -8,6 +9,8 @@ import type { RunExecutionActionResult } from '@/features/run-execution/runExecu
 import { createRunSaver, RUN_CHANGED_ELSEWHERE_MESSAGE, type RunSaverContext } from '@/features/run-execution/runSaver';
 import { bindRunSaves, toggleRunItem, toggleRunSubItem } from '@/features/run-execution/runExecutionActions';
 import { loadRunExecutionData } from '@/features/run-execution/runExecutionLoad';
+
+const runStatus = z.enum(['in_progress', 'completed']);
 
 const CONFLICT = { code: 'edit_conflict', error: 'Checklist run changed since it was loaded. Refresh before saving again.' };
 
@@ -70,7 +73,7 @@ const createServerRefusingStaleRevisions = (initial: SavedRun) => {
       getSharedChecklist: vi.fn(async () => record()),
       revokeChecklistRunShare: vi.fn(),
       updateSharedChecklist: vi.fn(async (_token: string, body: { expected_revision: number; sections: ChecklistSection[]; status: string }) => {
-        const saved = accept({ ...stored, revision: body.expected_revision, sections: body.sections, status: body.status as ChecklistRun['status'] });
+        const saved = accept({ ...stored, revision: body.expected_revision, sections: body.sections, status: runStatus.parse(body.status) });
         return { success: true as const, revision: saved.revision, progress: saved.progress };
       }),
     },
@@ -290,7 +293,7 @@ describe('run actions keep what the retry needs', () => {
 });
 
 describe('toggles queued while an earlier save is in flight', () => {
-  const runWhereTask2HasSubTasksAAndB = (done: Record<string, boolean>): SavedRun => ({
+  const runWhereTask2HasSubTasksAAndB = (done: { 'item-2'?: boolean; a?: boolean; b?: boolean }): SavedRun => ({
     ...buildRun(1),
     sections: [
       {

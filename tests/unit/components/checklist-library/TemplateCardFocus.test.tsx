@@ -47,8 +47,8 @@ describe('TemplateCard (discovery) keyboard focus, with its View Template overla
       (node) => node.tag === 'a' && textOf(node).includes('View Template'),
     ));
 
-    expect(overlayLink.attrs.href).toBe(TEMPLATE_PATH);
-    expect(overlayLink.attrs.tabindex).toBe('-1');
+    expect(overlayLink.attrs['href']).toBe(TEMPLATE_PATH);
+    expect(overlayLink.attrs['tabindex']).toBe('-1');
     expect(selfAndAncestors(overlayLink).some((node) => node.attrs['aria-hidden'] === 'true')).toBe(
       true,
     );
@@ -57,7 +57,7 @@ describe('TemplateCard (discovery) keyboard focus, with its View Template overla
   it('still reaches the template from the keyboard through the title and Start links', () => {
     const reachable = findAll(
       parseMarkup(renderCard()),
-      (node) => node.tag === 'a' && node.attrs.href === TEMPLATE_PATH && node.attrs.tabindex !== '-1',
+      (node) => node.tag === 'a' && node.attrs['href'] === TEMPLATE_PATH && node.attrs['tabindex'] !== '-1',
     );
 
     expect(reachable.map((link) => textOf(link).trim())).toEqual([

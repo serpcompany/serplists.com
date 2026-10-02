@@ -10,13 +10,20 @@ import {
   type PendingUploads,
 } from '@/features/template-editor/pendingUploads';
 import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
+import type { ChecklistItemContent } from '@/types/checklist';
 
 import { deferred } from '../../../support/deferred';
-import { createFormControlMountedLikeUseForm, editorFormOf, type EditorForm } from '../../../support/editorFormControl';
-import { findByAriaLabel, findElement, findElementOf, findFileInput } from '../../../support/elementTree';
+import {
+  createFormControlMountedLikeUseForm,
+  editorContentsIn,
+  editorFormOf,
+  type EditorForm,
+} from '../../../support/editorFormControl';
+import { present } from '../../../support/elements';
+import { findByAriaLabel, findElement, findElementOf, findFileInput, handlerOf } from '../../../support/elementTree';
 
 const harness = vi.hoisted(
-  (): { form: EditorForm | null; editorSetValueSpy: Mock<(...args: unknown[]) => void>; pendingUploadsFromContext: unknown } => ({
+  (): { form: EditorForm | null; editorSetValueSpy: Mock<EditorForm['setValue']>; pendingUploadsFromContext: PendingUploads | null } => ({
     form: null,
     editorSetValueSpy: vi.fn(),
     pendingUploadsFromContext: null,
@@ -44,9 +51,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
     ({ valueAt }) => ({
       useFormContext: () => ({ ...editorForm(), setValue: harness.editorSetValueSpy }),
       useFieldArray: ({ name }: { name: string }) => ({
-        fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
-          (content) => ({ ...content, fieldId: content.id }),
-        ),
+        fields: editorContentsIn(valueAt(name)).map((content) => ({ ...content, fieldId: content.id })),
         append: vi.fn(),
         remove: vi.fn(),
       }),
@@ -66,18 +71,17 @@ vi.mock('sonner', () => ({
 const CONTENT_PATH = 'sections.0.items.0.contents';
 const UPLOADED_URL = '/api/uploads/file?key=template-images%2Fu1%2Fphoto.png';
 
-function createForm(contents: Array<Partial<TemplateEditorContent>>): void {
+function createForm(contents: ChecklistItemContent[]): void {
   harness.form = createFormControlMountedLikeUseForm({
     sections: [
       {
         id: 's1',
         title: 'Section',
-        items: [{ id: 'i1', title: 'Task', contents: contents as TemplateEditorContent[] }],
+        items: [{ id: 'i1', title: 'Task', contents }],
       },
     ],
   });
-  const setValue = editorForm().setValue as (...args: unknown[]) => void;
-  harness.editorSetValueSpy = vi.fn((...args: unknown[]) => setValue(...args));
+  harness.editorSetValueSpy = vi.fn(editorForm().setValue);
 }
 
 function renderEditorFileUploadFromCurrentForm() {
@@ -89,11 +93,11 @@ function renderEditorFileUploadFromCurrentForm() {
   return FileUpload(upload.props);
 }
 
-function selectFile(tree: unknown): Promise<void> {
+async function selectFile(tree: unknown): Promise<void> {
   const input = findElement(tree, (element) => element.props.type === 'file');
   assert.exists(input, 'the file input');
   const file = new File(['png'], 'photo.png', { type: 'image/png' });
-  return (input.props.onChange as (event: unknown) => Promise<void>)({
+  await handlerOf(input, 'onChange')({
     target: { files: [file] },
   });
 }
@@ -151,7 +155,7 @@ describe('ContentEditor media uploads', () => {
     const tree = renderEditorFileUploadFromCurrentForm();
     const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
     assert.exists(removeButton, 'the Remove uploaded image button');
-    await (removeButton.props.onClick as () => unknown)();
+    await handlerOf(removeButton, 'onClick')();
 
     const cleared = contentAt(0);
     expect(cleared?.id).toBe('c1');
@@ -195,7 +199,7 @@ describe('ContentEditor media uploads', () => {
 
   it('counts the upload as pending for the editor until it finishes, which keeps Save disabled and guards leaving', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    const uploads = harness.pendingUploadsFromContext as PendingUploads;
+    const uploads = present(harness.pendingUploadsFromContext, 'the pending uploads');
     const finishUpload = holdTheUpload();
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
@@ -211,7 +215,7 @@ describe('ContentEditor media uploads', () => {
 
   it('stops reporting an upload that fails', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    const uploads = harness.pendingUploadsFromContext as PendingUploads;
+    const uploads = present(harness.pendingUploadsFromContext, 'the pending uploads');
     vi.mocked(api.uploadToR2).mockRejectedValue(new Error('Network down'));
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
@@ -238,7 +242,7 @@ describe('ContentEditor media URL typed over an upload', () => {
       (element) => element.props.id === 'content-editor-test' && typeof element.props.onChange === 'function',
     );
     assert.exists(input, 'the URL field');
-    (input.props.onChange as (event: unknown) => void)({ target: { value } });
+    handlerOf(input, 'onChange')({ target: { value } });
   }
 
   it('drops the uploaded file name and size and records a URL source, so runs never label the new link with the old file', () => {

@@ -145,8 +145,8 @@ describe('Template form panels name every control for screen readers', () => {
     expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     expect(getByAccessibleName(html, 'Template Name')?.tag).toBe('input');
     expect(getByAccessibleName(html, 'Goal / Summary')?.tag).toBe('textarea');
-    expect(getByAccessibleName(html, 'Template Type')?.attrs.role).toBe('combobox');
-    expect(getByAccessibleName(html, 'Categories')?.attrs.role).toBe('combobox');
+    expect(getByAccessibleName(html, 'Template Type')?.attrs['role']).toBe('combobox');
+    expect(getByAccessibleName(html, 'Categories')?.attrs['role']).toBe('combobox');
     expect(getByAccessibleName(html, 'Tags')?.tag).toBe('input');
     expect(getByAccessibleName(html, 'Remove tag onboarding')?.tag).toBe('button');
   });
@@ -160,7 +160,7 @@ describe('Template form panels name every control for screen readers', () => {
 
     const publicSwitch = getByAccessibleName(html, 'Public Template');
     assert.exists(publicSwitch, 'a control named Public Template');
-    expect(publicSwitch.attrs.role).toBe('switch');
+    expect(publicSwitch.attrs['role']).toBe('switch');
     expect(accessibleDescription(html, publicSwitch)).toBe(
       'Make this template visible in the Template Library',
     );
@@ -199,6 +199,6 @@ describe('Template form panels name every control for screen readers', () => {
     expect(findUnnamedControls(html)).toEqual([]);
     expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     expect(findDuplicateIds(html)).toEqual([]);
-    expect(getByAccessibleName(html, 'Section Title')?.attrs.value).toBe('Prep');
+    expect(getByAccessibleName(html, 'Section Title')?.attrs['value']).toBe('Prep');
   });
 });

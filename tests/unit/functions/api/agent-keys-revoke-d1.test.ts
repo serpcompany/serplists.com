@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sessionMocks } from "../../../support/mockedSession";
 import { SqliteD1 } from "../../../support/sqlite-d1";
+import type { StoredRow } from "../../../support/d1Doubles";
 import { apiEnv } from "../../../support/apiEnv";
-import { jsonObject, readJson } from "../../../support/readJson";
+import { z } from "zod";
+import { readJson } from "../../../support/readJson";
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
+
+const revokeBody = z.object({ revokedAt: z.unknown() }).passthrough();
 
 const ORIGINAL_REVOKED_AT = "2026-09-19T02:00:00.000Z";
 
@@ -24,17 +28,17 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
       )
       .run(id, userId, `Key ${id}`, `slrk_${id}`, `hash-${id}`, revokedAt);
 
-  const storedRevokedAt = (id: string) =>
-    (database.sqlite.prepare("SELECT revoked_at FROM personal_run_keys WHERE id = ?").get(id) as
-      | { revoked_at: string | null }
-      | undefined)?.revoked_at;
+  const storedRevokedAt = (id: string) => {
+    const row: StoredRow | undefined = database.sqlite.prepare("SELECT revoked_at FROM personal_run_keys WHERE id = ?").get(id);
+    return row?.revoked_at;
+  };
 
   const revoke = async (id: string) => {
     const response = await handleAgentKeys(
       new Request(`http://localhost/api/agent-keys/${id}`, { method: "DELETE" }),
       apiEnv({ DB: database.binding }),
     );
-    return { status: response.status, body: await readJson(response, jsonObject) };
+    return { status: response.status, body: await readJson(response, revokeBody) };
   };
 
   beforeEach(() => {

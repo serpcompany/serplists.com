@@ -71,6 +71,19 @@ describe('uploaded asset deletion helpers', () => {
   });
 });
 
+class FileOfSize extends File {
+  constructor(
+    private readonly claimedSize: number,
+    type: string,
+  ) {
+    super([], 'upload', { type });
+  }
+
+  override get size() {
+    return this.claimedSize;
+  }
+}
+
 describe('validateFile', () => {
   it.each([
     ['image', 'template-images', 'image/png'],
@@ -78,7 +91,7 @@ describe('validateFile', () => {
     ['file', 'template-files', 'application/pdf'],
   ] as const)('checks %s files against the limit the API enforces for %s', (type, bucket, mime) => {
     const limit = UPLOAD_MAX_BYTES[bucket];
-    const fileOfSize = (size: number) => ({ size, type: mime }) as File;
+    const fileOfSize = (size: number) => new FileOfSize(size, mime);
 
     expect(validateFile(fileOfSize(limit), type)).toEqual({ valid: true });
     expect(validateFile(fileOfSize(limit + 1), type)).toEqual({

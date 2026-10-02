@@ -5,6 +5,7 @@ import { canFinishRun } from '@/features/run-execution/primaryTaskAction';
 import { mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
 import { sanitizeStoredSections } from '@/lib/schemas/storedSections';
 import { countRunTasks } from '@/lib/utils/checklistSections';
+import type { TaskRecord } from '@/lib/schemas/jsonRecords';
 import { applyRunOperation } from '@functions/api/handlers/agentMcpRuns';
 import {
   calculateRunProgress,
@@ -23,7 +24,7 @@ const task = (fields: Json) => ({ id: 'task-1', title: 'Write copy', ...fields }
 const onText = (isCompleted: boolean) => ({ type: 'text', value: 'Steps', subItems: [hidden(isCompleted)] });
 const onImage = (isCompleted: boolean) => ({ type: 'image', value: 'https://example.com/a.png', subItems: [hidden(isCompleted)] });
 const subTasksBlock = (isCompleted: boolean) => ({ type: 'subItems', value: '', subItems: [visible(isCompleted)] });
-const sectionsOf = (...items: Json[]) => [{ id: 'section-1', title: 'Launch', items }];
+const sectionsOf = (...items: TaskRecord[]) => [{ id: 'section-1', title: 'Launch', items }];
 
 const fixtures: Array<[string, Json[]]> = [
   ['sub-items on a text block', sectionsOf(task({ isCompleted: true, contents: [onText(false), subTasksBlock(true)] }))],

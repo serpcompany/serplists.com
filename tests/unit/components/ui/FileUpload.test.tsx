@@ -6,7 +6,7 @@ import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
 import { UserContentImage } from '@/components/shared/UserContentImage';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
-import { findByAriaLabel, findElement, findFileInput, type AnyElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, findFileInput, handlerOf, type AnyElement } from '../../../support/elementTree';
 import { objectContaining, stringContaining } from '../../../support/asymmetricMatchers';
 
 const useStateStub = vi.hoisted(() => ({ valueForEveryState: undefined as unknown, setterCalls: [] as unknown[] }));
@@ -32,7 +32,7 @@ const EXISTING_URL = '/api/uploads/file?key=template-images%2Fu1%2Fa.png';
 async function chooseFiles(tree: unknown, files: File[]) {
   const fileInput = findFileInput(tree);
   assert.exists(fileInput, 'the file input');
-  await (fileInput.props.onChange as (event: unknown) => Promise<void>)({ target: { files } });
+  await handlerOf(fileInput, 'onChange')({ target: { files } });
 }
 
 describe('FileUpload', () => {
@@ -63,7 +63,7 @@ describe('FileUpload', () => {
     const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
     assert.exists(removeButton, 'the Remove uploaded image button');
 
-    await (removeButton.props.onClick as () => unknown)();
+    await handlerOf(removeButton, 'onClick')();
 
     expect(onFileChange).toHaveBeenCalledTimes(1);
     expect(onFileChange).toHaveBeenCalledWith({
@@ -180,8 +180,8 @@ describe('FileUpload', () => {
       expect(img.type).toBe(UserContentImage);
       expect(img.props.style).toBeUndefined();
 
-      const target = { style: {} as Record<string, string> };
-      (img.props.onError as (event: unknown) => void)({ currentTarget: target, target });
+      const target: { style: { display?: string } } = { style: {} };
+      handlerOf(img, 'onError')({ currentTarget: target, target });
 
       expect(target.style.display).toBeUndefined();
       expect(useStateStub.setterCalls).toEqual([true]);

@@ -297,7 +297,7 @@ describe('template run reconciliation', () => {
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
       taskIn(sectionsOf(reconcileRunSections(previous, next, [])), 0, 0);
-    const subTasksBlockRows = (item: StoredTask): Json[] => (item.contents ?? [])
+    const subTasksBlockRows = (item: StoredTask) => (item.contents ?? [])
       .filter((content) => content.type === 'subItems')
       .flatMap((content) => content.subItems ?? []);
 

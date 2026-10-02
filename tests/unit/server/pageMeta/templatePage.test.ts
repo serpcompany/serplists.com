@@ -1,5 +1,5 @@
 import { createEdgeCache, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
@@ -88,7 +88,8 @@ describe('template page metadata', () => {
     const canonical = 'https://serplists.com/profile/alice/reviewed-clipy-checklist/';
     expect(metadata.alternates?.canonical).toBe(canonical);
     expect(metadata.openGraph?.url).toBe(canonical);
-    expect(result.kind === 'found' && buildPageJsonLd(result.seo).url).toBe(canonical);
+    assert(result.kind === 'found', 'the template page was found');
+    expect(buildPageJsonLd(result.seo)).toHaveProperty('url', canonical);
   });
 
   it('names the production site on staging and workers.dev hosts, as the sitemap does', async () => {

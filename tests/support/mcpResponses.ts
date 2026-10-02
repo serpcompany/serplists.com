@@ -68,6 +68,7 @@ const mcpToolInputSchema = z.object({
     description: z.string().optional(),
   }).passthrough()),
   required: z.array(z.string()).optional(),
+  additionalProperties: z.unknown(),
 }).passthrough();
 
 export type McpToolInputSchema = z.output<typeof mcpToolInputSchema>;

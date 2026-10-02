@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import {
   baseModel,
@@ -11,6 +12,10 @@ import {
   userStillOnThePage,
   visibilitySwitchProps,
 } from '../../support/templateDetailPage';
+import { lastOf } from '../../support/elements';
+import { handlerIn } from '../../support/elementTree';
+
+const createdTemplatePayload = z.object({ title: z.string() }).passthrough();
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import type { TemplateDetailActionResult } from '@/features/template-detail/useTemplateDetailModel';
 import { toast } from 'sonner';
@@ -31,9 +36,9 @@ describe('TemplateDetail Duplicate', () => {
     const duplicate = moreMenuItemProps.find((props) =>
       [props.children].flat(Infinity).includes('Duplicate'),
     );
-    await (duplicate?.onClick as () => Promise<void>)();
+    await handlerIn(duplicate, 'onClick')();
 
-    return contextCreateTemplate.mock.calls.at(-1)?.[0] as { title: string };
+    return createdTemplatePayload.parse(lastOf(contextCreateTemplate.mock.calls)[0]);
   };
 
   it('keeps the copy of a title near the limit within what the API accepts', async () => {
@@ -53,7 +58,7 @@ describe('TemplateDetail Duplicate', () => {
 
 const chooseExportJson = async () => {
   const exportItem = moreMenuItemProps.find((props) => [props.children].flat(Infinity).includes('Export JSON'));
-  await (exportItem?.onClick as () => Promise<void>)();
+  await handlerIn(exportItem, 'onClick')();
 };
 
 describe('TemplateDetail export after a failed plan check', () => {
@@ -112,7 +117,7 @@ describe('TemplateDetail visibility', () => {
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
 
     renderTemplateDetail();
-    const onCheckedChange = visibilitySwitchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    const onCheckedChange = handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange');
     await onCheckedChange(false);
 
     expect(setVisibility).toHaveBeenCalledWith(false);
@@ -127,7 +132,7 @@ describe('TemplateDetail visibility', () => {
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
 
     renderTemplateDetail();
-    const onCheckedChange = visibilitySwitchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    const onCheckedChange = handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange');
     const flipped = onCheckedChange(true);
     whileSaving();
     answer({ kind: 'login_required' });

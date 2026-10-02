@@ -69,3 +69,8 @@ export function withoutVars(env: Env, names: readonly OptionalEnvVar[]): Env {
 export function apiEnv(vars: Partial<Env> = {}): Env {
   return { DB: new D1DatabaseThatThrows(() => bindingNotGiven('DB')), R2_UPLOADS: new R2BucketNotGiven(), ...vars };
 }
+
+export const TEST_AUTH_SECRET = 'test-better-auth-secret-32-chars-minimum!!';
+
+export const apiEnvOn = (database: { binding: D1Database }): Env =>
+  apiEnv({ DB: database.binding, BETTER_AUTH_SECRET: TEST_AUTH_SECRET });

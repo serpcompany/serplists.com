@@ -6,7 +6,16 @@ import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
-const inviteBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
+const inviteBody = z
+  .object({
+    inviteToken: z.string(),
+    invitePath: z.string(),
+    inviteUrl: z.string(),
+    email: z.unknown(),
+    role: z.unknown(),
+    delivery: z.unknown(),
+  })
+  .passthrough();
 const pendingInviteError = apiErrorBody.extend({ details: z.object({ inviteId: z.string() }).passthrough() });
 
 function storedInvite(overrides: Record<string, unknown> = {}) {
@@ -232,7 +241,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("invite_already_accepted");
-    expect(data.success).toBeUndefined();
+    expect(data).not.toHaveProperty("success");
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
     expect(dbMocks.insertChain.select).toHaveBeenCalled();
   });

@@ -11,7 +11,7 @@ import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClien
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 import { expectOneCallOnlyAfterABackForwardRestore } from '../../support/pageRestore';
 
-const queryOptionsSeen = vi.fn();
+const queryOptionsSeen = vi.fn<(options: UseQueryOptions) => void>();
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
@@ -152,7 +152,7 @@ describe('Pricing', () => {
     renderPricing({ plan: 'free', billingEnabled: true, subscriptionStatus: null });
 
     const billingQuery = queryOptionsSeen.mock.calls
-      .map(([options]) => options as UseQueryOptions)
+      .map(([options]) => options)
       .find((options) => JSON.stringify(options.queryKey) === JSON.stringify(BILLING_STATUS_KEY));
     expect(billingQuery?.retry).toBe(shouldRetryBillingStatus);
   });

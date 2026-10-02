@@ -4,7 +4,7 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
 import { Sheet } from '@/components/ui/sheet';
 
-import { findElement } from '../../../support/elementTree';
+import { findElement, handlerOf } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState, unmountEffects } from '../../../support/hookStateSlots';
 
 const createMediaQuery = () => {
@@ -38,7 +38,7 @@ const renderTaskSheet = () => {
 };
 
 const openTaskSheet = () => {
-  (renderTaskSheet().props.onOpenChange as (open: boolean) => void)(true);
+  handlerOf(renderTaskSheet(), 'onOpenChange')(true);
   expect(renderTaskSheet().props.open).toBe(true);
 };
 
@@ -73,7 +73,7 @@ describe('MobileRunProgress task sheet', () => {
 
   it('stops listening once the sheet closes', () => {
     openTaskSheet();
-    (renderTaskSheet().props.onOpenChange as (open: boolean) => void)(false);
+    handlerOf(renderTaskSheet(), 'onOpenChange')(false);
     renderTaskSheet();
 
     expect(taskColumn.listeners.size).toBe(0);

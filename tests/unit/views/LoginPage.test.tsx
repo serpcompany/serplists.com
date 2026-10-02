@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { handOffLoginEmail, VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import Login from '@/views/Login';
-import { createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
+import { createFakeContainer, elementOf, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
 
 const authState = vi.hoisted(() => ({ isAuthenticated: false }));
 
@@ -134,7 +134,7 @@ describe('Login email handoff from sign-up', () => {
       container,
       (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === 'email',
     );
-    return field as FakeElement & { value?: string };
+    return elementOf(field, 'the email field');
   };
 
   it('fills the form with the address sign-up handed over, and keeps it out of the URL', async () => {

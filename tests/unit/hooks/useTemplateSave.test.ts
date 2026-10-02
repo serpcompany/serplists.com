@@ -77,19 +77,7 @@ describe("persistTemplateSave", () => {
   });
 
   it("sends the version the editor loaded, never the list cache's, and leaves out the rules it does not edit", async () => {
-    const listCopyRefetchedAfterAnotherEditorsSave = {
-      id: "template-1",
-      title: "Newer title",
-      description: "",
-      type: "checklist",
-      sections: baseSections,
-      isPublic: true,
-      version: 6,
-      rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
-    };
-    const dependencies = buildDependencies({
-      getTemplate: vi.fn(() => listCopyRefetchedAfterAnotherEditorsSave),
-    } as Partial<Parameters<typeof persistTemplateSave>[0]>);
+    const dependencies = buildDependencies({});
 
     const result = await persistTemplateSave(
       dependencies,

@@ -7,8 +7,9 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from '@/lib/schemas/contentLimits';
 import { storedSectionsIn } from '../../../support/storedJson';
+import type { TaskRecord } from '@/lib/schemas/jsonRecords';
 
-type Task = Record<string, unknown>;
+type Task = TaskRecord;
 
 const sectionsWithText = (length: number, task: Task = {}, extraTasks: Task[] = []) => [
   {

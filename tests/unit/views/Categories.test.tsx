@@ -8,18 +8,15 @@ import {
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../support/elements';
 import { typeThroughTheFieldsOwnOnChange } from '../../support/fakeDomRoots';
 
 import Categories from '@/views/Categories';
-import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
+import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, isFakeElement, type FakeNode } from '../../fixtures/fakeDom';
+import type { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 
-const catalogErrorProps = vi.fn();
-
-vi.mock('@/components/shared/SEOHead', () => ({
-  SEOHead: (props: Record<string, unknown>) => <div data-seo-head={String(props.url)} />,
-}));
+const catalogErrorProps = vi.fn<(props: React.ComponentProps<typeof CatalogLoadError>) => void>();
 
 vi.mock('@/components/checklist-library/CatalogLoadError', async (importOriginal) => {
   const actual =
@@ -71,7 +68,8 @@ describe('Categories page catalog states, which never present the bundled starte
     expect(markup).not.toContain('aria-busy="true"');
 
     expect(catalogErrorProps).toHaveBeenCalledTimes(1);
-    const [{ onRetry }] = catalogErrorProps.mock.calls[0] as [{ onRetry: () => void }];
+    const [{ onRetry }] = firstOf(catalogErrorProps.mock.calls);
+    assert.exists(onRetry, 'the Try again handler');
     onRetry();
     expect(retryCatalog).toHaveBeenCalledTimes(1);
   });
@@ -106,11 +104,11 @@ const fieldNamedByItsLabel = (container: FakeNode, labelText: string) => {
   const label = firstOf(findAll(
     container,
     (node) => node instanceof FakeElement && node.nodeName === 'LABEL' && node.textContent === labelText,
-  ) as FakeElement[]);
+  ).filter(isFakeElement));
   return firstOf(findAll(
     container,
     (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
-  ) as FakeElement[]);
+  ).filter(isFakeElement));
 };
 
 describe('Categories page search', () => {
@@ -138,9 +136,9 @@ describe('Categories page search', () => {
           node.nodeName === 'SECTION' &&
           findAll(node, (child) => child.nodeName === 'H2' && child.textContent === 'All Categories').length > 0,
       ));
-      return findAll(allCategories, (node) => node instanceof FakeElement && node.nodeName === 'A').map((node) =>
-        (node as FakeElement).getAttribute('href'),
-      );
+      return findAll(allCategories, (node) => node instanceof FakeElement && node.nodeName === 'A')
+        .filter(isFakeElement)
+        .map((node) => node.getAttribute('href'));
     };
     return { container, allCategoriesSectionLinks, type };
   };

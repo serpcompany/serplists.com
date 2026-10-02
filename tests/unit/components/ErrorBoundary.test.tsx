@@ -8,7 +8,7 @@ import { firstOf } from '../../support/elements';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorFallback } from '@/components/RouteErrorBoundary';
-import { click, createFakeContainer, FakeElement, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { click, createFakeContainer, elementOf, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
 
 let authUser: { id: string } | null = null;
 
@@ -20,11 +20,12 @@ type Props = React.ComponentProps<typeof ErrorBoundary>;
 
 function mountBoundaryDrivenLikeReact(props: Props) {
   const boundary = new ErrorBoundary(props);
-  boundary.setState = ((update: Partial<typeof boundary.state>) => {
+  boundary.setState = (update) => {
     const previous = boundary.state;
-    boundary.state = { ...boundary.state, ...update };
+    const next = typeof update === 'function' ? update(previous, boundary.props) : update;
+    boundary.state = { ...previous, ...next };
     boundary.componentDidUpdate(boundary.props, previous);
-  }) as typeof boundary.setState;
+  };
   return {
     boundary,
     crash: () => {
@@ -122,7 +123,7 @@ describe('ErrorBoundary', () => {
       expect(container.textContent).toContain('Something went wrong');
       expect(container.textContent).toContain('Go back');
       expect(container.textContent).toContain('Refresh Page');
-      const home = findByText(container, 'A', 'Go to home') as FakeElement;
+      const home = elementOf(findByText(container, 'A', 'Go to home'), 'the Go to home link');
       expect(home.getAttribute('href')).toBe('/');
 
       shellBroken = false;

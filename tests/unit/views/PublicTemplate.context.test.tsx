@@ -17,6 +17,7 @@ import {
 } from '../../support/publicTemplatePage';
 import { buildConsoleTemplatePath } from '@/lib/routes';
 import { navigation } from '../../support/nextNavigation';
+import { firstOf } from '../../support/elements';
 
 beforeAll(installNavigationWindow);
 afterAll(restoreNavigationWindow);
@@ -55,7 +56,7 @@ describe('PublicTemplate ownership context', () => {
   it('loads the template itself instead of reading the in-memory catalog', () => {
     renderPublishedRoute(publishedClipyTemplate);
 
-    const options = mockUseTemplateDetailModel.mock.calls[0]?.[0] as Record<string, unknown>;
+    const [options] = firstOf(mockUseTemplateDetailModel.mock.calls);
     expect(options).toEqual(
       expect.objectContaining({
         identifier: 'reviewed-clipy-checklist',
@@ -72,7 +73,7 @@ describe('PublicTemplate ownership context', () => {
 
     renderPublishedRoute(publishedClipyTemplate);
 
-    const options = mockUseTemplateDetailModel.mock.calls[0]?.[0] as Record<string, unknown>;
+    const [options] = firstOf(mockUseTemplateDetailModel.mock.calls);
     expect(options).toHaveProperty('teamId', undefined);
   });
 

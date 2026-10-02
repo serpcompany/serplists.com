@@ -3,7 +3,7 @@ import { assert, describe, expect, it } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { PasswordInput } from '@/components/auth/PasswordInput';
-import { click, FakeElement, findAll } from '../../fixtures/fakeDom';
+import { click, elementOf, FakeElement, findAll, isFakeElement } from '../../fixtures/fakeDom';
 
 const fakeDom = aFakeDomForEachTest();
 const mount = async () => {
@@ -14,15 +14,12 @@ const mount = async () => {
     </>,
   );
   const typePropertyOf = (id: string) =>
-    (
-      findAll(container, (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === id)[0] as FakeElement & {
-        type?: string;
-      }
+    elementOf(
+      findAll(container, (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === id)[0],
+      `the input ${id}`,
     ).type;
   const toggle = (name: string) =>
-    findAll(container, (node) => node instanceof FakeElement && node.nodeName === 'BUTTON' && node.getAttribute('aria-label') === name)[0] as
-      | FakeElement
-      | undefined;
+    findAll(container, (node) => node instanceof FakeElement && node.nodeName === 'BUTTON' && node.getAttribute('aria-label') === name).find(isFakeElement);
   const press = (name: string) => {
     const button = toggle(name);
     assert.exists(button, `a button named ${name}`);

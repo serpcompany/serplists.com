@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../support/elements';
 
 import Templates from '@/views/Templates';
+import { handlerIn } from '../../support/elementTree';
 
 const runDialog = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 vi.mock('@/components/ui/run-name-dialog', () => ({
@@ -130,7 +131,7 @@ describe('Templates page Start Run', () => {
     expect(runDialog.props).toEqual(
       expect.objectContaining({ loading: false, open: true, templateTitle: 'Vendor onboarding' }),
     );
-    await (runDialog.props?.onConfirm as (name: string) => Promise<void>)('Q3 vendor onboarding');
+    await handlerIn(runDialog.props, 'onConfirm')('Q3 vendor onboarding');
     expect(createRunFromTemplate).toHaveBeenCalledWith('Q3 vendor onboarding');
   });
 });

@@ -91,7 +91,7 @@ const expectPublicShape = (template: Record<string, unknown>) => {
   expect(template).not.toHaveProperty('deleted_at');
 };
 
-const templateRow = z.record(z.unknown());
+const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown() }).passthrough();
 const templateRows = z.array(templateRow);
 
 async function get<Output>(path: string, schema: ResponseSchema<Output>) {

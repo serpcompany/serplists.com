@@ -6,7 +6,7 @@ import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress'
 import { RunProgressPanel, RunTaskList } from '@/components/run-execution/RunProgressSidebar';
 import type { ChecklistSection } from '@/types/checklist';
 
-import { findAllElements } from '../../../support/elementTree';
+import { findAllElements, handlerOf } from '../../../support/elementTree';
 
 const sections: ChecklistSection[] = [
   {
@@ -48,7 +48,7 @@ describe('RunTaskList', () => {
     const rows = findAllElements(list(null, onSelectTask), (element) => element.type === 'button');
 
     expect(rows).toHaveLength(3);
-    (rows[2]?.props.onClick as () => void)();
+    handlerOf(rows[2], 'onClick')();
     expect(onSelectTask).toHaveBeenCalledWith('launch', 't3');
   });
 

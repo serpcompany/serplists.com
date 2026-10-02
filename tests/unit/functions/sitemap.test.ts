@@ -40,7 +40,7 @@ type SitemapRoute = { GET: (request: Request, context: { params: Promise<{ page:
 async function callTheRouteAsNextJsDoes(
   route: SitemapRoute,
   path: string,
-  options: { method?: string; params?: Record<string, string> } = {},
+  options: { method?: string; params?: { page?: string } } = {},
 ) {
   const page = options.params?.page;
   return route.GET(

@@ -8,7 +8,7 @@ import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
 import { objectContaining } from '../../../support/asymmetricMatchers';
 
-const runHistoryBody = z.object({ events: z.array(z.record(z.unknown())) }).passthrough();
+const runHistoryBody = z.object({ subject: z.unknown(), events: z.array(z.record(z.unknown())) }).passthrough();
 
 const readHistory = (query = '') => handleChecklists(apiRequest(`checklists/run-1/history${query}`), mockEnv);
 

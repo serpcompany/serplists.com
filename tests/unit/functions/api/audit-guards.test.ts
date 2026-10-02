@@ -4,7 +4,8 @@ import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../suppo
 import { apiErrorBody, readJson } from '../../../support/readJson';
 import type { StoredRow } from '../../../support/d1Doubles';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import { SQL } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { sqlExpression } from '../../../support/drizzleSql';
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -18,11 +19,6 @@ type Statement =
   | { kind: 'insert-select'; table: unknown; query: SQL };
 
 const builtStatements: Statement[] = [];
-
-function sqlIn(value: unknown): SQL {
-  if (value instanceof SQL) return value;
-  throw new Error(`Expected a drizzle SQL expression, but got ${typeof value}.`);
-}
 
 function queryOf(statement: Statement | undefined): SQL {
   if (statement?.kind !== 'insert-select') throw new Error(`Expected an INSERT ... SELECT, but got ${statement?.kind ?? 'nothing'}.`);
@@ -93,13 +89,13 @@ function recordTheStatementsEachWriteBuilds() {
   dbMocks.insertChain.values.mockImplementation((values) =>
     built({ kind: 'insert', table: dbMocks.db.insert.mock.lastCall?.[0], values }));
   dbMocks.insertChain.select.mockImplementation((query) =>
-    built({ kind: 'insert-select', table: dbMocks.db.insert.mock.lastCall?.[0], query: sqlIn(query) }));
+    built({ kind: 'insert-select', table: dbMocks.db.insert.mock.lastCall?.[0], query: sqlExpression(query) }));
   dbMocks.updateChain.where.mockImplementation((where) =>
     built({
       kind: 'update',
       table: dbMocks.db.update.mock.lastCall?.[0],
       values: dbMocks.updateChain.set.mock.lastCall?.[0],
-      where: sqlIn(where),
+      where: sqlExpression(where),
     }));
 }
 

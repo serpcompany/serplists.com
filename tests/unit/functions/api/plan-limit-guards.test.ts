@@ -3,7 +3,7 @@ import { firstOf } from '../../../support/elements';
 import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
 import { apiRequest } from '../../../support/apiRequest';
-import { jsonObject, readJson } from '../../../support/readJson';
+import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 
 vi.mock('@functions/api/utils/personal-run-key', () => ({
   authenticatePersonalRunKey: vi.fn(),
@@ -61,7 +61,7 @@ describe('limit-guarded writes that lose the race to another request answer 403 
     const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/restore', { method: 'POST' }), mockEnv);
 
     expect(response.status).toBe(403);
-    expect((await readJson(response, jsonObject)).code).toBe('limit_reached');
+    expect((await readJson(response, apiErrorBody)).code).toBe('limit_reached');
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
 
