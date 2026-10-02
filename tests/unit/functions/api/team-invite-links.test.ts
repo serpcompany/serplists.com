@@ -79,7 +79,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     const updates = storedChanges();
     expect(updates.token_hash).toBe(await sha256Hex(data.inviteToken));
     expect(updates.token_hash).not.toBe(data.inviteToken);
-    expect(Date.parse(updates.expires_at)).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect(Date.parse(String(updates.expires_at))).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect(updates.role).toBe("viewer");
   });
 

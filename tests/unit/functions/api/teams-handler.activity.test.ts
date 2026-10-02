@@ -5,6 +5,7 @@ import { dbMocks, mockEnv, resetTeamsHandlerMocks } from "../../../support/teams
 import { handleTeams } from "@functions/api/handlers/teams";
 import { readJson } from "../../../support/readJson";
 import { objectContaining } from "../../../support/asymmetricMatchers";
+import { teamActivityEventSchema } from "@/lib/schemas/historyResponses";
 
 const activityBody = z.array(z.object({ actor: z.record(z.unknown()) }).passthrough());
 
@@ -79,7 +80,7 @@ describe("Teams handler", () => {
 
     const response = await handleTeams(new Request("http://localhost/api/teams/team-1/activity"), mockEnv);
     const text = await response.text();
-    const data = JSON.parse(text) as Array<{ actor: Record<string, unknown> }>;
+    const data = z.array(teamActivityEventSchema).parse(JSON.parse(text));
 
     expect(response.status).toBe(200);
     expect(firstOf(data).actor).toEqual({ userId: null, email: null, name: null, username: null });

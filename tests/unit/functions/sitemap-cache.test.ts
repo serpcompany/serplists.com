@@ -4,11 +4,12 @@ import { firstOf } from '../../support/elements';
 
 import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
-import type { Env } from '../../../functions/api/types';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
 import { GET as profilesShardGet } from '@/app/sitemaps/profiles/[page]/route';
 import { GET as templatesShardGet } from '@/app/sitemaps/templates/[page]/route';
+import { apiEnv } from '../../support/apiEnv';
+import { D1DatabaseDouble, D1StatementDouble, d1Result } from '../../support/d1Doubles';
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
@@ -21,29 +22,30 @@ let publishedShards: Array<[string, number]>;
 let statements: string[];
 let cacheStore: Map<string, Response>;
 
-const envWithFixtureRevisionsAndEmptyShardBuilds = {
-  DB: {
-    prepare: (query: string) => {
-      statements.push(query);
-      let params: unknown[] = [];
-      const statement = {
-        bind: (...values: unknown[]) => { params = values; return statement; },
-        raw: async () => {
-          if (query.includes('from "sitemap_revisions"')) return revisions;
-          if (query.includes('from "sitemap_shard_revisions"')) {
-            return publishedShards
-              .filter(([kind, page]) => params[0] === kind && params[1] === page)
-              .map(([, page]) => [page]);
-          }
-          return [];
-        },
-        all: async () => ({ results: [] }),
-        run: async () => ({ success: true, meta: {}, results: [] }),
-      };
-      return statement;
-    },
-  },
-} as unknown as Env;
+class FixtureRevisionsStatement extends D1StatementDouble {
+  protected async allRows() {
+    return d1Result([]);
+  }
+
+  protected async rawRows(): Promise<unknown[][]> {
+    if (this.sql.includes('from "sitemap_revisions"')) return revisions;
+    if (this.sql.includes('from "sitemap_shard_revisions"')) {
+      return publishedShards
+        .filter(([kind, page]) => this.params[0] === kind && this.params[1] === page)
+        .map(([, page]) => [page]);
+    }
+    return [];
+  }
+}
+
+class FixtureRevisionsAndEmptyShardBuilds extends D1DatabaseDouble {
+  prepare(sql: string): FixtureRevisionsStatement {
+    statements.push(sql);
+    return new FixtureRevisionsStatement(sql);
+  }
+}
+
+const envWithFixtureRevisionsAndEmptyShardBuilds = apiEnv({ DB: new FixtureRevisionsAndEmptyShardBuilds() });
 
 function context(url: string, method = 'GET') {
   const pending: Promise<unknown>[] = [];

@@ -6,6 +6,7 @@ import { getSessionUserId } from '@functions/api/utils/session';
 import { paramValuesIn } from '../../../support/drizzleSql';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { textIn } from '../../../support/mcpResponses';
 
 const templateWithASlugTheMigrationBackfillsLeftUnstripped = () => ({
   id: 'template-1',
@@ -47,9 +48,9 @@ describe('Templates Handlers', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
-    expect(inserted.slug.length).toBeLessThanOrEqual(160);
-    expect(inserted.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    const insertedSlug = textIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug);
+    expect(insertedSlug.length).toBeLessThanOrEqual(160);
+    expect(insertedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
   it('keeps a conflict-suffixed slug within the slug limit on update', async () => {
@@ -66,7 +67,7 @@ describe('Templates Handlers', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const storedSlug = firstOf(dbMocks.updateChain.set.mock.calls)[0].slug;
+    const storedSlug = textIn(firstOf(dbMocks.updateChain.set.mock.calls)[0].slug);
     expect(storedSlug.length).toBeLessThanOrEqual(160);
     expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });

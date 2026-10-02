@@ -4,13 +4,14 @@ import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInM
 
 import { getSessionUserId } from '@functions/api/utils/session';
 import { captureTheEmailsSent, LOCAL_AUTH_ORIGIN, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { apiEnv } from '../../../support/apiEnv';
 
 const EMAIL = 'john@test.com';
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
   RESEND_API_KEY: 're_test_123',
-} as any;
+});
 
 async function userIdFor(cookie: string) {
   return getSessionUserId(new Request(`${LOCAL_AUTH_ORIGIN}/api/templates`, { headers: { Cookie: cookie } }), env);

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
 const BILLING_LIMIT_PER_MINUTE = 10;
 let ipCounter = 0;
 
 function buildEnv() {
-  return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+  return apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 }
 
 async function loadRouter() {

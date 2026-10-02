@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { elementAt, firstOf, onlyElement } from '../../../support/elements';
+import { elementAt, firstOf, onlyElement, taskIn } from '../../../support/elements';
 import { z } from 'zod';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import { columnNamesIn } from '../../../support/drizzleSql';
 import { storedSections, storedSectionsAsTheEditorResendsThem } from '../../../fixtures/editorResentSections';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 import { arrayContaining, objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn, jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
 const reconciledBody = z.object({ reconciledRuns: z.number() }).passthrough();
 
@@ -133,8 +134,8 @@ describe('Templates Handlers', () => {
     expect(data.success).toBe(true);
     expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(3);
     const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
-    const reconciledItems = JSON.parse(runUpdate.items);
-    expect(reconciledItems[0].items).toEqual([
+    const reconciledItems = storedSectionsIn(runUpdate.items);
+    expect(firstOf(reconciledItems).items).toEqual([
       objectContaining({
         id: 'item-1',
         title: 'Start with the renamed project',
@@ -154,7 +155,7 @@ describe('Templates Handlers', () => {
       template_version: 2,
       revision: 9,
     }));
-    expect(JSON.parse(secondRunUpdate.items)[0].items[0]).toEqual(objectContaining({
+    expect(taskIn(storedSectionsIn(secondRunUpdate.items), 0, 0)).toEqual(objectContaining({
       id: 'item-1',
       isCompleted: false,
       notes: 'Different progress',
@@ -199,8 +200,8 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
-    expect(JSON.parse(runUpdate.items)[1].items[1]).toEqual(objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
-    expect(JSON.parse(runUpdate.retired_items)).toEqual([]);
+    expect(taskIn(storedSectionsIn(runUpdate.items), 1, 1)).toEqual(objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(jsonRecordsIn(runUpdate.retired_items)).toEqual([]);
     expect(runUpdate.progress).toBe(33);
   });
 
@@ -310,8 +311,8 @@ describe('Templates Handlers', () => {
     });
 
     it('still reconciles active runs when the checklist structure changes', async () => {
-      const reordered = JSON.parse(JSON.stringify(storedSectionsAsTheEditorResendsThem));
-      reordered[0].items.reverse();
+      const reordered = structuredClone(storedSectionsAsTheEditorResendsThem);
+      firstOf(reordered).items.reverse();
       dbMocks.selectChain.orderBy.mockResolvedValueOnce([
         { id: 'run-1', items: JSON.stringify(storedSections), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
       ]);
@@ -322,7 +323,7 @@ describe('Templates Handlers', () => {
       expect(response.status).toBe(200);
       expect(data).toEqual(objectContaining({ structureChanged: true, reconciledRuns: 1, content_version: 3, version: 4 }));
       expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(objectContaining({ content_version: 3, version: 4 }));
-      expect(JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)[0].items.map((item: { id: string }) => item.id))
+      expect(firstOf(storedSectionsIn(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)).items.map((item) => item.id))
         .toEqual(['item-2', 'item-1']);
       expect(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0]).toEqual(objectContaining({ template_version: 3, revision: 2 }));
     });
@@ -331,8 +332,8 @@ describe('Templates Handlers', () => {
         ...section,
         items: section.items.filter((item) => item.id !== 'item-2'),
       }));
-      const annotatedRun = JSON.parse(JSON.stringify(storedSections));
-      annotatedRun[0].items[1] = { ...annotatedRun[0].items[1], isCompleted: true, notes: 'Registrar login is in vault X' };
+      const annotatedRun = storedSectionsIn(JSON.stringify(storedSections));
+      Object.assign(taskIn(annotatedRun, 0, 1), { isCompleted: true, notes: 'Registrar login is in vault X' });
       const runAlreadyMatchingTheNewStructure = reconcileRunSections(storedSections, withoutPublish, []).sections;
       dbMocks.selectChain.orderBy.mockResolvedValueOnce([
         { id: 'run-1', items: JSON.stringify(annotatedRun), retired_items: '[]', status: 'in_progress', is_public: false, revision: 4 },
@@ -351,7 +352,7 @@ describe('Templates Handlers', () => {
       expect(guardedInserts).toHaveLength(1);
       const { sql: insertSql, params } = onlyElement(guardedInserts);
       expect(params).toEqual(arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
-      const metadata = JSON.parse(params.find((param) => typeof param === 'string' && param.includes('"retired"')) as string);
+      const metadata = jsonRecordIn(params.find((param) => typeof param === 'string' && param.includes('"retired"')));
       expect(metadata).toEqual(objectContaining({
         templateId: 'template-1',
         templateVersion: 3,
@@ -366,7 +367,7 @@ describe('Templates Handlers', () => {
       expect(statements).toHaveLength(6);
       expect(statements[3]).toEqual({ kind: 'conditional-insert' });
       expect(statements[4]).toBe(dbMocks.updateChain);
-      expect(JSON.parse(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0].retired_items)).toEqual([
+      expect(jsonRecordsIn(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0].retired_items)).toEqual([
         objectContaining({ kind: 'item', item: objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),
       ]);
     });

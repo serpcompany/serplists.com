@@ -71,7 +71,7 @@ describe("verifyStripeWebhookSignature", () => {
 
 describe("stripePostForm", () => {
   it("forwards an idempotency key without putting it in the request body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ id: "cs_test" }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -84,8 +84,8 @@ describe("stripePostForm", () => {
     });
 
     const [, options] = firstOf(fetchMock.mock.calls);
-    expect(options.headers["Idempotency-Key"]).toBe("checkout-user-1-window");
-    expect(options.body).toBe("mode=subscription");
+    expect(new Headers(options?.headers).get("Idempotency-Key")).toBe("checkout-user-1-window");
+    expect(options?.body).toBe("mode=subscription");
   });
 
   it("returns the reply its schema parsed, and refuses a reply the schema does not describe", async () => {
@@ -101,15 +101,15 @@ describe("stripePostForm", () => {
 
 describe("stripeGet", () => {
   it("sends an authorized GET and returns the parsed body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "sub_1" }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ id: "sub_1" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(stripeGet("sk_test_example", "/v1/subscriptions/sub_1")).resolves.toEqual({ id: "sub_1" });
 
     const [url, options] = firstOf(fetchMock.mock.calls);
     expect(url).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
-    expect(options.method).toBe("GET");
-    expect(options.headers.Authorization).toBe("Bearer sk_test_example");
+    expect(options?.method).toBe("GET");
+    expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer sk_test_example");
   });
 
   it("parses Stripe's error type, code, and param, and keeps its message text out of logs", async () => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
 import { serverContext } from '../../../support/nextServerContext';
+import { InMemoryR2Bucket } from '../../../support/r2Bucket';
 
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
 
@@ -13,36 +14,15 @@ const METHODS = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'] as 
 type RouteHandler = (request: Request) => Promise<Response>;
 type RouteModule = Record<(typeof METHODS)[number], RouteHandler>;
 
-function fakeR2Bucket() {
-  return {
-    head: vi.fn(async (key: string) =>
-      key === FILE_KEY
-        ? {
-            key: FILE_KEY,
-            size: FILE_SIZE,
-            etag: 'etag-1',
-            httpEtag: '"etag-1"',
-            writeHttpMetadata: (headers: Headers) => headers.set('Content-Type', 'image/png'),
-          }
-        : null,
-    ),
-    get: vi.fn(async () => null),
-    put: vi.fn(),
-    delete: vi.fn(),
-  };
-}
-
 function useEnv() {
-  const env = {
-    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-    R2_UPLOADS: fakeR2Bucket(),
-  };
-  serverContext.env = env;
-  return env;
+  const bucket = new InMemoryR2Bucket([{ key: FILE_KEY, bytes: new Uint8Array(FILE_SIZE), contentType: 'image/png', etag: 'etag-1' }]);
+  const get = vi.spyOn(bucket, 'get');
+  serverContext.env = { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!', R2_UPLOADS: bucket };
+  return { get };
 }
 
 async function loadRoute(): Promise<RouteModule> {
-  return (await import('../../../../src/app/api/[[...route]]/route')) as unknown as RouteModule;
+  return import('../../../../src/app/api/[[...route]]/route');
 }
 
 async function callTheHandlerExportedForItsMethod(request: Request): Promise<Response> {
@@ -92,7 +72,7 @@ describe('API route handler methods, which send every /api/* request to the API 
 
   it("answers HEAD for an upload with the file's headers and without reading it", async () => {
     silenceRequestLog();
-    const env = useEnv();
+    const { get } = useEnv();
 
     const response = await callTheHandlerExportedForItsMethod(
       new Request(`${HOST}/api/uploads/file?key=${encodeURIComponent(FILE_KEY)}`, { method: 'HEAD' }),
@@ -102,7 +82,7 @@ describe('API route handler methods, which send every /api/* request to the API 
     expect(response.headers.get('Content-Type')).toBe('image/png');
     expect(response.headers.get('Content-Length')).toBe(String(FILE_SIZE));
     expect(await response.text()).toBe('');
-    expect(env.R2_UPLOADS.get).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('answers PATCH from the API instead of a page', async () => {

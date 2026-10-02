@@ -9,9 +9,9 @@ import {
   validTemplateSlugCondition,
   validUsernameCondition,
 } from '../../../functions/sitemap/shared';
-import type { Env } from '../../../functions/api/types';
 import { templates, users } from '../../../db/schema/index';
 import { SqliteD1 } from '../../support/sqlite-d1';
+import { apiEnv } from '../../support/apiEnv';
 
 function categoryDatabase(): SqliteD1 {
   return new SqliteD1({ schemaSql: [`
@@ -40,7 +40,7 @@ function addPublicTemplate(
 }
 
 async function categoryPaths(db: SqliteD1): Promise<string[]> {
-  const entries = await loadCategoryEntries({ DB: db.binding } as unknown as Env);
+  const entries = await loadCategoryEntries(apiEnv({ DB: db.binding }));
   return entries.map((entry) => entry.path);
 }
 
@@ -94,7 +94,7 @@ describe('public Template rule for the sitemaps', () => {
     insert.run('team-row-without-team', 'team', null, 1, null);
     insert.run('team-row-with-blank-team', 'team', '', 1, null);
 
-    const rows = await createDb({ DB: db.binding } as unknown as Env)
+    const rows = await createDb(apiEnv({ DB: db.binding }))
       .select({ id: templates.id })
       .from(templates)
       .where(publicTemplateCondition)
@@ -112,7 +112,7 @@ describe('public URL rules for the sitemaps', () => {
     const db = new SqliteD1({ schemaSql: ['CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE templates (id TEXT PRIMARY KEY, slug TEXT);'] });
     usernames.forEach((username, index) => db.sqlite.prepare('INSERT INTO users (id, username) VALUES (?, ?)').run(`user-${index}`, username));
     slugs.forEach((slug, index) => db.sqlite.prepare('INSERT INTO templates (id, slug) VALUES (?, ?)').run(`template-${index}`, slug));
-    const queries = createDb({ DB: db.binding } as unknown as Env);
+    const queries = createDb(apiEnv({ DB: db.binding }));
 
     const usernameRows = await queries.select({ username: users.username }).from(users).where(validUsernameCondition);
     const slugRows = await queries.select({ slug: templates.slug }).from(templates).where(validTemplateSlugCondition);

@@ -1,16 +1,26 @@
 import { vi } from 'vitest';
 
+type Row = Record<string, unknown>;
+type ChainStep = (...args: unknown[]) => unknown;
+type Condition = (condition: unknown) => unknown;
+
 export function drizzleChainMocks() {
-  const selectChain = { from: vi.fn(), leftJoin: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
-  const insertChain = { values: vi.fn(), select: vi.fn(), onConflictDoNothing: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn(), returning: vi.fn() };
-  const deleteChain = { where: vi.fn() };
+  const selectChain = {
+    from: vi.fn<ChainStep>(),
+    leftJoin: vi.fn<ChainStep>(),
+    where: vi.fn<Condition>(),
+    orderBy: vi.fn<ChainStep>(),
+    limit: vi.fn<(count: number) => unknown>(),
+  };
+  const insertChain = { values: vi.fn<(row: Row) => unknown>(), select: vi.fn<ChainStep>(), onConflictDoNothing: vi.fn<ChainStep>() };
+  const updateChain = { set: vi.fn<(values: Row) => unknown>(), where: vi.fn<Condition>(), returning: vi.fn<ChainStep>() };
+  const deleteChain = { where: vi.fn<Condition>() };
   const db = {
     select: vi.fn((_fields?: unknown) => selectChain),
     insert: vi.fn((_table?: unknown) => insertChain),
     update: vi.fn((_table?: unknown) => updateChain),
     delete: vi.fn((_table?: unknown) => deleteChain),
-    batch: vi.fn(),
+    batch: vi.fn<(statements: unknown[]) => unknown>(),
   };
   return { selectChain, insertChain, updateChain, deleteChain, db };
 }

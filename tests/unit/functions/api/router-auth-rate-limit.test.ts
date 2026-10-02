@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { elementAt } from '../../../support/elements';
 import { aFreshIp, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
 
 function buildEnv() {
-  return {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     RESEND_API_KEY: 're_test_key',
-  } as any;
+  });
 }
 
 async function loadRouter() {

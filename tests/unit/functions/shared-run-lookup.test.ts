@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadSharedRunTitle } from '../../../functions/seo/shared-run-lookup';
-import type { Env } from '../../../functions/api/types';
 import { SqliteD1 } from '../../support/sqlite-d1';
+import { apiEnv } from '../../support/apiEnv';
 
 const NOW = '2026-09-30T00:00:00.000Z';
 
 describe('loadSharedRunTitle', () => {
   let database: SqliteD1;
-  const env = () => ({ DB: database.binding }) as unknown as Env;
+  const env = () => apiEnv({ DB: database.binding });
 
   const addRun = (id: string, { isPublic = 1, deletedAt = null as string | null } = {}) =>
     database.sqlite

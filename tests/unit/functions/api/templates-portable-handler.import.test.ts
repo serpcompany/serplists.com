@@ -15,6 +15,7 @@ import { activeMember } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 import { objectContaining, stringContaining } from '../../../support/asymmetricMatchers';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 const ONE_ITEM_CHECKLIST = [{ title: 'Checklist', items: [{ title: 'Item' }] }];
 
@@ -243,7 +244,7 @@ describe('portable template import/export API', () => {
       expect(summary.successes).toEqual([objectContaining({ index: 1, title: 'Old export' })]);
       expect(summary.failed).toEqual([objectContaining({ index: 0, title: 'No tasks', code: 'invalid_sections' })]);
       const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
-      expect(JSON.parse(inserted.items)[0]).toEqual(objectContaining({ title: 'Section 1' }));
+      expect(firstOf(storedSectionsIn(inserted.items))).toEqual(objectContaining({ title: 'Section 1' }));
     });
   });
 });

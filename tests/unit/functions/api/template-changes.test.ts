@@ -15,7 +15,7 @@ import type { ChecklistSection } from '@/types/checklist';
 import type { PortableChecklistTemplate } from '@/lib/schemas/checklistSchema';
 import { storedSections, storedSectionsAsTheEditorResendsThem } from '../../../fixtures/editorResentSections';
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const clone = <T>(value: T): T => structuredClone(value);
 const changed = (stored: unknown[], incoming: unknown[]) =>
   templateStructureChanged(stored, assignMissingStableTemplateIdentities(incoming, stored));
 
@@ -83,7 +83,7 @@ describe('templateStructureChanged after an editor round trip of content blocks 
       buildTemplateEditorFormValues({ title: 'Technical SEO Audit', sections: loaded }),
     );
     const { sections } = applyTemplateSaveDefaults(form.title, form.sections as ChecklistSection[]);
-    return JSON.parse(JSON.stringify(sections)) as unknown[];
+    return structuredClone(sections);
   };
 
   it('treats a save of stored id-less content blocks as unchanged', () => {

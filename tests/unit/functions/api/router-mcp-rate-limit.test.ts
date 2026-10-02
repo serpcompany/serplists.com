@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFreshIp, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
 
 const WRITE_LIMIT_PER_MINUTE = 120;
 const MCP_RUN_KEY_LIMIT_PER_MINUTE = 120;
 const MCP_IP_LIMIT_PER_MINUTE = 240;
 
 function buildEnv() {
-  return {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     PERSONAL_RUN_MCP_ENABLED: 'true',
-  } as any;
+  });
 }
 
 async function loadRouter() {

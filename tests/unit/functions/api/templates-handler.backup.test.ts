@@ -8,6 +8,7 @@ import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { ONE_SECTION_WITH_ONE_ITEM, templateRowToExport } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
+import { objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 
 const exportBody = z.object({ templates: z.array(z.record(z.unknown())) }).passthrough();
 const importFailedError = apiErrorBody.extend({
@@ -128,11 +129,11 @@ describe('Templates Handlers', () => {
     expect(data.code).toBe('template_import_failed');
     expect(data.details.imported).toBe(0);
     expect(data.details.failed).toEqual([
-      expect.objectContaining({ index: 0, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
-      expect.objectContaining({ index: 1, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
-      expect.objectContaining({ index: 2, code: 'invalid_sections', reason: expect.stringMatching(/task 2 in section 1/i) }),
-      expect.objectContaining({ index: 3, code: 'invalid_sections', reason: expect.stringMatching(/section 2/i) }),
-      expect.objectContaining({ index: 4, code: 'invalid_sections', reason: expect.stringMatching(/sub-task 1 of task 1 in section 1/i) }),
+      objectContaining({ index: 0, code: 'invalid_sections', reason: stringMatching(/task 1 in section 1/i) }),
+      objectContaining({ index: 1, code: 'invalid_sections', reason: stringMatching(/task 1 in section 1/i) }),
+      objectContaining({ index: 2, code: 'invalid_sections', reason: stringMatching(/task 2 in section 1/i) }),
+      objectContaining({ index: 3, code: 'invalid_sections', reason: stringMatching(/section 2/i) }),
+      objectContaining({ index: 4, code: 'invalid_sections', reason: stringMatching(/sub-task 1 of task 1 in section 1/i) }),
     ]);
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });

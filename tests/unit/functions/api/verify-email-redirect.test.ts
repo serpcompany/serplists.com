@@ -11,16 +11,16 @@ import {
   getLoginNotice,
 } from "@/lib/auth/loginNotice";
 import { getReturnPath } from "@/lib/auth/returnPath";
+import { apiEnv } from "../../../support/apiEnv";
 
 const SECRET = "better-auth-secret-with-32-characters!!";
 
 function buildEnv() {
-  return {
+  return apiEnv({
     BETTER_AUTH_SECRET: SECRET,
     AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
     RESEND_API_KEY: "re_test_123",
-    DB: {},
-  } as any;
+  });
 }
 
 async function visitVerificationLink(token: string) {

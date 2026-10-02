@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, silenceRequestLog } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
 
 const MB = 1024 * 1024;
 const HANDLER_MODULES = {
@@ -11,7 +12,7 @@ const HANDLER_MODULES = {
 } as const;
 
 function buildEnv() {
-  return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+  return apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 }
 
 function chunkedBody(totalBytes: number): ReadableStream<Uint8Array> {

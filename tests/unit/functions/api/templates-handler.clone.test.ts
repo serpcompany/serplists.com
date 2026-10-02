@@ -8,6 +8,7 @@ import { activeMember, publicTemplateSource } from '../../../fixtures/handlerRow
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 import { anyInstanceOf, objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const publicSource = publicTemplateSource({ created_at: new Date().toISOString() });
 
@@ -84,8 +85,8 @@ describe('Templates Handlers', () => {
       const auditRow = inserted.find((values) => values.action === 'template.cloned');
       expect(templateRow).toEqual(objectContaining({ version: 1, content_version: 1 }));
       expect(versionRow).toEqual(objectContaining({ version: 1, change_summary: 'template.cloned' }));
-      expect(JSON.parse(versionRow.snapshot_json)).toEqual(objectContaining({ version: 1, content_version: 1 }));
-      expect(JSON.parse(auditRow.metadata_json)).toEqual({ sourceTemplateId: 'template-1', sourceVersion: 37, sourceContentVersion: 12 });
+      expect(jsonRecordIn(versionRow?.snapshot_json)).toEqual(objectContaining({ version: 1, content_version: 1 }));
+      expect(jsonRecordIn(auditRow?.metadata_json)).toEqual({ sourceTemplateId: 'template-1', sourceVersion: 37, sourceContentVersion: 12 });
     });
   });
 

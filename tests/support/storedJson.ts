@@ -14,6 +14,8 @@ export const storedSections = z.array(z.object({ items: z.array(storedTask) }).p
 
 export type StoredSections = z.output<typeof storedSections>;
 
+export type StoredTask = z.output<typeof storedTask>;
+
 export function parseJsonText<Output>(text: unknown, schema: ResponseSchema<Output>): Output {
   return schema.parse(JSON.parse(z.string().parse(text)));
 }

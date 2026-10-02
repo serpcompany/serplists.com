@@ -7,6 +7,7 @@ import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHa
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
 import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
+import { jsonRecordIn } from "../../../support/storedJson";
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -101,7 +102,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const body = await response.text();
 
     expect(response.status).toBe(403);
-    expect(JSON.parse(body).code).toBe("invite_email_mismatch");
+    expect(jsonRecordIn(body).code).toBe("invite_email_mismatch");
     expect(body).not.toContain("Acme Corp");
     expect(body).not.toContain("owner@example.com");
     expectNoWrites();

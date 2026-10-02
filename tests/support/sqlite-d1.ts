@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import { allRowsAsArrays } from "./sqliteRowArrays";
+import { D1StatementDouble } from "./d1Doubles";
 
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
@@ -38,40 +39,26 @@ function toSqliteValue(value: unknown): SQLInputValue {
   throw new TypeError(`D1 cannot bind a value of type ${typeof value}`);
 }
 
-class SqliteD1Statement implements D1PreparedStatement {
+class SqliteD1Statement extends D1StatementDouble {
   constructor(
     private readonly database: SqliteD1,
-    readonly sql: string,
-    readonly params: unknown[] = [],
-  ) {}
+    sql: string,
+    params: unknown[] = [],
+  ) {
+    super(sql, params);
+  }
 
-  bind(...params: unknown[]): SqliteD1Statement {
+  protected override boundTo(params: unknown[]): SqliteD1Statement {
     return new SqliteD1Statement(this.database, this.sql, params);
   }
 
-  all<T = Row>(): Promise<D1Result<T>>;
-  async all(): Promise<SqliteD1Result> {
+  protected async allRows(): Promise<SqliteD1Result> {
     return this.database.execute(this, false);
   }
 
-  run<T = Row>(): Promise<D1Result<T>>;
-  async run(): Promise<SqliteD1Result> {
-    return this.database.execute(this, false);
-  }
-
-  raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
-  raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
-  async raw(options?: { columnNames?: boolean }): Promise<unknown[][]> {
+  protected async rawRows(columnNames: boolean): Promise<unknown[][]> {
     const { columns, results } = this.database.execute(this, true);
-    return options?.columnNames ? [columns, ...results] : results;
-  }
-
-  first<T = unknown>(column: string): Promise<T | null>;
-  first<T = Row>(): Promise<T | null>;
-  async first(column?: string): Promise<unknown> {
-    const [row] = this.database.execute(this, false).results;
-    if (!row) return null;
-    return column ? row[column] : row;
+    return columnNames ? [columns, ...results] : results;
   }
 }
 

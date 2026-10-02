@@ -17,6 +17,7 @@ import { apiRequest } from '../../../support/apiRequest';
 import { columnNamesIn } from '../../../support/drizzleSql';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 import { anyInstanceOf } from '../../../support/asymmetricMatchers';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 const postTemplate = (body: Record<string, unknown>) => handleTemplates(apiRequest('templates', 'POST', body), mockEnv);
 
@@ -51,11 +52,11 @@ describe('Templates Handlers', () => {
     expect(data.slug).toBeDefined();
 
     const inserted = insertedTemplate();
-    const storedItems = JSON.parse(inserted.items);
+    const storedItems = storedSectionsIn(inserted.items);
     const personalLimitPredicate = firstOf(dbMocks.selectChain.where.mock.calls)[0];
     const personalLimitColumns = columnNamesIn(personalLimitPredicate);
     expect(Array.isArray(storedItems)).toBe(true);
-    expect(storedItems[0].items).toHaveLength(1);
+    expect(firstOf(storedItems).items).toHaveLength(1);
     expect(inserted.version).toBe(1);
     expect(inserted.updated_at).toEqual(anyInstanceOf(String));
     expect(inserted.updated_at).toBe(inserted.created_at);

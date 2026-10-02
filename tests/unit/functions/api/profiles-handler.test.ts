@@ -8,13 +8,15 @@ import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { handleProfileById, handleProfileByUsername } from '@functions/api/handlers/auth';
 import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const profileBody = z.object({ id: z.string(), username: z.string() }).passthrough();
 
 const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(firstOf(dbMocks.selectChain.where.mock.calls)[0] as SQL).sql;
 
 describe('Profiles Handlers', () => {
-  let mockEnv: any;
+  let mockEnv: Env;
 
   beforeEach(() => {
     dbMocks.db.select.mockReturnValue(dbMocks.selectChain);
@@ -22,10 +24,7 @@ describe('Profiles Handlers', () => {
     dbMocks.selectChain.where.mockClear();
     dbMocks.selectChain.limit.mockReset();
 
-    mockEnv = {
-      DB: {},
-      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-    };
+    mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
   });
 
   it('GET /api/profiles/by-username requires username', async () => {

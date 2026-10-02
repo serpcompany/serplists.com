@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, sendToAFreshApiWorker, silenceLogs } from '../../../support/apiRouter';
 import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv, withoutVars, type OptionalEnvVar } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
 let ipCounter = 0;
 
-function buildEnv(overrides: Record<string, unknown> = {}) {
-  return {
+function buildEnv(overrides: Partial<Env> = {}, without: readonly OptionalEnvVar[] = []) {
+  const env = apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     FRONTEND_URL: DEPLOYED_HOST,
     RESEND_API_KEY: 're_test_key',
     ...overrides,
-  } as any;
+  });
+  return withoutVars(env, without);
 }
 
 function authPost(path: string, init: { body?: string; headers?: Record<string, string>; ip?: string } = {}) {
@@ -86,7 +89,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
   it('sends a readable 503 when auth email cannot be sent', async () => {
     const response = await send(
       authPost('auth/request-password-reset', { body: JSON.stringify({ email: 'person@example.com' }) }),
-      buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', RESEND_API_KEY: undefined }),
+      buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'true' }, ['RESEND_API_KEY']),
     );
 
     await expectAuthErrorBody(response, 503, 'auth_email_unavailable');

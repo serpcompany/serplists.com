@@ -37,7 +37,7 @@ const stored: Json[] = [
 ];
 
 function copy<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return structuredClone(value);
 }
 
 function guest(sections: unknown) {

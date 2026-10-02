@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { contentAt, firstOf, present } from '../../../support/elements';
 import { jsonObject, readJson, readSuccessfulJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
@@ -33,6 +33,7 @@ import type { TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
 import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
+import { jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
 type Row = Record<string, unknown>;
 
@@ -110,8 +111,9 @@ function serveFromAndWriteBatchesTo(store: Store) {
     ...dbMocks.updateChain,
     set: vi.fn((values: Row) => ({ where: () => ({ table, values }) })),
   }));
-  dbMocks.db.batch.mockImplementation(async (statements: Array<{ table?: unknown; values?: Row }>) => {
+  dbMocks.db.batch.mockImplementation(async (statements) => {
     for (const statement of statements) {
+      if (typeof statement !== 'object' || statement === null || !('table' in statement) || !('values' in statement)) continue;
       if (statement.table === schema.templates) Object.assign(store.template, statement.values);
       if (statement.table === schema.checklist_runs) Object.assign(store.run, statement.values);
     }
@@ -167,11 +169,11 @@ const withTaskTitle = (values: TemplateEditorFormValues, itemIndex: number, titl
   }),
 });
 
-const storedIds = (items: unknown): string[] => (JSON.parse(String(items)) as Row[]).flatMap((section) => [
+const storedIds = (items: unknown): string[] => storedSectionsIn(items).flatMap((section) => [
   String(section.id),
-  ...(section.items as Row[]).flatMap((item) => [
+  ...section.items.flatMap((item) => [
     String(item.id),
-    ...((item.contents as Row[] | undefined) ?? []).flatMap((content) => (content.subItems as Row[]).map((subItem) => String(subItem.id))),
+    ...(item.contents ?? []).flatMap((content) => present(content.subItems, 'the sub-tasks').map((subItem) => String(subItem.id))),
   ]),
 ]);
 
@@ -196,20 +198,20 @@ describe('saving a Template stored without ids the API accepts, which the editor
     const afterFirst = await saveAndRebaseAsTheEditorDoes(opened, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
     const idsAfterFirst = storedIds(store.template.items);
     expect(responses[0]).toMatchObject({ structureChanged: true, content_version: 4 });
-    expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
+    expect(jsonRecordsIn(store.run.retired_items)).toEqual([]);
 
     await saveAndRebaseAsTheEditorDoes(afterFirst, withTaskTitle(afterFirst.loaded.initialValues, 2, 'Write and send the report'));
 
     expect(responses[1]).toMatchObject({ structureChanged: true, content_version: 5, reconciledRuns: 1 });
     const idsTheSecondSaveFoundAgain = storedIds(store.template.items);
     expect(idsTheSecondSaveFoundAgain).toEqual(idsAfterFirst);
-    expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
-    const section = firstOf(JSON.parse(String(store.run.items)) as Row[]);
-    const tasks = section.items as Row[];
+    expect(jsonRecordsIn(store.run.retired_items)).toEqual([]);
+    const section = firstOf(storedSectionsIn(store.run.items));
+    const tasks = section.items;
     const [, review, report] = tasks;
     const crawl = firstOf(tasks);
     expect(crawl).toMatchObject({ isCompleted: true, notes: 'Crawled with the new rules' });
-    expect((firstOf(crawl.contents as Row[]).subItems as Row[]).map((subItem) => subItem.isCompleted)).toEqual([true, true]);
+    expect(present(contentAt(crawl, 0).subItems, 'the sub-tasks').map((subItem) => subItem.isCompleted)).toEqual([true, true]);
     expect(review).toMatchObject({ title: 'Review on-page SEO issues', isCompleted: false });
     expect(report).toMatchObject({ title: 'Write and send the report', isCompleted: true });
     expect(store.run.progress).toBe(Math.round((4 / 7) * 100));

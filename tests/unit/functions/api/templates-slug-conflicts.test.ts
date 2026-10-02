@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const slugBody = z.object({ slug: z.string() }).passthrough();
 const importBody = z
@@ -44,8 +45,8 @@ const rowsOfOneAttempt = z.tuple([
 function expectAttemptCarries(attempt: unknown, slug: string) {
   const [template, version, audit] = rowsOfOneAttempt.parse(attempt);
   expect(template.slug).toBe(slug);
-  expect(JSON.parse(version.snapshot_json).slug).toBe(slug);
-  expect(JSON.parse(audit.after_json).slug).toBe(slug);
+  expect(jsonRecordIn(version.snapshot_json).slug).toBe(slug);
+  expect(jsonRecordIn(audit.after_json).slug).toBe(slug);
 }
 
 describe('template slugs claimed between the check and the write, which the unique slug index then refuses', () => {

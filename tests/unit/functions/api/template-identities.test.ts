@@ -8,6 +8,7 @@ import {
   assignMissingStableTemplateIdentities,
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
+import { jsonRecordsIn } from '../../../support/storedJson';
 
 type Row = Record<string, unknown>;
 
@@ -126,7 +127,7 @@ describe('withStableTemplateIdentities', () => {
   });
 
   it('lets an editor that sends the ids back save without renumbering or a structure change, then and on the next load and save', () => {
-    const stored = JSON.parse(JSON.stringify(storedSectionsWithNumericBlankOrMissingIds)) as unknown[];
+    const stored = structuredClone(storedSectionsWithNumericBlankOrMissingIds);
     const loaded = withStableTemplateIdentities(stored);
 
     const saved = assignMissingStableTemplateIdentities(loaded, stored);
@@ -145,7 +146,7 @@ describe('withStableItemsColumn', () => {
 
     expect(withStableItemsColumn(complete)).toBe(complete);
     expect(withStableItemsColumn('not json')).toBe('not json');
-    expect(idsInNumberingOrder(JSON.parse(withStableItemsColumn(JSON.stringify(storedSectionsWithNumericBlankOrMissingIds))))).toEqual(
+    expect(idsInNumberingOrder(jsonRecordsIn(withStableItemsColumn(JSON.stringify(storedSectionsWithNumericBlankOrMissingIds))))).toEqual(
       idsInNumberingOrder(assignMissingStableTemplateIdentities(storedSectionsWithNumericBlankOrMissingIds)),
     );
   });

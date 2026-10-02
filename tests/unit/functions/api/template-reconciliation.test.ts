@@ -8,6 +8,7 @@ import {
 } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
 import { objectContaining } from '../../../support/asymmetricMatchers';
+import type { StoredTask } from '../../../support/storedJson';
 
 const originalRun = [
   {
@@ -284,7 +285,7 @@ describe('template run reconciliation', () => {
   });
 
   describe('task completion follows its Sub-tasks', () => {
-    type Json = Record<string, any>;
+    type Json = Record<string, unknown>;
     const subTasks = (...entries: Array<[string, boolean?]>) =>
       entries.map(([id, isCompleted]) => ({ id, title: id, ...(isCompleted === undefined ? {} : { isCompleted }) }));
     const block = (subItems: Json[]) => ({ type: 'subItems', value: '', subItems });
@@ -296,14 +297,14 @@ describe('template run reconciliation', () => {
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
       taskIn(sectionsOf(reconcileRunSections(previous, next, [])), 0, 0);
-    const subTasksBlockRows = (item: Json): Json[] => (item.contents ?? [])
-      .filter((content: Json) => content.type === 'subItems')
-      .flatMap((content: Json) => content.subItems ?? []);
+    const subTasksBlockRows = (item: StoredTask): Json[] => (item.contents ?? [])
+      .filter((content) => content.type === 'subItems')
+      .flatMap((content) => content.subItems ?? []);
 
     it('reopens a completed task when the template adds a Sub-task to it', () => {
       const previous = run(true, subTasks(['short', true], ['long', true]));
       const result = reconcileRunSections(previous, template(subTasks(['short'], ['long'], ['tagline'])), []);
-      const task: Json = taskIn(sectionsOf(result), 0, 0);
+      const task = taskIn(sectionsOf(result), 0, 0);
 
       expect(task.isCompleted).toBe(false);
       expect(subTasksBlockRows(task).map((subItem) => [subItem.id, subItem.isCompleted]))

@@ -2,14 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import { jsonRecordIn } from '../../../support/storedJson';
+import type { Env } from '@functions/api/types';
 
 const requestIdBody = z.object({ requestId: z.string() }).passthrough();
 
-function buildEnv(overrides?: Record<string, unknown>) {
-  return {
+function buildEnv(overrides: Partial<Env> = {}) {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
-  } as any;
+  });
 }
 
 const aRouterWithTheMcpHandlerMocked = async () => {
@@ -44,7 +47,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
 
     const response = await apiWorker.fetch(new Request('http://localhost/api/templates'), buildEnv());
 
-    const logged = lines.map((line) => JSON.parse(line) as { message: string; requestId?: string });
+    const logged = lines.map((line) => jsonRecordIn(line));
     expect(logged.find((entry) => entry.message === 'handler_line')?.requestId).toBe(response.headers.get('X-Request-Id'));
   });
 
@@ -102,7 +105,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
     const { apiWorker, handleAgentMcp } = await aRouterWithTheMcpHandlerMocked();
     const response = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
-      {} as any,
+      apiEnv(),
     );
 
     expect(response.status).toBe(404);

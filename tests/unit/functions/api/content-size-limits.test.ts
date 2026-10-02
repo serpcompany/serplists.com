@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { firstOf, onlyElement } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from '@/lib/schemas/contentLimits';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 type Task = Record<string, unknown>;
 
@@ -123,7 +124,7 @@ describe('Template content limit', () => {
     expect(data).toEqual(expect.objectContaining({ structureChanged: true, reconciledRuns: 1 }));
     const runUpdates = dbMocks.updateChain.set.mock.calls.map(([values]) => values).filter((values) => 'retired_items' in values);
     expect(runUpdates).toHaveLength(1);
-    expect(contentSaveBytes(JSON.parse(runUpdates[0].items))).toBeLessThan(templateBytes + 5000);
+    expect(contentSaveBytes(storedSectionsIn(onlyElement(runUpdates).items))).toBeLessThan(templateBytes + 5000);
   });
 });
 

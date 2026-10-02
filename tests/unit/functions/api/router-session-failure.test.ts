@@ -1,12 +1,14 @@
 import { APIError } from 'better-auth/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
+import { apiEnv } from '../../../support/apiEnv';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const HOST = 'http://localhost:8788';
 const SESSION_COOKIE = 'better-auth.session_token=SECRET_TOKEN.SIGNATURE';
 
 function buildEnv() {
-  return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+  return apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 }
 
 async function loadRouterWithBetterAuthGetSession(getSession: () => Promise<unknown>) {
@@ -49,7 +51,7 @@ describe('API router when the session lookup fails, which Better Auth reports by
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: 'Internal Server Error' });
-    const events = lines.map((line) => JSON.parse(line).message);
+    const events = lines.map((line) => jsonRecordIn(line).message);
     expect(events).toEqual(expect.arrayContaining(['session_lookup_failed', 'api_error']));
     expect(lines.join('\n')).not.toContain('SECRET_TOKEN');
   });
@@ -60,6 +62,6 @@ describe('API router when the session lookup fails, which Better Auth reports by
     const response = await send('teams');
 
     expect(response.status).toBe(401);
-    expect(lines.map((line) => JSON.parse(line).message)).not.toContain('session_lookup_failed');
+    expect(lines.map((line) => jsonRecordIn(line).message)).not.toContain('session_lookup_failed');
   });
 });
