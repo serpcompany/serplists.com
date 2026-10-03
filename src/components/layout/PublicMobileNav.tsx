@@ -17,7 +17,9 @@ import {
 import { publicHeaderItems, type PublicSiteLink } from '@/components/layout/publicSiteLinks';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import type { ConsoleContext } from '@/lib/consoleRoutes';
 import { buildConsoleHomePath, buildLoginPath, buildRegisterPath, isPathWithin } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
@@ -58,10 +60,12 @@ function MobileMenuGroup({
 }
 
 export const PublicMobileMenu = ({
+  consoleContext,
   onNavigate,
   pathname,
   signedIn,
 }: {
+  consoleContext: ConsoleContext;
   onNavigate: () => void;
   pathname: string;
   signedIn: boolean;
@@ -88,7 +92,7 @@ export const PublicMobileMenu = ({
 
     <div className="flex flex-col gap-2">
       {signedIn ? (
-        <Link href={buildConsoleHomePath()} onClick={onNavigate} className={buttonVariants()}>
+        <Link href={buildConsoleHomePath(consoleContext)} onClick={onNavigate} className={buttonVariants()}>
           Dashboard
         </Link>
       ) : (
@@ -123,6 +127,7 @@ export function PublicMobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useOpenUntilPathnameChanges(pathname);
   const { user } = useAuth();
+  const { consoleContext } = useWorkspace();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -144,6 +149,7 @@ export function PublicMobileNav() {
           <SheetTitle>{APP_BRAND_NAME}</SheetTitle>
         </SheetHeader>
         <PublicMobileMenu
+          consoleContext={consoleContext}
           onNavigate={() => setOpen(false)}
           pathname={pathname}
           signedIn={Boolean(user)}

@@ -33,17 +33,9 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => ({ templates: [], templatesLoading: false }),
 }));
 
-vi.mock('@/contexts/WorkspaceContext', () => {
-  const personal = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
-  return {
-    useWorkspace: () => ({
-      activeWorkspace: personal,
-      isWorkspaceLoading: false,
-      selectWorkspace: vi.fn(),
-      workspaces: [personal],
-      workspaceStatus: 'ready',
-    }),
-  };
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { inThePersonalWorkspace } = await import('../../fixtures/workspaces');
+  return { useWorkspace: () => inThePersonalWorkspace({ workspaceStatus: 'ready' }) };
 });
 
 vi.mock('@/lib/analytics', () => ({

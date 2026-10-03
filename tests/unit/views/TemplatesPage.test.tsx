@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../support/elements';
 
+import { organizationConsole } from '@/lib/consoleRoutes';
 import Templates from '@/views/Templates';
 import { handlerIn } from '../../support/elementTree';
 
@@ -43,6 +44,19 @@ describe('Templates page', () => {
     expect(html).not.toContain('Template JSON Import');
     expect(html).not.toContain('Beta workspace lane');
     expect(html).not.toContain('Owned templates');
+  });
+
+  it("links its Templates inside the Organization the page shows, in the grid and in the list", () => {
+    for (const viewMode of ['grid', 'list'] as const) {
+      dashboardTemplates.viewMode = viewMode;
+      showTheTemplatesModel({ consoleContext: organizationConsole('team-1'), templates: [template({ teamId: 'team-1' })] });
+
+      const html = renderTemplatesAt('/dashboard/organization/team-1/templates/');
+
+      expect(html, viewMode).toContain('href="/dashboard/organization/team-1/templates/template-1/"');
+      expect(html, viewMode).not.toContain('href="/dashboard/templates/template-1/');
+    }
+    dashboardTemplates.viewMode = 'grid';
   });
 
   it('renders the reference empty state instead of the generic local fallback copy', () => {

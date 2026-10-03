@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { findAll, findHiddenFocusables, parseMarkup, type MarkupNode } from '../focusVisibility';
 import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
@@ -27,6 +28,7 @@ function renderCardMarkup(overrides: Partial<ChecklistTemplate> = {}) {
   navigation.reset('/dashboard/templates');
   return renderToStaticMarkup(
     <TemplateCard
+      context={PERSONAL_CONSOLE}
       onDelete={vi.fn()}
       onStartRun={vi.fn()}
       template={{ ...template, ...overrides }}
@@ -89,6 +91,7 @@ describe('TemplateCard counts', () => {
     navigation.reset('/dashboard/templates');
     const html = renderToStaticMarkup(
       <TemplateCard
+        context={PERSONAL_CONSOLE}
         template={{
           ...template,
           sections: [{ id: 'section-1', title: 'Launch prep', items: [{ id: 'item-1', title: 'Freeze content', description: '', contents: [] }] }],

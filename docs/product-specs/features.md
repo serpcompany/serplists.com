@@ -32,7 +32,9 @@ Each Organization has the same pages under `/dashboard/organization/:organizatio
 `/runs`, `/runs/:id`, `/settings`, `/archive`), named by the Organization's stable id, and
 `/dashboard/organization/:organizationId` itself opens its Templates. An Organization URL
 always shows that Organization to its members, after a refresh or in another tab, and the
-sidebar's links stay in it. For anyone else, and for an archived or unknown Organization, it
+links on its pages stay in it. A Run, a private Organization Template, and a Run or copy an
+action just made open at the URL of the context that owns them, whichever context is
+selected. For anyone else, and for an archived or unknown Organization, it
 shows the not-found page and loads none of its data.
 
 A missing page under `/dashboard/` answers 404 with the not-found page: in the console shell for a signed-in user, once the session check answers, and in the public shell (site header and footer) for anyone else.
@@ -111,7 +113,7 @@ Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote wh
 
 - Users always have a Personal context and can belong to Organizations.
 - Organization-owned templates and runs are shared with active Organization members.
-- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. Organization URLs decide their context; Personal URLs still show the remembered selection until every link follows the route (issue #212). A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher, Settings, and an Organization's run or private Template say the Organizations couldn't load and offer Retry instead of showing no Organizations or a silent "View only".
+- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. Organization URLs decide their context, and every link names the context it means; Personal URLs still show the remembered selection until the last step of issue #212. A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher, Settings, and an Organization's run or private Template say the Organizations couldn't load and offer Retry instead of showing no Organizations or a silent "View only".
 - Organization roles:
   - `owner`: full Organization management and ownership transfer.
   - `admin`: manage Organization settings, members, and invites.

@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { shownConsole } from '../../support/mockedConsoleContext';
 import React from 'react';
 import { waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 import { AccountMenu } from '@/components/layout/AccountMenu';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 
 import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
@@ -37,6 +39,21 @@ describe('AccountMenu', () => {
       'Profile -> /profile/alice/',
       'Sign out',
     ]);
+  });
+
+  it("opens My Templates and My Runs in the Organization the tab is in, and Settings in Personal, where the account's settings live", async () => {
+    shownConsole.context = organizationConsole('team-1');
+    try {
+      expect(await menuItemLabelsWithHrefs()).toEqual([
+        'My Templates -> /dashboard/organization/team-1/templates/',
+        'My Runs -> /dashboard/organization/team-1/runs/',
+        'Settings -> /dashboard/settings/',
+        'Profile -> /profile/alice/',
+        'Sign out',
+      ]);
+    } finally {
+      shownConsole.context = PERSONAL_CONSOLE;
+    }
   });
 
   it('leaves Profile out for a user without a username', async () => {

@@ -7,6 +7,7 @@ import { usePageVisit } from '@/hooks/usePageVisit';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { getAccessFailure } from '@/lib/api-errors';
+import { ownerConsoleContext, type ConsoleContext } from '@/lib/consoleRoutes';
 import { resolveRunName } from '@/lib/runs/runName';
 import {
   getOrganizationPermissions,
@@ -20,6 +21,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
+import { resolveTemplateConsoleContext } from '@/lib/templateDestination';
 import { isPersonalTemplateOf } from '@/lib/templates/templateOwnership';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
@@ -60,7 +62,7 @@ type DashboardTemplatesModelDependencies = {
 };
 
 export type DashboardTemplateRunResult =
-  | { kind: 'ok'; runId: string }
+  | { kind: 'ok'; runId: string; teamId?: string | undefined }
   | { kind: 'login_required' }
   | { kind: 'upgrade_required'; message: string }
   | { kind: 'error'; message: string };
@@ -100,13 +102,14 @@ export const getDashboardSelectedTemplate = (
 
 export const openDashboardTemplate = (
   navigate: Navigate,
-  templateId: string,
+  template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'teamId'>,
+  context: ConsoleContext,
 ): void => {
-  navigate(buildConsoleTemplateEditPath(templateId));
+  navigate(buildConsoleTemplateEditPath(template.id, resolveTemplateConsoleContext(template, context)));
 };
 
-export const openDashboardCreateTemplate = (navigate: Navigate): void => {
-  navigate(buildConsoleTemplateCreatePath());
+export const openDashboardCreateTemplate = (navigate: Navigate, context: ConsoleContext): void => {
+  navigate(buildConsoleTemplateCreatePath(context));
 };
 
 export const openDashboardPublicLibrary = (navigate: Navigate): void => {
@@ -165,6 +168,7 @@ export const createDashboardTemplateRun = async (
     return {
       kind: 'ok',
       runId: run.id,
+      teamId: run.teamId,
     };
   } catch (error) {
     const failure = getAccessFailure(error, 'Failed to create checklist run.');
@@ -229,7 +233,7 @@ export const finishDashboardTemplateRun = (
 
   actions.closeLauncher();
   if (visit.isCurrent()) {
-    actions.navigate(buildConsoleRunPath(result.runId));
+    actions.navigate(buildConsoleRunPath(result.runId, ownerConsoleContext(result.teamId)));
   }
 };
 
@@ -239,7 +243,7 @@ export const useDashboardTemplatesModel = (
   const router = useAppRouter();
   const beginVisit = usePageVisit();
   const { user } = useAuth();
-  const { activeTeamId, activeWorkspace, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, activeWorkspace, consoleContext, isTeamWorkspace } = useWorkspace();
   const templateContext = useTemplateLists();
   const model = buildDashboardTemplatesState({
     allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
@@ -264,12 +268,12 @@ export const useDashboardTemplatesModel = (
     selectedTemplateId,
   );
 
-  const openTemplate = (templateId: string) => {
-    openDashboardTemplate(navigateTo, templateId);
+  const openTemplate = (template: ChecklistTemplate) => {
+    openDashboardTemplate(navigateTo, template, consoleContext);
   };
 
   const openCreateTemplate = () => {
-    openDashboardCreateTemplate(navigateTo);
+    openDashboardCreateTemplate(navigateTo, consoleContext);
   };
 
   const openPublicLibrary = () => {
@@ -343,6 +347,7 @@ export const useDashboardTemplatesModel = (
     retryLoad: () => void templateContext.refetchTemplates(),
     createRunFromTemplate,
     closeRunLauncher,
+    consoleContext,
     isCreatingRun,
     isTeamWorkspace,
     openCreateTemplate,

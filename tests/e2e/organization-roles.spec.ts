@@ -1,40 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fulfillJson, routeTheApi, sessionOf } from './support/mocked-api';
+import { organizationRun, organizationTemplate } from './support/organization-records';
 
 type Role = 'viewer' | 'runner' | 'editor';
-
-const sections = [
-  { id: 'sec-1', title: 'Section', items: [
-    { id: 'task-a', title: 'Task A' },
-    { id: 'task-b', title: 'Task B' },
-  ] },
-];
-
-const organizationTemplate = {
-  id: 'tpl-org',
-  title: 'Org Playbook',
-  description: 'Private Organization template',
-  items: JSON.stringify(sections),
-  is_public: 0,
-  team_id: 'team-1',
-  user_id: 'user-owner',
-  created_at: '2026-07-01T00:00:00.000Z',
-  updated_at: '2026-07-01T00:00:00.000Z',
-};
-
-const organizationRun = {
-  id: 'run-org',
-  title: 'Org Run',
-  template_id: 'tpl-org',
-  items: JSON.stringify(sections),
-  status: 'in_progress',
-  is_stale: true,
-  is_public: 0,
-  team_id: 'team-1',
-  user_id: 'user-owner',
-  revision: 1,
-  started_at: '2026-07-02T00:00:00.000Z',
-};
 
 const archivedTemplate = { ...organizationTemplate, id: 'tpl-archived', title: 'Archived Playbook', deleted_at: '2026-07-03T00:00:00.000Z' };
 const archivedRun = { ...organizationRun, id: 'run-archived', title: 'Archived Run', deleted_at: '2026-07-03T00:00:00.000Z' };
@@ -157,7 +125,7 @@ test('an Organization viewer opening an edit link gets a read-only notice, not t
   await expect(page.getByText("You can't edit this template")).toBeVisible();
   await expect(page.getByRole('link', { name: 'View template' })).toHaveAttribute(
     'href',
-    '/dashboard/templates/tpl-org/',
+    '/dashboard/organization/team-1/templates/tpl-org/',
   );
   await expectNoTemplateFormAndNoWrites(page, api);
 });

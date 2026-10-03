@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import '../../support/mockedConsoleContext';
 import React from 'react';
 import { describe, it, vi } from 'vitest';
 

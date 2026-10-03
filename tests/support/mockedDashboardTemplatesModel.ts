@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 
 import type { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 type DashboardTemplatesModel = ReturnType<typeof useDashboardTemplatesModel>;
@@ -54,6 +55,7 @@ export const showTheTemplatesModel = (overrides: Partial<DashboardTemplatesModel
     canCreateTemplate: true,
     canEditTemplate: true,
     canRunTemplate: true,
+    consoleContext: PERSONAL_CONSOLE,
     totalTemplateItems: 2,
     selectedTemplate: null,
     selectedTemplateId: '',

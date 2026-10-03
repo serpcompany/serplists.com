@@ -32,6 +32,17 @@ describe('createDashboardTemplateRun', () => {
     });
   });
 
+  it("returns the Organization that owns the new run, so the page can open it there", async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'run-9', teamId: 'team-1' });
+
+    const result = await createDashboardTemplateRun(
+      { templateId: 'template-1', templateTitle: 'Content Audit' },
+      { createRun },
+    );
+
+    expect(result).toStrictEqual({ kind: 'ok', runId: 'run-9', teamId: 'team-1' });
+  });
+
   it('names a run left blank after the template and start time, as the dialog shows', async () => {
     const createRun = vi.fn().mockResolvedValue({ id: 'run-10' });
     const now = new Date('2026-09-28T10:15:00.000Z');
@@ -108,6 +119,14 @@ describe('finishDashboardTemplateRun', () => {
 
     expect(closeLauncher).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/dashboard/runs/run-9/');
+  });
+
+  it("opens an Organization's new run in that Organization", () => {
+    const navigate = vi.fn();
+
+    finishDashboardTemplateRun({ ...run, teamId: 'team-1' }, { isCurrent: () => true }, { closeLauncher: vi.fn(), navigate });
+
+    expect(navigate).toHaveBeenCalledWith('/dashboard/organization/team-1/runs/run-9/');
   });
 
   it('does not pull a user who left the page, with Back for example, to the new run, and still closes the launcher since the run exists', () => {

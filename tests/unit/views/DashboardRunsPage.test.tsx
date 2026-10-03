@@ -242,7 +242,7 @@ describe('/dashboard/runs presentation', () => {
     expect(publicCatalogOnly.every((template) => template.isPublic)).toBe(true);
   });
 
-  it('links runs to private workspace Templates and to catalog-only public Templates', () => {
+  it("links runs, and their private Organization Templates, in the run's own context, and catalog-only public Templates too", () => {
     mockUseAuth.mockReturnValue({ user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' }, logout: vi.fn() });
     const organizationTemplate: ChecklistTemplate = {
       ...privateTemplate,
@@ -254,7 +254,7 @@ describe('/dashboard/runs presentation', () => {
     showTheRuns({
       allTemplates: allTemplatesInThatOrganization,
       runs: [
-        { ...elementAt(runs, 0), id: 'run-org', templateId: 'org-template', title: 'Acme' },
+        { ...elementAt(runs, 0), id: 'run-org', templateId: 'org-template', title: 'Acme', teamId: 'team-1' },
         { ...elementAt(runs, 1), id: 'run-public', templateId: 'template-1', title: 'Beta' },
         { ...elementAt(runs, 2), id: 'run-library', templateId: '', title: 'Library run' },
       ],
@@ -263,7 +263,9 @@ describe('/dashboard/runs presentation', () => {
     const html = renderRunsPage();
 
     expect(html).toContain('From Org Checklist');
-    expect(html).toContain('href="/dashboard/templates/org-template/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/runs/run-org/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/org-template/"');
+    expect(html).toContain('href="/dashboard/runs/run-public/"');
     expect(html).toContain('From Website Launch Playbook');
     expect(html).toContain('href="/dashboard/templates/template-1/"');
     expect(html.match(/>From /g)).toHaveLength(2);

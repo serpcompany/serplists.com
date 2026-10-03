@@ -17,7 +17,7 @@ export type TemplateDetailApiClient = Pick<
 >;
 
 export type TemplateDetailActionResult =
-  | { kind: 'ok'; runId?: string; shareUrl?: string; templateId?: string }
+  | { kind: 'ok'; runId?: string; shareUrl?: string; teamId?: string | undefined; templateId?: string }
   | { kind: 'login_required' }
   | { kind: 'upgrade_required' }
   | { kind: 'error'; message: string };

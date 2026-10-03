@@ -1,10 +1,12 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import { shownConsole } from '../../support/mockedConsoleContext';
 import React, { act, useEffect } from 'react';
 import { createEvent, fireEvent, screen } from '@testing-library/react';
 import { useSearchParams } from 'next/navigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
@@ -87,6 +89,20 @@ describe('RouteErrorBoundary', () => {
     expect(navigation.pathname()).toBe('/dashboard/templates/');
     expect(page.hasAlert()).toBe(false);
     expect(page.text()).toContain('Page ok');
+  });
+
+  it('links Go to My Templates to the Templates of the Organization the tab is in', async () => {
+    silenceCaughtErrors();
+    authUser = { id: 'user-1' };
+    pageThrowsOnABadRow = true;
+    shownConsole.context = organizationConsole('team-1');
+    try {
+      const page = await renderAt('/dashboard/templates/');
+
+      expect(page.link('Go to My Templates').getAttribute('href')).toBe('/dashboard/organization/team-1/templates/');
+    } finally {
+      shownConsole.context = PERSONAL_CONSOLE;
+    }
   });
 
   it('recovers when a visitor clicks Go to home on the home page itself', async () => {

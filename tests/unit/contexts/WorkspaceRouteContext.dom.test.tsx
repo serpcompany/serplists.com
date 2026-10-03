@@ -107,6 +107,20 @@ describe('an Organization URL decides the context', () => {
 
     expect(workspace().routeOrganizationStatus).toBeNull();
     expect(workspace().activeTeamId).toBe('team-1');
+    expect(workspace().consoleContext).toEqual(organizationConsole('team-1'));
+  });
+
+  it('names no remembered Organization for links until the list confirms it, since a settled list may rule it out', async () => {
+    const teams = deferred<TeamSummary[]>();
+    getTeams.mockReturnValue(teams.promise);
+    const workspace = await openTheTabAt('/dashboard/templates/', { remembered: 'team-1' });
+
+    expect(workspace().consoleContext).toEqual(PERSONAL_CONSOLE);
+
+    teams.resolve([acme]);
+    await letQueryUpdatesReachObservers();
+
+    expect(workspace().consoleContext).toEqual(organizationConsole('team-1'));
   });
 });
 

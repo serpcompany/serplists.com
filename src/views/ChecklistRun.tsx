@@ -36,6 +36,7 @@ import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
@@ -49,7 +50,7 @@ const ChecklistRunPage = () => {
   const router = useAppRouter();
   const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
-  const { getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
+  const { consoleContext, getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isCompletingRun, setIsCompletingRun] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -84,6 +85,8 @@ const ChecklistRunPage = () => {
     updateRun,
   });
   const displayRun = run;
+  const runContext = displayRun ? ownerConsoleContext(displayRun.teamId) : consoleContext;
+  const consoleHomePath = buildConsoleHomePath(consoleContext);
   const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
   const keepNoteDrafts = useKeptRunNoteDrafts({ privateRun: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
@@ -96,8 +99,8 @@ const ChecklistRunPage = () => {
 
     toast.error('Run not found');
     allowLeave();
-    router.replace(isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath());
-  }, [allowLeave, isSharedRun, loading, notFound, router]);
+    router.replace(isSharedRun ? buildPublicTemplatesPath() : consoleHomePath);
+  }, [allowLeave, consoleHomePath, isSharedRun, loading, notFound, router]);
 
   useEffect(() => {
     if (!loadError) {
@@ -108,7 +111,7 @@ const ChecklistRunPage = () => {
   }, [loadError]);
 
   const handleBack = () =>
-    router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
+    router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath(runContext));
 
   const afterToggle = (result: RunExecutionActionResult) => {
     if (result.kind === 'ok') {
@@ -195,7 +198,7 @@ const ChecklistRunPage = () => {
       setIsCompleteDialogOpen(false);
       toast.success('Run completed');
       if (!isSharedRun && visit.isCurrent()) {
-        router.push(buildConsoleRunsPath());
+        router.push(buildConsoleRunsPath(runContext));
       }
       return;
     }

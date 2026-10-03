@@ -25,6 +25,7 @@ import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClip
 import { buildConsoleTemplatesPath } from "@/lib/routes";
 import { resolveTemplateEditorOwnerSlug } from "@/lib/templates/templateSeoPreview";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { usePageVisit } from "@/hooks/usePageVisit";
 import {
   templateEditorFormSchema,
@@ -85,6 +86,7 @@ type TemplateEditorFormProps = {
 const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const router = useAppRouter();
   const { user } = useAuth();
+  const { consoleContext } = useWorkspace();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const isOutlineBesideForm = useMediaQuery(OUTLINE_BESIDE_FORM_QUERY);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
@@ -177,7 +179,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     if (shouldNavigateToTemplatesAfterSave({ id, result })) {
       templateForm.reset(result.savedValues);
       allowLeave();
-      router.push(buildConsoleTemplatesPath());
+      router.push(buildConsoleTemplatesPath(consoleContext));
       return;
     }
 
@@ -206,7 +208,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         isSaving={model.isSaving}
         isGenerating={isGeneratingClipyDraft}
         isUploading={hasPendingUploads}
-        onCancel={() => router.push(buildConsoleTemplatesPath())}
+        onCancel={() => router.push(buildConsoleTemplatesPath(consoleContext))}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         outlineTrigger={
@@ -329,6 +331,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 const TemplateEditor = () => {
   const { id } = useParams<{ id?: string }>();
   const router = useAppRouter();
+  const { consoleContext } = useWorkspace();
   const model = useTemplateEditorModel({ id });
   const permission = useTemplateEditPermission({
     isCreate: !id,
@@ -349,7 +352,7 @@ const TemplateEditor = () => {
           <AlertDescription>{model.loadError}</AlertDescription>
         </Alert>
         <div>
-          <Button variant="outline" onClick={() => router.push(buildConsoleTemplatesPath())}>
+          <Button variant="outline" onClick={() => router.push(buildConsoleTemplatesPath(consoleContext))}>
             Back to Templates
           </Button>
         </div>
@@ -362,7 +365,7 @@ const TemplateEditor = () => {
   }
 
   if (permission !== "editable") {
-    return <TemplateEditorReadOnlyNotice reason={permission} templateId={id} />;
+    return <TemplateEditorReadOnlyNotice context={consoleContext} reason={permission} templateId={id} />;
   }
 
   return <TemplateEditorForm id={id} key={id ?? "new"} model={model} />;

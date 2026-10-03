@@ -1,4 +1,5 @@
 import { VERIFY_EMAIL_LOGIN_PATH } from "@/lib/auth/loginPrefill";
+import { PERSONAL_CONSOLE } from "@/lib/consoleRoutes";
 import { canonicalPath } from "@/lib/http/urlStandard";
 import {
   buildConsoleHomePath,
@@ -89,7 +90,7 @@ export function withReturnPath(path: string, returnPath: string | null): string 
 }
 
 export function getPostSignInDestination(returnPath: string | null): string {
-  return returnPath ?? buildConsoleHomePath();
+  return returnPath ?? buildConsoleHomePath(PERSONAL_CONSOLE);
 }
 
 export function getPostRegisterDestination({

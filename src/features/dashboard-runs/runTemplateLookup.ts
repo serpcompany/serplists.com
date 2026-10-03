@@ -1,6 +1,6 @@
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
-export type RunSourceTemplate = Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>;
+export type RunSourceTemplate = Pick<ChecklistTemplate, 'id' | 'isPublic' | 'ownerProfile' | 'teamId' | 'title'>;
 export type RunStatusFilter = 'all' | 'in_progress' | 'completed';
 
 export function buildRunTemplateLookup<T extends { id: string }>(
@@ -23,7 +23,7 @@ export function findRunTemplate<T>(
 
 export function filterDashboardRuns(
   runs: readonly ChecklistRun[],
-  lookup: ReadonlyMap<string, RunSourceTemplate>,
+  lookup: ReadonlyMap<string, Pick<RunSourceTemplate, 'ownerProfile' | 'title'>>,
   searchQuery: string,
   statusFilter: RunStatusFilter,
 ): ChecklistRun[] {

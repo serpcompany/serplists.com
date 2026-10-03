@@ -19,7 +19,9 @@ import {
 import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { useSidebar } from '@/components/ui/use-sidebar';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { signOutAndLeave } from '@/features/auth/signOut';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import {
@@ -38,6 +40,7 @@ function AccountMenuContent({
   trigger: ReactElement;
 }) {
   const { user, logout } = useAuth();
+  const { consoleContext } = useWorkspace();
   const router = useAppRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -70,11 +73,11 @@ function AccountMenuContent({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href={buildConsoleTemplatesPath()} />}>
+          <DropdownMenuItem render={<Link href={buildConsoleTemplatesPath(consoleContext)} />}>
             My Templates
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={buildConsoleRunsPath()} />}>My Runs</DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={buildConsoleSettingsPath()} />}>Settings</DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={buildConsoleRunsPath(consoleContext)} />}>My Runs</DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={buildConsoleSettingsPath(PERSONAL_CONSOLE)} />}>Settings</DropdownMenuItem>
           {user?.username ? (
             <DropdownMenuItem
               render={

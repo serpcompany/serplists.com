@@ -18,26 +18,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { inThePersonalWorkspace } = await import('../../fixtures/workspaces');
+  return { useWorkspace: () => inThePersonalWorkspace() };
+});
 
 const renderLayoutAt = (pathname: string, child: string) => {
   navigation.reset(pathname);

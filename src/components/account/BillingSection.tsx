@@ -30,7 +30,7 @@ import { Link } from '@/components/navigation/Link';
 
 export function BillingSection() {
   const { user } = useAuth();
-  const { activeTeamId, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, consoleContext, isTeamWorkspace } = useWorkspace();
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const [isOpeningPortal, setIsOpeningPortal] = useRedirectPending();
   const billingReturn = useSearchParams().get("billing");
@@ -193,7 +193,7 @@ export function BillingSection() {
             A template you could not save is kept on this tab.{" "}
             <Link
               className="font-medium text-primary underline underline-offset-4"
-              href={buildConsoleTemplateCreatePath()}
+              href={buildConsoleTemplateCreatePath(consoleContext)}
             >
               Resume template draft
             </Link>

@@ -15,6 +15,7 @@ import {
   restoreNavigationWindow,
   workspaceState,
 } from '../../support/publicTemplatePage';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { buildConsoleTemplatePath } from '@/lib/routes';
 import { navigation } from '../../support/nextNavigation';
 import { firstOf } from '../../support/elements';
@@ -111,14 +112,31 @@ describe('PublicTemplate ownership context', () => {
     expect(mockToastError).not.toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
   });
 
-  it('opens the saved copy so the user lands where it was saved', async () => {
-    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+  it('opens the saved copy in the Organization it was saved to, so the user lands where it was saved', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1', teamId: 'team-1' });
     renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
 
     await lastViewProps().onSaveTemplate();
 
     expect(navigation.router.push).toHaveBeenCalledTimes(1);
-    expect(navigation.url()).toBe(buildConsoleTemplatePath('clone-1'));
+    expect(navigation.url()).toBe('/dashboard/organization/team-1/templates/clone-1/');
+  });
+
+  it('opens a started run in the context that owns it, whatever the page was opened from', async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1', teamId: 'team-2' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    await lastDialogProps().onConfirm('Launch run');
+
+    expect(navigation.url()).toBe('/dashboard/organization/team-2/runs/run-1/');
+
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    renderPublishedRoute(publishedClipyTemplate, { startRun: vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-2' }) });
+
+    await lastDialogProps().onConfirm('Launch run');
+
+    expect(navigation.url()).toBe('/dashboard/runs/run-2/');
   });
 
   it('labels Save as an upgrade for a Free Personal user, never in an Organization', () => {
@@ -155,7 +173,7 @@ describe('PublicTemplate ownership context', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Template copied to this Organization');
   });
 
-  it('still says the copy was saved to the account in Personal', async () => {
+  it('still says the copy was saved to the account in Personal, and opens it in Personal', async () => {
     workspaceState.activeTeamId = undefined;
     workspaceState.isTeamWorkspace = false;
     const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
@@ -164,6 +182,7 @@ describe('PublicTemplate ownership context', () => {
     await lastViewProps().onSaveTemplate();
 
     expect(mockToastSuccess).toHaveBeenCalledWith('Template saved to your account');
+    expect(navigation.url()).toBe(buildConsoleTemplatePath('clone-1', PERSONAL_CONSOLE));
   });
 
   it('never offers Save to an Organization role that cannot add Templates', async () => {

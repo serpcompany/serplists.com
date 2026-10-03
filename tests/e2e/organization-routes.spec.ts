@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { answerTheAcmeOwnerSession, fulfillJson, routeTheApi } from './support/mocked-api';
+import { organizationRun, organizationTemplate } from './support/organization-records';
 import { expectNoSidewaysScroll } from './support/phone';
 
 const ACME_TEMPLATES = '/dashboard/organization/team-1/templates/';
@@ -18,6 +19,33 @@ async function mockApi(page: Page) {
 }
 
 const theSwitcher = (page: Page) => page.getByRole('button', { name: 'Switch context' }).first();
+
+const ACME_RECORDS = new Map<string, unknown>([
+  [`/api/templates/${organizationTemplate.id}`, organizationTemplate],
+  [`/api/templates/${organizationTemplate.id}/history`, { events: [], subject: { type: 'team', id: 'team-1' }, templateId: organizationTemplate.id, versions: [] }],
+  [`/api/checklists/${organizationRun.id}`, organizationRun],
+  [`/api/checklists/${organizationRun.id}/history`, { checklistId: organizationRun.id, events: [], subject: { type: 'team', id: 'team-1' } }],
+]);
+
+async function mockAcmeWithATemplate(page: Page) {
+  const startedRuns: string[] = [];
+  await routeTheApi(page, async (call) => {
+    if (await answerTheAcmeOwnerSession(call)) return;
+    const { route, url, path, method } = call;
+    const inAcme = url.searchParams.get('teamId') === 'team-1';
+    if (path === '/api/checklists' && method === 'POST') {
+      startedRuns.push(organizationRun.id);
+      await fulfillJson(route, { id: organizationRun.id });
+    } else if (path === '/api/templates') {
+      await fulfillJson(route, inAcme ? [organizationTemplate] : []);
+    } else if (path === '/api/checklists') {
+      await fulfillJson(route, inAcme ? startedRuns.map(() => organizationRun) : []);
+    } else {
+      await fulfillJson(route, ACME_RECORDS.get(path) ?? []);
+    }
+  });
+  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'personal'));
+}
 
 test("an Organization URL opens that Organization's Templates in a tab that remembered Personal, and a reload keeps it", async ({ page }) => {
   const scopedListSearches = await mockApi(page);
@@ -56,6 +84,34 @@ test('an Organization the user is not in shows the not-found page and loads none
   await expect(page.getByRole('heading', { name: 'That page does not exist' })).toBeVisible({ timeout: 30_000 });
   await expect(theSwitcher(page)).toContainText('Personal');
   expect(scopedListSearches.filter((search) => search.includes('team-9'))).toEqual([]);
+});
+
+test("a Template opened from an Organization's Templates, its run, and the way back all stay at that Organization's URLs", async ({ page }) => {
+  await mockAcmeWithATemplate(page);
+  const visited: string[] = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) visited.push(new URL(frame.url()).pathname);
+  });
+
+  await page.goto(ACME_TEMPLATES);
+  await page.getByRole('link', { name: organizationTemplate.title }).click({ timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`${ACME_TEMPLATES}${organizationTemplate.id}/$`));
+  await expect(page.getByRole('link', { name: 'My Templates' })).toHaveAttribute('href', ACME_TEMPLATES);
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', `${ACME_TEMPLATES}${organizationTemplate.id}/edit/`);
+
+  await page.getByRole('button', { name: 'Start Run' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Start Run' }).click();
+  await expect(page).toHaveURL(new RegExp(`/dashboard/organization/team-1/runs/${organizationRun.id}/$`));
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Runs', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/organization\/team-1\/runs\/$/);
+  await expect(page.getByRole('link', { name: organizationRun.title })).toHaveAttribute(
+    'href',
+    `/dashboard/organization/team-1/runs/${organizationRun.id}/`,
+  );
+  await expect(theSwitcher(page)).toContainText('Acme Org');
+  expect(visited.filter((path) => !path.startsWith('/dashboard/organization/team-1/'))).toEqual([]);
 });
 
 test.describe('on a phone', () => {

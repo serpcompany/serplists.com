@@ -14,8 +14,8 @@ import {
   getDevTestUserPasswordHelp,
   type DevTestUser,
 } from '@/lib/auth/devUsers';
+import { getPostSignInDestination } from '@/lib/auth/returnPath';
 import {
-  buildConsoleHomePath,
   buildHomePath,
   buildPublicCategoriesPath,
   DASHBOARD_PATH,
@@ -78,7 +78,7 @@ export function DevLoginBar(): JSX.Element | null {
       const result = await login(testUser.email, testUser.password);
       if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
-        moveOnAfterAnAccountChange(() => router.push(buildConsoleHomePath()));
+        moveOnAfterAnAccountChange(() => router.push(getPostSignInDestination(null)));
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }

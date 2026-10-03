@@ -250,6 +250,7 @@ const Templates = () => {
               <TemplateCard
                 key={template.id}
                 canEdit={model.canEditTemplate}
+                context={model.consoleContext}
                 onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
                 onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
                 template={template}
@@ -262,6 +263,7 @@ const Templates = () => {
               <TemplateListItem
                 key={template.id}
                 canEdit={model.canEditTemplate}
+                context={model.consoleContext}
                 onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
                 onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
                 template={template}

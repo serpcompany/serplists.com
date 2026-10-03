@@ -20,7 +20,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
+import type { ConsoleContext } from '@/lib/consoleRoutes';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { resolveTemplateConsoleContext } from '@/lib/templateDestination';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { cn } from '@/lib/utils';
 import { formatCount } from '@/lib/utils/pluralize';
@@ -30,6 +32,7 @@ import { Link } from '@/components/navigation/Link';
 
 interface TemplateCardProps {
   template: ChecklistTemplate;
+  context: ConsoleContext;
   canEdit?: boolean;
   onDelete?: ((id: string) => void) | undefined;
   onDuplicate?: (id: string) => void;
@@ -38,11 +41,13 @@ interface TemplateCardProps {
 
 export function TemplateCard({
   template,
+  context,
   canEdit = true,
   onDelete,
   onDuplicate,
   onStartRun,
 }: TemplateCardProps) {
+  const templateContext = resolveTemplateConsoleContext(template, context);
   const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
   const taskCount = countTemplateItems(template);
@@ -71,7 +76,7 @@ export function TemplateCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {canEdit ? (
-                <DropdownMenuItem render={<Link href={buildConsoleTemplateEditPath(template.id)} />}>
+                <DropdownMenuItem render={<Link href={buildConsoleTemplateEditPath(template.id, templateContext)} />}>
                   <Edit3 />
                   Edit
                 </DropdownMenuItem>
@@ -104,7 +109,7 @@ export function TemplateCard({
       clampDescription
       description={template.description || undefined}
       eyebrow={categories.length > 0 ? <MediaCardCategories categories={categories} countHidden /> : undefined}
-      href={buildConsoleTemplatePath(template.id)}
+      href={buildConsoleTemplatePath(template.id, templateContext)}
       icon={<TypeIcon />}
       mediaOverlay={
         onStartRun ? (

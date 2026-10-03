@@ -45,6 +45,7 @@ describe('TemplateDetail Organization permissions', () => {
 
     expect(hasShareButton(html)).toBe(true);
     expect(hasEditLink(html)).toBe(true);
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/tpl-1/edit/"');
     expect(isVisibilitySwitchDisabled(html)).toBe(false);
   });
 

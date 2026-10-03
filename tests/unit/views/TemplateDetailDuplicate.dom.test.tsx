@@ -53,10 +53,12 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 }));
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  const { PERSONAL_CONSOLE } = await import('@/lib/consoleRoutes');
   return {
     useWorkspace: () => ({
       activeTeamId: undefined,
       canEditTemplates: true,
+      consoleContext: PERSONAL_CONSOLE,
       getPermissions: (teamId?: string) => getResourcePermissions(teamId, () => undefined),
       isTeamWorkspace: false,
       teams: [],

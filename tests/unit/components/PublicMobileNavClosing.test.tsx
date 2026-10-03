@@ -1,5 +1,6 @@
 import '../../support/reactHooksKeptBetweenRenders';
 import { navigation } from '../../support/mockedNextNavigation';
+import '../../support/mockedConsoleContext';
 import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: null }) }));

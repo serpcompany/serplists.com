@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { PRIVATE_LAUNCH_TEMPLATE } from '../../fixtures/dashboardTemplate';
 
 const template = PRIVATE_LAUNCH_TEMPLATE;
@@ -13,6 +14,7 @@ describe('TemplateListItem', () => {
     navigation.reset('/');
     const html = renderToStaticMarkup(
       <TemplateListItem
+        context={PERSONAL_CONSOLE}
         onDelete={vi.fn()}
         onStartRun={vi.fn()}
         template={template}
@@ -27,7 +29,7 @@ describe('TemplateListItem', () => {
   it('shows no actions to members who cannot run, edit or delete Templates', () => {
     navigation.reset('/');
     const html = renderToStaticMarkup(
-      <TemplateListItem canEdit={false} template={template} />,
+      <TemplateListItem canEdit={false} context={PERSONAL_CONSOLE} template={template} />,
     );
 
     expect(html).toContain('Website Launch Checklist');
@@ -39,7 +41,7 @@ describe('TemplateListItem', () => {
   it('lets a runner start a run without editing or deleting', () => {
     navigation.reset('/');
     const html = renderToStaticMarkup(
-      <TemplateListItem canEdit={false} onStartRun={vi.fn()} template={template} />,
+      <TemplateListItem canEdit={false} context={PERSONAL_CONSOLE} onStartRun={vi.fn()} template={template} />,
     );
 
     expect(html).toContain('Start Run');

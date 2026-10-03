@@ -10,10 +10,12 @@ import {
   ItemDescription,
   ItemTitle,
 } from '@/components/ui/item';
+import type { ConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
 } from '@/lib/routes';
+import { resolveTemplateConsoleContext } from '@/lib/templateDestination';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -22,6 +24,7 @@ import { Link } from '@/components/navigation/Link';
 
 type TemplateListItemProps = {
   canEdit?: boolean;
+  context: ConsoleContext;
   onDelete?: ((id: string) => void) | undefined;
   onStartRun?: ((id: string) => void) | undefined;
   template: ChecklistTemplate;
@@ -29,10 +32,12 @@ type TemplateListItemProps = {
 
 export function TemplateListItem({
   canEdit = true,
+  context,
   onDelete,
   onStartRun,
   template,
 }: TemplateListItemProps) {
+  const templateContext = resolveTemplateConsoleContext(template, context);
   const sectionCount = template.sections.length;
   const taskCount = countTemplateItems(template);
   const TypeIcon = template.type === 'recipe' ? List : FileText;
@@ -46,7 +51,7 @@ export function TemplateListItem({
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-2 wrap-anywhere">
           <Link
-            href={buildConsoleTemplatePath(template.id)}
+            href={buildConsoleTemplatePath(template.id, templateContext)}
             className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {template.title}
@@ -71,7 +76,7 @@ export function TemplateListItem({
           ) : null}
           {canEdit ? (
             <Link
-              href={buildConsoleTemplateEditPath(template.id)}
+              href={buildConsoleTemplateEditPath(template.id, templateContext)}
               className={buttonVariants({ variant: 'ghost', size: 'sm' })}
             >
               <Pencil data-icon="inline-start" />

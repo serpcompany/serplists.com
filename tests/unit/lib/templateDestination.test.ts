@@ -4,8 +4,10 @@ import {
   getRunStartedMessage,
   getTemplateDuplicatedMessage,
   nameOtherTemplateDestination,
+  resolveTemplateConsoleContext,
   resolveTemplateDestinationTeamId,
 } from '@/lib/templateDestination';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 
 const teams = [
   { id: 'team-a', name: 'Acme Agency' },
@@ -19,6 +21,16 @@ describe('template destination', () => {
     expect(resolveTemplateDestinationTeamId(privateTeamBTemplate, undefined)).toBe('team-b');
     expect(resolveTemplateDestinationTeamId({ isPublic: true, teamId: 'team-b' }, 'team-a')).toBe('team-a');
     expect(resolveTemplateDestinationTeamId({ isPublic: false }, undefined)).toBeUndefined();
+  });
+
+  it("links a private Organization template in its own Organization, and any other template in the link's context", () => {
+    const acme = organizationConsole('team-a');
+
+    expect(resolveTemplateConsoleContext(privateTeamBTemplate, acme)).toEqual(organizationConsole('team-b'));
+    expect(resolveTemplateConsoleContext(privateTeamBTemplate, PERSONAL_CONSOLE)).toEqual(organizationConsole('team-b'));
+    expect(resolveTemplateConsoleContext({ isPublic: true, teamId: 'team-b' }, acme)).toEqual(acme);
+    expect(resolveTemplateConsoleContext({ isPublic: false }, acme)).toEqual(acme);
+    expect(resolveTemplateConsoleContext({ isPublic: false }, PERSONAL_CONSOLE)).toEqual(PERSONAL_CONSOLE);
   });
 
   it.each([

@@ -1,10 +1,11 @@
 import { navigation } from '../../support/mockedNextNavigation';
-import { inviteeAuth, PENDING_INVITE_PREVIEW } from '../../support/teamInvitePage';
+import { inviteeAuth, PENDING_INVITE_PREVIEW, workspaceMocks } from '../../support/teamInvitePage';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
 
 type InviteLinkState = {
@@ -90,5 +91,15 @@ describe('Organization invite page for another account', () => {
 
     expect(html).toContain('Open settings');
     expect(html).not.toContain('Sign out and continue');
+  });
+
+  it("opens the account's settings in Personal from an invite that failed, whichever context the tab is in", () => {
+    inviteLinkState.previewError = new ApiError({ status: 404, message: 'Invite not found' });
+    workspaceMocks.consoleContext = organizationConsole('team-9');
+    try {
+      expect(renderInvitePage()).toMatch(/<a[^>]*href="\/dashboard\/settings\/"[^>]*>Open settings<\/a>/);
+    } finally {
+      workspaceMocks.consoleContext = PERSONAL_CONSOLE;
+    }
   });
 });
