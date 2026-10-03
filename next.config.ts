@@ -4,6 +4,7 @@ import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 import { assertProductionApiUrl } from './scripts/lib/buildEnv';
 import { applyDevBindings } from './scripts/lib/dev-bindings';
+import { ORGANIZATION_HOME_REDIRECT } from './src/lib/consoleRoutes';
 import {
   CONTENT_SECURITY_POLICY,
   LOCAL_CONTENT_SECURITY_POLICY,
@@ -73,6 +74,7 @@ const nextConfig: NextConfig = {
       ...canonicalHostRedirects(CANONICAL_ORIGIN, [wwwHost]),
       ...LEGACY_PATH_REDIRECTS,
       DASHBOARD_HOME_REDIRECT,
+      ORGANIZATION_HOME_REDIRECT,
       ...trailingSlashRedirects(),
     ];
   },

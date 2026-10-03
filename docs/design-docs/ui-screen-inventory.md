@@ -362,8 +362,9 @@ existing content, invent nothing):
 - **SCREEN NAME:** Signed-in console shell
 - **PURPOSE:** Frame every console page: move between console sections, see and switch the
   Ownership Context, reach the account.
-- **HOW USER GETS HERE:** any page under `/dashboard/`, after the session check; the 404 page
-  for a signed-in user on a missing path under `/dashboard/`.
+- **HOW USER GETS HERE:** any page under `/dashboard/`, after the session check (an
+  Organization's pages under `/dashboard/organization/<organizationId>/` included); the 404
+  page for a signed-in user on a missing path under `/dashboard/`.
 - **WHAT'S ON THE SCREEN:**
   - Left: the sidebar (full height). Header: the brand link and the [context
     switcher](#context-switcher) ("Switch context"). Content, in the "Dashboard" navigation
@@ -384,10 +385,14 @@ existing content, invent nothing):
   - Session check: a spinner. A failed check: "Can't reach SERP Lists", "We couldn't check
     your session. Check your connection and try again.", "Retry".
   - Signed out: redirect to `/login/?next=<path>`.
-  - Organizations failed to load before the stored Organization was confirmed: "Couldn't load
-    your Organizations", "Your Organization opens once they load. Check your connection and
-    try again, or continue in Personal.", "Retry", "Continue in Personal" (in place of the
-    page).
+  - Organizations failed to load before the stored Organization, or the Organization the URL
+    names, was confirmed: "Couldn't load your Organizations", "Your Organization opens once
+    they load. Check your connection and try again, or continue in Personal.", "Retry",
+    "Continue in Personal" (in place of the page; on an Organization URL, Continue in Personal
+    opens the same section in Personal).
+  - On an Organization URL: a spinner in place of the page until the Organizations load, and
+    the [404 page](#404-page) for an Organization the user cannot open (unknown, archived or
+    not theirs), with the switcher and the sidebar in the tab's own context.
   - Role-limited: no "New Template" for runners and viewers.
   - A page that crashes: "Something went wrong" with "Go to My Templates".
 - **NAVIGATION TYPE:** shell; sidebar items are root sections.
@@ -423,7 +428,9 @@ existing content, invent nothing):
   present.
 - **NOTES:**
   - Code: `src/components/layout/AppShell.tsx` and `src/components/layout/AppSidebar.tsx`.
-  - A Run's page (`/dashboard/runs/<id>/`) highlights "Runs".
+  - A Run's page (`/dashboard/runs/<id>/`) highlights "Runs", in either context.
+  - The sidebar's console links (and "New Template") open the current context's pages: on an
+    Organization URL they stay under `/dashboard/organization/<organizationId>/`.
   - The public site header no longer sits above console pages: the sidebar holds the brand,
     the switcher, the theme toggle and the account menu, and the top bar the site navigation.
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
@@ -1803,7 +1810,9 @@ existing content, invent nothing):
 - **SCREEN NAME:** 404 page ("That page does not exist")
 - **PURPOSE:** Say the address is not a page and offer a way home.
 - **HOW USER GETS HERE:** any path no route matches (HTTP 404); an unknown feature slug or
-  category (HTTP 200, noindex).
+  category (HTTP 200, noindex); an Organization URL the user cannot open, once their
+  Organizations load (in the console shell, rendered by `OrganizationRouteGate`; it never
+  says whether the Organization exists).
 - **WHAT'S ON THE SCREEN:** a centered page hero: eyebrow "404", "That page does not exist",
   "The route <path> could not be found. Use the main navigation or head back to the home
   page." (the server's HTML says "This route"), "Return to home".
@@ -1945,7 +1954,9 @@ replaced.
 - **SECONDARY ACTIONS:** "Retry loading Organizations"; "Settings".
 - **STATES:** loading (items disabled); error (Personal stays available); Organizations
   unavailable while in Personal.
-- **NAVIGATION TYPE:** dropdown menu; the page changes in place.
+- **NAVIGATION TYPE:** dropdown menu; on a console page, picking a context opens the same
+  section in it (a Template or Run page opens that context's list, and an unsaved page asks
+  first); on the public template page it changes in place.
 - **PATTERN CHOICE (decided):** a shadcn DropdownMenu in the sidebar header ([Signed-in
   console shell](#signed-in-console-shell)).
 - **REFERENCE IMAGES:** none.
@@ -1958,6 +1969,8 @@ replaced.
 - **PROOF PASS:** Pass (step 1): the console shots; it follows the team switcher of shadcn's
   sidebar block (no reference screenshot).
 - **NOTES:** A switch reloads the page's lists in the new context and is remembered per tab.
+  "Settings" opens the current context's settings. Code: `src/components/workspace/WorkspaceSwitcher.tsx`
+  and `src/contexts/useContextSwitch.ts`.
 
 ### Start a Run dialog
 

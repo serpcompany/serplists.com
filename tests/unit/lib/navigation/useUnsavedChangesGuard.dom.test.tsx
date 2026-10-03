@@ -154,6 +154,38 @@ describe('useUnsavedChangesGuard', () => {
     expect(navigation.url()).toBe('/runs/r1');
   });
 
+  it('runs the step a navigation needs just before it, and only once the page lets it go', async () => {
+    await mountGuard();
+    const onLeave = vi.fn();
+    navigation.window.confirm.mockReturnValue(false);
+
+    await act(async () => {
+      probe.router?.push('/runs', { onLeave });
+    });
+    expect(onLeave).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs/r1');
+
+    navigation.window.confirm.mockReturnValue(true);
+    await act(async () => {
+      probe.router?.push('/runs', { onLeave });
+    });
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs');
+  });
+
+  it('runs that step when the page decides after rendering, as when the work was saved in the same step', async () => {
+    await mountGuard();
+    const onLeave = vi.fn();
+
+    await act(async () => {
+      probe.setDirty?.(false);
+      probe.router?.push('/runs', { onLeave });
+    });
+
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs');
+  });
+
   it('asks on Sign out with the page message, and does not ask again on the way out', async () => {
     await mountGuard();
     const confirmDialog = vi.fn(() => true);

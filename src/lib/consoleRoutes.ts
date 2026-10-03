@@ -27,6 +27,12 @@ const ORGANIZATION_SEGMENT = 'organization';
 const PERSONAL_BASE = `/${DASHBOARD_SEGMENT}/`;
 const ORGANIZATION_BASE = '/dashboard/organization/';
 
+export const ORGANIZATION_HOME_REDIRECT = {
+  source: `${ORGANIZATION_BASE}:organizationId`,
+  destination: `${ORGANIZATION_BASE}:organizationId/templates/`,
+  permanent: false,
+};
+
 const contextBase = (context: ConsoleContext): string =>
   context.type === 'organization'
     ? `${ORGANIZATION_BASE}${encodeURIComponent(context.organizationId)}/`

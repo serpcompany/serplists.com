@@ -7,7 +7,7 @@ import { leavePage, type LeaveMethod, type NavigatedRightAway } from './leaveGua
 import { leavesPage } from './leavesPage';
 import { reportNavigation } from './navigationSignal';
 
-type NavigateOptions = { scroll?: boolean };
+type NavigateOptions = { scroll?: boolean; onLeave?: () => void };
 
 export type AppRouter = {
   push: (href: string, options?: NavigateOptions) => NavigatedRightAway;
@@ -23,7 +23,8 @@ export function useAppRouter(): AppRouter {
   return useMemo<AppRouter>(() => {
     const navigate = (method: LeaveMethod, href: string, options?: NavigateOptions) => {
       reportNavigation();
-      router[method](href, options);
+      options?.onLeave?.();
+      router[method](href, options?.scroll === undefined ? undefined : { scroll: options.scroll });
     };
     const guarded = (method: LeaveMethod) => (href: string, options?: NavigateOptions) => {
       if (!leavesPage(href, pathname)) {

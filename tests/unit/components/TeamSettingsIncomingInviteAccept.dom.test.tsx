@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

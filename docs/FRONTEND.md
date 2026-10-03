@@ -41,7 +41,11 @@ own module (`button-variants.ts`, `navigation-menu-trigger-style.ts`), and share
 ids sit beside the component in a `.ts` file.
 
 Canonical private routes live under `/dashboard/*`; the full route list is in
-[system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
+[system overview](design-docs/system-overview.md#routes). An Organization's pages repeat
+the console sections under `/dashboard/organization/:organizationId/`: each page there
+re-exports the Personal page, and the segment's layout (`OrganizationRouteGate`) renders it
+only once the user's Organizations confirm that Organization
+([Organizations](design-docs/organizations.md#ui-flow)). Public pages sit in the `(site)`
 route group and signed-in pages in `(app)`, whose layout checks the session first
 (`RequireAuth` sends a signed-out visitor to `/login/?next=<path>`). Both layouts render
 `Layout`, which picks the public or console shell from the pathname.
@@ -62,7 +66,9 @@ wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/
 
 In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
 `useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work
-first (below). ESLint refuses `next/link` and `next/navigation`'s `useRouter` anywhere else in
+first (below). A step that belongs to the navigation goes in `push()`'s or `replace()`'s
+`onLeave`, which runs just before it and only if the page lets the user go: switching
+context records the new context there, so keeping unsaved work leaves the context as it was. ESLint refuses `next/link` and `next/navigation`'s `useRouter` anywhere else in
 `src/`, except in the navigation modules themselves and `RequireAuth`: sending a signed-out
 visitor to sign in must never wait on a page, and the session ending has already kept the
 page's work. A page that drops one-shot query parameters once it has read them (a reset
@@ -121,6 +127,12 @@ and agents (MCP) call them directly and do not follow redirects.
   checks every builder, the sitemap entries and the links the API writes, and ESLint refuses a
   hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
   `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.ts`).
+- Console paths come from `src/lib/consoleRoutes.ts` (`routes.ts` re-exports its
+  builders). Each builder takes the context it links into: `PERSONAL_CONSOLE` (the default
+  for now) or `organizationConsole(organizationId)`. `parseConsoleRoute` reads a path back
+  into its context and section, and `buildEquivalentConsolePath` gives the same section in
+  another context, which is where the switcher goes. ESLint refuses a hand-built
+  `/dashboard/organization` path anywhere else in `src/` or `functions/`.
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
   route helpers (`isPathWithin`, `resolveRouteShell`), which accept either form, not with
   `===` or `startsWith` on a literal.
@@ -147,6 +159,8 @@ and agents (MCP) call them directly and do not follow redirects.
   API imports it and must not import Next.js.
 - `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
   My Templates for now. Links use `buildConsoleHomePath()`, which returns the home itself.
+  `/dashboard/organization/:organizationId/` answers 307 with that Organization's Templates
+  (`ORGANIZATION_HOME_REDIRECT`).
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
   its page without a redirect.
 - Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL

@@ -6,13 +6,16 @@ import {
   assertWorkspaceReady,
   createWorkspaceSelectionMemory,
   describeTeamsQuery,
+  getRouteOrganizationStatus,
   getWorkspaceStatus,
   isConfirmedSignOut,
   reconcileWorkspaceSelection,
   recordWorkspaceSelection,
   resetWorkspaceSelection,
+  toConsoleContext,
   type WorkspaceSelectionInput,
 } from '@/contexts/workspaceSelection';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 
 function createTabAsWorkspaceProviderDrivesIt(options: { stored: string; userId?: string }) {
   const storageSharedByEveryTab = { value: options.stored };
@@ -225,5 +228,44 @@ describe('isConfirmedSignOut', () => {
     expect(isConfirmedSignOut('unauthenticated')).toBe(true);
     expect(isConfirmedSignOut('unavailable')).toBe(false);
     expect(isConfirmedSignOut('loading')).toBe(false);
+  });
+});
+
+describe('getRouteOrganizationStatus, which decides what an Organization URL shows', () => {
+  const settledList = { teamIds: ['acme'], teamsLoaded: true, teamsSettled: true, teamsFailed: false };
+
+  it('confirms an Organization the user belongs to', () => {
+    expect(getRouteOrganizationStatus({ ...settledList, organizationId: 'acme' })).toBe('confirmed');
+  });
+
+  it('confirms an Organization the tab just created or joined, before the server lists it', () => {
+    expect(
+      getRouteOrganizationStatus({ organizationId: 'acme', teamIds: ['acme'], teamsLoaded: false, teamsSettled: false, teamsFailed: true }),
+    ).toBe('confirmed');
+  });
+
+  it('calls an Organization missing only once a settled list from the server leaves it out', () => {
+    expect(getRouteOrganizationStatus({ ...settledList, organizationId: 'archived-or-unknown' })).toBe('missing');
+  });
+
+  it('waits while the list loads, refetches, is paused offline or failed, since none of those rules it out', () => {
+    const unknown = { organizationId: 'other' };
+    expect(getRouteOrganizationStatus({ ...settledList, ...unknown, teamsLoaded: false, teamsSettled: false })).toBe('pending');
+    expect(getRouteOrganizationStatus({ ...settledList, ...unknown, teamsSettled: false })).toBe('pending');
+    expect(getRouteOrganizationStatus({ ...settledList, ...unknown, teamsLoaded: false })).toBe('pending');
+    expect(getRouteOrganizationStatus({ ...settledList, ...unknown, teamsFailed: true })).toBe('pending');
+  });
+
+  it('never reads the Personal id in an Organization URL as Personal', () => {
+    expect(
+      getRouteOrganizationStatus({ ...settledList, organizationId: PERSONAL_WORKSPACE_ID, teamsLoaded: false, teamsSettled: false }),
+    ).toBe('missing');
+  });
+});
+
+describe('toConsoleContext', () => {
+  it('names the console context of a workspace id', () => {
+    expect(toConsoleContext(PERSONAL_WORKSPACE_ID)).toEqual(PERSONAL_CONSOLE);
+    expect(toConsoleContext('acme')).toEqual(organizationConsole('acme'));
   });
 });

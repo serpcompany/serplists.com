@@ -32,6 +32,7 @@ const getSwitcherLabel = (
 export function WorkspaceSwitcher() {
   const {
     activeWorkspace,
+    consoleContext,
     isWorkspaceLoading,
     retryWorkspace,
     selectWorkspace,
@@ -107,7 +108,7 @@ export function WorkspaceSwitcher() {
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-3" render={<Link href={buildConsoleSettingsPath()} />}>
+        <DropdownMenuItem className="gap-3" render={<Link href={buildConsoleSettingsPath(consoleContext)} />}>
           <Settings className="text-muted-foreground" />
           Settings
         </DropdownMenuItem>

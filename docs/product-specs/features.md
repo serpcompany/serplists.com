@@ -27,6 +27,14 @@ Canonical private routes:
 - Settings: `/dashboard/settings`
 - Archive: `/dashboard/archive`, linked from the console sidebar (a sheet on phones)
 
+Each Organization has the same pages under `/dashboard/organization/:organizationId`
+(`/templates`, `/templates/new`, `/templates/:id`, `/templates/:id/edit`, `/import-templates`,
+`/runs`, `/runs/:id`, `/settings`, `/archive`), named by the Organization's stable id, and
+`/dashboard/organization/:organizationId` itself opens its Templates. An Organization URL
+always shows that Organization to its members, after a refresh or in another tab, and the
+sidebar's links stay in it. For anyone else, and for an archived or unknown Organization, it
+shows the not-found page and loads none of its data.
+
 A missing page under `/dashboard/` answers 404 with the not-found page: in the console shell for a signed-in user, once the session check answers, and in the public shell (site header and footer) for anyone else.
 
 ## Templates
@@ -103,7 +111,7 @@ Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote wh
 
 - Users always have a Personal context and can belong to Organizations.
 - Organization-owned templates and runs are shared with active Organization members.
-- Context switching is available from the dashboard shell and persists locally. This remembered selection is transitional convenience state; canonical Organization routes are tracked in issue #212. A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher, Settings, and an Organization's run or private Template say the Organizations couldn't load and offer Retry instead of showing no Organizations or a silent "View only".
+- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. Organization URLs decide their context; Personal URLs still show the remembered selection until every link follows the route (issue #212). A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher, Settings, and an Organization's run or private Template say the Organizations couldn't load and offer Retry instead of showing no Organizations or a silent "View only".
 - Organization roles:
   - `owner`: full Organization management and ownership transfer.
   - `admin`: manage Organization settings, members, and invites.
@@ -111,7 +119,7 @@ Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote wh
   - `runner`: start and execute runs.
   - `viewer`: read-only access.
 - The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../design-docs/organizations.md#ui-flow)).
-- Organization management currently lives on `/dashboard/settings`.
+- Organization management currently lives on Settings: `/dashboard/settings` while the Organization is selected, or the Organization's own `/dashboard/organization/:organizationId/settings`.
 - Organization names are limited to 120 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Organization name fields stop at the limit, and a longer name gets a clear message instead of the API's schema error.
 - Organization invites are link-based today. A link is shown once; managers can replace a lost one with **New link** on the pending invite, which stops the previous link from working. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance. The link page shows the Organization, inviter, and role and waits for **Accept invite** or **Decline**; accepting does not switch the active context.
 - Members other than the owner can leave an Organization from `/dashboard/settings`.

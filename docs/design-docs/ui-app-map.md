@@ -203,6 +203,14 @@ Toasts (sonner) report results everywhere.
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
 | `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal or Organization context; manager-only Organization controls; created Run Key panel |
 
+Each path above also exists for an Organization under `/dashboard/organization/<organizationId>/`
+(for example `/dashboard/organization/<organizationId>/runs/<id>/`), with the same screen, level,
+overlays and modes in that Organization. Until the user's Organizations load, the page shows a
+loading state; for an Organization the user cannot open it shows the [404 page](ui-screen-inventory.md#404-page)
+in the console shell. The sidebar's Templates, Runs, New Template, Import Templates, Archive and
+Settings, and the switcher's Settings, open the current context's page, and switching context
+opens the same section in the chosen context (a Template or Run page opens the list).
+
 The sidebar's "Template Library" and "Categories" open `/templates/` and `/categories/`, which
 leave the console shell for the public shell.
 
@@ -219,7 +227,8 @@ the session check answers; everyone else sees it in the public shell
 ## Redirect-only paths
 
 - `/dashboard/` is not a page: it answers 307 with `/dashboard/templates/`, the console
-  home. Links use `buildConsoleHomePath()` instead.
+  home. Links use `buildConsoleHomePath()` instead. `/dashboard/organization/<organizationId>/`
+  answers 307 with that Organization's Templates.
 - Legacy paths answer 308 with their page: `/checklists` with `/templates/`; `/console` with
   `/dashboard/templates/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;
   `/console/templates/<id>` with `/dashboard/templates/<id>/`;
