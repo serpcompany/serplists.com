@@ -180,12 +180,13 @@ elsewhere, and offers it back when the editor opens again (`templateDraftStore.t
 - **Restoring.** Restore hands the form a deep copy, and the draft stays stored until a save
   succeeds: the plan can still read Free for a moment after checkout, and a refused save would need
   the draft again.
-- **Another context.** A confirmed sign-out returns the tab to Personal, so after sign-in a draft
-  kept in an Organization is not the active context's. `listTemplateDraftContexts` finds the
+- **Another context.** A draft belongs to the context it was written in, so the new-template
+  page at another context's URL (Personal's, say, after a sign-out and sign-in) does not offer
+  it as its own. `listTemplateDraftContexts` finds the
   user's new-template drafts in every context, newest first, by a key prefix that ends after the
   user id, so a user whose id starts the same never matches. `findOtherContextDraft` decides only
-  once the Organization list has loaded, since the tab may still be moving into the stored
-  Organization, and offers only a context the user can still create templates in. The editor
+  once the Organization list has loaded, since it offers only a context the user can still
+  create templates in. The editor
   offers a switch to that context, which opens that context's new-template page, where it offers
   the draft itself: a draft is restored, and saved, only in the context it was written for. Discard hides the offer until the next lookup.
 

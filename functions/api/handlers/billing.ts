@@ -28,6 +28,7 @@ import {
   type SubscriptionSnapshot,
 } from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
+import { buildConsoleSettingsPath, PERSONAL_CONSOLE } from "../../../src/lib/consoleRoutes";
 
 type Db = ReturnType<typeof createDb>;
 const stripeCheckoutSessionSchema = z.object({ id: z.string(), url: z.string().nullish() });
@@ -35,7 +36,7 @@ const stripePortalSessionSchema = z.object({ id: z.string(), url: z.string() });
 type StripeCheckoutSession = z.infer<typeof stripeCheckoutSessionSchema>;
 type StripePortalSession = z.infer<typeof stripePortalSessionSchema>;
 
-const SETTINGS_PATH = "/dashboard/settings/";
+const PERSONAL_SETTINGS_PATH = buildConsoleSettingsPath(PERSONAL_CONSOLE);
 const ACCOUNT_STRIPE_CALL_LIMIT = { windowMs: 60 * 1000, max: 10 };
 const CHECKOUT_IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1000;
 
@@ -144,8 +145,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     if (openStatus) return storedSubscriptionConflict(openStatus);
   }
 
-  const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
-  const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
+  const successUrl = `${origin}${PERSONAL_SETTINGS_PATH}?billing=success`;
+  const cancelUrl = `${origin}${PERSONAL_SETTINGS_PATH}?billing=cancel`;
   const paramsDigest = await shortDigest(`${proPriceId} ${successUrl} ${cancelUrl}`);
 
   let stripeCustomerId: string;
@@ -335,7 +336,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       });
     }
 
-    const returnUrl = `${origin}${SETTINGS_PATH}`;
+    const returnUrl = `${origin}${PERSONAL_SETTINGS_PATH}`;
     let portal: StripePortalSession;
     try {
       portal = await stripePostForm(secretKey, "/v1/billing_portal/sessions", {

@@ -149,15 +149,20 @@ export const parseConsoleRoute = (pathname: string): ConsoleRoute | null => {
   return section ? { context: organizationConsole(organizationId), section } : null;
 };
 
-export const getRouteOrganizationId = (pathname: string): string | null => {
-  const context = parseConsoleRoute(pathname)?.context;
-  return context?.type === 'organization' ? context.organizationId : null;
-};
-
 export const isSameConsoleContext = (left: ConsoleContext, right: ConsoleContext): boolean =>
   left.type === 'organization'
     ? right.type === 'organization' && left.organizationId === right.organizationId
     : right.type === 'personal';
+
+const RECORD_SECTIONS: ReadonlySet<ConsoleSection['name']> = new Set(['template', 'template-edit', 'run']);
+
+export const buildOwnerContextPath = (pathname: string, ownerContext: ConsoleContext): string | null => {
+  const route = parseConsoleRoute(pathname);
+  if (!route || !RECORD_SECTIONS.has(route.section.name) || isSameConsoleContext(route.context, ownerContext)) {
+    return null;
+  }
+  return buildConsoleRoutePath({ context: ownerContext, section: route.section });
+};
 
 const listSectionOf = (section: ConsoleSection): ConsoleSection => {
   switch (section.name) {

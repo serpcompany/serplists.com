@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { vi } from 'vitest';
 
 import { navigateToLoginWithReturnPath } from '@/lib/access-flow';
+import { buildConsoleTemplatePath, ownerConsoleContext } from '@/lib/consoleRoutes';
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
@@ -102,9 +103,12 @@ vi.mock('@/contexts/TemplatesContext', () => {
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { getResourcePermissions } = await import('@/lib/organizationPermissions');
   const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
+  const roleImpliedByTheActiveContext = (id: string) =>
+    id === workspaceState.activeTeamId && !workspaceState.teamsUnavailable
+      ? workspaceState.canEditTemplates ? 'editor' : 'runner'
+      : undefined;
   const roleSetByATestOrImpliedByTheActiveContext = (id: string) =>
-    workspaceState.roles[id] ??
-    (id === workspaceState.activeTeamId ? (workspaceState.canEditTemplates ? 'editor' : 'runner') : undefined);
+    workspaceState.roles[id] ?? roleImpliedByTheActiveContext(id);
   return {
     useWorkspace: () => ({
       ...workspaceState,
@@ -171,7 +175,9 @@ export {
 };
 
 export const renderTemplateDetail = () => {
-  navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
+  navigation.reset(buildConsoleTemplatePath('tpl-1', ownerConsoleContext(workspaceState.activeTeamId)), {
+    routes: ['/dashboard/templates/[id]', '/dashboard/organization/[organizationId]/templates/[id]'],
+  });
   return renderToStaticMarkup(
     <TemplateDetail />,
   );

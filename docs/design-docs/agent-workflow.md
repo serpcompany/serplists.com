@@ -17,7 +17,10 @@ kept clean.
    - For a bug, the failing test from step 3 becomes the regression test. Commit it with
      the fix as `fix:`: the commit-msg hook and CI refuse a `fix:` commit that changes no
      test.
-   - Run `pnpm run verify` before opening the PR.
+   - Run the tests a change touches before you push, browser specs included. Run browser
+     specs through `node --import tsx scripts/run-at-low-priority.ts pnpm run test:e2e:full
+     <specs>`, which caps the build and the browsers to a quarter of the CPU threads.
+   - Run `pnpm run verify` before opening the PR; the push hook runs it too.
 5. Open a PR into `staging` and fill in the template, including evidence for UI changes.
 6. Review loop: review your own diff first. Claude then reviews the PR automatically
    (see [Claude code review](#claude-code-review)). Address every comment: fix it, or

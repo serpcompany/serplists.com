@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { present } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
-import { PERSONAL_CONSOLE } from "@/lib/consoleRoutes";
+import { parseConsoleRoute, PERSONAL_CONSOLE } from "@/lib/consoleRoutes";
 import { buildConsoleSettingsPath } from "@/lib/routes";
 import { billingSchemaSql, emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
@@ -42,6 +42,20 @@ describe("Stripe return URLs, which are the settings page itself so no redirect 
     expect(sentForm().get("success_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath(PERSONAL_CONSOLE)}?billing=success`);
     expect(sentForm().get("cancel_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath(PERSONAL_CONSOLE)}?billing=cancel`);
     expect(sentForm().get("line_items[0][price]")).toBe("price_pro");
+  });
+
+  it("returns every Stripe page to Personal settings, where Personal billing lives", async () => {
+    await postToBilling(env(), "checkout");
+    const checkoutForm = sentForm();
+    fetchMock.mockClear();
+    await postToBilling(env(), "portal");
+
+    for (const url of [checkoutForm.get("success_url"), checkoutForm.get("cancel_url"), sentForm().get("return_url")]) {
+      expect(parseConsoleRoute(new URL(String(url)).pathname), String(url)).toEqual({
+        context: PERSONAL_CONSOLE,
+        section: { name: "settings" },
+      });
+    }
   });
 
   it("returns the Customer Portal to the settings page the app builds", async () => {

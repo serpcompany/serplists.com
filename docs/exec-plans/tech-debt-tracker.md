@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-82.**
+then you raise it. **Next ID: TD-83.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -29,3 +29,4 @@ then you raise it. **Next ID: TD-82.**
 | TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None |
 | TD-76 | Agent safety | `.claude/settings.json` asks before `node scripts/* --allow-production*`, but scripts now run as `node --import tsx scripts/<name>.ts`, so a direct run of `scripts/d1-baseline-migrations.ts --allow-production` is no longer asked (`pnpm run db:migrations:baseline:prod` still is, through `pnpm *:prod*`). | A person adds the ask rules for `node --import tsx scripts/* --allow-production*` (Bash and PowerShell) and updates the literal command in `tests/unit/config/agent-tooling.test.ts`. Small; needs a person, since agents do not edit their own permission settings. | None |
 | TD-81 | Runs | The X close button (and Escape) stays enabled while RunCompleteDialog completes a run and while RunNameDialog starts one, though their answer buttons lock; the in-place stand-ins hid the X until TD-77. | Owner decision: lock the close button too while the request runs, or keep it as a way out. Small; needs the owner. | None |
+| TD-82 | Organizations | The role-unavailable notices on the Template page ("Start Run waits until they load.") and the Run page ("This run's actions wait until they load."), and `isRoleUnavailable` behind them, appeared only for a private Organization Template or an Organization Run opened from another context. Since #212's PR 3 such a record moves to its Organization's URL, where the route waits for the Organizations list, so they no longer appear. | Remove both notices, `isRoleUnavailable` from `WorkspaceContext` and the Run page header's `roleUnavailable`, with their tests, and drop the sentence about them from `docs/design-docs/organizations.md`. Small. | None |

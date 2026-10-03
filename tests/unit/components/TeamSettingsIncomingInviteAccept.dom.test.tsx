@@ -1,4 +1,5 @@
 import '../../support/mockedNextNavigation';
+import { teamSettingsServer as server } from '../../support/signedInTeamSettingsApi';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,23 +10,6 @@ import type { IncomingTeamInvite, TeamSummary } from '@/lib/api';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 import { renderSettled } from '../../support/renderInTheDom';
 
-const server = vi.hoisted(() => ({
-  acceptIncomingTeamInvite: vi.fn(),
-  getIncomingTeamInvites: vi.fn(),
-  getTeams: vi.fn(),
-}));
-
-vi.mock('@/lib/api', () => ({
-  api: {
-    ...server,
-    getTeamActivity: vi.fn().mockResolvedValue([]),
-    getTeamInvites: vi.fn().mockResolvedValue([]),
-    getTeamMembers: vi.fn().mockResolvedValue([]),
-  },
-}));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: 'user-1' } }),
-}));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';

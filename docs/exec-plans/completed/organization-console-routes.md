@@ -1,6 +1,6 @@
 # Organization Console Routes
 
-- **Status:** active
+- **Status:** completed
 - **Last updated:** 2026-10-02
 - **Goal:** the authenticated URL decides the Personal or Organization context (issue
   #212), so an Organization's pages can be refreshed, shared and opened in any tab, and
@@ -138,8 +138,19 @@ means.
   on the page), and their sidebar entries followed the context in PR 1. The browser test walks
   an Organization's Templates, a Template (its My Templates and Edit links), Start Run, the
   run and its Runs button; the other links are covered by unit and DOM tests.
-- [ ] PR 3: Personal URLs mean Personal, bare `/dashboard/`, resource redirects, settings
-  and billing returns.
+- [x] PR 3: Personal URLs mean Personal, bare `/dashboard/`, resource redirects, settings
+  and billing returns. A Personal console URL shows Personal whatever the tab remembered, and
+  every context URL becomes the remembered context; `/dashboard/` is a client page that opens
+  the remembered context's Templates (`DashboardHome`), and sign-in without a return path and
+  the legacy `/console` go there; the Template page, the editor and the Run page move a record
+  opened under another context's URL to its owner's (`useOwnerContextRedirect`); Personal
+  settings shows no Organization's management; the API builds Stripe's return URLs with
+  `consoleRoutes.ts`. The browser specs that opened an Organization through a Personal URL now
+  use its URL (`organization-roles`, `workspace-teams-error`, `auth-session-resilience`,
+  `session-end-kept-work`, `team-invite-flow`), and `organization-routes` covers Personal URLs,
+  the dashboard home and the record moves, on a phone too.
+
+All of #212's acceptance criteria are met; the plan is complete.
 
 ## Decision log
 
@@ -234,3 +245,43 @@ means.
   Templates URL; "Organization settings" opens the Organization's settings URL, which moves
   the tab into it on that explicit click; "Open templates" after a decline keeps the current
   context, since declining changes none.
+- 2026-10-02 (PR 3): The route decides on every console URL (`getRouteContextId`): Personal
+  for a Personal URL, the Organization for an Organization URL until a settled list rules it
+  out. The tab's selection follows each context URL (Personal, or a confirmed Organization),
+  once per arrival, and each one writes the remembered context; the selection is read only
+  outside the console, by bare `/dashboard/`, and on a missing Organization's 404. Removed: a
+  Personal URL reading the selection, and the switch's special case that selected Personal
+  before leaving, since the Personal URL now does it on arrival.
+- 2026-10-02 (PR 3): `DashboardHome` leaves once `isWorkspaceLoading` is false (the session,
+  the Organizations list or its failure, and a confirmed context), so it waits for the list even
+  when Personal is remembered. Rejected: leaving as soon as `workspaceStatus` is `ready`, which
+  could leave for Personal in the same commit in which the provider first reads the remembered
+  Organization for the user, since a page's effects run before its provider's. A failed list
+  keeps the page on `/dashboard/` under `WorkspaceGate`'s error; Continue in Personal selects
+  Personal in place and the page then opens Personal's Templates.
+- 2026-10-02 (PR 3): A record's owner context is `resolveTemplateConsoleContext` for a
+  Template (a private Organization Template's Organization, otherwise the page's context, so a
+  public Template or the user's own stays put) and `ownerConsoleContext(run.teamId)` for a Run.
+  `buildOwnerContextPath` moves only record pages (Template, editor, Run), keeps the query and
+  hash, and the hook replaces the URL so Back skips the wrong one. No membership check runs
+  first: the API returns a private Organization Template or an Organization Run only to an
+  active member, so the Organization is in the user's list, its route confirms it, and the API
+  checks again. The editor's loaded ownership carries `isPublic` for this
+  (`LoadedTemplateOwnership`).
+- 2026-10-02 (PR 3): Settings needed no new wording. On a settings page the Organization
+  context now comes only from the Organization's settings URL, so the selected Organization's
+  management (`TeamSettingsSection`'s rename, invites, members and activity, and
+  `LeaveOrganizationCard`) shows only there. Personal settings keeps the account's Organization
+  choices: incoming invites (they belong to the account), Create Organization (the only place
+  to make one) and Your Organizations, whose rows open each Organization's settings. Headings
+  and the Account/Personal split stay with #206.
+- 2026-10-02 (PR 3): The API builds Stripe's return URLs with
+  `buildConsoleSettingsPath(PERSONAL_CONSOLE)`; `consoleRoutes.ts` joins `SHARED_FROM_SRC`, as
+  it imports nothing. Checkout and the Customer Portal are Personal only (an Organization's
+  Billing card shows its plan and sends subscriptions to Personal), so every Stripe return is
+  Personal settings, which now always shows Personal. An Organization checkout, if one is
+  added, would return to `buildConsoleSettingsPath(organizationConsole(id))`.
+- 2026-10-02 (PR 3): The role-unavailable notices on the Template page and the Run page
+  (`isRoleUnavailable`) appeared only for a record opened from another context, which now moves
+  to its owner's URL, where the route waits for the Organizations list. They stay until a
+  cleanup removes them (TD-82).

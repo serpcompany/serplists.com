@@ -21,7 +21,7 @@ migrations, backups, and R2 storage are in
 | Pre-push hook | `pnpm run verify`, at below-normal CPU priority (`scripts/run-at-low-priority.ts`) |
 | `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects and, with `skipLibCheck` off, the declaration files the repository writes, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), on every pull request and every push to `main` and `staging`; on a pull request, every `fix:` commit must change a test |
-| Browser tests (pull requests only) | `.github/workflows/browser-tests.yml`: the OpenNext build (`build:worker`) and the browser tests against it, smoke on PRs into `staging` and the full suite on PRs into `main`, on the standard `ubuntu-latest` runner. Pushes run neither: they are the slowest and most expensive checks, and a push to `staging` builds again to deploy |
+| Browser tests (pull requests only) | `.github/workflows/browser-tests.yml`: the OpenNext build (`build:worker`) and the browser tests against it, smoke on PRs into `staging`, plus every browser spec the PR adds or changes, and the full suite on PRs into `main`, on the standard `ubuntu-latest` runner. Pushes run neither: they are the slowest and most expensive checks, and a push to `staging` builds again to deploy |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
@@ -154,9 +154,14 @@ Lefthook hooks install with `pnpm install` (the `prepare` script); run
 files, so they stay fast; the push hook runs the full gate.
 
 Local checks are kept light, so the machine stays usable while they run:
-- `scripts/run-at-low-priority.ts` starts the push hook's `pnpm run verify` at below-normal
-  CPU priority. Every process it starts inherits that priority, so other programs get the
-  CPU first.
+- `scripts/run-at-low-priority.ts` starts the push hook's `pnpm run verify`, and any heavy
+  local run such as `pnpm run test:e2e:full <specs>`, at below-normal CPU priority.
+  - It also confines itself to one in four CPU threads before it starts the command
+    (`cpuCapCommand` in `scripts/lib/cpu-cap.ts`): Windows through the process affinity,
+    Linux through `taskset`.
+  - Every process the command starts inherits both, so other programs get the CPU first,
+    and a production build or a browser test cannot load every core. Priority alone does
+    not stop that when nothing else wants the CPU.
 - On a developer machine, Vitest runs one worker per four CPU threads (`testWorkerLimit` in
   `scripts/lib/local-test-workers.ts`, set in `vitest.config.ts`).
   - Its default, one worker per thread minus one, meant 31 workers on a 32-thread PC, each

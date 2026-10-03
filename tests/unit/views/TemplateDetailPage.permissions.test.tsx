@@ -11,8 +11,19 @@ import {
   workspaceState,
 } from '../../support/templateDetailPage';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 beforeEach(resetTemplateDetailPageMocks);
+
+function expectStartRunWithoutACopy(template: ChecklistTemplate) {
+  mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template });
+
+  const html = renderTemplateDetail();
+
+  expect(html).not.toContain('Copy to');
+  expect(html).not.toContain('Upgrade to copy template');
+  expect(html).toContain('Start Run');
+}
 
 describe('TemplateDetail Organization permissions', () => {
   beforeEach(() => {
@@ -114,16 +125,8 @@ describe('TemplateDetail copy into an Organization', () => {
 
   it('hides the copy from roles that cannot add Templates to the Organization', () => {
     workspaceState.canEditTemplates = false;
-    mockUseTemplateDetailModel.mockReturnValue({
-      ...baseModel(),
-      template: otherUsersPublicTemplate(),
-    });
 
-    const html = renderTemplateDetail();
-
-    expect(html).not.toContain('Copy to');
-    expect(html).not.toContain('Upgrade to copy template');
-    expect(html).toContain('Start Run');
+    expectStartRunWithoutACopy(otherUsersPublicTemplate());
   });
 });
 
@@ -155,22 +158,20 @@ describe('TemplateDetail copy of a private Organization template, which the API 
     teamId: 'team-1',
     userId: 'someone-else',
   });
+  const inTheTemplatesOrganization = () => {
+    workspaceState.activeTeamId = 'team-1';
+    workspaceState.isTeamWorkspace = true;
+  };
 
-  it("offers no copy to a member viewing it from Personal, while Start Run follows their runner role in the template's Organization", () => {
+  it("offers no copy to a runner in the template's Organization, while Start Run follows their role", () => {
+    inTheTemplatesOrganization();
     workspaceState.roles = { 'team-1': 'runner' };
-    mockUseTemplateDetailModel.mockReturnValue({
-      ...baseModel(),
-      template: privateOrganizationTemplate(),
-    });
 
-    const html = renderTemplateDetail();
-
-    expect(html).not.toContain('Copy to My Templates');
-    expect(html).not.toContain('Upgrade to copy template');
-    expect(html).toContain('Start Run');
+    expectStartRunWithoutACopy(privateOrganizationTemplate());
   });
 
   it('offers no copy to a Free member, so nobody is sent to checkout for it', () => {
+    inTheTemplatesOrganization();
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
       billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
@@ -179,13 +180,17 @@ describe('TemplateDetail copy of a private Organization template, which the API 
 
     const html = renderTemplateDetail();
 
+    expect(html).toContain('Start Run');
     expect(html).not.toContain('Upgrade to copy template');
-    expect(html).not.toContain('Copy to My Templates');
+    expect(html).not.toContain('Copy to');
   });
 
-  it('offers no copy from another Organization', () => {
-    workspaceState.activeTeamId = 'team-2';
-    workspaceState.isTeamWorkspace = true;
+  it.each([
+    ['Personal', undefined],
+    ['another Organization', 'team-2'],
+  ])("shows none of its actions at %s's URL, which it leaves for its Organization's", (_context, teamId) => {
+    workspaceState.activeTeamId = teamId;
+    workspaceState.isTeamWorkspace = teamId !== undefined;
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
       template: privateOrganizationTemplate(),
@@ -193,10 +198,12 @@ describe('TemplateDetail copy of a private Organization template, which the API 
 
     const html = renderTemplateDetail();
 
-    expect(html).not.toContain('Copy to Organization');
+    expect(html).toContain('Loading template...');
+    expect(html).not.toContain('Copy to');
+    expect(html).not.toContain('Start Run');
   });
 
-  it('keeps the copy once the template is public', () => {
+  it('keeps the copy once the template is public, at a Personal URL too', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
       template: privateOrganizationTemplate(true),

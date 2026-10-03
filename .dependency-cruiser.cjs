@@ -10,6 +10,7 @@ const SHARED_FROM_SRC = [
   "^src/lib/progress\\.ts$",
   "^src/lib/seo/siteOrigin\\.ts$",
   "^src/lib/http/urlStandard\\.ts$",
+  "^src/lib/consoleRoutes\\.ts$",
 ];
 
 const APP_ROUTES = "^src/app/";

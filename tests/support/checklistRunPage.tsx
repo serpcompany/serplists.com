@@ -5,6 +5,7 @@ import { firstOf } from './elements';
 import './mockedWorkspaceRoles';
 
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
+import { buildConsoleRunPath, ownerConsoleContext } from '@/lib/consoleRoutes';
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
 import type { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
@@ -111,7 +112,7 @@ export const twoTaskRun = (completed: [boolean, boolean], status: ChecklistRun['
 
 export const renderRunPage = (
   run: ChecklistRun,
-  options: { noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
+  options: { at?: string; noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
 ) => {
   const done = firstOf(run.sections).items.filter((item) => item.isCompleted).length;
   mockUseRunExecutionModel.mockReturnValue(runPageModel({
@@ -124,8 +125,10 @@ export const renderRunPage = (
     hasUnsavedNotes: Object.keys(options.noteDrafts ?? {}).length > 0,
   }));
 
-  return renderPageAt(options.shared ? '/share/abc123' : '/dashboard/runs/run-1', {
+  const ownerUrl = buildConsoleRunPath(run.id, ownerConsoleContext(run.teamId));
+  return renderPageAt(options.at ?? (options.shared ? '/share/abc123' : ownerUrl), {
     '/dashboard/runs/[id]': <ChecklistRunPage />,
+    '/dashboard/organization/[organizationId]/runs/[id]': <ChecklistRunPage />,
     '/share/[shareToken]': <ChecklistRunPage />,
   });
 };

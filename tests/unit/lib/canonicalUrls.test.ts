@@ -87,6 +87,10 @@ const ORGANIZATION_ROUTE_BUILDER_PATHS: Array<[string, string]> = [
     'buildEquivalentConsolePath',
     present(consoleRoutes.buildEquivalentConsolePath('/dashboard/templates/tpl-1/', acme), 'the equivalent path in an Organization'),
   ],
+  [
+    'buildOwnerContextPath',
+    present(consoleRoutes.buildOwnerContextPath('/dashboard/runs/run-1/', acme), "a Run's path in its Organization"),
+  ],
 ];
 
 const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [

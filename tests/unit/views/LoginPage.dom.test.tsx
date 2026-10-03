@@ -92,8 +92,8 @@ describe('Login once signed in, which leaves for the return path or the console 
     return vi.mocked(navigation.router.replace).mock.calls[0]?.[0];
   };
 
-  it.each(['/login/', '/login/?verified=1'])('opens the console home from %s', async (url) => {
-    expect(await firstDestinationFrom(url)).toBe('/dashboard/templates/');
+  it.each(['/login/', '/login/?verified=1'])('opens the dashboard home, which opens the remembered context, from %s', async (url) => {
+    expect(await firstDestinationFrom(url)).toBe('/dashboard/');
   });
 
   it('opens the page the user was headed to', async () => {

@@ -43,9 +43,20 @@ const loadedModel = (ownership: TemplateEditorModel['ownership']): Partial<Templ
   templateSlug: 'launch-checklist',
 });
 
-const renderEdit = () =>
-  renderPageAt('/dashboard/templates/template-1/edit/', { '/dashboard/templates/[id]/edit': <TemplateEditor /> });
-const renderNew = () => renderPageAt('/dashboard/templates/new/', { '/dashboard/templates/new': <TemplateEditor /> });
+const EDITOR_PAGES = {
+  '/dashboard/templates/[id]/edit': <TemplateEditor />,
+  '/dashboard/organization/[organizationId]/templates/[id]/edit': <TemplateEditor />,
+};
+const renderEdit = () => renderPageAt('/dashboard/templates/template-1/edit/', EDITOR_PAGES);
+const renderEditInAcme = () => {
+  workspace.activeTeamId = 'team-1';
+  return renderPageAt('/dashboard/organization/team-1/templates/template-1/edit/', EDITOR_PAGES);
+};
+const acmeTemplate = { userId: 'creator-1', teamId: 'team-1', ownerType: 'team' as const, isPublic: false };
+const renderNewInAcme = () =>
+  renderPageAt('/dashboard/organization/team-1/templates/new/', {
+    '/dashboard/organization/[organizationId]/templates/new': <TemplateEditor />,
+  });
 const hasSaveButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*Save(?:(?!<\/button>).)*<\/button>/.test(html);
 
 beforeEach(() => {
@@ -55,33 +66,33 @@ beforeEach(() => {
   workspace.teams = [];
 });
 
-const renderEditForAnOrganizationViewer = () => {
-  workspace.teams = [{ id: 'team-1', role: 'viewer' }];
-  mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
-  return renderEdit();
-};
-
 describe('TemplateEditor permissions, which show why instead of a form whose every save the API would refuse', () => {
-  it('shows an Organization viewer a read-only notice instead of the form', async () => {
-    const html = await renderEditForAnOrganizationViewer();
+  it("shows an Organization viewer a read-only notice instead of the form, linked inside the Organization", async () => {
+    workspace.teams = [{ id: 'team-1', role: 'viewer' }];
+    mockModel.mockReturnValue(loadedModel(acmeTemplate));
+
+    const html = await renderEditInAcme();
 
     expect(html).toContain("You can&#x27;t edit this template");
-    expect(html).toContain('href="/dashboard/templates/template-1/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/template-1/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/"');
     expect(html).not.toContain('Launch checklist');
     expect(hasSaveButton(html)).toBe(false);
   });
 
-  it('links the notice inside the Organization the editor was opened in', async () => {
-    workspace.activeTeamId = 'team-1';
+  it("shows neither the notice nor the form at a Personal URL for a private Organization Template, which moves to the Organization's URL", async () => {
+    workspace.teams = [{ id: 'team-1', role: 'viewer' }];
+    mockModel.mockReturnValue(loadedModel(acmeTemplate));
 
-    const html = await renderEditForAnOrganizationViewer();
+    const html = await renderEdit();
 
-    expect(html).toContain('href="/dashboard/organization/team-1/templates/template-1/"');
-    expect(html).toContain('href="/dashboard/organization/team-1/templates/"');
+    expect(html).toContain('animate-spin');
+    expect(html).not.toContain("You can&#x27;t edit this template");
+    expect(hasSaveButton(html)).toBe(false);
   });
 
   it("shows the notice for another user's public template", async () => {
-    mockModel.mockReturnValue(loadedModel({ userId: 'someone-else', ownerType: 'user' }));
+    mockModel.mockReturnValue(loadedModel({ userId: 'someone-else', ownerType: 'user', isPublic: true }));
 
     const html = await renderEdit();
 
@@ -89,27 +100,27 @@ describe('TemplateEditor permissions, which show why instead of a form whose eve
     expect(hasSaveButton(html)).toBe(false);
   });
 
-  it('opens the form for an Organization editor whose Organization is not active', async () => {
+  it('opens the form for an Organization editor in the Organization', async () => {
     workspace.teams = [{ id: 'team-1', role: 'editor' }];
-    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+    mockModel.mockReturnValue(loadedModel(acmeTemplate));
 
-    const html = await renderEdit();
+    const html = await renderEditInAcme();
 
     expect(html).not.toContain("You can&#x27;t edit this template");
     expect(hasSaveButton(html)).toBe(true);
   });
 
   it('opens the form for the owner of a Personal template', async () => {
-    mockModel.mockReturnValue(loadedModel({ userId: 'user-1', ownerType: 'user' }));
+    mockModel.mockReturnValue(loadedModel({ userId: 'user-1', ownerType: 'user', isPublic: false }));
 
     expect(hasSaveButton(await renderEdit())).toBe(true);
   });
 
   it("waits for the viewer's Organizations before showing either", async () => {
     workspace.isWorkspaceLoading = true;
-    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+    mockModel.mockReturnValue(loadedModel(acmeTemplate));
 
-    const html = await renderEdit();
+    const html = await renderEditInAcme();
 
     expect(html).toContain('animate-spin');
     expect(html).not.toContain("You can&#x27;t edit this template");
@@ -122,7 +133,7 @@ describe('TemplateEditor permissions, which show why instead of a form whose eve
     workspace.teams = [{ id: 'team-1', role: 'runner' }];
     mockModel.mockReturnValue(loadedModel(undefined));
 
-    const html = await renderNew();
+    const html = await renderNewInAcme();
 
     expect(html).toContain("You can&#x27;t create templates here");
     expect(hasSaveButton(html)).toBe(false);

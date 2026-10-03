@@ -70,8 +70,8 @@ and user-facing failure states when a supporting service is unavailable.
   parameter, which Login, Register, and the verification callback carry forward so
   a new account returns to the page that sent it, such as an Organization invite. Only same-origin, non-auth paths are accepted (one
   leading `/`, not `//`, checked again after dot segments are removed, so
-  `/.//host` is rejected too); without one, Login goes to the console home,
-  `/dashboard/templates/` (`getPostSignInDestination`).
+  `/.//host` is rejected too); without one, Login goes to `/dashboard/`,
+  which opens the remembered context's Templates (`getPostSignInDestination`).
 - A password reset revokes every session for the account, including the one in
   the browser doing the reset (`onPasswordReset` runs before Better Auth deletes the
   sessions, so it only logs `password_reset_completed` and must never throw);

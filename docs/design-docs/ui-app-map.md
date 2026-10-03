@@ -70,10 +70,11 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   straight to the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
-  My Templates (a sign-in with no return path opens the console home).
+  My Templates (a sign-in with no return path opens `/dashboard/`, which opens the remembered
+  context's Templates, Personal's for a new account).
 - **Returning user:** Home → "Log in" → Log in → "Sign in" → My Templates. Signed in: Home →
   "Open Dashboard" → My Templates, or account menu → "My Templates". A bookmarked
-  `/dashboard/` redirects to My Templates. A console link opened while signed out → Log in
+  `/dashboard/` opens the remembered context's My Templates. A console link opened while signed out → Log in
   (`?next=<path>`) → "Sign in" → that page.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template
   editor → Template Settings fields → outline "Add section" and "Add task to <section>" →
@@ -105,12 +106,13 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Publish a Template:** Template detail → "Share" → Share Template dialog (the
   `/profile/<user>/<template>/` link) → copy. Or the "Visibility" switch in Details. No
   username yet: a toast asks for one → Account Settings → "Username" → "Update Profile".
-- **Organization invite:** manager: Account Settings → Organizations → "Invite email" and
-  "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
+- **Organization invite:** manager: the Organization's Account Settings
+  (`/dashboard/organization/<organizationId>/settings/`, the switcher's "Settings") →
+  Organizations → "Invite email" and "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
   → signed out: "Log in to accept" (or "Create an account") → Log in → back to the invite →
   "Accept invite" → "Invite accepted." → "Switch to <Organization>" → My Templates in that
-  Organization (`/dashboard/organization/<organizationId>/templates/`). Or Account Settings →
-  "Incoming invites" → "Accept". Wrong account: "Sign out and continue" → Log in → the invite.
+  Organization (`/dashboard/organization/<organizationId>/templates/`). Or Personal Account
+  Settings → "Incoming invites" → "Accept" → that Organization's settings. Wrong account: "Sign out and continue" → Log in → the invite.
 - **Context switch:** any console page → context switcher ("Switch context") → Personal or
   an Organization → the same page, with that context's Templates and Runs. Also: Account
   Settings → "Your Organizations" → a row ("Select"), and the invite page's "Switch to
@@ -201,17 +203,19 @@ Toasts (sonner) report results everywhere.
 | `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
 | `/dashboard/import-templates/` | [Import Templates](ui-screen-inventory.md#import-templates) | Root section (sidebar "Import Templates") | Visibility select | Import preview; last import result; plan and role notices |
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
-| `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal or Organization context; manager-only Organization controls; created Run Key panel |
+| `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal (no Organization's management; the Organization's settings path adds it, manager-only controls included); created Run Key panel |
 
-Each path above also exists for an Organization under `/dashboard/organization/<organizationId>/`
-(for example `/dashboard/organization/<organizationId>/runs/<id>/`), with the same screen, level,
-overlays and modes in that Organization. Until the user's Organizations load, the page shows a
+Each path above always shows Personal, and also exists for an Organization under
+`/dashboard/organization/<organizationId>/` (for example
+`/dashboard/organization/<organizationId>/runs/<id>/`), with the same screen, level, overlays and
+modes in that Organization. Until the user's Organizations load, the page shows a
 loading state; for an Organization the user cannot open it shows the [404 page](ui-screen-inventory.md#404-page)
 in the console shell. The sidebar's Templates, Runs, New Template, Import Templates, Archive and
 Settings, the switcher's Settings and every link on the page open the current context's page,
 and switching context opens the same section in the chosen context (a Template or Run page
 opens the list). A Run, a private Organization Template, and a Run or copy an action just made
-open at the URL of the context that owns them.
+open at the URL of the context that owns them; opened at another context's URL, a Template, its
+editor or a Run replaces the URL with its owner's.
 
 The sidebar's "Template Library" and "Categories" open `/templates/` and `/categories/`, which
 leave the console shell for the public shell.
@@ -228,18 +232,23 @@ the session check answers; everyone else sees it in the public shell
 
 ## Redirect-only paths
 
-- `/dashboard/` is not a page: it answers 307 with `/dashboard/templates/`, the console
-  home. Links use `buildConsoleHomePath(context)` instead. `/dashboard/organization/<organizationId>/`
-  answers 307 with that Organization's Templates.
+- `/dashboard/organization/<organizationId>/` answers 307 with that Organization's Templates.
+  Links use `buildConsoleHomePath(context)`.
 - Legacy paths answer 308 with their page: `/checklists` with `/templates/`; `/console` with
-  `/dashboard/templates/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;
+  `/dashboard/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;
   `/console/templates/<id>` with `/dashboard/templates/<id>/`;
   `/console/templates/<id>/edit` with `/dashboard/templates/<id>/edit/`; `/console/runs/<id>`
   and `/run/<id>` (a Run's second address until 2026-09-29) with `/dashboard/runs/<id>/`.
 - A page path without its trailing slash, or a file path with one, answers 308 with the
   canonical form. `www.serplists.com` and `*.workers.dev` hosts redirect to the
   environment's one host.
-- In the browser, with no redirect status: `/templates/?category=<slug>` with no other
+- In the browser, with no redirect status: `/dashboard/` (a spinner) replaces itself with the
+  remembered context's My Templates once the user's Organizations confirm it, and Personal's
+  when they rule it out (`src/views/DashboardHome.tsx`; a failed list shows "Couldn't load your
+  Organizations" there); a Personal URL for a private Organization Template, its editor or an
+  Organization Run replaces itself with that Organization's URL, and an Organization URL for
+  another owner's Run or private Organization Template with that owner's;
+  `/templates/?category=<slug>` with no other
   filter replaces itself with `/categories/<slug>/`; an old ASCII category slug replaces
   itself with the current one; `/profile/<user>/` in another letter case replaces itself
   with the stored casing.

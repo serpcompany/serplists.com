@@ -3,6 +3,8 @@ import type { ChecklistTemplate } from "@/types/checklist";
 
 export type TemplateOwnership = Pick<ChecklistTemplate, "userId" | "teamId" | "ownerType">;
 
+export type LoadedTemplateOwnership = TemplateOwnership & Pick<ChecklistTemplate, "isPublic">;
+
 export type TemplateEditPermission = "checking" | "editable" | "organization_role" | "not_owner";
 
 export const resolveTemplateEditPermission = (params: {

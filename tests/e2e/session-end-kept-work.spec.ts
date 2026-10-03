@@ -131,15 +131,15 @@ test('unsaved task notes survive a cancelled sign-out and are offered back after
   await callApi(page, `/checklists/${created.id}`, 'DELETE', bodyNotRead);
 });
 
-test("a new template's draft kept in an Organization is offered from Personal after signing in again, with a switch back to it", async ({ page, context }) => {
+test("a new template's draft kept in an Organization is offered from Personal's editor after signing in again, with a switch back to it", async ({ page, context }) => {
   test.setTimeout(120_000);
   await loginAsAdmin(page);
   const organization = await callApi(page, '/teams', 'POST', createdOrganization, {
     name: `Kept draft Org ${Date.now()}`,
   });
-  await page.evaluate((teamId) => window.localStorage.setItem('serplists.activeWorkspaceId', teamId), organization.id);
+  const organizationEditor = `/dashboard/organization/${organization.id}/templates/new/`;
   const organizationEditorLoads = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/dashboard/templates/new/');
+  await page.goto(organizationEditor);
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name, {
     timeout: 30_000,
   });
@@ -152,8 +152,11 @@ test("a new template's draft kept in an Organization is offered from Personal af
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await signInAgainAfterTheSessionEnded(page);
 
-  await expect(page).toHaveURL(/\/dashboard\/templates\/new/, { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
+  await expect(page).toHaveURL(new RegExp(`${organizationEditor}$`), { timeout: 30_000 });
+  await page.goto('/dashboard/templates/new/');
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal', {
+    timeout: 30_000,
+  });
   await expect(page.getByText(`Unsaved template draft in ${organization.name}`)).toBeVisible();
   await page.getByRole('button', { name: `Switch to ${organization.name}` }).click();
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name);

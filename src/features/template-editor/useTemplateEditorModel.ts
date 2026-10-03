@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
-import type { TemplateOwnership } from "@/features/template-editor/templateEditPermission";
+import type { LoadedTemplateOwnership } from "@/features/template-editor/templateEditPermission";
 import {
   type SaveTemplateInput,
   type SaveTemplateResult,
@@ -57,7 +57,7 @@ export type TemplateEditorLoadResult = {
   templateSlug?: string | undefined;
   version?: number | undefined;
   ownerSlug?: string | null | undefined;
-  ownership?: TemplateOwnership | undefined;
+  ownership?: LoadedTemplateOwnership | undefined;
 };
 
 const buildDefaultTemplateEditorTemplate =
@@ -161,7 +161,7 @@ const buildLoadResult = (
       })
     : undefined,
   ownership: template?.id
-    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType }
+    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic ?? false }
     : undefined,
 });
 
@@ -264,7 +264,7 @@ export const useTemplateEditorModel = (
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
   const [ownerSlug, setOwnerSlug] = useState<string | null | undefined>();
-  const [ownership, setOwnership] = useState<TemplateOwnership | undefined>();
+  const [ownership, setOwnership] = useState<LoadedTemplateOwnership | undefined>();
 
   useLayoutEffect(() => {
     apiClientRef.current = dependencies?.apiClient;

@@ -176,8 +176,8 @@ describe('getPostSignInDestination', () => {
     expect(getPostSignInDestination('/team-invites/abc/?x=1#h')).toBe('/team-invites/abc/?x=1#h');
   });
 
-  it('opens the console home, My Templates, not Account Settings, without a return path', () => {
-    expect(getPostSignInDestination(null)).toBe('/dashboard/templates/');
+  it('opens the dashboard home, which opens the remembered context, not Account Settings, without a return path', () => {
+    expect(getPostSignInDestination(null)).toBe('/dashboard/');
   });
 });
 
@@ -189,7 +189,7 @@ describe('getPostRegisterDestination', () => {
   });
 
   it('falls back to the console without a return path', () => {
-    expect(getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })).toBe('/dashboard/templates/');
+    expect(getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })).toBe('/dashboard/');
   });
 
   it('sends an account that must verify to login with the return path kept', () => {

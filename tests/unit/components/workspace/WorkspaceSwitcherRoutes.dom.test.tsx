@@ -27,8 +27,9 @@ beforeEach(() => {
 
 afterEach(() => unmountTheSwitcher());
 
-async function openTheSwitcherAt(url: string) {
+async function openTheSwitcherAt(url: string, remembered = 'personal') {
   navigation.reset(url);
+  navigation.window.localStorage.setItem('serplists.activeWorkspaceId', remembered);
   await act(async () => {
     ({ unmount: unmountTheSwitcher } = renderTheWorkspaceProvider(
       <SidebarProvider>
@@ -46,6 +47,16 @@ const choose = (name: RegExp) =>
   act(async () => {
     fireEvent.click(screen.getByRole('menuitem', { name }));
   });
+
+describe('the context switcher on Personal URLs', () => {
+  it('names Personal whatever the tab remembered, and links Settings to Personal settings', async () => {
+    await openTheSwitcherAt('/dashboard/runs/', 'team-1');
+
+    expect(theSwitcher().textContent).toContain('Personal');
+    expect(theSwitcher().textContent).not.toContain('Acme');
+    expect(screen.getByRole('menuitem', { name: 'Settings' }).getAttribute('href')).toBe('/dashboard/settings/');
+  });
+});
 
 describe('the context switcher on Organization URLs', () => {
   it("names the Organization the URL names and links Settings to that Organization's settings", async () => {
