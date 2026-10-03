@@ -1,1 +1,5 @@
-export { default } from '@/app/(app)/dashboard/settings/page';
+import OrganizationSettings from '@/views/OrganizationSettings';
+
+export default function Page() {
+  return <OrganizationSettings />;
+}

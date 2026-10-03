@@ -30,7 +30,7 @@ import { Link } from '@/components/navigation/Link';
 
 export function BillingSection() {
   const { user } = useAuth();
-  const { activeTeamId, consoleContext, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, activeWorkspace, consoleContext, isTeamWorkspace } = useWorkspace();
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const [isOpeningPortal, setIsOpeningPortal] = useRedirectPending();
   const billingReturn = useSearchParams().get("billing");
@@ -181,11 +181,13 @@ export function BillingSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">Billing</CardTitle>
+        <CardTitle as="h2" className="wrap-anywhere">
+          {activeWorkspace.type === "team" ? `${activeWorkspace.name} billing` : "Personal billing"}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
         <p>
-          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel}</span>
+          Current plan: <span className="font-medium text-foreground">{planLabel}</span>
         </p>
 
         {hasTemplateDraft ? (

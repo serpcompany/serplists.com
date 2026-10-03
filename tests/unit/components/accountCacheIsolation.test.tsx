@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AccountOrganizationsSection } from '@/components/account/AccountOrganizationsSection';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
@@ -106,7 +107,8 @@ function renderAsUserAThenUserBOnOneQueryClient(element: React.ReactElement) {
 
 describe('private account data after user A signs out and user B signs in on the same tab, whose QueryClient outlives the session', () => {
   it.each([
-    ['Organization settings', <TeamSettingsSection key="team" />, ['Acme Corp', 'Disabled Member', 'pending-invitee@example.com']],
+    ['Organization invites', <AccountOrganizationsSection key="invites" />, ['Acme Corp', 'jane@acme.com']],
+    ['Organization settings', <TeamSettingsSection key="team" />, ['Disabled Member', 'pending-invitee@example.com']],
     ['Run Keys', <AgentAccessSection key="run-keys" />, ['Prod SOP bot']],
     ['Archive', <ArchiveRecoverySection key="archive" />, ['User A Archived Template', 'User A Archived Run']],
   ])('does not show user A\'s cached %s to user B', (_name, element, userAVisible) => {

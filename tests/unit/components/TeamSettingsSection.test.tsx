@@ -19,21 +19,8 @@ const workspaceMocks = vi.hoisted(() => ({
     type: 'team',
   },
   canManageTeam: true,
-  createTeam: vi.fn(),
-  inPersonalWithTeamsRequestFailed: false,
   patchTeam: vi.fn(),
-  rememberTeam: vi.fn(),
   refreshTeams: vi.fn(),
-  selectWorkspace: vi.fn(),
-  teams: [
-    {
-      id: 'team-1',
-      memberId: 'member-current',
-      name: 'Acme Team',
-      role: 'admin',
-      slug: 'acme-team',
-    },
-  ],
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -45,24 +32,9 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     activeTeamId: 'team-1',
     activeWorkspace: workspaceMocks.activeWorkspace,
     canManageTeam: workspaceMocks.canManageTeam,
-    createTeam: workspaceMocks.createTeam,
     isTeamWorkspace: true,
     patchTeam: workspaceMocks.patchTeam,
-    rememberTeam: workspaceMocks.rememberTeam,
     refreshTeams: workspaceMocks.refreshTeams,
-    retryWorkspace: vi.fn(),
-    selectWorkspace: workspaceMocks.selectWorkspace,
-    teams: workspaceMocks.teams,
-    ...(workspaceMocks.inPersonalWithTeamsRequestFailed
-      ? {
-          activeTeamId: undefined,
-          activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
-          canManageTeam: false,
-          isTeamWorkspace: false,
-          teams: [],
-          teamsUnavailable: true,
-        }
-      : {}),
   }),
 }));
 
@@ -121,16 +93,15 @@ describe('TeamSettingsSection', () => {
   beforeEach(() => {
     workspaceMocks.activeWorkspace.role = 'admin';
     workspaceMocks.canManageTeam = true;
-    workspaceMocks.inPersonalWithTeamsRequestFailed = false;
   });
 
-  it('says the Organizations could not load, with Retry, instead of inviting a member of other Organizations to create a duplicate', () => {
-    workspaceMocks.inPersonalWithTeamsRequestFailed = true;
+  it("is headed by the Organization's name and holds only its management, not the account's Organization choices", () => {
     const html = renderSectionWithMembers([]);
 
-    expect(html).toContain('Couldn&#x27;t load your Organizations.');
-    expect(html).toContain('Retry');
-    expect(html).not.toContain('Create or select an Organization to share templates and runs.');
+    expect(html).toMatch(/<h2[^>]*>Acme Team<\/h2>/);
+    expect(html).toContain('Your role: Admin');
+    expect(html).not.toContain('Create Organization');
+    expect(html).not.toContain('Your Organizations');
   });
 
   it('copies invite links through the clipboard API when available', async () => {
@@ -162,7 +133,6 @@ describe('TeamSettingsSection', () => {
   it('stops typing an Organization name at the limit the API accepts, rather than letting the API refuse it with a raw schema error', () => {
     const html = renderSectionWithMembers([]);
 
-    expect(html).toMatch(/<input[^>]*id="team-name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*id="team-name"/);
     expect(html).toMatch(/<input[^>]*id="team-settings-name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*id="team-settings-name"/);
   });
 

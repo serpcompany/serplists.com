@@ -7,7 +7,7 @@
 - Browser auth state uses Better Auth httpOnly cookies. The client does not store auth tokens.
 - Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to `/dashboard`, which opens the remembered context's Templates (Personal's after a sign-out); email verification and password reset end on the login page, so they follow the same rule, and sign-up without email verification goes there too (`getPostSignInDestination` in `src/lib/auth/returnPath.ts`).
 - Password strength rules are enforced for registration and password changes.
-- `/dashboard/settings` is the canonical settings/account page, always in Personal: the account's profile, security, Personal Run Keys (where enabled) and Personal billing, with incoming invites, Create Organization and the user's Organizations. An Organization's management lives on its own settings page (below).
+- `/dashboard/settings` is Account Settings, always in Personal: the account's profile, security, Personal Run Keys (where enabled) and Personal billing, with incoming invites, Create Organization and the user's Organizations. An Organization's settings (`/dashboard/organization/:organizationId/settings`) is its own page, named after it: its billing, its management by role, and Leave Organization, with a link back to Account Settings and none of the User's own controls.
 - `/account` and `/dashboard/profile` redirect to `/dashboard/settings`, keeping the
   query string and hash (legacy redirects use `LegacyRedirect`).
 - Public profiles remain available at `/profile/:username`.

@@ -50,36 +50,29 @@ export function IncomingInviteList({ acceptingInviteId, invites, onAccept }: Inc
 }
 
 type OrganizationListProps = {
-  activeTeamId: string | null;
   onSelect: (teamId: string) => void;
   teams: TeamSummary[];
 };
 
-export function OrganizationList({ activeTeamId, onSelect, teams }: OrganizationListProps) {
+export function OrganizationList({ onSelect, teams }: OrganizationListProps) {
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-medium">Your Organizations</h3>
       <div className="flex flex-col gap-2">
-        {teams.map((team) => {
-          const selected = activeTeamId === team.id;
-
-          return (
-            <Item
-              key={team.id}
-              className="w-full text-left hover:bg-muted"
-              render={<button type="button" onClick={() => onSelect(team.id)} />}
-              variant="outline"
-            >
-              <ItemContent className="min-w-0">
-                <ItemTitle className="wrap-anywhere">{team.name}</ItemTitle>
-                <ItemDescription>{formatRole(team.role)}</ItemDescription>
-              </ItemContent>
-              <ItemActions className="text-xs text-muted-foreground">
-                {selected ? 'Selected' : 'Select'}
-              </ItemActions>
-            </Item>
-          );
-        })}
+        {teams.map((team) => (
+          <Item
+            key={team.id}
+            className="w-full text-left hover:bg-muted"
+            render={<button type="button" onClick={() => onSelect(team.id)} />}
+            variant="outline"
+          >
+            <ItemContent className="min-w-0">
+              <ItemTitle className="wrap-anywhere">{team.name}</ItemTitle>
+              <ItemDescription>{formatRole(team.role)}</ItemDescription>
+            </ItemContent>
+            <ItemActions className="text-xs text-muted-foreground">Select</ItemActions>
+          </Item>
+        ))}
       </div>
     </section>
   );

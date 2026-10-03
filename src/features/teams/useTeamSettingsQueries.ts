@@ -1,9 +1,15 @@
-import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { reloadObservedQueries } from '@/features/teams/reloadObservedQueries';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+
+const cancelThenRefetch =
+  (queryClient: QueryClient, query: { refetch: () => Promise<unknown> }, queryKey: QueryKey) => async () => {
+    await queryClient.cancelQueries({ queryKey });
+    await query.refetch();
+  };
 
 export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string | undefined; canManageTeam: boolean }) {
   const userId = useAuth().user?.id;
@@ -12,7 +18,6 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
   const keys = {
     members: queryKeys.teamMembers(userId, activeTeamId),
     activity: queryKeys.teamActivity(userId, activeTeamId),
-    incomingInvites: queryKeys.incomingTeamInvites(userId),
     invites: queryKeys.teamInvites(userId, activeTeamId),
   };
 
@@ -28,27 +33,31 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
     enabled: signedIn && Boolean(activeTeamId && canManageTeam),
     staleTime: 30 * 1000,
   });
-  const incomingInvitesQuery = useQuery({
-    queryKey: keys.incomingInvites,
-    queryFn: () => api.getIncomingTeamInvites(),
-    enabled: signedIn,
-    staleTime: 30 * 1000,
-  });
-
-  const cancelThenRefetch = (query: { refetch: () => Promise<unknown> }, queryKey: QueryKey) => async () => {
-    await queryClient.cancelQueries({ queryKey });
-    await query.refetch();
-  };
 
   return {
     membersQuery,
     activityQuery,
-    incomingInvitesQuery,
     reload: {
-      members: cancelThenRefetch(membersQuery, keys.members),
-      activity: cancelThenRefetch(activityQuery, keys.activity),
-      incomingInvites: cancelThenRefetch(incomingInvitesQuery, keys.incomingInvites),
+      members: cancelThenRefetch(queryClient, membersQuery, keys.members),
+      activity: cancelThenRefetch(queryClient, activityQuery, keys.activity),
       invites: () => reloadObservedQueries(queryClient, keys.invites),
     },
+  };
+}
+
+export function useIncomingTeamInvites() {
+  const userId = useAuth().user?.id;
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.incomingTeamInvites(userId);
+  const incomingInvitesQuery = useQuery({
+    queryKey,
+    queryFn: () => api.getIncomingTeamInvites(),
+    enabled: Boolean(userId),
+    staleTime: 30 * 1000,
+  });
+
+  return {
+    incomingInvitesQuery,
+    reloadIncomingInvites: cancelThenRefetch(queryClient, incomingInvitesQuery, queryKey),
   };
 }

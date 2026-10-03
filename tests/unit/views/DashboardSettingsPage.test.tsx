@@ -91,7 +91,7 @@ describe('DashboardSettings page', () => {
     expect(html).toContain('data-dashboard-content-shell="true"');
     expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('Profile Information');
-    expect(html).toContain('Billing');
+    expect(html).toContain('Personal billing');
     expect(html).toContain('Security');
     expect(html).toContain('john@example.com');
     expect(html).toContain('John Doe');

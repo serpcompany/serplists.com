@@ -8,8 +8,7 @@ import { ProfileSection } from '@/components/account/ProfileSection';
 import { authClient } from '@/lib/auth-client';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
-import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
-import { LeaveOrganizationCard } from '@/components/account/LeaveOrganizationCard';
+import { AccountOrganizationsSection } from '@/components/account/AccountOrganizationsSection';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { isPersonalRunMcpUiEnabled } from '@/env';
 import {
@@ -102,11 +101,13 @@ const Account = () => {
     }));
   };
 
+  const runKeysEnabled = isPersonalRunMcpUiEnabled();
+
   return (
     <DashboardContentShell width="narrow">
       <DashboardPageHeader
         title="Account Settings"
-        description="Manage your profile, billing, and security settings."
+        description={`${runKeysEnabled ? 'Your profile, sign-in, Run Keys and Personal billing.' : 'Your profile, sign-in and Personal billing.'} They stay yours in every context.`}
       />
       <DashboardPageBody>
         <ProfileSection
@@ -120,11 +121,9 @@ const Account = () => {
 
         <BillingSection />
 
-        {isPersonalRunMcpUiEnabled() ? <AgentAccessSection /> : null}
+        {runKeysEnabled ? <AgentAccessSection /> : null}
 
-        <TeamSettingsSection />
-
-        <LeaveOrganizationCard />
+        <AccountOrganizationsSection />
 
         <SecuritySection />
       </DashboardPageBody>
