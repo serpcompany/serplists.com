@@ -104,13 +104,16 @@ test('a Personal URL shows Personal while the teams request fails, and the switc
   await expect(page.getByRole('heading', { name: 'My Templates' })).toBeVisible();
   await expect.poll(() => templateListRequests.some((search) => search.includes('scope=personal'))).toBe(true);
   expect(templateListRequests.filter((search) => search.includes('teamId'))).toEqual([]);
-  await switcher.click();
-  await expect(page.getByRole('menuitem', { name: 'Retry loading Organizations' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
 
-  await retryWithTheTeamsListBack(page, state);
+  state.teamsFail = false;
+  await switcher.click();
+  await page.getByRole('menuitem', { name: 'Retry loading Organizations' }).click();
+
   await switcher.click();
   await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Retry loading Organizations' })).toHaveCount(0);
+  await expect(switcher).toContainText('Personal');
 });
 
 test("a Personal URL for an Organization run moves to the Organization's URL, which waits for a failed teams request with Retry", async ({ page }) => {
