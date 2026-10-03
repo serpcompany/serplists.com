@@ -14,6 +14,7 @@ import {
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import { getPostRegisterDestination, getPostSignInDestination, withReturnPath } from '@/lib/auth/returnPath';
+import * as consoleRoutes from '@/lib/consoleRoutes';
 import { canonicalPath } from '@/lib/http/urlStandard';
 import * as routes from '@/lib/routes';
 
@@ -66,6 +67,26 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildConsoleArchivePath', routes.buildConsoleArchivePath()],
 ];
 
+const acme = consoleRoutes.organizationConsole('team-1');
+
+const ORGANIZATION_ROUTE_BUILDER_PATHS: Array<[string, string]> = [
+  ['buildConsoleHomePath (an Organization)', consoleRoutes.buildConsoleHomePath(acme)],
+  ['buildConsoleTemplatesPath (an Organization)', consoleRoutes.buildConsoleTemplatesPath(acme)],
+  ['buildConsoleTemplateCreatePath (an Organization)', consoleRoutes.buildConsoleTemplateCreatePath(acme)],
+  ['buildConsoleTemplateImportPath (an Organization)', consoleRoutes.buildConsoleTemplateImportPath(acme)],
+  ['buildConsoleTemplatePath (an Organization)', consoleRoutes.buildConsoleTemplatePath('tpl-1', acme)],
+  ['buildConsoleTemplateEditPath (an Organization)', consoleRoutes.buildConsoleTemplateEditPath('tpl-1', acme)],
+  ['buildConsoleRunsPath (an Organization)', consoleRoutes.buildConsoleRunsPath(acme)],
+  ['buildConsoleRunPath (an Organization)', consoleRoutes.buildConsoleRunPath('run-1', acme)],
+  ['buildConsoleSettingsPath (an Organization)', consoleRoutes.buildConsoleSettingsPath(acme)],
+  ['buildConsoleArchivePath (an Organization)', consoleRoutes.buildConsoleArchivePath(acme)],
+  ['buildConsoleRoutePath', consoleRoutes.buildConsoleRoutePath({ context: acme, section: { name: 'run', runId: 'run-1' } })],
+  [
+    'buildEquivalentConsolePath',
+    present(consoleRoutes.buildEquivalentConsolePath('/dashboard/templates/tpl-1/', acme), 'the equivalent path in an Organization'),
+  ],
+];
+
 const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [
   ['EMAIL_VERIFIED_CALLBACK_URL', EMAIL_VERIFIED_CALLBACK_URL],
   ['VERIFY_EMAIL_LOGIN_PATH', VERIFY_EMAIL_LOGIN_PATH],
@@ -80,7 +101,7 @@ const PUBLIC_SITE_LINK_PATHS = everyPublicSiteLink
   .map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
 
 describe('route builders and the URLs the app writes', () => {
-  it.each([...ROUTE_BUILDER_PATHS, ...AUTH_PAGE_AND_API_LINKS, ...PUBLIC_SITE_LINK_PATHS])(
+  it.each([...ROUTE_BUILDER_PATHS, ...ORGANIZATION_ROUTE_BUILDER_PATHS, ...AUTH_PAGE_AND_API_LINKS, ...PUBLIC_SITE_LINK_PATHS])(
     '%s gives a canonical URL that is served as it is',
     async (_name, url) => {
       await expectServedAsIs(url);
@@ -90,6 +111,12 @@ describe('route builders and the URLs the app writes', () => {
   it('checks every route builder routes.ts exports', () => {
     const builders = Object.keys(routes).filter((name) => /^build\w*Path$/.test(name));
     const checked = new Set(ROUTE_BUILDER_PATHS.map(([name]) => name.split(' ')[0]));
+    expect(builders.filter((name) => !checked.has(name))).toEqual([]);
+  });
+
+  it('checks every console route builder consoleRoutes.ts exports in an Organization too', () => {
+    const builders = Object.keys(consoleRoutes).filter((name) => /^build\w*Path$/.test(name));
+    const checked = new Set(ORGANIZATION_ROUTE_BUILDER_PATHS.map(([name]) => name.split(' ')[0]));
     expect(builders.filter((name) => !checked.has(name))).toEqual([]);
   });
 });
