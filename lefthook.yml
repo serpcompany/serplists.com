@@ -18,4 +18,4 @@ commit-msg:
 pre-push:
   commands:
     verify:
-      run: pnpm run verify
+      run: node --import tsx scripts/run-at-low-priority.ts pnpm run verify
