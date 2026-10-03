@@ -168,9 +168,11 @@ test('@smoke team workspace settings create link invites and expose owner contro
 
   await openTheAcmeTeamSettings(page);
 
-  await expect(
-    page.getByRole('heading', { name: 'Account Settings' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Acme Team Settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Acme Team billing' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Profile Information' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Create Organization' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Account Settings' })).toHaveAttribute('href', '/dashboard/settings/');
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await expect(
     page.getByText('Owns billing, members, settings, templates, and runs.'),

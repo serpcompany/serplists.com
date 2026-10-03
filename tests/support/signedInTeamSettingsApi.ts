@@ -9,13 +9,20 @@ const teamSettingsServer = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({
   api: {
     ...teamSettingsServer,
+    getBillingStatus: vi.fn().mockResolvedValue({ billingEnabled: true, plan: 'free' }),
     getTeamActivity: vi.fn().mockResolvedValue([]),
     getTeamInvites: vi.fn().mockResolvedValue([]),
     getTeamMembers: vi.fn().mockResolvedValue([]),
   },
 }));
+const signedInSession = vi.hoisted(() => ({
+  isLoading: false,
+  sessionStatus: 'authenticated',
+  user: { id: 'user-1' },
+}));
+
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: 'user-1' } }),
+  useAuth: () => signedInSession,
 }));
 
 export { teamSettingsServer };

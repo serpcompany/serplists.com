@@ -1210,7 +1210,7 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Organization invite ("Organization Invite", `/team-invites/<token>/`)
 - **PURPOSE:** Show an Organization invite and accept or decline it.
-- **HOW USER GETS HERE:** an invite link a manager created in Account Settings; back from Log in
+- **HOW USER GETS HERE:** an invite link a manager created in Organization Settings; back from Log in
   or Register after "Log in to accept" or "Create an account".
 - **WHAT'S ON THE SCREEN:** the auth card frame without its aside: a people icon over the
   title "Organization Invite" (the page's h1). The body depends on the state, its buttons
@@ -1226,9 +1226,10 @@ existing content, invent nothing):
     settings" (outline).
 - **PRIMARY ACTION:** "Accept invite".
 - **SECONDARY ACTIONS:** "Decline"; "Switch to <Organization>" → [My Templates](#my-templates)
-  in that Organization; "Organization settings" → [Account Settings](#account-settings) in that
-  Organization; "Open templates" (declined) → My Templates in the current context; "Open
-  settings" (an invite error) → Personal Account Settings.
+  in that Organization; "Organization settings" → that Organization's
+  [Organization Settings](#organization-settings); "Open templates" (declined) → My Templates
+  in the current context; "Open settings" (an invite error) → [Account
+  Settings](#account-settings).
 - **STATES:** no token ("This invite link is missing a token."); "Checking your session...";
   signed out; "Loading invite..."; the invite; "Responding..."; accepted; already a member
   ("You're already a member of <Organization>." with the same two buttons); declined ("Invite
@@ -1724,24 +1725,23 @@ existing content, invent nothing):
 
 ### Account Settings
 
-- **SCREEN NAME:** Account Settings (`/dashboard/settings/`, always Personal, and
-  `/dashboard/organization/<organizationId>/settings/` for an Organization)
-- **PURPOSE:** Manage the profile, billing, Run Keys, Organizations and security.
-- **HOW USER GETS HERE:** Personal settings: account menu "Settings" (from any context);
-  sidebar "Settings" and the context switcher's "Settings" in Personal; "Open settings" on an
-  invite; "Manage Pro" or "Manage subscription" on Pricing; Stripe's return. An Organization's
-  settings: sidebar "Settings" and the context switcher's "Settings" in that Organization;
-  "Organization settings" on an invite; "Select" on a row of "Your Organizations".
-- **WHAT'S ON THE SCREEN:** page header "Account Settings", "Manage your profile, billing, and
-  security settings."; stacked cards:
+- **SCREEN NAME:** Account Settings (`/dashboard/settings/`, always Personal)
+- **PURPOSE:** Manage what is the User's in every context: the profile, security, Run Keys
+  and Personal billing, with the account's Organization choices.
+- **HOW USER GETS HERE:** account menu "Settings" (from any context); sidebar "Settings" and
+  the context switcher's "Settings" in Personal; the "Account Settings" link on
+  [Organization Settings](#organization-settings); "Open settings" on an invite; "Manage Pro"
+  or "Manage subscription" on Pricing; Stripe's return.
+- **WHAT'S ON THE SCREEN:** page header "Account Settings", "Your profile, sign-in, Run Keys
+  and Personal billing. They stay yours in every context." ("Your profile, sign-in and
+  Personal billing." where the Run Key UI is off); stacked cards:
   - "Profile Information": "Profile Picture" (the avatar with "Upload avatar" and "Remove
     avatar" buttons, always shown); "Email" (disabled, "Email cannot be changed"); "Full
     Name"; "Username" (after "@"); "Public profile URL:" (a link); "Update Profile" in the
     card's footer.
-  - "Billing": "Current Personal plan:" or "Current Organization plan:" with the plan;
-    "Resume template draft" when a draft is kept; the status error with "Retry"; "Billing
-    checkout is currently unavailable."; the Organization billing message; "Manage
-    subscription" or "Upgrade to Pro — $9/month" in the card's footer.
+  - "Personal billing": "Current plan:" with the plan; "Resume template draft" when a draft
+    is kept; the status error with "Retry"; "Billing checkout is currently unavailable.";
+    "Manage subscription" or "Upgrade to Pro — $9/month" in the card's footer.
   - "Agent Access" (only where the Run Key UI is enabled): "Permissions are fixed when you
     create a key" (make a new key to change them; no key can delete or publish templates,
     change the profile, reach Organizations or billing); "Key name" ("Codex SOP Runner");
@@ -1753,31 +1753,21 @@ existing content, invent nothing):
     button); "Personal Run Keys" (name, "Active" or "Revoked", prefix, the key's
     permissions as badges, created and last used, "Revoke"), or "No Run Keys yet."
   - "Organizations": "Incoming invites" ("Accept"); a create form ("Organization name",
-    "Slug", "Create Organization"); "Your Organizations" (name, role, "Selected" or
-    "Select"); on an Organization's settings only: its name, "Your role: <role>", the role's
-    description; for managers: a rename form ("Save Organization") and invites ("Invite
-    email", "Role", "Create link", the link with a copy button, "Pending invites" with "New
-    link" and revoke); "Owners and admins manage Organization settings, invites, and
-    activity." for others; "Members" (name, "You", email, role and status selects, labelled
-    "Role" and "Status" on phones where they stack, "Make owner"); "Activity". In Personal:
-    "Create or select an Organization to share templates and runs."
-  - "Leave Organization" (on an Organization's settings, not its owner): "Leave <name> and return to your
-    Personal context. …", "Leave Organization".
+    "Slug", "Create Organization"); "Your Organizations" (name, role, "Select", which opens
+    that Organization's settings); "Create or select an Organization to share templates and
+    runs."
   - "Security": "Change password" ("Current password", "New password", "Confirm new password",
     "Sign out other sessions" switch with "Keeps you signed in on this device.", "Update
     password"); "Sessions" ("Quickly sign out other devices if you suspect misuse.", "Sign out
     other sessions").
 - **PRIMARY ACTION:** "Update Profile".
 - **SECONDARY ACTIONS:** billing actions; "Create Run Key", "Revoke" → [Revoke Run Key
-  dialog](#revoke-run-key-dialog); Organization actions ("Leave Organization" and "Make owner"
-  ask a [browser confirm](#browser-confirm-prompts)); "Update password"; "Sign out other
-  sessions".
-- **STATES:** Personal (no Organization's management) or an Organization; role-limited Organization controls (owners and
-  admins manage); "Couldn't load your Organizations." with "Retry"; members, invites, keys and
-  activity each load or fail on their own ("Loading members...", "Couldn't load members.");
-  no Run Key permission ticked: "Choose at least one permission." and "Create Run Key"
-  disabled; busy labels ("Updating...", "Creating...", "Saving...", "Accepting...",
-  "Leaving...", "Opening billing...", "Revoking...", "Signing out...").
+  dialog](#revoke-run-key-dialog); "Accept", "Create Organization" and "Select" (each opens
+  that Organization's settings); "Update password"; "Sign out other sessions".
+- **STATES:** "Couldn't load your Organizations." with "Retry"; incoming invites and keys each
+  load or fail on their own; no Run Key permission ticked: "Choose at least one permission."
+  and "Create Run Key" disabled; busy labels ("Updating...", "Creating...", "Accepting...",
+  "Opening billing...", "Revoking...", "Signing out...").
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (built):** each section a shadcn Card with Field groups, one column in the
   narrow page width. The proposal's section nav ([Left category nav](#left-category-nav)) or
@@ -1786,7 +1776,7 @@ existing content, invent nothing):
   no settings.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: page header; one column of Cards (the narrow page width): Profile
-    Information, Billing, Agent Access, Organizations, Leave Organization, Security.
+    Information, Personal billing, Agent Access, Organizations, Security.
   - COMPONENT TYPES: Card with a footer; avatar with visible buttons; labelled Fields
     (inputs, an InputGroup with "@", switches as horizontal Fields, selects); a FieldSet of
     checkbox choice cards (a `FieldLabel` around a horizontal `Field`: `Checkbox`,
@@ -1794,8 +1784,8 @@ existing content, invent nothing):
     outline `Badge`s for their permissions, Organizations, invites, members); Alerts; copy
     InputGroups; `ChangelogList` rows; `AlertDialog`.
   - DATA FIELDS: User (email, name, username, avatar); plan; Run Keys (name, prefix, status,
-    permissions, created and last used); Organizations (name, slug, role, members, invites,
-    activity); password fields.
+    permissions, created and last used); Organizations (name, role) and incoming invites;
+    password fields.
 - **PROOF PASS:** Pass (step 2a), against shadcn's Card and Field (the reference has no
   settings): `settings-personal` (admin, Personal), `settings-organization-owner` (the owner
   of an Organization: members, invites, activity), `settings-organization-editor` (an editor:
@@ -1811,10 +1801,59 @@ existing content, invent nothing):
   title and description; Tab from "Key name" reaches the four checkboxes in order, then
   "Create Run Key", and Space ticks one; the cards stack in one column and nothing scrolls
   sideways at 390px.
+  The Organization captures show what is now [Organization Settings](#organization-settings),
+  from before #206 split it into its own page.
 - **NOTES:** Code: `src/views/Account.tsx` (the route renders `src/views/DashboardSettings.tsx`,
-  which re-exports it); Agent Access is `src/components/account/AgentAccessSection.tsx`, and
-  the permission names and rules are `src/lib/schemas/runKeyPermissions.ts`. Issue #206
-  tracks splitting this page.
+  which re-exports it); the Organizations card is
+  `src/components/account/AccountOrganizationsSection.tsx`; Agent Access is
+  `src/components/account/AgentAccessSection.tsx`, and the permission names and rules are
+  `src/lib/schemas/runKeyPermissions.ts`.
+
+### Organization Settings
+
+- **SCREEN NAME:** Organization Settings ("<name> Settings",
+  `/dashboard/organization/<organizationId>/settings/`)
+- **PURPOSE:** Manage one Organization: its billing, name and slug, invites, members and
+  activity, or leave it. Nothing of the User's own (profile, security, Run Keys) is here.
+- **HOW USER GETS HERE:** sidebar "Settings" and the context switcher's "Settings" in that
+  Organization; "Select" on a row of [Account Settings](#account-settings)' "Your
+  Organizations", or creating an Organization or accepting an incoming invite there;
+  "Organization settings" on an accepted invite.
+- **WHAT'S ON THE SCREEN:** page header "<name> Settings", "<name>'s billing, members and
+  invites." and "Your profile, security and Run Keys are in Account Settings." (a link to
+  Account Settings; "Your profile and security are in" where the Run Key UI is off); stacked
+  cards:
+  - "<name> billing": "Current plan:" with the plan; "Resume template draft" when a draft is
+    kept; the status error with "Retry"; "Billing checkout is currently unavailable."; the
+    Organization billing message ("Paid Organization entitlements apply while this
+    Organization is selected." or "Personal subscriptions are managed from Personal.").
+  - "<name>": "Your role: <role>", the role's description; for managers: a rename form
+    ("Organization name", "Slug", "Save Organization") and invites ("Invite email", "Role",
+    "Create link", the link with a copy button, "Pending invites" with "New link" and
+    revoke); "Owners and admins manage Organization settings, invites, and activity." for
+    others; "Members" (name, "You", email, role and status selects, labelled "Role" and
+    "Status" on phones where they stack, "Make owner"); "Activity" for managers.
+  - "Leave Organization" (not for its owner): "Leave <name> and return to your Personal
+    context. …", "Leave Organization".
+- **PRIMARY ACTION:** "Save Organization" (owners and admins).
+- **SECONDARY ACTIONS:** "Create link", "New link" and revoke on invites; member role and
+  status; "Make owner" and "Leave Organization" ask a [browser
+  confirm](#browser-confirm-prompts); "Account Settings".
+- **STATES:** role-limited controls (owners and admins manage); members, invites and activity
+  each load or fail on their own ("Loading members...", "Couldn't load members."); until the
+  user's Organizations load, a loading state, and for an Organization the user cannot open,
+  the [404 page](#404-page); busy labels ("Saving...", "Leaving...").
+- **NAVIGATION TYPE:** root section.
+- **PATTERN CHOICE (built):** as Account Settings: a shadcn Card per section, one column in the
+  narrow page width.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header; one column of Cards: <name> billing, <name>, Leave
+    Organization.
+  - DATA FIELDS: Organization (name, slug, role, members, invites, activity); plan.
+- **NOTES:** Code: `src/views/OrganizationSettings.tsx`; the Organization's card is
+  `src/components/account/TeamSettingsSection.tsx`, Leave is
+  `src/components/account/LeaveOrganizationCard.tsx`, and billing is
+  `src/components/account/BillingSection.tsx`, shared with Account Settings.
 
 ### 404 page
 
@@ -2245,7 +2284,7 @@ replaced.
     "Sign out"; the browser's own leave prompt on a reload or tab close.
   - In the editor: "Load latest version" with unsaved edits; a Clipy draft or "Restore draft"
     replacing unsaved work.
-  - In Account Settings: "Leave <name>? You will lose access to its Templates and Runs." and
+  - In Organization Settings: "Leave <name>? You will lose access to its Templates and Runs." and
     "Transfer Organization ownership to <name>? You will become an admin."
 - **WHAT'S ON THE SCREEN:** the browser's confirm box with the message, OK and Cancel.
 - **PRIMARY ACTION:** OK.

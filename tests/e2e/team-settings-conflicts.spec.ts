@@ -104,6 +104,11 @@ async function openOrganizationSettings(page: Page) {
   await expect(page.getByText('Your role: Owner')).toBeVisible();
 }
 
+async function openAccountSettings(page: Page) {
+  await page.goto('/dashboard/settings/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Account Settings' })).toBeVisible();
+}
+
 function countRequests(state: MockState, method: string, path: string) {
   return state.requests.filter((request) => request.method === method && request.path === path).length;
 }
@@ -269,7 +274,7 @@ test('creating an Organization with a taken slug shows the conflict and keeps th
       : null),
   };
   await mockOrganizationApi(page, state);
-  await openOrganizationSettings(page);
+  await openAccountSettings(page);
 
   await page.locator('#team-name').fill('Acme');
   await page.locator('#team-slug').fill('acme-team');
@@ -307,7 +312,7 @@ test('accepting an invite to an Organization the user already belongs to shows t
     },
   };
   await mockOrganizationApi(page, state);
-  await openOrganizationSettings(page);
+  await openAccountSettings(page);
 
   await page.getByRole('button', { name: 'Accept invite to Acme Team' }).click();
 

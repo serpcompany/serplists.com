@@ -29,7 +29,13 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
   return {
-    useWorkspace: () => ({ consoleContext: ownerConsoleContext(workspaceMock.value.activeTeamId), ...workspaceMock.value }),
+    useWorkspace: () => ({
+      activeWorkspace: workspaceMock.value.activeTeamId
+        ? { type: 'team', teamId: workspaceMock.value.activeTeamId, name: 'Acme Org' }
+        : { type: 'personal', name: 'Personal' },
+      consoleContext: ownerConsoleContext(workspaceMock.value.activeTeamId),
+      ...workspaceMock.value,
+    }),
   };
 });
 
@@ -85,7 +91,8 @@ describe('BillingSection', () => {
       plan: 'free',
     });
 
-    expect(html).toContain('Current Personal plan');
+    expect(html).toContain('Personal billing');
+    expect(html).toContain('Current plan: <span');
     expect(html).toContain('Upgrade to Pro — $9/month');
   });
 
@@ -192,7 +199,8 @@ describe('BillingSection', () => {
       'team-1',
     );
 
-    expect(html).toContain('Current Organization plan');
+    expect(html).toContain('Acme Org billing');
+    expect(html).not.toContain('Personal billing');
     expect(html).toContain('Personal subscriptions are managed from Personal.');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');

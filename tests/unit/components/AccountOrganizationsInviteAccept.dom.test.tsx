@@ -12,7 +12,7 @@ import { renderSettled } from '../../support/renderInTheDom';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
-import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
+import { AccountOrganizationsSection } from '@/components/account/AccountOrganizationsSection';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 import { safeLocalStorage } from '@/lib/browserStorage';
@@ -63,7 +63,7 @@ async function openSettingsInPersonal() {
     <QueryClientProvider client={queryClient}>
       <WorkspaceProvider>
         <ActiveContext />
-        <TeamSettingsSection />
+        <AccountOrganizationsSection />
       </WorkspaceProvider>
     </QueryClientProvider>,
   );

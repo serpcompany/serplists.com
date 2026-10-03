@@ -6,13 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import type { TeamMember, TeamMemberStatus, TeamRole } from '@/lib/api';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import {
-  acceptIncomingTeamInvite,
   saveTeamSettings,
   transferTeamOwnership,
   updateTeamMember,
@@ -22,9 +20,7 @@ import { useTeamSettingsForm } from '@/features/teams/useTeamSettingsForm';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
 import { TeamActivityList } from '@/components/account/TeamActivityList';
-import { IncomingInviteList, OrganizationList } from '@/components/account/OrganizationChoices';
 import { OrganizationMemberList } from '@/components/account/OrganizationMemberList';
-import { QueryErrorNotice } from '@/components/shared/QueryListState';
 import { formatRole } from '@/components/account/teamSettingsFormat';
 import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 
@@ -46,36 +42,25 @@ export function TeamSettingsSection() {
     activeTeamId,
     activeWorkspace,
     canManageTeam,
-    createTeam,
     isTeamWorkspace,
     patchTeam,
     refreshTeams,
-    rememberTeam,
-    retryWorkspace,
-    selectWorkspace,
-    teams = [],
-    teamsUnavailable,
   } = useWorkspace();
-  const [teamName, setTeamName] = useState('');
-  const [teamSlug, setTeamSlug] = useState('');
   const teamSettingsForm = useTeamSettingsForm(
     activeWorkspace.type === 'team'
       ? { teamId: activeWorkspace.teamId, name: activeWorkspace.name, slug: activeWorkspace.slug ?? '' }
       : null,
   );
   const { name: editTeamName, slug: editTeamSlug } = teamSettingsForm.values;
-  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [transferringOwnerMemberId, setTransferringOwnerMemberId] = useState<string | null>(null);
-  const [acceptingIncomingInviteId, setAcceptingIncomingInviteId] = useState<string | null>(null);
 
-  const { membersQuery, activityQuery, incomingInvitesQuery, reload } = useTeamSettingsQueries({
+  const { membersQuery, activityQuery, reload } = useTeamSettingsQueries({
     activeTeamId,
     canManageTeam,
   });
   const members = membersQuery.data ?? [];
-  const incomingInvites = incomingInvitesQuery.data ?? [];
   const queryClient = useQueryClient();
   const memberChangeRefreshes = [reload.members, refreshTeams, reload.activity];
   const markOrganizationListStale = () =>
@@ -92,32 +77,6 @@ export function TeamSettingsSection() {
   const changedTeamSettings = isTeamWorkspace
     ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
     : null;
-
-  const handleCreateTeam = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const name = teamName.trim();
-    const nameError = getOrganizationNameError(name);
-    if (nameError) {
-      toast.error(nameError);
-      return;
-    }
-
-    setIsCreatingTeam(true);
-    try {
-      await createTeam({
-        name,
-        slug: teamSlug.trim() || undefined,
-      });
-      setTeamName('');
-      setTeamSlug('');
-      toast.success('Organization created');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create Organization');
-    } finally {
-      setIsCreatingTeam(false);
-    }
-  };
 
   const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -157,27 +116,6 @@ export function TeamSettingsSection() {
       });
     } finally {
       setIsUpdatingTeam(false);
-    }
-  };
-
-  const handleAcceptIncomingInvite = async (inviteId: string) => {
-    setAcceptingIncomingInviteId(inviteId);
-    try {
-      const acceptedInvite = await acceptIncomingTeamInvite(inviteId);
-
-      if (acceptedInvite.team) {
-        rememberTeam(acceptedInvite.team);
-      }
-
-      selectWorkspace(acceptedInvite.teamId);
-      await reload.incomingInvites();
-      void refreshTeams().catch(() => undefined);
-      toast.success('Organization invite accepted');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
-      await reload.incomingInvites().catch(() => undefined);
-    } finally {
-      setAcceptingIncomingInviteId(null);
     }
   };
 
@@ -242,128 +180,76 @@ export function TeamSettingsSection() {
     }
   };
 
+  if (activeWorkspace.type !== 'team') {
+    return null;
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">Organizations</CardTitle>
+        <CardTitle as="h2" className="wrap-anywhere">{activeWorkspace.name}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        {incomingInvites.length > 0 ? (
-          <IncomingInviteList
-            acceptingInviteId={acceptingIncomingInviteId}
-            invites={incomingInvites}
-            onAccept={(inviteId) => void handleAcceptIncomingInvite(inviteId)}
-          />
-        ) : null}
-
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleCreateTeam}>
-          <Field>
-            <FieldLabel htmlFor="team-name">Organization name</FieldLabel>
-            <Input
-              id="team-name"
-              maxLength={ORGANIZATION_NAME_MAX}
-              value={teamName}
-              onChange={(event) => setTeamName(event.target.value)}
-              placeholder="Agency operations"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="team-slug">Slug</FieldLabel>
-            <Input
-              id="team-slug"
-              value={teamSlug}
-              onChange={(event) => setTeamSlug(event.target.value)}
-              placeholder="agency-ops"
-            />
-          </Field>
-          <Button type="submit" disabled={isCreatingTeam}>
-            {isCreatingTeam ? 'Creating...' : 'Create Organization'}
-          </Button>
-        </form>
-
-        {teamsUnavailable ? (
-          <QueryErrorNotice message="Couldn't load your Organizations." onRetry={retryWorkspace} />
-        ) : null}
-
-        {teams.length > 0 ? (
-          <OrganizationList
-            activeTeamId={activeWorkspace.type === 'team' ? activeWorkspace.teamId : null}
-            onSelect={selectWorkspace}
-            teams={teams}
-          />
-        ) : null}
-
-        <Separator />
-
-        {isTeamWorkspace ? (
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-medium wrap-anywhere">{activeWorkspace.name}</h3>
-              <p className="text-sm text-muted-foreground">
-                Your role: {formatRole(activeWorkspace.role)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {roleDescriptions[activeWorkspace.role]}
-              </p>
-            </div>
-
-            {canManageTeam ? (
-              <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleUpdateTeam}>
-                <Field>
-                  <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
-                  <Input
-                    id="team-settings-name"
-                    maxLength={ORGANIZATION_NAME_MAX}
-                    value={editTeamName}
-                    onChange={(event) => teamSettingsForm.setName(event.target.value)}
-                    placeholder="Agency operations"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="team-settings-slug">Slug</FieldLabel>
-                  <Input
-                    id="team-settings-slug"
-                    value={editTeamSlug}
-                    onChange={(event) => teamSettingsForm.setSlug(event.target.value)}
-                    placeholder="agency-ops"
-                  />
-                </Field>
-                <Button type="submit" disabled={isUpdatingTeam || !changedTeamSettings}>
-                  {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
-                </Button>
-              </form>
-            ) : null}
-
-            {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
-
-            {!canManageTeam ? (
-              <p className="text-sm text-muted-foreground">
-                Owners and admins manage Organization settings, invites, and activity.
-              </p>
-            ) : null}
-
-            <OrganizationMemberList
-              activeMemberId={activeMemberId}
-              canManageTeam={canManageTeam}
-              canTransferOwnership={canTransferOwnership}
-              members={members}
-              membersQuery={membersQuery}
-              onRetry={() => void reload.members()}
-              onTransferOwnership={(member) => void handleTransferOwnership(member)}
-              onUpdateMember={(member, updates) => void handleUpdateMember(member, updates)}
-              transferringOwnerMemberId={transferringOwnerMemberId}
-              updatingMemberId={updatingMemberId}
-            />
-
-            {canManageTeam ? (
-              <TeamActivityList query={activityQuery} onRetry={() => void reload.activity()} />
-            ) : null}
-          </div>
-        ) : teamsUnavailable ? null : (
+        <div className="flex flex-col gap-1">
           <p className="text-sm text-muted-foreground">
-            Create or select an Organization to share templates and runs.
+            Your role: {formatRole(activeWorkspace.role)}
           </p>
-        )}
+          <p className="text-xs text-muted-foreground">
+            {roleDescriptions[activeWorkspace.role]}
+          </p>
+        </div>
+
+        {canManageTeam ? (
+          <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleUpdateTeam}>
+            <Field>
+              <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
+              <Input
+                id="team-settings-name"
+                maxLength={ORGANIZATION_NAME_MAX}
+                value={editTeamName}
+                onChange={(event) => teamSettingsForm.setName(event.target.value)}
+                placeholder="Agency operations"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="team-settings-slug">Slug</FieldLabel>
+              <Input
+                id="team-settings-slug"
+                value={editTeamSlug}
+                onChange={(event) => teamSettingsForm.setSlug(event.target.value)}
+                placeholder="agency-ops"
+              />
+            </Field>
+            <Button type="submit" disabled={isUpdatingTeam || !changedTeamSettings}>
+              {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
+            </Button>
+          </form>
+        ) : null}
+
+        {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
+
+        {!canManageTeam ? (
+          <p className="text-sm text-muted-foreground">
+            Owners and admins manage Organization settings, invites, and activity.
+          </p>
+        ) : null}
+
+        <OrganizationMemberList
+          activeMemberId={activeMemberId}
+          canManageTeam={canManageTeam}
+          canTransferOwnership={canTransferOwnership}
+          members={members}
+          membersQuery={membersQuery}
+          onRetry={() => void reload.members()}
+          onTransferOwnership={(member) => void handleTransferOwnership(member)}
+          onUpdateMember={(member, updates) => void handleUpdateMember(member, updates)}
+          transferringOwnerMemberId={transferringOwnerMemberId}
+          updatingMemberId={updatingMemberId}
+        />
+
+        {canManageTeam ? (
+          <TeamActivityList query={activityQuery} onRetry={() => void reload.activity()} />
+        ) : null}
       </CardContent>
     </Card>
   );

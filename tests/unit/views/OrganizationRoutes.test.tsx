@@ -63,7 +63,7 @@ const renderTheOrganizationArchive = (routeOrganizationStatus: RouteOrganization
 };
 
 describe('the Organization console routes', () => {
-  it("render the same pages as the Personal routes, under the Organization's layout", () => {
+  it("render the same pages as the Personal routes, under the Organization's layout, except Settings, which is the Organization's own page", () => {
     expect([
       OrganizationTemplatesPage,
       OrganizationTemplateCreatePage,
@@ -72,7 +72,6 @@ describe('the Organization console routes', () => {
       OrganizationImportTemplatesPage,
       OrganizationRunsPage,
       OrganizationRunPage,
-      OrganizationSettingsPage,
       OrganizationArchivePage,
     ]).toEqual([
       TemplatesPage,
@@ -82,9 +81,9 @@ describe('the Organization console routes', () => {
       ImportTemplatesPage,
       RunsPage,
       RunPage,
-      SettingsPage,
       ArchivePage,
     ]);
+    expect(OrganizationSettingsPage).not.toBe(SettingsPage);
   });
 
   it.each([

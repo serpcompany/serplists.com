@@ -106,9 +106,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Publish a Template:** Template detail → "Share" → Share Template dialog (the
   `/profile/<user>/<template>/` link) → copy. Or the "Visibility" switch in Details. No
   username yet: a toast asks for one → Account Settings → "Username" → "Update Profile".
-- **Organization invite:** manager: the Organization's Account Settings
+- **Organization invite:** manager: the Organization's settings
   (`/dashboard/organization/<organizationId>/settings/`, the switcher's "Settings") →
-  Organizations → "Invite email" and "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
+  its card → "Invite email" and "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
   → signed out: "Log in to accept" (or "Create an account") → Log in → back to the invite →
   "Accept invite" → "Invite accepted." → "Switch to <Organization>" → My Templates in that
   Organization (`/dashboard/organization/<organizationId>/templates/`). Or Personal Account
@@ -145,7 +145,7 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Run Keys:** Account Settings → Agent Access → "Key name" → "Create Run Key" → "Copy
   key" → "I have saved this key". Revoke: "Revoke" → "Revoke <name>?" → "Revoke key". The
   section shows only where the Run Key UI is enabled.
-- **Leave an Organization:** Account Settings in an Organization (not its owner) → "Leave
+- **Leave an Organization:** the Organization's settings (not its owner) → "Leave
   Organization" → browser confirm → Personal.
 - **Sign out:** account menu → "Sign out" (asks first when the page holds unsaved work) →
   Home.
@@ -203,12 +203,14 @@ Toasts (sonner) report results everywhere.
 | `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
 | `/dashboard/import-templates/` | [Import Templates](ui-screen-inventory.md#import-templates) | Root section (sidebar "Import Templates") | Visibility select | Import preview; last import result; plan and role notices |
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
-| `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal (no Organization's management; the Organization's settings path adds it, manager-only controls included); created Run Key panel |
+| `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings" in Personal, account menu "Settings") | Revoke Run Key dialog | Created Run Key panel; incoming invites |
+| `/dashboard/organization/<organizationId>/settings/` | [Organization Settings](ui-screen-inventory.md#organization-settings) | Root section (sidebar "Settings" in that Organization) | Browser confirm; selects | Manager-only controls; Leave Organization for members other than the owner |
 
-Each path above always shows Personal, and also exists for an Organization under
+Each path above but the Organization's settings always shows Personal, and also exists for an Organization under
 `/dashboard/organization/<organizationId>/` (for example
 `/dashboard/organization/<organizationId>/runs/<id>/`), with the same screen, level, overlays and
-modes in that Organization. Until the user's Organizations load, the page shows a
+modes in that Organization. Settings is the exception: an Organization's is its own screen,
+and Account Settings stays Personal. Until the user's Organizations load, the page shows a
 loading state; for an Organization the user cannot open it shows the [404 page](ui-screen-inventory.md#404-page)
 in the console shell. The sidebar's Templates, Runs, New Template, Import Templates, Archive and
 Settings, the switcher's Settings and every link on the page open the current context's page,
