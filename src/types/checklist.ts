@@ -1,4 +1,5 @@
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { PublicTemplateOwner, TemplateOwner } from "@/lib/schemas/templateOwner";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
 export type ChecklistSubItem = {
@@ -58,6 +59,7 @@ export type ChecklistTemplate = {
   } | undefined;
   teamId?: string | undefined;
   ownerType?: "user" | "team" | undefined;
+  owner?: TemplateOwner | PublicTemplateOwner | undefined;
 };
 
 export type TemplateSavePayload = {

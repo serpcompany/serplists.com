@@ -106,6 +106,13 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 - `GET /api/checklists/archived?teamId=...`
 - `POST /api/checklists` with `teamId`
 
+Template list and detail responses for the owner and members name an Organization
+Template's Template Owner as the Organization in `owner` (`type` `team`, its id, slug as
+`publicHandle` and name as `displayName`), never its Creator, who stays in `user_id` and
+`owner_username`. Public responses never name the Organization: their `owner` is only
+`{ type: 'team' }`, and they carry no `team_id`, members, roles, billing or invites
+([data persistence](data-persistence.md#resource-ownership)).
+
 ## Invite Flow
 
 Invites are link-based today:

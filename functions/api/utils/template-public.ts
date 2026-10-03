@@ -1,3 +1,4 @@
+import type { PublicTemplateOwner, TemplateOwner } from '../../../src/lib/schemas/templateOwner';
 import type { schema } from '../db';
 
 const PUBLIC_TEMPLATE_FIELDS = [
@@ -25,12 +26,19 @@ const PUBLIC_TEMPLATE_FIELDS = [
 
 export type PublicTemplateField = (typeof PUBLIC_TEMPLATE_FIELDS)[number];
 
-export function toPublicTemplate(template: Record<string, unknown>): Partial<Record<PublicTemplateField, unknown>> {
+function publicOwnerOf(owner: TemplateOwner): PublicTemplateOwner {
+  if (owner.type === 'team') return { type: 'team' };
+  return { type: 'user', userId: owner.userId, publicHandle: owner.publicHandle, displayName: owner.displayName };
+}
+
+export function toPublicTemplate(
+  template: Record<string, unknown> & { owner?: TemplateOwner | undefined },
+): Partial<Record<PublicTemplateField, unknown>> & { owner?: PublicTemplateOwner } {
   const publicTemplate: Partial<Record<PublicTemplateField, unknown>> = {};
   for (const field of PUBLIC_TEMPLATE_FIELDS) {
     if (template[field] !== undefined) publicTemplate[field] = template[field];
   }
-  return publicTemplate;
+  return template.owner ? { ...publicTemplate, owner: publicOwnerOf(template.owner) } : publicTemplate;
 }
 
 export function isOwnPersonalTemplateRow(

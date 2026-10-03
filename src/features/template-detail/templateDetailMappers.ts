@@ -1,6 +1,6 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import { resolveTemplateDestinationTeamId } from '@/lib/templateDestination';
-import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
+import { readApiTemplateOwner, readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
 import {
   isSectionsShape,
@@ -95,6 +95,7 @@ export const mapApiTemplateToChecklistTemplate = (
             full_name: asString(foundTemplate.owner_full_name),
           }
         : undefined,
+    owner: readApiTemplateOwner(foundTemplate),
   };
 };
 

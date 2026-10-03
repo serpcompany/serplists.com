@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-10-01
+- **Last updated:** 2026-10-02
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -186,3 +186,10 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   all the owner's Personal rows, as the unpaged lists did. Bounding the rows read needs the
   owner-and-sort indexes in step 2, which take a migration; the user chose to leave them
   pending, so that item stays open.
+- 2026-10-02: Name each Template's owning Organization with a `LEFT JOIN teams` on
+  `owner_type = 'team'` and the primary key, not with a second query. The join reads one
+  row per Organization Template and none for a Personal one. A lookup of the distinct
+  Organizations would read one row per list instead, but every caller of
+  `selectTemplatesWithOwner` would have to run it and merge the rows. The Organization
+  template list's budget moved from 3 to 4 rows per Template (67 to 88 rows on the
+  budget dataset); every other hot request reads what it did.
