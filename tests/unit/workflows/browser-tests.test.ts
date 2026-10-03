@@ -19,6 +19,10 @@ const ciSteps = z
 
 const browserJob = browserTestsWorkflow.jobs['browser-tests'];
 const stepRunning = (command: string) => browserJob.steps.findIndex((step) => step.run?.includes(command));
+const ON_STAGING_PULL_REQUESTS = "github.base_ref != 'main'";
+const ON_MAIN_PULL_REQUESTS = "github.base_ref == 'main'";
+const stepWhen = (condition: string, command: string) =>
+  browserJob.steps.find((step) => step.if === condition && step.run?.includes(command));
 const HEAVY_COMMANDS = ['build:worker', 'test:smoke', 'test:e2e', 'playwright'];
 
 describe('the browser tests workflow', () => {
@@ -38,12 +42,20 @@ describe('the browser tests workflow', () => {
   });
 
   it('runs the smoke tests on pull requests into staging and every spec on pull requests into main', () => {
-    const smoke = browserJob.steps[stepRunning('test:smoke')];
-    const full = browserJob.steps[stepRunning('test:e2e:full')];
+    const smoke = stepWhen(ON_STAGING_PULL_REQUESTS, 'test:smoke');
+    const full = stepWhen(ON_MAIN_PULL_REQUESTS, 'test:e2e:full');
 
-    expect(smoke?.if).toBe("github.base_ref != 'main'");
-    expect(full?.if).toBe("github.base_ref == 'main'");
     expect([smoke?.run, full?.run]).toEqual([expect.stringContaining('--skip-build'), expect.stringContaining('--skip-build')]);
+  });
+
+  it('also runs every browser spec a pull request into staging adds or changes, so a spec outside the smoke set never merges unrun', () => {
+    const changedSpecs = stepWhen(ON_STAGING_PULL_REQUESTS, 'test:e2e:full');
+    const changedSpecsIndex = browserJob.steps.findIndex((step) => step === changedSpecs);
+
+    expect(changedSpecs?.run).toContain("git diff --name-only --diff-filter=ACMR \"origin/$BASE_REF...HEAD\" -- 'tests/e2e/*.spec.ts'");
+    expect(changedSpecs?.run).toContain('pnpm run test:e2e:full --skip-build $specs');
+    expect(changedSpecs?.env?.['BASE_REF']).toBe('${{ github.base_ref }}');
+    expect(changedSpecsIndex).toBeGreaterThan(stepRunning('test:smoke'));
   });
 
   it('keeps the traces, videos and screenshots of a failed run', () => {

@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import vitestConfig from '../../../vitest.config';
+import { cappedThreadCount, cpuCapCommand } from '../../../scripts/lib/cpu-cap';
 import { LOCAL_SHARE_OF_CPU_THREADS, testWorkerLimit } from '../../../scripts/lib/local-test-workers';
 import { buildScriptInvocation, REPO_ROOT } from '../../../scripts/lib/run-tool';
 
@@ -47,3 +48,23 @@ describe('the pre-push check', () => {
     expect(Number(result.stdout.trim())).toBeGreaterThanOrEqual(constants.priority.PRIORITY_BELOW_NORMAL);
   });
 });
+
+describe('the CPU cap of a low-priority run', () => {
+  it(`confines the run and everything it starts to one in ${LOCAL_SHARE_OF_CPU_THREADS} CPU threads, since priority alone still lets it use every core`, () => {
+    expect([32, 16, 2].map(cappedThreadCount)).toEqual([8, 4, 1]);
+    expect(cpuCapCommand('win32', 42, 32)).toEqual({
+      command: 'powershell',
+      args: ['-NoProfile', '-Command', '(Get-Process -Id 42).ProcessorAffinity = 255'],
+    });
+    expect(cpuCapCommand('linux', 42, 32)).toEqual({ command: 'taskset', args: ['-a', '-p', '-c', '0-7', '42'] });
+  });
+
+  it('writes the affinity mask of a machine with more threads than a 32-bit number holds', () => {
+    expect(cpuCapCommand('win32', 7, 256)?.args.at(-1)).toBe('(Get-Process -Id 7).ProcessorAffinity = 18446744073709551615');
+  });
+
+  it('leaves systems without a CPU affinity command to the lower priority alone', () => {
+    expect(cpuCapCommand('darwin', 42, 32)).toBeNull();
+  });
+});
+

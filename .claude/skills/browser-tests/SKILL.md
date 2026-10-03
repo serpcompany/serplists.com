@@ -40,8 +40,10 @@ app code, because the tests load the build, not the source.
    skill.
 
 The `Browser tests` workflow (`.github/workflows/browser-tests.yml`) runs only on pull requests:
-`test:smoke` on PRs into `staging` and `test:e2e:full` on promotions to `main`. When a run
-fails, it uploads `tests/test-results/` as the `playwright-evidence` artifact:
+`test:smoke` on PRs into `staging`, plus every browser spec the PR adds or changes, and
+`test:e2e:full` on promotions to `main`. Before pushing, run the specs you changed locally
+through `node --import tsx scripts/run-at-low-priority.ts pnpm run test:e2e:full <specs>`, which
+caps the build and the browsers to a quarter of the CPU threads. When a run fails, it uploads `tests/test-results/` as the `playwright-evidence` artifact:
 `gh run download <run-id> -n playwright-evidence` fetches it, and
 `gh run view <run-id> --log-failed` shows the failing step's log.
 

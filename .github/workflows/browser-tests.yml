@@ -51,6 +51,19 @@ jobs:
         if: github.base_ref != 'main'
         run: pnpm run test:smoke -- --skip-build
 
+      - name: Browser specs this pull request adds or changes
+        if: github.base_ref != 'main'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          specs=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'tests/e2e/*.spec.ts' | tr '\n' ' ')
+          if [ -z "$specs" ]; then
+            echo "This pull request changes no browser spec."
+            exit 0
+          fi
+          echo "Browser specs this pull request adds or changes: $specs"
+          pnpm run test:e2e:full --skip-build $specs
+
       - name: Full end-to-end tests (promotions to main)
         if: github.base_ref == 'main'
         run: pnpm run test:e2e:full -- --skip-build
