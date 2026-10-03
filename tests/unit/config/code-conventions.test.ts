@@ -74,6 +74,20 @@ const APP_CASES: Case[] = [
   refused('a hard-coded return path', APP, "navigate(withReturnPath('/login', returnPath));", 'route builders'),
   refused('a hard-coded link in a nav item', APP, "const item = { href: '/about', label: 'About' };", 'route builders'),
   allowed('a link a route builder gives', APP, '<Link href={buildLoginPath()}>Log in</Link>;'),
+  refused(
+    'a hand-built Organization path',
+    APP,
+    'const path = `/dashboard/organization/${organizationId}/runs/`;',
+    'organizationConsole(organizationId) to buildConsoleTemplatesPath()',
+  ),
+  refused('an Organization path in a string', 'src/features/sample.ts', "const base = '/dashboard/organization';", 'src/lib/consoleRoutes.ts'),
+  allowed('the Organization paths in the console route builders', 'src/lib/consoleRoutes.ts', "const base = '/dashboard/organization/';"),
+  allowed(
+    'an Organization path a builder gives',
+    APP,
+    '<Link href={buildConsoleRunsPath(organizationConsole(organizationId))}>Runs</Link>;',
+  ),
+  allowed('another path that mentions organizations', APP, "const path = '/dashboard/organizations-guide';"),
   allowed('a link to another site', APP, '<a href="https://example.com/">Example</a>;'),
 ];
 
@@ -90,6 +104,7 @@ const API_CASES: Case[] = [
   refused('a run start state reimplemented in a handler', API, 'function resetCompletionState(sections: unknown[]) { return sections; }', 'resetRunCompletionState()'),
   refused('an inline progress percentage in the API', 'functions/api/utils/sample.ts', 'const progress = Math.round((completed / total) * 100);', 'toProgressPercent()'),
   refused('the SVG placeholder in the API', API, "const image = '/placeholder.svg';", 'placeholder'),
+  refused('an Organization path in the API', API, 'const path = `/dashboard/organization/${teamId}/settings/`;', 'src/lib/consoleRoutes.ts'),
 ];
 
 const SCRIPT_CASES: Case[] = [

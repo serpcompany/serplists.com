@@ -26,6 +26,8 @@ have not been updated in 30 days.
   amplification.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
+- [Organization console routes](exec-plans/active/organization-console-routes.md): the URL
+  decides the Personal or Organization context (issue #212), in three PRs.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
   the proposed migration that makes public Organization Template edits refresh cached
   sitemaps (TD-23).

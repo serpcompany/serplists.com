@@ -32,6 +32,7 @@ import {
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { isWithinConsoleArea, type ConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleArchivePath,
   buildConsoleRunsPath,
@@ -50,24 +51,24 @@ type NavItem = { href: string; icon: typeof FileText; label: string };
 
 const FULL_SIZE_TARGET_CLASS = 'h-11';
 
-const mainItems: NavItem[] = [
-  { href: buildConsoleTemplatesPath(), icon: FileText, label: 'Templates' },
-  { href: buildConsoleRunsPath(), icon: Play, label: 'Runs' },
+const mainItems = (context: ConsoleContext): NavItem[] => [
+  { href: buildConsoleTemplatesPath(context), icon: FileText, label: 'Templates' },
+  { href: buildConsoleRunsPath(context), icon: Play, label: 'Runs' },
   { href: buildPublicTemplatesPath(), icon: Globe, label: 'Template Library' },
   { href: buildPublicCategoriesPath(), icon: FolderOpen, label: 'Categories' },
 ];
 
-const secondaryItems: NavItem[] = [
-  { href: buildConsoleTemplateImportPath(), icon: Import, label: 'Import Templates' },
-  { href: buildConsoleArchivePath(), icon: Archive, label: 'Archive' },
-  { href: buildConsoleSettingsPath(), icon: Settings, label: 'Settings' },
+const secondaryItems = (context: ConsoleContext): NavItem[] => [
+  { href: buildConsoleTemplateImportPath(context), icon: Import, label: 'Import Templates' },
+  { href: buildConsoleArchivePath(context), icon: Archive, label: 'Archive' },
+  { href: buildConsoleSettingsPath(context), icon: Settings, label: 'Settings' },
 ];
 
 function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
-        const active = isPathWithin(pathname, item.href);
+        const active = isPathWithin(pathname, item.href) || isWithinConsoleArea(pathname, item.href);
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
@@ -105,7 +106,7 @@ function ThemeMenuButton() {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { canEditTemplates } = useWorkspace();
+  const { canEditTemplates, consoleContext } = useWorkspace();
 
   return (
     <Sidebar collapsible="icon">
@@ -140,7 +141,7 @@ export function AppSidebar() {
                         FULL_SIZE_TARGET_CLASS,
                         'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground',
                       )}
-                      render={<Link href={buildConsoleTemplateCreatePath()} />}
+                      render={<Link href={buildConsoleTemplateCreatePath(consoleContext)} />}
                     >
                       <CirclePlus />
                       <span>New Template</span>
@@ -148,12 +149,12 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 </SidebarMenu>
               ) : null}
-              <NavItems items={mainItems} pathname={pathname} />
+              <NavItems items={mainItems(consoleContext)} pathname={pathname} />
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarGroup className="mt-auto">
             <SidebarGroupContent>
-              <NavItems items={secondaryItems} pathname={pathname} />
+              <NavItems items={secondaryItems(consoleContext)} pathname={pathname} />
             </SidebarGroupContent>
           </SidebarGroup>
         </nav>

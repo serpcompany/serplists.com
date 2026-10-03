@@ -1,22 +1,13 @@
-import { navigation } from '../../support/mockedNextNavigation';
+import { renderInTheSignedInLayoutAt } from '../../support/signedInConsoleLayout';
 import { appShell } from '../../support/appShellInPlace';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/api', async () => (await import('../../support/emptyArchiveApi')).emptyArchiveApi());
-
-import AppLayout from '@/app/(app)/layout';
 import ArchivePage from '@/app/(app)/dashboard/archive/page';
 import RunsPage from '@/app/(app)/dashboard/runs/page';
-import { Providers } from '@/app/providers';
 
 import { inThePersonalWorkspace } from '../../fixtures/workspaces';
 
-appShell.auth = {
-  logout: vi.fn().mockResolvedValue({ ok: true }),
-  user: { id: 'user-1', email: 'user@example.com', name: 'User One' },
-};
 appShell.templates = {
   templates: [],
   templatesLoading: false,
@@ -32,15 +23,6 @@ appShell.workspace = inThePersonalWorkspace({
   getPermissions: () => ({ canRun: true, canEditTemplates: true, canManage: true }),
   workspaceScopeId: 'personal',
 });
-
-const renderInTheSignedInLayoutAt = (pathname: string, page: React.ReactNode): string => {
-  navigation.reset(pathname);
-  return renderToStaticMarkup(
-    <Providers>
-      <AppLayout>{page}</AppLayout>
-    </Providers>,
-  );
-};
 
 const pageIncludes = (html: string, text: string) => html.includes(text);
 

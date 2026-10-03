@@ -56,6 +56,12 @@ redirected. Canonical private routes use `/dashboard/*`:
 - `/dashboard/settings/`
 - `/dashboard/archive/`
 
+An Organization's pages repeat these sections under
+`/dashboard/organization/:organizationId/` (its stable id), and that URL decides the
+context ([Organizations](organizations.md#ui-flow)); `/dashboard/organization/:organizationId/`
+itself redirects to the Organization's Templates. `src/lib/consoleRoutes.ts` builds and reads
+both forms.
+
 Public routes include:
 
 - `/templates/`

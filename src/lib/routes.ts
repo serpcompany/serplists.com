@@ -3,6 +3,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 import { categorySlug } from '@/lib/categorySlug';
 import { canonicalPath } from '@/lib/http/urlStandard';
+import { parseConsoleRoute } from '@/lib/consoleRoutes';
 
 export { resolvePublicTemplateOwnerSlug };
 
@@ -147,38 +148,27 @@ export const hasCanonicalPublicTemplatePath = (
 
 export const DASHBOARD_PATH = '/dashboard/';
 
-export const buildConsoleTemplatesPath = (): string => '/dashboard/templates/';
+export {
+  buildConsoleArchivePath,
+  buildConsoleHomePath,
+  buildConsoleRunPath,
+  buildConsoleRunsPath,
+  buildConsoleSettingsPath,
+  buildConsoleTemplateCreatePath,
+  buildConsoleTemplateEditPath,
+  buildConsoleTemplateImportPath,
+  buildConsoleTemplatePath,
+  buildConsoleTemplatesPath,
+} from '@/lib/consoleRoutes';
 
-export const buildConsoleHomePath = (): string => buildConsoleTemplatesPath();
-
-export const buildConsoleTemplateCreatePath = (): string =>
-  '/dashboard/templates/new/';
-
-export const buildConsoleTemplateImportPath = (): string =>
-  '/dashboard/import-templates/';
-
-export const buildConsoleTemplatePath = (templateId: string): string =>
-  `/dashboard/templates/${encodeURIComponent(templateId)}/`;
-
-export const buildConsoleTemplateEditPath = (templateId: string): string =>
-  `/dashboard/templates/${encodeURIComponent(templateId)}/edit/`;
-
-export const buildConsoleRunsPath = (): string => '/dashboard/runs/';
-
-export const buildConsoleRunPath = (runId: string): string =>
-  `/dashboard/runs/${encodeURIComponent(runId)}/`;
-
-export const buildConsoleSettingsPath = (): string => '/dashboard/settings/';
-
-export const buildConsoleArchivePath = (): string => '/dashboard/archive/';
+const LEGACY_TEMPLATE_EDITOR_PATH = /^\/console\/templates\/[^/]+\/edit\/$/;
 
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
-  const path = comparablePath(pathname);
-
+  const section = parseConsoleRoute(pathname)?.section.name;
   return (
-    path === buildConsoleTemplateCreatePath() ||
-    /^\/dashboard\/templates\/[^/]+\/edit\/$/.test(path) ||
-    /^\/console\/templates\/[^/]+\/edit\/$/.test(path)
+    section === 'template-create' ||
+    section === 'template-edit' ||
+    LEGACY_TEMPLATE_EDITOR_PATH.test(comparablePath(pathname))
   );
 };
 

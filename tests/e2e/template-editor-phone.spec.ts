@@ -1,16 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { expectNoSidewaysScroll } from './support/phone';
 import { loginAsAdmin } from './support/sign-in';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-
-async function expectNoSidewaysScroll(page: Page) {
-  const widths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
-}
 
 async function openOutline(page: Page) {
   await page.getByRole('button', { name: 'Outline', exact: true }).click();

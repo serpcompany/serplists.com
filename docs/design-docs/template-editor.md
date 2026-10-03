@@ -186,8 +186,8 @@ elsewhere, and offers it back when the editor opens again (`templateDraftStore.t
   user id, so a user whose id starts the same never matches. `findOtherContextDraft` decides only
   once the Organization list has loaded, since the tab may still be moving into the stored
   Organization, and offers only a context the user can still create templates in. The editor
-  offers a switch to that context, where it offers the draft itself: a draft is restored, and
-  saved, only in the context it was written for. Discard hides the offer until the next lookup.
+  offers a switch to that context, which opens that context's new-template page, where it offers
+  the draft itself: a draft is restored, and saved, only in the context it was written for. Discard hides the offer until the next lookup.
 
 ## Plan limits and session notices
 

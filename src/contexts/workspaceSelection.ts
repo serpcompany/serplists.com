@@ -1,6 +1,25 @@
+import { organizationConsole, PERSONAL_CONSOLE, type ConsoleContext } from '@/lib/consoleRoutes';
+
 import type { SessionStatus } from './authSession';
 
 export const PERSONAL_WORKSPACE_ID = 'personal';
+
+export const toConsoleContext = (workspaceId: string): ConsoleContext =>
+  workspaceId === PERSONAL_WORKSPACE_ID ? PERSONAL_CONSOLE : organizationConsole(workspaceId);
+
+export type RouteOrganizationStatus = 'confirmed' | 'pending' | 'missing';
+
+export function getRouteOrganizationStatus(input: {
+  organizationId: string;
+  teamIds: readonly string[];
+  teamsLoaded: boolean;
+  teamsSettled: boolean;
+  teamsFailed: boolean;
+}): RouteOrganizationStatus {
+  if (input.organizationId === PERSONAL_WORKSPACE_ID) return 'missing';
+  if (input.teamIds.includes(input.organizationId)) return 'confirmed';
+  return input.teamsLoaded && input.teamsSettled && !input.teamsFailed ? 'missing' : 'pending';
+}
 
 export type WorkspaceSelectionMemory = {
   storedContextReadForUserId: string | null;

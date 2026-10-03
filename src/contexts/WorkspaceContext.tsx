@@ -1,9 +1,10 @@
 import { createContext, useContext } from 'react';
 
 import type { TeamRole, TeamSummary } from '@/lib/api';
+import type { ConsoleContext } from '@/lib/consoleRoutes';
 import type { ResourcePermissions } from '@/lib/organizationPermissions';
 
-import type { PERSONAL_WORKSPACE_ID, WorkspaceStatus } from './workspaceSelection';
+import type { PERSONAL_WORKSPACE_ID, RouteOrganizationStatus, WorkspaceStatus } from './workspaceSelection';
 
 export type Workspace =
   | {
@@ -34,6 +35,7 @@ export type WorkspaceContextValue = {
   canEditTemplates: boolean;
   canManageTeam: boolean;
   canRunTemplates: boolean;
+  consoleContext: ConsoleContext;
   createTeam: (input: CreateTeamInput) => Promise<void>;
   getPermissions: (teamId?: string) => ResourcePermissions;
   isRoleUnavailable: (teamId?: string) => boolean;
@@ -43,6 +45,7 @@ export type WorkspaceContextValue = {
   refreshTeams: () => Promise<TeamSummary[]>;
   rememberTeam: (team: TeamSummary) => void;
   retryWorkspace: () => void;
+  routeOrganizationStatus: RouteOrganizationStatus | null;
   selectWorkspace: (workspaceId: string) => void;
   teams: TeamSummary[];
   teamsUnavailable: boolean;

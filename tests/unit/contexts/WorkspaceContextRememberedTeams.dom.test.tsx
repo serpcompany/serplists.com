@@ -1,11 +1,11 @@
-import React, { act } from 'react';
-import { render } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '../../support/mockedNextNavigation';
+import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TeamSummary } from '@/lib/api';
 
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
+import { renderTheWorkspaceProvider, type ShownWorkspace } from '../../support/workspaceProviderProbe';
 
 const { getTeams } = vi.hoisted(() => ({ getTeams: vi.fn() }));
 const signedIn = vi.hoisted(() => ({ userId: 'user-1' }));
@@ -14,9 +14,6 @@ vi.mock('@/lib/api', () => ({ api: { getTeams } }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: signedIn.userId } }),
 }));
-
-import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { WorkspaceProvider } from '@/contexts/WorkspaceProvider';
 
 const organization = (id: string): TeamSummary => ({
   id,
@@ -33,38 +30,18 @@ beforeEach(() => {
 });
 
 async function withWorkspace(
-  test: (tab: { rerender: () => void; workspace: () => ReturnType<typeof useWorkspace> }) => Promise<void>,
+  test: (tab: { rerender: () => void; workspace: () => ShownWorkspace }) => Promise<void>,
 ) {
-  const shown: { value?: ReturnType<typeof useWorkspace> } = {};
-  const Probe = () => {
-    shown.value = useWorkspace();
-    return null;
-  };
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const tree = () => (
-    <QueryClientProvider client={queryClient}>
-      <WorkspaceProvider>
-        <Probe />
-      </WorkspaceProvider>
-    </QueryClientProvider>
-  );
-  const shownOnTheTab = render(tree());
-  const rerender = () => shownOnTheTab.rerender(tree());
+  const tab = renderTheWorkspaceProvider();
   await letQueryUpdatesReachObservers();
   try {
-    await test({
-      rerender,
-      workspace: () => {
-        if (!shown.value) throw new Error('WorkspaceProvider did not render');
-        return shown.value;
-      },
-    });
+    await test(tab);
   } finally {
-    shownOnTheTab.unmount();
+    tab.unmount();
   }
 }
 
-const teamIdsOf = (workspace: ReturnType<typeof useWorkspace>) => workspace.teams.map(({ id }) => id);
+const teamIdsOf = (workspace: ShownWorkspace) => workspace.teams.map(({ id }) => id);
 
 describe('Organizations remembered in this tab', () => {
   it('are shown until the next list the server sends, which replaces them', () =>

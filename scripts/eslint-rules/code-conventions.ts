@@ -44,6 +44,16 @@ const PLACEHOLDER_IMAGES: CodeConvention = {
     "SITE_SOCIAL_IMAGE from src/lib/publicPageMeta.ts for link previews.",
 };
 
+const ORGANIZATION_CONSOLE_PATHS: CodeConvention = {
+  selector: text(`/${SLASH}dashboard${SLASH}organization(?:${SLASH}|$)/`),
+  message:
+    "Build an Organization's console paths with the builders in src/lib/consoleRoutes.ts: pass " +
+    "organizationConsole(organizationId) to buildConsoleTemplatesPath() and the rest, and switch context with " +
+    "buildEquivalentConsolePath(). They encode the id, keep each URL canonical, and are the paths parseConsoleRoute() " +
+    "reads back to decide the Organization a page shows.",
+  owners: ["src/lib/consoleRoutes.ts"],
+};
+
 export const APP_CONVENTIONS: CodeConvention[] = [
   {
     selector:
@@ -104,6 +114,7 @@ export const APP_CONVENTIONS: CodeConvention[] = [
       "state and render a local fallback, as TaskImageView (src/components/shared/TaskImage.tsx) does.",
   },
   PLACEHOLDER_IMAGES,
+  ORGANIZATION_CONSOLE_PATHS,
   {
     selector: text("/Checklist App/"),
     message: "The product is SERP Lists: use APP_BRAND_NAME from src/lib/brand.ts, never the old placeholder brand.",
@@ -193,6 +204,7 @@ export const API_CONVENTIONS: CodeConvention[] = [
       "outside local development, so code that grants something by address grants it to them.",
   },
   PLACEHOLDER_IMAGES,
+  { ...ORGANIZATION_CONSOLE_PATHS, owners: [] },
   { ...PROGRESS_PERCENT, owners: [] },
 ];
 

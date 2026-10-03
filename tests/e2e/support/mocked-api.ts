@@ -35,3 +35,19 @@ export const ACME_ORG_OWNED = [
 ];
 
 export const FREE_BILLING_STATUS = { billingEnabled: true, plan: 'free' };
+
+export async function answerTheAcmeOwnerSession({ route, method, path }: ApiCall): Promise<boolean> {
+  if (path === '/api/auth/get-session') {
+    await fulfillJson(route, OWNER_SESSION);
+    return true;
+  }
+  if (path === '/api/teams' && method === 'GET') {
+    await fulfillJson(route, ACME_ORG_OWNED);
+    return true;
+  }
+  if (path === '/api/billing/status') {
+    await fulfillJson(route, FREE_BILLING_STATUS);
+    return true;
+  }
+  return false;
+}
