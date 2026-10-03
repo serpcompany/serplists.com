@@ -101,7 +101,7 @@ means.
 - A Personal URL for a resource that belongs to an Organization the viewer is a member of
   (a private Organization Template, or an Organization Run) replaces itself with the
   Organization URL, and an Organization URL for another owner's Run or pinned Template
-  replaces itself with that owner's URL (decision below; owner to confirm). Anyone else
+  replaces itself with that owner's URL (owner decision 1 below). Anyone else
   gets the API's 404, as now.
 - `/dashboard/settings/` shows no Organization management; the Organization settings
   route does. Organization billing returns to the Organization's settings route
@@ -111,24 +111,19 @@ means.
   Organization (`workspace-teams-error`), and remove the transitional code (the tab
   selection that Personal URLs read).
 
-## Decisions that need the owner
+## Owner decisions (2026-10-02)
 
-1. **A Personal URL for an Organization's Template or Run** (PR 3). Recommended: replace
-   it with the Organization URL for members, so the URL, the sidebar and the switcher name
-   the context the resource lives in. The alternative keeps such links working in
-   Personal, with the template page saying where its Runs and copies go, as today. Either
-   way no one sees anything new; the choice changes which context the page shows.
-2. **Where #206 puts Account settings** (PR 3 and #206). Recommended: Account controls
-   (profile, security, sessions, Personal Run Keys) on the Personal settings route beside
-   Personal billing, which matches the glossary's Account; Organization settings only on
-   the Organization's settings route; the account menu's Settings opens Personal settings
-   from any context, which moves the tab to Personal, and the switcher's Settings opens
-   the current context's settings. The alternative is a context-free `/dashboard/account/`
-   page that keeps the tab's context. Neither needs the routes reshaped.
-3. **The not-found copy for an Organization URL the user cannot open.** PR 1 shows the
-   app's existing 404 ("That page does not exist"), which never says whether the
-   Organization exists. An Organization-specific message would be new product wording and
-   could confirm that an id exists; recommended to keep the generic page.
+1. **A Personal URL for an Organization's Template or Run** (PR 3) replaces itself with the
+   Organization URL for members, so the URL, the sidebar and the switcher name the context
+   the resource lives in.
+2. **Account settings for #206** (PR 3 and #206):
+   - Account controls (profile, security, sessions, Personal Run Keys) live on the
+     Personal settings route, beside Personal billing, as the glossary's Account says.
+   - Organization settings live only on the Organization's settings route.
+   - The account menu's Settings opens Personal settings from any context, which moves the
+     tab to Personal. The switcher's Settings opens the current context's settings.
+3. **An Organization URL the user cannot open** keeps the app's generic 404 ("That page
+   does not exist"), which never says whether the Organization exists.
 
 ## Progress
 
