@@ -21,6 +21,15 @@ export function getRouteOrganizationStatus(input: {
   return input.teamsLoaded && input.teamsSettled && !input.teamsFailed ? 'missing' : 'pending';
 }
 
+export function getRouteContextId(
+  routeContext: ConsoleContext | null,
+  organizationStatus: RouteOrganizationStatus | null,
+): string | null {
+  if (routeContext === null) return null;
+  if (routeContext.type === 'personal') return PERSONAL_WORKSPACE_ID;
+  return organizationStatus === 'missing' ? null : routeContext.organizationId;
+}
+
 export type WorkspaceSelectionMemory = {
   storedContextReadForUserId: string | null;
   explicitSelectionId: string | null;

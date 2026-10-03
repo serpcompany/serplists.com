@@ -25,8 +25,9 @@ describe('TemplateDetail after the teams request failed', () => {
     userId: 'someone-else',
   });
 
-  it('says the Organizations could not load, with Retry, on a private Organization template', () => {
+  it('says the Organizations could not load, with Retry, on a private Organization template its Organization shows', () => {
     workspaceState.teamsUnavailable = true;
+    workspaceState.activeTeamId = 'team-1';
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: privateOrganizationTemplate() });
 
     const html = renderTemplateDetail();

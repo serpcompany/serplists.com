@@ -89,7 +89,7 @@ describe("loadTemplateEditorData", () => {
     expect(result.version).toBeUndefined();
   });
 
-  it("keeps who owns the loaded template, which decides whether the viewer may edit, and nothing for a new one or a failed load", async () => {
+  it("keeps who owns the loaded template and whether it is public, which decide whether the viewer may edit and which context's URL it opens at, and nothing for a new one or a failed load", async () => {
     const organizationTemplate = await loadTemplateEditorData(
       { id: "template-3" },
       {
@@ -100,6 +100,7 @@ describe("loadTemplateEditorData", () => {
             user_id: "creator-1",
             team_id: "team-1",
             owner_type: "team",
+            is_public: false,
           }),
         },
       },
@@ -113,6 +114,7 @@ describe("loadTemplateEditorData", () => {
       userId: "creator-1",
       teamId: "team-1",
       ownerType: "team",
+      isPublic: false,
     });
     expect((await loadTemplateEditorData({})).ownership).toBeUndefined();
     expect(failed.ownership).toBeUndefined();

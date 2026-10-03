@@ -73,16 +73,22 @@ describe('the Template page links in the context it shows', () => {
     expect(html).toContain('href="/dashboard/organization/team-1/templates/tpl-1/edit/"');
   });
 
-  it("links a private Organization Template's Templates in its own Organization, whichever context is selected", () => {
+  it("shows no links for a private Organization Template at another context's URL, which it leaves for its Organization's", () => {
     const fromPersonal = openTheTemplate({ isPublic: false, teamId: 'team-2' });
     inTheOrganization('team-1');
     const fromAnotherOrganization = openTheTemplate({ isPublic: false, teamId: 'team-2' });
 
     for (const html of [fromPersonal, fromAnotherOrganization]) {
-      expect(html).toContain('href="/dashboard/organization/team-2/templates/"');
-      expect(html).not.toContain('href="/dashboard/organization/team-1/');
-      expect(html).not.toContain('href="/dashboard/templates/"');
+      expect(html).toContain('Loading template...');
+      expect(html).not.toContain('href="/dashboard/');
     }
+  });
+
+  it("links a public Organization Template in the context the page shows, which keeps it", () => {
+    const html = openTheTemplate({ isPublic: true, teamId: 'team-2' });
+
+    expect(html).toContain('href="/dashboard/templates/"');
+    expect(html).not.toContain('/dashboard/organization/');
   });
 });
 
@@ -104,14 +110,12 @@ describe('the Template page opens what an action made in the context that owns i
     expect(navigation.url()).toBe('/dashboard/organization/team-1/runs/run-1/');
   });
 
-  it("opens the run of another Organization's private Template in that Organization, not the selected one", async () => {
-    inTheOrganization('team-1');
-    workspaceState.roles = { 'team-2': 'runner' };
-    openTheTemplate({ isPublic: false, teamId: 'team-2' }, { kind: 'ok', runId: 'run-1', teamId: 'team-2' });
+  it('opens the run of a public Organization Template started in Personal in Personal, where the API put it', async () => {
+    openTheTemplate({ isPublic: true, teamId: 'team-2' }, { kind: 'ok', runId: 'run-1' });
 
     await startARun();
 
-    expect(navigation.url()).toBe('/dashboard/organization/team-2/runs/run-1/');
+    expect(navigation.url()).toBe('/dashboard/runs/run-1/');
   });
 
   it('opens a duplicate in the context that owns it', async () => {

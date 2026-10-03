@@ -55,6 +55,7 @@ import {
 import { withReturnPath } from '@/lib/auth/returnPath';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
+import { useOwnerContextRedirect } from '@/lib/navigation/useOwnerContextRedirect';
 import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleRunPath,
@@ -135,6 +136,7 @@ const TemplateDetail = () => {
   });
   const otherDestination = displayTemplate ? nameOtherTemplateDestination(displayTemplate, activeTeamId, teams) : undefined;
   const templateContext = displayTemplate ? resolveTemplateConsoleContext(displayTemplate, consoleContext) : consoleContext;
+  const isMovingToOwner = useOwnerContextRedirect(templateContext);
   const isPublic = displayTemplate?.isPublic ?? false;
   const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
   const { canStartRun } = getTemplateActionPermissions({
@@ -307,7 +309,7 @@ const TemplateDetail = () => {
     }
   };
 
-  if (loading) {
+  if (loading || isMovingToOwner) {
     return (
       <DashboardContentShell>
         <DashboardLoadingState label="Loading template..." />

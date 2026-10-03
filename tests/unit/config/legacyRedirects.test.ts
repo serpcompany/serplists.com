@@ -14,7 +14,7 @@ describe('legacy redirects', () => {
   it.each([
     ['/account', '/dashboard/settings/', 308],
     ['/dashboard/profile', '/dashboard/settings/', 308],
-    ['/console', '/dashboard/templates/', 308],
+    ['/console', '/dashboard/', 308],
     ['/checklists', '/templates/', 308],
     ['/console/templates/tpl-1', '/dashboard/templates/tpl-1/', 308],
     ['/console/templates/tpl-1/edit', '/dashboard/templates/tpl-1/edit/', 308],
@@ -28,11 +28,9 @@ describe('legacy redirects', () => {
     expect(await agreedRedirectOnTheSiteHost(to), to).toBeNull();
   });
 
-  it('sends /dashboard to My Templates with a 307, since the dashboard home may change', async () => {
-    for (const path of ['/dashboard', '/dashboard/']) {
-      expect(await agreedRedirectOnTheSiteHost(path), path).toEqual({ status: 307, location: '/dashboard/templates/' });
-    }
-    expect(await agreedRedirectOnTheSiteHost('/dashboard/templates/')).toBeNull();
+  it('serves the dashboard home itself, which opens the remembered context in the browser, and gives /dashboard just its slash', async () => {
+    expect(await agreedRedirectOnTheSiteHost('/dashboard/')).toBeNull();
+    expect(await agreedRedirectOnTheSiteHost('/dashboard')).toEqual({ status: 308, location: '/dashboard/' });
   });
 
   it('adds no query of its own, so the Stripe billing result and other queries reach the page', async () => {
@@ -52,7 +50,7 @@ describe('legacy redirects', () => {
   });
 
   it('leaves the live pages alone', async () => {
-    for (const path of ['/dashboard/settings/', '/dashboard/templates/', '/dashboard/runs/run-1/', '/templates/', '/account-settings/']) {
+    for (const path of ['/dashboard/', '/dashboard/settings/', '/dashboard/templates/', '/dashboard/runs/run-1/', '/templates/', '/account-settings/']) {
       expect(await agreedRedirectOnTheSiteHost(path), path).toBeNull();
     }
   });

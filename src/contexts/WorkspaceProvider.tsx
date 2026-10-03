@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { patchTeamSummary } from '@/features/teams/teamSummaries';
 import { api, type TeamSummary } from '@/lib/api';
 import { safeLocalStorage } from '@/lib/browserStorage';
-import { getRouteOrganizationId } from '@/lib/consoleRoutes';
+import { parseConsoleRoute } from '@/lib/consoleRoutes';
 import { getOrganizationPermissions, getResourcePermissions } from '@/lib/organizationPermissions';
 
 import { SESSION_RECHECK_INTERVAL_MS } from './sessionSync';
@@ -28,6 +28,7 @@ import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
   describeTeamsQuery,
+  getRouteContextId,
   getRouteOrganizationStatus,
   getWorkspaceStatus,
   isConfirmedSignOut,
@@ -132,28 +133,28 @@ export function WorkspaceProvider({
 
   const pathname = usePathname();
   const teamIds = useMemo(() => teams.map((team) => team.id), [teams]);
-  const routeOrganizationId = getRouteOrganizationId(pathname);
+  const routeContext = parseConsoleRoute(pathname)?.context ?? null;
   const routeOrganizationStatus =
-    routeOrganizationId === null
-      ? null
-      : getRouteOrganizationStatus({ organizationId: routeOrganizationId, teamIds, teamsLoaded, teamsSettled, teamsFailed });
-  const followedRouteOrganizationId = routeOrganizationStatus === 'confirmed' ? routeOrganizationId : null;
-  const [lastFollowedRouteOrganizationId, setLastFollowedRouteOrganizationId] = useState<string | null>(null);
-  if (lastFollowedRouteOrganizationId !== followedRouteOrganizationId) {
-    setLastFollowedRouteOrganizationId(followedRouteOrganizationId);
-    if (followedRouteOrganizationId !== null) {
-      setSelectedWorkspaceId(followedRouteOrganizationId);
+    routeContext?.type === 'organization'
+      ? getRouteOrganizationStatus({ organizationId: routeContext.organizationId, teamIds, teamsLoaded, teamsSettled, teamsFailed })
+      : null;
+  const routeContextId = getRouteContextId(routeContext, routeOrganizationStatus);
+  const followedRouteContextId = routeOrganizationStatus === 'pending' ? null : routeContextId;
+  const [lastFollowedRouteContextId, setLastFollowedRouteContextId] = useState<string | null>(null);
+  if (lastFollowedRouteContextId !== followedRouteContextId) {
+    setLastFollowedRouteContextId(followedRouteContextId);
+    if (followedRouteContextId !== null) {
+      setSelectedWorkspaceId(followedRouteContextId);
     }
   }
 
   useEffect(() => {
-    if (followedRouteOrganizationId !== null) {
-      writeStoredWorkspaceId(followedRouteOrganizationId);
+    if (followedRouteContextId !== null) {
+      writeStoredWorkspaceId(followedRouteContextId);
     }
-  }, [followedRouteOrganizationId]);
+  }, [followedRouteContextId]);
 
-  const contextWorkspaceId =
-    routeOrganizationId !== null && routeOrganizationStatus !== 'missing' ? routeOrganizationId : selectedWorkspaceId;
+  const contextWorkspaceId = routeContextId ?? selectedWorkspaceId;
 
   const signedOut = !isAuthLoading && !user && isConfirmedSignOut(sessionStatus);
   const [seenSignedOut, setSeenSignedOut] = useState(false);
@@ -224,13 +225,8 @@ export function WorkspaceProvider({
   const selectWorkspace = useContextSwitch({
     isShownContext: (workspaceId) => workspaceId === contextWorkspaceId && routeOrganizationStatus !== 'missing',
     selectInPlace,
-    beforeLeavingFor: (workspaceId) => {
-      if (workspaceId === PERSONAL_WORKSPACE_ID) {
-        selectInPlace(workspaceId);
-        return;
-      }
-      markListsStaleForWorkspaceSwitch(queryClient, { fromWorkspaceId: contextWorkspaceId, toWorkspaceId: workspaceId });
-    },
+    beforeLeavingFor: (workspaceId) =>
+      markListsStaleForWorkspaceSwitch(queryClient, { fromWorkspaceId: contextWorkspaceId, toWorkspaceId: workspaceId }),
   });
 
   const rememberTeam = useCallback(
@@ -310,8 +306,7 @@ export function WorkspaceProvider({
     [teams, teamsUnavailable],
   );
 
-  const shownContextId =
-    routeOrganizationId !== null && routeOrganizationStatus !== 'missing' ? routeOrganizationId : activeWorkspace.id;
+  const shownContextId = routeContextId ?? activeWorkspace.id;
 
   const value = useMemo<WorkspaceContextValue>(() => {
     const isTeamWorkspace = activeWorkspace.type === 'team';

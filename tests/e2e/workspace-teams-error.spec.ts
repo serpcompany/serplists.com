@@ -51,6 +51,14 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
   return scopedListRequests;
 }
 
+async function openWhileTheTeamsRequestFails(page: Page, path: string, remembered: string) {
+  const state = { teamsFail: true };
+  const templateListRequests = await mockApi(page, state);
+  await page.addInitScript((id) => window.localStorage.setItem('serplists.activeWorkspaceId', id), remembered);
+  await page.goto(path);
+  return { state, templateListRequests };
+}
+
 async function retryWithTheTeamsListBack(page: Page, state: { teamsFail: boolean }) {
   state.teamsFail = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -58,80 +66,82 @@ async function retryWithTheTeamsListBack(page: Page, state: { teamsFail: boolean
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
 }
 
-test("a failed teams request shows an error instead of switching to Personal or loading Personal's Templates", async ({ page }) => {
-  const state = { teamsFail: true };
-  const templateListRequests = await mockApi(page, state);
-  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
-
-  await page.goto('/dashboard/templates/');
+test("the dashboard home waits on a failed teams request with an error instead of opening Personal's Templates, and Retry opens the remembered Organization", async ({ page }) => {
+  const { state, templateListRequests } = await openWhileTheTeamsRequestFails(page, '/dashboard/', 'team-1');
 
   await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/dashboard\/$/);
   const switcher = page.getByRole('button', { name: 'Switch context' }).first();
   await expect(switcher).toContainText('Organizations unavailable');
   await expect(switcher).not.toContainText('Personal');
-  const personalTemplateListRequests = templateListRequests.filter((search) => search.includes('scope=personal'));
-  expect(personalTemplateListRequests).toEqual([]);
+  const contextListRequests = () => templateListRequests.filter((search) => /scope=personal|teamId=/.test(search));
+  expect(contextListRequests()).toEqual([]);
 
   state.teamsFail = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
 
+  await expect(page).toHaveURL(/\/dashboard\/organization\/team-1\/templates\/$/);
   await expect(switcher).toContainText('Acme Org');
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  expect(contextListRequests().filter((search) => !search.includes('teamId=team-1'))).toEqual([]);
   expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('team-1');
 });
 
-test('Continue in Personal leaves the error for Personal', async ({ page }) => {
-  await mockApi(page, { teamsFail: true });
-  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
-
-  await page.goto('/dashboard/templates/');
+test("Continue in Personal leaves the dashboard home's error for Personal's Templates", async ({ page }) => {
+  await openWhileTheTeamsRequestFails(page, '/dashboard/', 'team-1');
   await page.getByRole('button', { name: 'Continue in Personal' }).click({ timeout: 30_000 });
 
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
 });
 
-test('in Personal, a failed teams request is shown on an Organization run and in the switcher', async ({ page }) => {
-  const state = { teamsFail: true };
-  await mockApi(page, state);
-  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'personal'));
+test('a Personal URL shows Personal while the teams request fails, and the switcher offers a retry', async ({ page }) => {
+  const { state, templateListRequests } = await openWhileTheTeamsRequestFails(page, '/dashboard/templates/', 'team-1');
 
-  await page.goto('/dashboard/runs/run-org/');
-
-  await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
-  const header = page.locator('[data-dashboard-page-header="true"]');
-  await expect(header.getByText('View only')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Continue in Personal' })).toHaveCount(0);
   const switcher = page.getByRole('button', { name: 'Switch context' }).first();
-  await expect(switcher).toContainText('Personal');
+  await expect(switcher).toContainText('Personal', { timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'My Templates' })).toBeVisible();
+  await expect.poll(() => templateListRequests.some((search) => search.includes('scope=personal'))).toBe(true);
+  expect(templateListRequests.filter((search) => search.includes('teamId'))).toEqual([]);
   await switcher.click();
   await expect(page.getByRole('menuitem', { name: 'Retry loading Organizations' })).toBeVisible();
   await page.keyboard.press('Escape');
 
   await retryWithTheTeamsListBack(page, state);
-  await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeEnabled();
   await switcher.click();
   await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
 });
 
+test("a Personal URL for an Organization run moves to the Organization's URL, which waits for a failed teams request with Retry", async ({ page }) => {
+  const { state } = await openWhileTheTeamsRequestFails(page, '/dashboard/runs/run-org/', 'personal');
+
+  await expect(page).toHaveURL(/\/dashboard\/organization\/team-1\/runs\/run-org\/$/, { timeout: 30_000 });
+  await expect(page.getByText("Couldn't load your Organizations")).toBeVisible();
+  const header = page.locator('[data-dashboard-page-header="true"]');
+  await expect(header.getByText('View only')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0);
+
+  await retryWithTheTeamsListBack(page, state);
+  await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org');
+});
+
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
 
-async function openPublicTemplateWithFailedTeams(page: Page, state: { teamsFail: boolean }) {
-  await mockApi(page, state);
-  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
-  await page.goto(PUBLIC_TEMPLATE_PATH);
+async function openPublicTemplateWithFailedTeams(page: Page) {
+  const { state } = await openWhileTheTeamsRequestFails(page, PUBLIC_TEMPLATE_PATH, 'team-1');
   await expect(page.getByRole('heading', { level: 1, name: 'Ultimate Camping Checklist' })).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeDisabled();
+  return state;
 }
 
 test('the public template page offers Retry when the teams request fails', async ({ page }) => {
-  const state = { teamsFail: true };
-  await openPublicTemplateWithFailedTeams(page, state);
+  const state = await openPublicTemplateWithFailedTeams(page);
 
   await retryWithTheTeamsListBack(page, state);
   await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeEnabled();
@@ -139,7 +149,7 @@ test('the public template page offers Retry when the teams request fails', async
 });
 
 test('the public template page can continue in Personal when the teams request fails', async ({ page }) => {
-  await openPublicTemplateWithFailedTeams(page, { teamsFail: true });
+  await openPublicTemplateWithFailedTeams(page);
 
   await page.getByRole('button', { name: 'Continue in Personal' }).click();
 

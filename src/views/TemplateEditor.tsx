@@ -17,6 +17,8 @@ import {
 } from "@/features/template-editor/useTemplateEditorModel";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
+import { useOwnerContextRedirect } from "@/lib/navigation/useOwnerContextRedirect";
+import { resolveTemplateConsoleContext } from "@/lib/templateDestination";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { TemplateEditorOutline } from "@/components/template-editor/TemplateEditorOutline";
 import { TemplatePreviewDialog } from "@/components/template-editor/TemplatePreviewDialog";
@@ -338,8 +340,11 @@ const TemplateEditor = () => {
     loading: model.loading,
     ownership: model.ownership,
   });
+  const isMovingToOwner = useOwnerContextRedirect(
+    model.ownership ? resolveTemplateConsoleContext(model.ownership, consoleContext) : null,
+  );
 
-  if (model.loading) {
+  if (model.loading || isMovingToOwner) {
     return <TemplateEditorLoading />;
   }
 

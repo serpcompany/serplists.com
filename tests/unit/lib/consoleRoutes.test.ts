@@ -13,7 +13,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildEquivalentConsolePath,
-  getRouteOrganizationId,
+  buildOwnerContextPath,
   isSameConsoleContext,
   isWithinConsoleArea,
   organizationConsole,
@@ -114,10 +114,27 @@ describe('parseConsoleRoute', () => {
     expect(parseConsoleRoute(path)).toBeNull();
   });
 
-  it('names the Organization of an Organization route only', () => {
-    expect(getRouteOrganizationId('/dashboard/organization/team-1/archive/')).toBe('team-1');
-    expect(getRouteOrganizationId('/dashboard/archive/')).toBeNull();
-    expect(getRouteOrganizationId('/profile/serp/ultimate-camping-checklist/')).toBeNull();
+});
+
+describe("buildOwnerContextPath, where a record opened under another context's URL moves", () => {
+  it.each([
+    ['/dashboard/templates/tpl-1/', acme, '/dashboard/organization/team-1/templates/tpl-1/'],
+    ['/dashboard/templates/tpl-1/edit/', acme, '/dashboard/organization/team-1/templates/tpl-1/edit/'],
+    ['/dashboard/runs/run-1/', acme, '/dashboard/organization/team-1/runs/run-1/'],
+    ['/dashboard/organization/team-2/runs/run-1/', acme, '/dashboard/organization/team-1/runs/run-1/'],
+    ['/dashboard/organization/team-1/runs/run-1/', PERSONAL_CONSOLE, '/dashboard/runs/run-1/'],
+  ])('opens %s in the context that owns the record', (pathname, owner, expected) => {
+    expect(buildOwnerContextPath(pathname, owner)).toBe(expected);
+  });
+
+  it("stays put on a page that already shows the owner, on a page that is not a record's, and outside the console", () => {
+    expect(buildOwnerContextPath('/dashboard/organization/team-1/templates/tpl-1/', acme)).toBeNull();
+    expect(buildOwnerContextPath('/dashboard/runs/run-1/', PERSONAL_CONSOLE)).toBeNull();
+    expect(buildOwnerContextPath('/dashboard/templates/', acme)).toBeNull();
+    expect(buildOwnerContextPath('/dashboard/templates/new/', acme)).toBeNull();
+    expect(buildOwnerContextPath('/dashboard/settings/', acme)).toBeNull();
+    expect(buildOwnerContextPath('/share/token-1/', acme)).toBeNull();
+    expect(buildOwnerContextPath('/dashboard/', acme)).toBeNull();
   });
 });
 

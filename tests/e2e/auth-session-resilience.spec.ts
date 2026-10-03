@@ -26,18 +26,20 @@ async function mockApi(page: Page, sessionAvailable: { value: boolean }) {
   });
 }
 
-test('a failing session check keeps the page and the Organization, then recovers on retry', async ({ page }) => {
+test("a failing session check keeps an Organization's page and its remembered context, then recovers on retry", async ({ page }) => {
   const sessionAvailable = { value: true };
   await mockApi(page, sessionAvailable);
 
-  await page.goto('/dashboard/runs/');
-  await page.evaluate(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
+  await page.goto('/dashboard/organization/team-1/runs/');
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org', {
+    timeout: 30_000,
+  });
 
   sessionAvailable.value = false;
   await page.reload();
 
   await expect(page.getByText(/Can't reach/)).toBeVisible({ timeout: 30_000 });
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+  await expect(page).toHaveURL(/\/dashboard\/organization\/team-1\/runs\/$/);
   expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('team-1');
 
   sessionAvailable.value = true;
@@ -46,7 +48,7 @@ test('a failing session check keeps the page and the Organization, then recovers
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org', {
     timeout: 30_000,
   });
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+  await expect(page).toHaveURL(/\/dashboard\/organization\/team-1\/runs\/$/);
 });
 
 test('a 429 on the page-load session check retries instead of redirecting to login', async ({ page }) => {

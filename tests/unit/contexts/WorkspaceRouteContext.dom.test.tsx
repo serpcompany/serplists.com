@@ -1,7 +1,7 @@
 import { navigation } from '../../support/mockedNextNavigation';
 import { teamsApi } from '../../support/signedInTeamsApi';
 import { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TeamSummary } from '@/lib/api';
 import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
@@ -10,44 +10,25 @@ import { registerLeaveGuard } from '@/lib/navigation/leaveGuard';
 import { deferred } from '../../support/deferred';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 import { theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
-import { renderTheWorkspaceProvider, type ShownWorkspace } from '../../support/workspaceProviderProbe';
+import {
+  oneWorkspaceTabPerTest,
+  organizationSummary,
+  rememberedContext as remembered,
+  type ShownWorkspace,
+} from '../../support/workspaceTab';
 
 const { getTeams } = teamsApi;
 
 theInMemoryBrowserAsTheWindow();
+const openTheTabAt = oneWorkspaceTabPerTest();
 
-const REMEMBERED_CONTEXT_KEY = 'serplists.activeWorkspaceId';
-
-const organization = (id: string, name: string): TeamSummary => ({
-  id,
-  memberId: `member-${id}`,
-  membershipStatus: 'active',
-  name,
-  role: 'owner',
-});
-
-const acme = organization('team-1', 'Acme');
-const beta = organization('team-2', 'Beta');
-
-let unmountTheTab: () => void = () => {};
+const acme = organizationSummary('team-1', 'Acme');
+const beta = organizationSummary('team-2', 'Beta');
 
 beforeEach(() => {
   getTeams.mockReset();
   getTeams.mockResolvedValue([acme, beta]);
 });
-
-afterEach(() => unmountTheTab());
-
-async function openTheTabAt(url: string, { remembered = 'personal' }: { remembered?: string } = {}) {
-  navigation.reset(url);
-  navigation.window.localStorage.setItem(REMEMBERED_CONTEXT_KEY, remembered);
-  const tab = renderTheWorkspaceProvider();
-  unmountTheTab = tab.unmount;
-  await letQueryUpdatesReachObservers();
-  return tab.workspace;
-}
-
-const remembered = () => navigation.window.localStorage.getItem(REMEMBERED_CONTEXT_KEY);
 
 async function switchTo(workspace: () => ShownWorkspace, workspaceId: string) {
   act(() => workspace().selectWorkspace(workspaceId));
@@ -102,18 +83,10 @@ describe('an Organization URL decides the context', () => {
     expect(workspace().activeTeamId).toBeUndefined();
   });
 
-  it('leaves a Personal URL in the context the tab remembered, since links there come from every context until they follow the route', async () => {
-    const workspace = await openTheTabAt('/dashboard/templates/', { remembered: 'team-1' });
-
-    expect(workspace().routeOrganizationStatus).toBeNull();
-    expect(workspace().activeTeamId).toBe('team-1');
-    expect(workspace().consoleContext).toEqual(organizationConsole('team-1'));
-  });
-
-  it('names no remembered Organization for links until the list confirms it, since a settled list may rule it out', async () => {
+  it('names no remembered Organization for links outside the console until the list confirms it, since a settled list may rule it out', async () => {
     const teams = deferred<TeamSummary[]>();
     getTeams.mockReturnValue(teams.promise);
-    const workspace = await openTheTabAt('/dashboard/templates/', { remembered: 'team-1' });
+    const workspace = await openTheTabAt('/profile/serp/ultimate-camping-checklist/', { remembered: 'team-1' });
 
     expect(workspace().consoleContext).toEqual(PERSONAL_CONSOLE);
 
@@ -121,6 +94,72 @@ describe('an Organization URL decides the context', () => {
     await letQueryUpdatesReachObservers();
 
     expect(workspace().consoleContext).toEqual(organizationConsole('team-1'));
+  });
+});
+
+describe('a Personal URL always means Personal', () => {
+  it.each(['/dashboard/templates/', '/dashboard/runs/run-1/', '/dashboard/settings/', '/dashboard/archive/'])(
+    'shows Personal at %s whatever the tab remembered, and becomes the remembered context',
+    async (url) => {
+      const workspace = await openTheTabAt(url, { remembered: 'team-1' });
+
+      expect(workspace().routeOrganizationStatus).toBeNull();
+      expect(workspace().activeWorkspace.type).toBe('personal');
+      expect(workspace().activeTeamId).toBeUndefined();
+      expect(workspace().workspaceScopeId).toBe('personal');
+      expect(workspace().consoleContext).toEqual(PERSONAL_CONSOLE);
+      expect(remembered()).toBe('personal');
+    },
+  );
+
+  it('shows Personal while the Organizations list loads, and when it fails, never the remembered Organization', async () => {
+    const teams = deferred<TeamSummary[]>();
+    getTeams.mockReturnValue(teams.promise);
+    const workspace = await openTheTabAt('/dashboard/templates/', { remembered: 'team-1' });
+
+    expect(workspace().workspaceStatus).toBe('ready');
+    expect(workspace().activeTeamId).toBeUndefined();
+
+    teams.reject(new Error('Teams unavailable'));
+    await letQueryUpdatesReachObservers();
+
+    expect(workspace().workspaceStatus).toBe('ready');
+    expect(workspace().activeTeamId).toBeUndefined();
+    expect(workspace().teamsUnavailable).toBe(true);
+  });
+
+  it('shows Personal at a Personal URL opened after an Organization URL, and a page outside the console then keeps Personal', async () => {
+    const workspace = await openTheTabAt('/dashboard/organization/team-1/templates/');
+    expect(workspace().activeTeamId).toBe('team-1');
+
+    act(() => {
+      navigation.router.push('/dashboard/runs/');
+    });
+    await letQueryUpdatesReachObservers();
+    expect(workspace().activeWorkspace.type).toBe('personal');
+    expect(remembered()).toBe('personal');
+
+    act(() => {
+      navigation.router.push('/profile/serp/ultimate-camping-checklist/');
+    });
+    await letQueryUpdatesReachObservers();
+    expect(workspace().activeWorkspace.type).toBe('personal');
+  });
+
+  it("keeps the tab's last Organization on a page outside the console", async () => {
+    const workspace = await openTheTabAt('/dashboard/runs/');
+
+    act(() => {
+      navigation.router.push('/dashboard/organization/team-2/runs/');
+    });
+    await letQueryUpdatesReachObservers();
+    act(() => {
+      navigation.router.push('/team-invites/token-1/');
+    });
+    await letQueryUpdatesReachObservers();
+
+    expect(workspace().activeTeamId).toBe('team-2');
+    expect(remembered()).toBe('team-2');
   });
 });
 

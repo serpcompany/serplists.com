@@ -33,6 +33,7 @@ import { useRunExecutionModel, type RunExecutionActionResult } from '@/features/
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { useOwnerContextRedirect } from '@/lib/navigation/useOwnerContextRedirect';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -86,6 +87,7 @@ const ChecklistRunPage = () => {
   });
   const displayRun = run;
   const runContext = displayRun ? ownerConsoleContext(displayRun.teamId) : consoleContext;
+  const isMovingToOwner = useOwnerContextRedirect(isSharedRun ? null : runContext);
   const consoleHomePath = buildConsoleHomePath(consoleContext);
   const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
@@ -208,7 +210,7 @@ const ChecklistRunPage = () => {
     }
   };
 
-  if (loading) {
+  if (loading || isMovingToOwner) {
     if (!isSharedRun) {
       return (
         <DashboardContentShell>

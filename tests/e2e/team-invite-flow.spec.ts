@@ -59,6 +59,8 @@ function captureTeamApiResponses(page: Page) {
   return responses;
 }
 
+const ORGANIZATION_SETTINGS_URL = /\/dashboard\/organization\/[^/]+\/settings\/$/;
+
 async function withThePageDescribedOnFailure(page: Page, responses: string[], check: () => Promise<void>) {
   try {
     await check();
@@ -140,6 +142,8 @@ test('@smoke team invite flow asks before joining through a link, lets members l
     teamName,
     { timeout: 15_000 },
   );
+  await expect(page).toHaveURL(ORGANIZATION_SETTINGS_URL);
+  const organizationSettingsPath = new URL(page.url()).pathname;
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await expect(page.getByText(teamName).first()).toBeVisible();
 
@@ -181,8 +185,9 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   expect(storedWorkspaceAfterAccept ?? 'personal').toBe('personal');
 
   await linkInviteePage.getByRole('button', { name: `Switch to ${teamName}` }).click();
-  await linkInviteePage.goto('/dashboard/settings/');
   await expectWorkspaceSelected(linkInviteePage, teamName, linkInviteResponses);
+  await linkInviteePage.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(linkInviteePage).toHaveURL(new RegExp(`${organizationSettingsPath}$`));
   await expect(linkInviteePage.getByText('Your role: Viewer')).toBeVisible();
 
   linkInviteePage.once('dialog', (dialog) => void dialog.accept());
@@ -191,6 +196,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
     'Personal',
     { timeout: 15_000 },
   );
+  await expect(linkInviteePage).toHaveURL(/\/dashboard\/settings\/$/);
   await expect(linkInviteePage.getByRole('button', { name: 'Leave Organization' })).toHaveCount(0);
   await linkInviteeContext.close();
 
@@ -216,7 +222,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(settingsInviteePage.getByText('Incoming invites')).toHaveCount(0);
   await settingsInviteeContext.close();
 
-  await page.goto('/dashboard/settings/');
+  await page.goto(organizationSettingsPath);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
     teamName,

@@ -28,7 +28,7 @@ const smokeTestHeader = { type: 'header', key: SMOKE_TEST_HEADER } as const;
 
 const LEGACY_PATH_REDIRECTS = [
   { source: '/checklists', destination: '/templates/', permanent: true },
-  { source: '/console', destination: '/dashboard/templates/', permanent: true },
+  { source: '/console', destination: '/dashboard/', permanent: true },
   { source: '/account', destination: '/dashboard/settings/', permanent: true },
   { source: '/dashboard/profile', destination: '/dashboard/settings/', permanent: true },
   { source: '/console/templates/:id', destination: '/dashboard/templates/:id/', permanent: true },
@@ -40,7 +40,6 @@ const LEGACY_PATH_REDIRECTS = [
   { source: '/console/runs/:id', destination: '/dashboard/runs/:id/', permanent: true },
   { source: '/run/:id', destination: '/dashboard/runs/:id/', permanent: true },
 ];
-const DASHBOARD_HOME_REDIRECT = { source: '/dashboard', destination: '/dashboard/templates/', permanent: false };
 
 const nextConfig: NextConfig = {
   agentRules: false,
@@ -73,7 +72,6 @@ const nextConfig: NextConfig = {
       ...(isOnWorkersDev(siteOrigin) ? [] : canonicalHostRedirects(siteOrigin, [workersDevHost], [smokeTestHeader])),
       ...canonicalHostRedirects(CANONICAL_ORIGIN, [wwwHost]),
       ...LEGACY_PATH_REDIRECTS,
-      DASHBOARD_HOME_REDIRECT,
       ORGANIZATION_HOME_REDIRECT,
       ...trailingSlashRedirects(),
     ];

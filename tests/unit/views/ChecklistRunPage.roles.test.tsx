@@ -6,7 +6,16 @@ import type { ChecklistRun } from '@/types/checklist';
 describe('ChecklistRunPage Organization roles', () => {
   const organizationRun = (): ChecklistRun => ({ ...twoTaskRun([false, false]), teamId: 'acme' });
 
-  it('renders an Organization run read-only for a viewer, even from the Personal context', async () => {
+  it("shows none of an Organization run at a Personal URL, which it leaves for the Organization's", async () => {
+    workspaceRoles.roles = { acme: 'runner' };
+    const html = await renderRunPage(organizationRun(), { at: '/dashboard/runs/run-1/', selectedItemId: 'item-1' });
+
+    expect(html).toContain('data-dashboard-loading-state="true"');
+    expect(html).not.toContain('Website Launch Checklist');
+    expect(html).not.toContain('Mark Complete');
+  });
+
+  it('renders an Organization run read-only for a viewer', async () => {
     workspaceRoles.roles = { acme: 'viewer' };
     const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
 
