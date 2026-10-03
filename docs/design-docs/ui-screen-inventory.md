@@ -1225,7 +1225,9 @@ existing content, invent nothing):
     settings" (outline).
 - **PRIMARY ACTION:** "Accept invite".
 - **SECONDARY ACTIONS:** "Decline"; "Switch to <Organization>" → [My Templates](#my-templates)
-  in that Organization; "Organization settings" → [Account Settings](#account-settings).
+  in that Organization; "Organization settings" → [Account Settings](#account-settings) in that
+  Organization; "Open templates" (declined) → My Templates in the current context; "Open
+  settings" (an invite error) → Personal Account Settings.
 - **STATES:** no token ("This invite link is missing a token."); "Checking your session...";
   signed out; "Loading invite..."; the invite; "Responding..."; accepted; already a member
   ("You're already a member of <Organization>." with the same two buttons); declined ("Invite
@@ -1916,7 +1918,8 @@ replaced.
 - **HOW USER GETS HERE:** signed in: the avatar button ("Account menu") in the site header
   on public pages; the account row ("Account menu") in the sidebar footer on console pages.
 - **WHAT'S ON THE SCREEN:** the name (or "Your account") and email; "My Templates" (the
-  console home), "My Runs", "Settings", "Profile" (only with a username; opens a new tab);
+  console home) and "My Runs" in the current context, "Settings" (Personal Account Settings,
+  where the account's settings live), "Profile" (only with a username; opens a new tab);
   "Sign out".
 - **PRIMARY ACTION:** a destination.
 - **SECONDARY ACTIONS:** "Sign out" → Home.

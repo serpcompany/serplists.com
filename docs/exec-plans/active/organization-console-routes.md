@@ -130,7 +130,14 @@ means.
 - [x] Plan (this file), 2026-10-02.
 - [x] PR 1: builders and parser, the ESLint convention, the Organization route tree and
   its gate, route-decided context for Organization URLs, the switcher and the sidebar.
-- [ ] PR 2: links follow the context.
+- [x] PR 2: links follow the context. The builders' context is required; Template cards and
+  rows, Run rows, the Template page, the editor, the Run page, the account menu, the invite
+  page, the public pages' dashboard links and sign-in name their context; a Run, a private
+  Organization Template and what an action made open in their owner's context. Archive and
+  Import Templates have no in-page links or navigation after an action (Restore and Import stay
+  on the page), and their sidebar entries followed the context in PR 1. The browser test walks
+  an Organization's Templates, a Template (its My Templates and Edit links), Start Run, the
+  run and its Runs button; the other links are covered by unit and DOM tests.
 - [ ] PR 3: Personal URLs mean Personal, bare `/dashboard/`, resource redirects, settings
   and billing returns.
 
@@ -189,3 +196,41 @@ means.
 - 2026-10-02: Bare `/dashboard/` will be a client page (PR 3), because the remembered
   context lives in browser storage the server cannot read. Rejected: copying it into a
   cookie for a server redirect, which would add stored state sent with every request.
+- 2026-10-02: PR 2 makes every builder's context argument required, so TypeScript listed
+  every call site. A link on a page passes the context the page shows (`consoleContext`). A
+  link to a record with one owner passes that owner's context, never the selected one:
+  `ownerConsoleContext(teamId)` for a Run (its `teamId`) and for what an action just made, and
+  `resolveTemplateConsoleContext(template, linkContext)` for a Template, which is its
+  Organization for a private Organization Template (the rule of
+  `resolveTemplateDestinationTeamId`, which sends its Runs and copies there) and the link's
+  context for any other. It reads `teamId`, which the client's mapper takes from `owner_type`
+  and `team_id`, the columns the API's `owner` (#234) names, so the two agree; `teamId` is used
+  because records the client builds itself (a created Run or copy) carry it and no `owner`.
+  A Template link in a Run row falls back to the Run's context.
+- 2026-10-02: After an action the page opens what it made in the context that owns it. The
+  Template actions and the dashboard's run start return the created record's `teamId`
+  (`startTemplateRun`, `duplicateOwnedTemplate`, `saveTemplateToAccount`,
+  `createDashboardTemplateRun`), and `buildCopiedTemplatePath` builds a copy's path. The
+  Template page's list links (breadcrumb, Back to Templates, after Delete) use the Template's
+  context, since a private Organization Template's list is its Organization's. The editor uses
+  the page's context: the Template page's Edit link already names the Template's context, and
+  a new Template is created in the context the page shows.
+- 2026-10-02: `consoleContext` on a URL that names no Organization now follows the resolved
+  context (`activeWorkspace`), so it names a remembered Organization only once the
+  Organizations list confirms it. PR 1 gave the tab's raw selection, which may be an
+  Organization a settled list then rules out; a link built from it would open the 404. The
+  sidebar and the switcher's Settings link get the same rule.
+- 2026-10-02: The account's own destinations name Personal: the account menu's Settings (owner
+  decision 2), Pricing's "Manage" (Personal billing), the invite page's "Open settings"
+  (incoming invites belong to the account), and sign-in without a return path (the dev login
+  bar uses the same `getPostSignInDestination`). Until PR 3 those Personal URLs still show the
+  tab's selection, so users see no change yet; PR 3 sends sign-in to bare `/dashboard/`. The
+  account menu's My Templates and My Runs open the current context's pages, as the sidebar
+  does. The public pages' dashboard links ("Open Dashboard", the mobile menu's "Dashboard"),
+  Categories' "Create Template" and the error page's "Go to My Templates" use the tab's
+  current context.
+- 2026-10-02: On the invite page, "Switch to <Organization>" still selects the Organization in
+  place (the remembered context and the list cache follow at once) and then opens its
+  Templates URL; "Organization settings" opens the Organization's settings URL, which moves
+  the tab into it on that explicit click; "Open templates" after a decline keeps the current
+  context, since declining changes none.

@@ -109,8 +109,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
   → signed out: "Log in to accept" (or "Create an account") → Log in → back to the invite →
   "Accept invite" → "Invite accepted." → "Switch to <Organization>" → My Templates in that
-  Organization. Or Account Settings → "Incoming invites" → "Accept". Wrong account: "Sign
-  out and continue" → Log in → the invite.
+  Organization (`/dashboard/organization/<organizationId>/templates/`). Or Account Settings →
+  "Incoming invites" → "Accept". Wrong account: "Sign out and continue" → Log in → the invite.
 - **Context switch:** any console page → context switcher ("Switch context") → Personal or
   an Organization → the same page, with that context's Templates and Runs. Also: Account
   Settings → "Your Organizations" → a row ("Select"), and the invite page's "Switch to
@@ -208,8 +208,10 @@ Each path above also exists for an Organization under `/dashboard/organization/<
 overlays and modes in that Organization. Until the user's Organizations load, the page shows a
 loading state; for an Organization the user cannot open it shows the [404 page](ui-screen-inventory.md#404-page)
 in the console shell. The sidebar's Templates, Runs, New Template, Import Templates, Archive and
-Settings, and the switcher's Settings, open the current context's page, and switching context
-opens the same section in the chosen context (a Template or Run page opens the list).
+Settings, the switcher's Settings and every link on the page open the current context's page,
+and switching context opens the same section in the chosen context (a Template or Run page
+opens the list). A Run, a private Organization Template, and a Run or copy an action just made
+open at the URL of the context that owns them.
 
 The sidebar's "Template Library" and "Categories" open `/templates/` and `/categories/`, which
 leave the console shell for the public shell.
@@ -227,7 +229,7 @@ the session check answers; everyone else sees it in the public shell
 ## Redirect-only paths
 
 - `/dashboard/` is not a page: it answers 307 with `/dashboard/templates/`, the console
-  home. Links use `buildConsoleHomePath()` instead. `/dashboard/organization/<organizationId>/`
+  home. Links use `buildConsoleHomePath(context)` instead. `/dashboard/organization/<organizationId>/`
   answers 307 with that Organization's Templates.
 - Legacy paths answer 308 with their page: `/checklists` with `/templates/`; `/console` with
   `/dashboard/templates/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;

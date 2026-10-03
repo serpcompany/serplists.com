@@ -128,11 +128,22 @@ and agents (MCP) call them directly and do not follow redirects.
   hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
   `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.ts`).
 - Console paths come from `src/lib/consoleRoutes.ts` (`routes.ts` re-exports its
-  builders). Each builder takes the context it links into: `PERSONAL_CONSOLE` (the default
-  for now) or `organizationConsole(organizationId)`. `parseConsoleRoute` reads a path back
-  into its context and section, and `buildEquivalentConsolePath` gives the same section in
-  another context, which is where the switcher goes. ESLint refuses a hand-built
-  `/dashboard/organization` path anywhere else in `src/` or `functions/`.
+  builders). Each builder requires the context it links into, `PERSONAL_CONSOLE` or
+  `organizationConsole(organizationId)`, so no link falls into Personal by default.
+  `parseConsoleRoute` reads a path back into its context and section, and
+  `buildEquivalentConsolePath` gives the same section in another context, which is where the
+  switcher goes. ESLint refuses a hand-built `/dashboard/organization` path anywhere else in
+  `src/` or `functions/`.
+- A link passes the context it means, usually the context its page shows (`consoleContext`
+  from `useWorkspace()`, which names a remembered Organization only once the Organizations
+  list confirms it). A link to a record with one owner uses that owner's
+  context, never the selected one: a Run opens in its own (`ownerConsoleContext(run.teamId)`),
+  and a private Organization Template in its Organization (`resolveTemplateConsoleContext` in
+  `src/lib/templateDestination.ts`, the rule that sends its Runs and copies there). After an
+  action, the page opens what it made (a Run, a copy) in the context that owns it, from the
+  created record's `teamId`. The account's own pages name Personal: the account menu's
+  Settings, Pricing's "Manage", the invite page's "Open settings", and sign-in without a
+  return path ([Organization console routes](exec-plans/active/organization-console-routes.md)).
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
   route helpers (`isPathWithin`, `resolveRouteShell`), which accept either form, not with
   `===` or `startsWith` on a literal.
@@ -158,7 +169,7 @@ and agents (MCP) call them directly and do not follow redirects.
   which would match them too. The module states Next.js's redirect shape itself, since the
   API imports it and must not import Next.js.
 - `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
-  My Templates for now. Links use `buildConsoleHomePath()`, which returns the home itself.
+  My Templates for now. Links use `buildConsoleHomePath(context)`, which returns the home itself.
   `/dashboard/organization/:organizationId/` answers 307 with that Organization's Templates
   (`ORGANIZATION_HOME_REDIRECT`).
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
