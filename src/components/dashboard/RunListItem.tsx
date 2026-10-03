@@ -26,7 +26,9 @@ import { Item, ItemActions, ItemContent, ItemTitle } from '@/components/ui/item'
 import { Progress } from '@/components/ui/progress';
 import type { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import type { RunSourceTemplate } from '@/features/dashboard-runs/runTemplateLookup';
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import { buildConsoleRunPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { resolveTemplateConsoleContext } from '@/lib/templateDestination';
 import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -64,7 +66,8 @@ export function RunListItem({
 }: RunListItemProps) {
   const isCompleted = run.status === 'completed';
   const { tasksCompleted, tasksTotal } = countRunTasks(run.sections);
-  const runPath = buildConsoleRunPath(run.id);
+  const runContext = ownerConsoleContext(run.teamId);
+  const runPath = buildConsoleRunPath(run.id, runContext);
 
   return (
     <Item className="group" role="listitem" variant="outline">
@@ -84,7 +87,7 @@ export function RunListItem({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {template ? (
             <Link
-              href={buildConsoleTemplatePath(template.id)}
+              href={buildConsoleTemplatePath(template.id, resolveTemplateConsoleContext(template, runContext))}
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
               From {template.title}

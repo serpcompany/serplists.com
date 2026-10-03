@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PublicMobileMenu } from '@/components/layout/PublicMobileNav';
 import { publicHeaderItems } from '@/components/layout/publicSiteLinks';
+import { organizationConsole, PERSONAL_CONSOLE, type ConsoleContext } from '@/lib/consoleRoutes';
 
 const groupOfLinksNamedByMenuLabel = (html: string, menuLabel: string) => {
   const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${menuLabel}</p>`))?.[1];
@@ -14,10 +15,10 @@ const groupOfLinksNamedByMenuLabel = (html: string, menuLabel: string) => {
   return html.slice(start, html.indexOf('</div>', start));
 };
 
-const renderMenu = (pathname: string, signedIn: boolean) => {
+const renderMenu = (pathname: string, signedIn: boolean, consoleContext: ConsoleContext = PERSONAL_CONSOLE) => {
   navigation.reset(pathname);
   return renderToStaticMarkup(
-    <PublicMobileMenu onNavigate={() => undefined} pathname={pathname} signedIn={signedIn} />,
+    <PublicMobileMenu consoleContext={consoleContext} onNavigate={() => undefined} pathname={pathname} signedIn={signedIn} />,
   );
 };
 
@@ -50,6 +51,12 @@ describe('PublicMobileMenu', () => {
     expect(html).toContain('>Dashboard</a>');
     expect(html).not.toContain('href="/login');
     expect(html).not.toContain('href="/register');
+  });
+
+  it("opens the dashboard in the Organization the tab is in", () => {
+    const html = renderMenu('/templates/', true, organizationConsole('team-1'));
+
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/"');
   });
 
   it('marks the current section and offers the theme switch', () => {

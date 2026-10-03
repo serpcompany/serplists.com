@@ -22,6 +22,9 @@ export const organizationConsole = (organizationId: string): ConsoleContext => (
   organizationId,
 });
 
+export const ownerConsoleContext = (organizationId: string | undefined): ConsoleContext =>
+  organizationId ? organizationConsole(organizationId) : PERSONAL_CONSOLE;
+
 const DASHBOARD_SEGMENT = 'dashboard';
 const ORGANIZATION_SEGMENT = 'organization';
 const PERSONAL_BASE = `/${DASHBOARD_SEGMENT}/`;
@@ -64,38 +67,38 @@ const sectionPath = (section: ConsoleSection): string => {
 export const buildConsoleRoutePath = ({ context, section }: ConsoleRoute): string =>
   `${contextBase(context)}${sectionPath(section)}`;
 
-export const buildConsoleTemplatesPath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleTemplatesPath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'templates' } });
 
-export const buildConsoleHomePath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleHomePath = (context: ConsoleContext): string =>
   buildConsoleTemplatesPath(context);
 
-export const buildConsoleTemplateCreatePath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleTemplateCreatePath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'template-create' } });
 
-export const buildConsoleTemplateImportPath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleTemplateImportPath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'template-import' } });
 
 export const buildConsoleTemplatePath = (
   templateId: string,
-  context: ConsoleContext = PERSONAL_CONSOLE,
+  context: ConsoleContext,
 ): string => buildConsoleRoutePath({ context, section: { name: 'template', templateId } });
 
 export const buildConsoleTemplateEditPath = (
   templateId: string,
-  context: ConsoleContext = PERSONAL_CONSOLE,
+  context: ConsoleContext,
 ): string => buildConsoleRoutePath({ context, section: { name: 'template-edit', templateId } });
 
-export const buildConsoleRunsPath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleRunsPath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'runs' } });
 
-export const buildConsoleRunPath = (runId: string, context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleRunPath = (runId: string, context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'run', runId } });
 
-export const buildConsoleSettingsPath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleSettingsPath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'settings' } });
 
-export const buildConsoleArchivePath = (context: ConsoleContext = PERSONAL_CONSOLE): string =>
+export const buildConsoleArchivePath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'archive' } });
 
 const SINGLE_PAGE_SECTIONS: ReadonlyMap<string, ConsoleSection> = new Map<string, ConsoleSection>([

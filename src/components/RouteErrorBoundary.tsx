@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { buildConsoleTemplatesPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
@@ -25,9 +26,10 @@ export function RouteErrorBoundary({ children }: { children: ReactNode }) {
 
 export function RouteErrorFallback({ reset }: { reset: () => void }) {
   const { user } = useAuth();
+  const { consoleContext } = useWorkspace();
   const router = useAppRouter();
   const home = user
-    ? { to: buildConsoleTemplatesPath(), label: 'Go to My Templates' }
+    ? { to: buildConsoleTemplatesPath(consoleContext), label: 'Go to My Templates' }
     : { to: '/', label: 'Go to home' };
 
   return (

@@ -26,9 +26,12 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => workspaceMock.value,
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
+  return {
+    useWorkspace: () => ({ consoleContext: ownerConsoleContext(workspaceMock.value.activeTeamId), ...workspaceMock.value }),
+  };
+});
 
 const draftMock = vi.hoisted(() => ({
   readTemplateDraft: vi.fn(() => null as unknown),
@@ -220,6 +223,18 @@ describe('BillingSection', () => {
     expect(draftMock.readTemplateDraft).toHaveBeenCalledWith({ userId: 'user-1', teamId: undefined });
     expect(html).toContain('Resume template draft');
     expect(html).toContain('href="/dashboard/templates/new/"');
+  });
+
+  it("links an Organization's kept draft to New Template in that Organization", () => {
+    draftMock.readTemplateDraft.mockReturnValueOnce({
+      savedAt: '2026-09-28T10:00:00.000Z',
+      values: { title: 'Launch checklist' },
+    });
+
+    const html = renderBillingSection({ billingEnabled: true, plan: 'team' }, 'team-1');
+
+    expect(draftMock.readTemplateDraft).toHaveBeenCalledWith({ userId: 'user-1', teamId: 'team-1' });
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/new/"');
   });
 
   it('shows no draft link when nothing was kept', () => {

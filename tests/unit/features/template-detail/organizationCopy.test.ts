@@ -48,7 +48,7 @@ describe('copying a public template into an Organization', () => {
 
     const result = await copyIntoTheOrganization(apiClient, { invalidateTemplates });
 
-    expect(result).toEqual({ kind: 'ok', templateId: 'clone-1' });
+    expect(result).toEqual({ kind: 'ok', templateId: 'clone-1', teamId: 'team-1' });
     expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
       teamId: 'team-1',
       visibility: 'private',

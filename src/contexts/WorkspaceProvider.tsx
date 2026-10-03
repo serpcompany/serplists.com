@@ -310,6 +310,9 @@ export function WorkspaceProvider({
     [teams, teamsUnavailable],
   );
 
+  const shownContextId =
+    routeOrganizationId !== null && routeOrganizationStatus !== 'missing' ? routeOrganizationId : activeWorkspace.id;
+
   const value = useMemo<WorkspaceContextValue>(() => {
     const isTeamWorkspace = activeWorkspace.type === 'team';
     const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
@@ -321,7 +324,7 @@ export function WorkspaceProvider({
       canEditTemplates: teamRole ? activePermissions.canEditTemplates : true,
       canManageTeam: teamRole ? activePermissions.canManage : false,
       canRunTemplates: teamRole ? activePermissions.canRun : true,
-      consoleContext: toConsoleContext(contextWorkspaceId),
+      consoleContext: toConsoleContext(shownContextId),
       createTeam,
       getPermissions,
       isRoleUnavailable,
@@ -340,8 +343,8 @@ export function WorkspaceProvider({
       workspaceStatus,
     };
   }, [
-    activeWorkspace, contextWorkspaceId, createTeam, getPermissions, isRoleUnavailable, isWorkspaceLoading, patchTeam,
-    refreshTeams, rememberTeam, retryWorkspace, routeOrganizationStatus, selectWorkspace, teams, teamsUnavailable,
+    activeWorkspace, createTeam, getPermissions, isRoleUnavailable, isWorkspaceLoading, patchTeam, refreshTeams,
+    rememberTeam, retryWorkspace, routeOrganizationStatus, selectWorkspace, shownContextId, teams, teamsUnavailable,
     workspaces, workspaceStatus,
   ]);
 

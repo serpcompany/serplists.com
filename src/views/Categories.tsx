@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/empty';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { buildConsoleTemplateCreatePath, buildPublicCategoryPathForSlug } from '@/lib/routes';
@@ -53,6 +54,7 @@ const Categories = () => {
   const searchId = useId();
   const { allCategories, templates, loading, catalogError, retryCatalog } =
     useTemplateLibrary();
+  const { consoleContext } = useWorkspace();
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
     [allCategories, templates],
@@ -176,7 +178,7 @@ const Categories = () => {
       <PageSection spacing="spacious">
         <CtaBanner
           actions={
-            <Link href={buildConsoleTemplateCreatePath()} className={buttonVariants()}>
+            <Link href={buildConsoleTemplateCreatePath(consoleContext)} className={buttonVariants()}>
               Create Template
               <ArrowRight data-icon="inline-end" />
             </Link>

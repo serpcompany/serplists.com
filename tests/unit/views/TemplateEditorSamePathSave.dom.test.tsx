@@ -1,4 +1,5 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import { shownConsole } from '../../support/mockedConsoleContext';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Link } from '@/components/navigation/Link';
 import type { TemplateEditorSaveResult } from '@/features/template-editor/useTemplateEditorModel';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import TemplateEditor from '@/views/TemplateEditor';
 
 import { deferred } from '../../support/deferred';
@@ -51,10 +53,15 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', username: 'jane' } }),
 }));
 vi.mock('@/components/template-editor/TemplateHeader', () => ({
-  TemplateHeader: ({ onSave }: { onSave: () => void }) => (
-    <button type="button" onClick={onSave}>
-      Save
-    </button>
+  TemplateHeader: ({ onCancel, onSave }: { onCancel: () => void; onSave: () => void }) => (
+    <>
+      <button type="button" onClick={onSave}>
+        Save
+      </button>
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+    </>
   ),
 }));
 vi.mock('@/components/template-editor/OutlineSidebar', () => ({ OutlineSidebar: () => null }));
@@ -69,6 +76,7 @@ theInMemoryBrowserAsTheWindow();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  shownConsole.context = PERSONAL_CONSOLE;
 });
 
 const created = (): TemplateEditorSaveResult => ({
@@ -138,5 +146,55 @@ describe('TemplateEditor create after a same-path navigation', () => {
 
     expect(mocks.settleDraft).toHaveBeenCalledTimes(1);
     expect(navigation.pathname()).toBe('/dashboard/runs/');
+  });
+});
+
+describe('TemplateEditor navigation in the context it shows', () => {
+  const acmeNewTemplatePath = '/dashboard/organization/team-1/templates/new/';
+
+  async function openTheNewTemplateEditorIn(path: string) {
+    navigation.reset(path, {
+      routes: ['/dashboard/organization/[organizationId]/templates/new', '/dashboard/templates/new'],
+    });
+    await renderSettled(
+      <RoutedPages
+        pages={{
+          '/dashboard/organization/[organizationId]/templates/new': <TemplateEditor />,
+          '/dashboard/templates/new': <TemplateEditor />,
+        }}
+      />,
+    );
+  }
+
+  const click = (name: string) =>
+    act(async () => {
+      fireEvent.click(screen.getByRole('button', { name }));
+    });
+
+  it("goes to the Organization's Templates after creating a Template there", async () => {
+    shownConsole.context = organizationConsole('team-1');
+    mocks.save.mockResolvedValueOnce(created());
+    await openTheNewTemplateEditorIn(acmeNewTemplatePath);
+
+    await click('Save');
+
+    expect(navigation.pathname()).toBe('/dashboard/organization/team-1/templates/');
+  });
+
+  it("goes back to the Organization's Templates on Cancel", async () => {
+    shownConsole.context = organizationConsole('team-1');
+    await openTheNewTemplateEditorIn(acmeNewTemplatePath);
+
+    await click('Cancel');
+
+    expect(navigation.pathname()).toBe('/dashboard/organization/team-1/templates/');
+  });
+
+  it('goes back to the Personal Templates on Cancel in Personal', async () => {
+    await openTheNewTemplateEditorIn('/dashboard/templates/new/');
+
+    await click('Cancel');
+
+    expect(navigation.pathname()).toBe('/dashboard/templates/');
   });
 });

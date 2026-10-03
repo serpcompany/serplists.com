@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, vi } from 'vitest';
 
 import type { useWorkspace } from '@/contexts/WorkspaceContext';
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import type { ChecklistTemplate, TemplateSavePayload, TemplatesContextProps } from '@/types/checklist';
 
 import { PERSONAL_WORKSPACE } from '../fixtures/workspaces';
@@ -24,7 +25,12 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, isLoading: false }),
 }));
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeWorkspace: PERSONAL_WORKSPACE, isTeamWorkspace: false, ...providerWorkspace }),
+  useWorkspace: () => ({
+    activeWorkspace: PERSONAL_WORKSPACE,
+    consoleContext: ownerConsoleContext(providerWorkspace.activeTeamId),
+    isTeamWorkspace: false,
+    ...providerWorkspace,
+  }),
 }));
 
 import { useTemplates } from '@/contexts/TemplatesContext';

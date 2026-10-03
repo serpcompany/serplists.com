@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
@@ -69,23 +70,23 @@ describe('routes', () => {
   });
 
   it("links the console home straight to the dashboard's home, since /dashboard/ only redirects there", () => {
-    expect(buildConsoleHomePath()).toBe('/dashboard/templates/');
+    expect(buildConsoleHomePath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/');
   });
 
   it('builds the canonical console routes', () => {
-    expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates/');
-    expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new/');
-    expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates/');
-    expect(buildConsoleTemplatePath('template-1')).toBe(
+    expect(buildConsoleTemplatesPath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/');
+    expect(buildConsoleTemplateCreatePath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/new/');
+    expect(buildConsoleTemplateImportPath(PERSONAL_CONSOLE)).toBe('/dashboard/import-templates/');
+    expect(buildConsoleTemplatePath('template-1', PERSONAL_CONSOLE)).toBe(
       '/dashboard/templates/template-1/',
     );
-    expect(buildConsoleTemplateEditPath('template-1')).toBe(
+    expect(buildConsoleTemplateEditPath('template-1', PERSONAL_CONSOLE)).toBe(
       '/dashboard/templates/template-1/edit/',
     );
-    expect(buildConsoleRunsPath()).toBe('/dashboard/runs/');
-    expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1/');
-    expect(buildConsoleSettingsPath()).toBe('/dashboard/settings/');
-    expect(buildConsoleArchivePath()).toBe('/dashboard/archive/');
+    expect(buildConsoleRunsPath(PERSONAL_CONSOLE)).toBe('/dashboard/runs/');
+    expect(buildConsoleRunPath('run-1', PERSONAL_CONSOLE)).toBe('/dashboard/runs/run-1/');
+    expect(buildConsoleSettingsPath(PERSONAL_CONSOLE)).toBe('/dashboard/settings/');
+    expect(buildConsoleArchivePath(PERSONAL_CONSOLE)).toBe('/dashboard/archive/');
   });
 
   it('flags template editor routes that should render on a blank workspace shell, with or without the trailing slash the router reports', () => {
@@ -246,10 +247,10 @@ describe('routes', () => {
 
 describe('isPathWithin', () => {
   it('matches the page a link names and the pages under it in any form or case, and the home page only itself', () => {
-    expect(isPathWithin('/dashboard/templates/abc/', buildConsoleTemplatesPath())).toBe(true);
-    expect(isPathWithin('/dashboard/templates', buildConsoleTemplatesPath())).toBe(true);
-    expect(isPathWithin('/Dashboard/Templates/', buildConsoleTemplatesPath())).toBe(true);
-    expect(isPathWithin('/dashboard/runs/', buildConsoleTemplatesPath())).toBe(false);
+    expect(isPathWithin('/dashboard/templates/abc/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/dashboard/templates', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/Dashboard/Templates/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/dashboard/runs/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(false);
     expect(isPathWithin('/', '/')).toBe(true);
     expect(isPathWithin('/about/', '/')).toBe(false);
   });

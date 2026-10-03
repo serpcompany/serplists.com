@@ -36,6 +36,7 @@ import {
   PRO_MONTHLY_PRICE_LABEL,
   shouldRetryBillingStatus,
 } from '@/lib/billing';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { buildConsoleSettingsPath, buildRegisterPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
@@ -149,7 +150,7 @@ const Pricing = () => {
               ) : personalAction === 'support' ? (
                 <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
               ) : personalAction === 'manage' ? (
-                <Link href={buildConsoleSettingsPath()} className={buttonVariants()}>
+                <Link href={buildConsoleSettingsPath(PERSONAL_CONSOLE)} className={buttonVariants()}>
                   {billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}
                 </Link>
               ) : (

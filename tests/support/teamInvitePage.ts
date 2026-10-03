@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
+
 type InviteeAuth = {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -35,6 +37,7 @@ export const inviteeAuth = {
 };
 
 export const workspaceMocks = {
+  consoleContext: PERSONAL_CONSOLE,
   refreshTeams: vi.fn(async () => []),
   rememberTeam: vi.fn(),
   selectWorkspace: vi.fn(),

@@ -161,7 +161,7 @@ test("a new template's draft kept in an Organization is offered from Personal af
   await expect(titleField).toHaveValue(title);
 
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/dashboard/organization/${organization.id}/templates/$`), { timeout: 30_000 });
   const saved = await callApi(page, `/templates?teamId=${organization.id}`, 'GET', apiTemplateRows);
   const created = saved.find((template) => template.title === title);
   expect(created).toBeTruthy();

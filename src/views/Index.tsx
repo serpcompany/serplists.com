@@ -26,6 +26,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
@@ -86,6 +87,7 @@ const productSurfaces = [
 
 const Index = () => {
   const { user } = useAuth();
+  const { consoleContext } = useWorkspace();
   const { templates, templatesLoading } = useTemplates();
 
   const featuredTemplates = useMemo(
@@ -94,7 +96,7 @@ const Index = () => {
   );
 
   const primaryCta = user
-    ? { href: buildConsoleTemplatesPath(), label: 'Open Dashboard' }
+    ? { href: buildConsoleTemplatesPath(consoleContext), label: 'Open Dashboard' }
     : { href: buildRegisterPath(), label: 'Get Started' };
 
   return (

@@ -30,6 +30,8 @@ async function expectServedAsIs(url: string) {
   expect(nextServerRedirect(redirects, absolute), url).toBeNull();
 }
 
+const personal = consoleRoutes.PERSONAL_CONSOLE;
+
 const template = { id: 'tpl-1', slug: 'weekly-review', userId: 'user-1', ownerProfile: { username: 'john.doe' } };
 
 const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
@@ -55,16 +57,16 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildPublicFeaturesPath', routes.buildPublicFeaturesPath()],
   ['buildPublicFeaturePath', routes.buildPublicFeaturePath('template-builder')],
   ['buildSharePath', routes.buildSharePath('share-token')],
-  ['buildConsoleHomePath', routes.buildConsoleHomePath()],
-  ['buildConsoleTemplatesPath', routes.buildConsoleTemplatesPath()],
-  ['buildConsoleTemplateCreatePath', routes.buildConsoleTemplateCreatePath()],
-  ['buildConsoleTemplateImportPath', routes.buildConsoleTemplateImportPath()],
-  ['buildConsoleTemplatePath', routes.buildConsoleTemplatePath('tpl-1')],
-  ['buildConsoleTemplateEditPath', routes.buildConsoleTemplateEditPath('tpl-1')],
-  ['buildConsoleRunsPath', routes.buildConsoleRunsPath()],
-  ['buildConsoleRunPath', routes.buildConsoleRunPath('run-1')],
-  ['buildConsoleSettingsPath', routes.buildConsoleSettingsPath()],
-  ['buildConsoleArchivePath', routes.buildConsoleArchivePath()],
+  ['buildConsoleHomePath', routes.buildConsoleHomePath(personal)],
+  ['buildConsoleTemplatesPath', routes.buildConsoleTemplatesPath(personal)],
+  ['buildConsoleTemplateCreatePath', routes.buildConsoleTemplateCreatePath(personal)],
+  ['buildConsoleTemplateImportPath', routes.buildConsoleTemplateImportPath(personal)],
+  ['buildConsoleTemplatePath', routes.buildConsoleTemplatePath('tpl-1', personal)],
+  ['buildConsoleTemplateEditPath', routes.buildConsoleTemplateEditPath('tpl-1', personal)],
+  ['buildConsoleRunsPath', routes.buildConsoleRunsPath(personal)],
+  ['buildConsoleRunPath', routes.buildConsoleRunPath('run-1', personal)],
+  ['buildConsoleSettingsPath', routes.buildConsoleSettingsPath(personal)],
+  ['buildConsoleArchivePath', routes.buildConsoleArchivePath(personal)],
 ];
 
 const acme = consoleRoutes.organizationConsole('team-1');

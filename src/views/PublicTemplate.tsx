@@ -14,7 +14,7 @@ import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
+import { buildCopiedTemplatePath, followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import { analytics } from '@/lib/analytics';
@@ -23,11 +23,10 @@ import {
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import { TEMPLATE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
 import {
   buildConsoleRunPath,
-  buildConsoleTemplatePath,
-  buildConsoleTemplatesPath,
   buildPublicProfilePath,
   buildPublicTemplatesPath,
   resolvePublicTemplateOwnerSlug,
@@ -123,10 +122,10 @@ const PublicTemplate = () => {
       }
       await followTemplateActionResult(result, visit, {
         ...followResult,
-        succeeded: ({ runId }) => {
+        succeeded: ({ runId, teamId }) => {
           if (runId) {
             toast.success('Checklist run created');
-            router.push(buildConsoleRunPath(runId));
+            router.push(buildConsoleRunPath(runId, ownerConsoleContext(teamId)));
           }
         },
       });
@@ -148,15 +147,13 @@ const PublicTemplate = () => {
       const result = await saveTemplate();
       await followTemplateActionResult(result, visit, {
         ...followResult,
-        succeeded: ({ templateId }) => {
+        succeeded: (copied) => {
           toast.success(
             isTeamWorkspace
               ? 'Template copied to this Organization'
               : 'Template saved to your account',
           );
-          router.push(
-            templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
-          );
+          router.push(buildCopiedTemplatePath(copied));
         },
       });
       return result.kind === 'ok';

@@ -1,4 +1,5 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import '../../support/mockedConsoleContext';
 import {
   baseTemplate,
   bundledTemplate,

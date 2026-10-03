@@ -3,6 +3,7 @@ import {
   apiMocks,
   inviteeAuth as auth,
   PENDING_INVITE_PREVIEW as preview,
+  workspaceMocks,
 } from '../../support/teamInvitePage';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
@@ -10,6 +11,7 @@ import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
 
 import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
@@ -50,7 +52,8 @@ async function openInvite() {
     });
     await letQueryUpdatesReachObservers();
   };
-  return { text: () => container.textContent, press };
+  const hrefOf = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
+  return { text: () => container.textContent, press, hrefOf };
 }
 
 describe('Organization invite page after the invitee answers, whose confirmation no later read of the preview may replace', () => {
@@ -134,5 +137,53 @@ describe('Organization invite page after the invitee answers, whose confirmation
     expect(page.text()).toContain('Beta Org');
     expect(page.text()).toContain('Accept invite');
     expect(page.text()).not.toContain('Invite declined.');
+  });
+});
+
+describe('Organization invite page links, which name the context they open', () => {
+  beforeEach(() => {
+    auth.reset();
+    Object.values(apiMocks).forEach((mock) => mock.mockReset());
+    workspaceMocks.selectWorkspace.mockReset();
+    apiMocks.getTeamInvitePreview.mockResolvedValue(preview);
+  });
+
+  afterEach(async () => {
+    await act(async () => unmountTheInvitePage());
+    workspaceMocks.consoleContext = PERSONAL_CONSOLE;
+  });
+
+  const acceptTheInvite = async () => {
+    const page = await openInvite();
+    apiMocks.acceptTeamInvite.mockResolvedValue({ memberId: 'member-1', role: 'editor', teamId: 'team-1' });
+    await page.press('Accept invite');
+    return page;
+  };
+
+  it("switches to the Organization and opens its Templates on Switch to", async () => {
+    const page = await acceptTheInvite();
+
+    await page.press('Switch to Acme Corp');
+
+    expect(workspaceMocks.selectWorkspace).toHaveBeenCalledWith('team-1');
+    expect(navigation.url()).toBe('/dashboard/organization/team-1/templates/');
+  });
+
+  it("opens the Organization's own settings from Organization settings", async () => {
+    const page = await acceptTheInvite();
+
+    await page.press('Organization settings');
+
+    expect(navigation.url()).toBe('/dashboard/organization/team-1/settings/');
+  });
+
+  it('opens the Templates of the context the tab is in after a decline, since declining changes no context', async () => {
+    workspaceMocks.consoleContext = organizationConsole('team-2');
+    const page = await openInvite();
+    apiMocks.declineTeamInvite.mockResolvedValue({ success: true });
+
+    await page.press('Decline');
+
+    expect(page.hrefOf('Open templates')).toBe('/dashboard/organization/team-2/templates/');
   });
 });

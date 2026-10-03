@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { present } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
+import { PERSONAL_CONSOLE } from "@/lib/consoleRoutes";
 import { buildConsoleSettingsPath } from "@/lib/routes";
 import { billingSchemaSql, emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
@@ -38,8 +39,8 @@ describe("Stripe return URLs, which are the settings page itself so no redirect 
     const response = await postToBilling(env(), "checkout");
 
     expect(response.status).toBe(200);
-    expect(sentForm().get("success_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath()}?billing=success`);
-    expect(sentForm().get("cancel_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath()}?billing=cancel`);
+    expect(sentForm().get("success_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath(PERSONAL_CONSOLE)}?billing=success`);
+    expect(sentForm().get("cancel_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath(PERSONAL_CONSOLE)}?billing=cancel`);
     expect(sentForm().get("line_items[0][price]")).toBe("price_pro");
   });
 
@@ -47,6 +48,6 @@ describe("Stripe return URLs, which are the settings page itself so no redirect 
     const response = await postToBilling(env(), "portal");
 
     expect(response.status).toBe(200);
-    expect(sentForm().get("return_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath()}`);
+    expect(sentForm().get("return_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath(PERSONAL_CONSOLE)}`);
   });
 });

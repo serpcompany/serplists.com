@@ -6,7 +6,12 @@ import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
-import { duplicateOwnedTemplate, saveTemplateToAccount, startTemplateRun } from '@/features/template-detail/templateActionOutcome';
+import {
+  buildCopiedTemplatePath,
+  duplicateOwnedTemplate,
+  saveTemplateToAccount,
+  startTemplateRun,
+} from '@/features/template-detail/templateActionOutcome';
 import { resolveShareOwnerTemplate } from '@/features/template-detail/templateDetailApi';
 import type { TemplateDetailBillingState } from '@/features/template-detail/useTemplateDetailModel';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
@@ -55,6 +60,36 @@ describe('template detail actions', () => {
     expect(result).toEqual({ kind: 'login_required' });
   });
 
+  it('returns the Organization that owns a started run, or none for a Personal run, so the page opens it in its context', async () => {
+    const startIn = (teamId: string | undefined) =>
+      startTemplateRun({
+        createRun: vi.fn().mockResolvedValue({ id: 'run-1', teamId }),
+        isAuthenticated: true,
+        template: buildTemplate(),
+      });
+
+    expect(await startIn('team-b')).toStrictEqual({ kind: 'ok', runId: 'run-1', teamId: 'team-b' });
+    expect(await startIn(undefined)).toStrictEqual({ kind: 'ok', runId: 'run-1', teamId: undefined });
+  });
+
+  it("opens a copy, or the Templates it went to, in its owner's context", () => {
+    expect(buildCopiedTemplatePath({ kind: 'ok', templateId: 'copy-1', teamId: 'team-b' })).toBe(
+      '/dashboard/organization/team-b/templates/copy-1/',
+    );
+    expect(buildCopiedTemplatePath({ kind: 'ok', templateId: 'copy-1' })).toBe('/dashboard/templates/copy-1/');
+    expect(buildCopiedTemplatePath({ kind: 'ok', teamId: 'team-b' })).toBe('/dashboard/organization/team-b/templates/');
+  });
+
+  it('returns the Organization that owns a duplicate', async () => {
+    const result = await duplicateOwnedTemplate({
+      activeTeamId: 'team-a',
+      createTemplate: vi.fn().mockResolvedValue(buildTemplate({ id: 'copy-3', isPublic: false, teamId: 'team-b' })),
+      template: buildTemplate({ isPublic: false, teamId: 'team-b' }),
+    });
+
+    expect(result).toStrictEqual({ kind: 'ok', templateId: 'copy-3', teamId: 'team-b' });
+  });
+
   it('returns upgrade_required when a free user tries to save a gated template', async () => {
     const apiClient = templateDetailApiClient();
 
@@ -99,7 +134,7 @@ describe('template detail actions', () => {
     expect(createTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ teamId: 'team-1', isPublic: false }),
     );
-    expect(apiResult).toEqual({ kind: 'ok', templateId: 'clone-1' });
+    expect(apiResult).toEqual({ kind: 'ok', templateId: 'clone-1', teamId: 'team-1' });
     expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
       teamId: 'team-1',
       visibility: 'private',

@@ -24,9 +24,10 @@ vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOrigin
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com', username: 'jane' } }),
 }));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => workspace,
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
+  return { useWorkspace: () => ({ ...workspace, consoleContext: ownerConsoleContext(workspace.activeTeamId) }) };
+});
 vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
   const { editorAccess } = await import('../../fixtures/templateEditorHooks');
   return { useTemplateEditorAccess: () => editorAccess() };
@@ -54,17 +55,29 @@ beforeEach(() => {
   workspace.teams = [];
 });
 
+const renderEditForAnOrganizationViewer = () => {
+  workspace.teams = [{ id: 'team-1', role: 'viewer' }];
+  mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+  return renderEdit();
+};
+
 describe('TemplateEditor permissions, which show why instead of a form whose every save the API would refuse', () => {
   it('shows an Organization viewer a read-only notice instead of the form', async () => {
-    workspace.teams = [{ id: 'team-1', role: 'viewer' }];
-    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
-
-    const html = await renderEdit();
+    const html = await renderEditForAnOrganizationViewer();
 
     expect(html).toContain("You can&#x27;t edit this template");
     expect(html).toContain('href="/dashboard/templates/template-1/"');
     expect(html).not.toContain('Launch checklist');
     expect(hasSaveButton(html)).toBe(false);
+  });
+
+  it('links the notice inside the Organization the editor was opened in', async () => {
+    workspace.activeTeamId = 'team-1';
+
+    const html = await renderEditForAnOrganizationViewer();
+
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/template-1/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/templates/"');
   });
 
   it("shows the notice for another user's public template", async () => {

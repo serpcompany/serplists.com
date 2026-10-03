@@ -39,7 +39,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
+import { buildCopiedTemplatePath, followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import {
   exportTemplateFile,
@@ -55,16 +55,21 @@ import {
 import { withReturnPath } from '@/lib/auth/returnPath';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
-  buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildLoginPath,
 } from '@/lib/routes';
 import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
-import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
+import {
+  getRunStartedMessage,
+  getTemplateDuplicatedMessage,
+  nameOtherTemplateDestination,
+  resolveTemplateConsoleContext,
+} from '@/lib/templateDestination';
 import { formatLocalDate } from '@/lib/utils/dbTimestamp';
 
 import { Link } from '@/components/navigation/Link';
@@ -76,8 +81,8 @@ const TemplateDetail = () => {
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const {
-    activeTeamId, canEditTemplates, getPermissions, isRoleUnavailable, isTeamWorkspace, retryWorkspace, teams,
-    workspaceStatus,
+    activeTeamId, canEditTemplates, consoleContext, getPermissions, isRoleUnavailable, isTeamWorkspace, retryWorkspace,
+    teams, workspaceStatus,
   } = useWorkspace();
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -129,6 +134,7 @@ const TemplateDetail = () => {
     template: displayTemplate,
   });
   const otherDestination = displayTemplate ? nameOtherTemplateDestination(displayTemplate, activeTeamId, teams) : undefined;
+  const templateContext = displayTemplate ? resolveTemplateConsoleContext(displayTemplate, consoleContext) : consoleContext;
   const isPublic = displayTemplate?.isPublic ?? false;
   const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
   const { canStartRun } = getTemplateActionPermissions({
@@ -163,10 +169,10 @@ const TemplateDetail = () => {
       await followTemplateActionResult(result, visit, {
         loginRequired: goToLogin,
         upgradeRequired: handleUpgrade,
-        succeeded: ({ runId }) => {
+        succeeded: ({ runId, teamId }) => {
           if (runId) {
             toast.success(getRunStartedMessage(otherDestination));
-            router.push(buildConsoleRunPath(runId));
+            router.push(buildConsoleRunPath(runId, ownerConsoleContext(teamId)));
           }
         },
       });
@@ -214,7 +220,7 @@ const TemplateDetail = () => {
       await followTemplateActionResult(result, visit, {
         loginRequired: goToLogin,
         upgradeRequired: handleUpgrade,
-        succeeded: ({ templateId }) => {
+        succeeded: (copied) => {
           toast.success(
             canEditTemplate
               ? getTemplateDuplicatedMessage(otherDestination)
@@ -222,9 +228,7 @@ const TemplateDetail = () => {
                 ? 'Template copied to this Organization'
                 : 'Template copied to your account',
           );
-          router.push(
-            templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
-          );
+          router.push(buildCopiedTemplatePath(copied));
         },
       });
     } finally {
@@ -291,7 +295,7 @@ const TemplateDetail = () => {
       await deleteTemplate(displayTemplate.id);
       toast.success('Template deleted');
       if (visit.isCurrent()) {
-        router.push(buildConsoleTemplatesPath());
+        router.push(buildConsoleTemplatesPath(templateContext));
       } else {
         setIsDeleting(false);
       }
@@ -312,7 +316,7 @@ const TemplateDetail = () => {
   }
 
   const backToTemplates = (
-    <Link href={buildConsoleTemplatesPath()} className={buttonVariants({ variant: 'outline' })}>
+    <Link href={buildConsoleTemplatesPath(templateContext)} className={buttonVariants({ variant: 'outline' })}>
       <ArrowLeft data-icon="inline-start" />
       Back to Templates
     </Link>
@@ -358,7 +362,7 @@ const TemplateDetail = () => {
       <DetailPageLayout
         breadcrumbHome={false}
         breadcrumbs={[
-          { href: buildConsoleTemplatesPath(), label: 'My Templates' },
+          { href: buildConsoleTemplatesPath(templateContext), label: 'My Templates' },
           { label: displayTemplate.title },
         ]}
         notice={
@@ -384,7 +388,7 @@ const TemplateDetail = () => {
             canEdit={canEditTemplate}
             canShare={permissions.canShare}
             copyButton={copyButton}
-            editHref={buildConsoleTemplateEditPath(displayTemplate.id)}
+            editHref={buildConsoleTemplateEditPath(displayTemplate.id, templateContext)}
             exportDisabled={billingState.isLoading}
             exportLabel={getTemplateExportLabel(billingState)}
             isChangingVisibility={isChangingVisibility}

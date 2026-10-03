@@ -3,11 +3,13 @@ import { toast } from "sonner";
 import { WORKSPACE_NOT_READY_MESSAGE, type WorkspaceStatus } from "@/contexts/workspaceSelection";
 import { buildTemplateCopyPayload } from "@/features/template-detail/templateDetailMappers";
 import { api } from "@/lib/api";
+import { ownerConsoleContext } from "@/lib/consoleRoutes";
 import type { PageVisit } from "@/lib/navigation/pageVisit";
 import {
   buildRepoTemplateCreatePayload,
   isRepoTemplate,
 } from "@/lib/repoTemplateCatalog";
+import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/routes";
 import type { ChecklistRun, ChecklistTemplate } from "@/types/checklist";
 
 import { mapActionFailure, type TemplateDetailActionResult } from "./templateDetailApi";
@@ -62,7 +64,7 @@ export const startTemplateRun = async (params: {
       return { kind: "error", message: "Failed to start template run" };
     }
 
-    return { kind: "ok", runId: run.id };
+    return { kind: "ok", runId: run.id, teamId: run.teamId };
   } catch (error) {
     return mapActionFailure(error, "Failed to start template run");
   }
@@ -114,7 +116,7 @@ export const saveTemplateToAccount = async (params: {
       const createdTemplate = await params.createTemplate(
         buildRepoTemplateCreatePayload(params.template, params.teamId),
       );
-      return { kind: "ok", templateId: createdTemplate.id };
+      return { kind: "ok", templateId: createdTemplate.id, teamId: createdTemplate.teamId };
     }
 
     const clonedTemplate = await apiClient.clonePublicTemplate(params.template.id, {
@@ -124,7 +126,7 @@ export const saveTemplateToAccount = async (params: {
 
     await params.invalidateTemplates?.();
 
-    return { kind: "ok", templateId: clonedTemplate.id };
+    return { kind: "ok", templateId: clonedTemplate.id, teamId: params.teamId };
   } catch (error) {
     return mapActionFailure(error, "Failed to save template");
   }
@@ -140,16 +142,23 @@ export const duplicateOwnedTemplate = async (params: {
       buildTemplateCopyPayload(params.template, params.activeTeamId),
     );
 
-    return { kind: "ok", templateId: duplicatedTemplate.id };
+    return { kind: "ok", templateId: duplicatedTemplate.id, teamId: duplicatedTemplate.teamId };
   } catch (error) {
     return mapActionFailure(error, "Failed to duplicate template");
   }
 };
 
+type TemplateActionSuccess = Extract<TemplateDetailActionResult, { kind: "ok" }>;
+
+export const buildCopiedTemplatePath = ({ templateId, teamId }: TemplateActionSuccess): string => {
+  const copyContext = ownerConsoleContext(teamId);
+  return templateId ? buildConsoleTemplatePath(templateId, copyContext) : buildConsoleTemplatesPath(copyContext);
+};
+
 type TemplateActionOutcomeHandlers = {
   loginRequired: () => void;
   upgradeRequired: () => void | Promise<unknown>;
-  succeeded: (result: Extract<TemplateDetailActionResult, { kind: "ok" }>) => void;
+  succeeded: (result: TemplateActionSuccess) => void;
 };
 
 export const followTemplateActionResult = async (

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { mergeAccountTemplateCollections } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -33,28 +34,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => authState,
 }));
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: undefined,
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    canEditTemplates: true,
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { inThePersonalWorkspace } = await import('../../../fixtures/workspaces');
+  return { useWorkspace: () => inThePersonalWorkspace({ activeTeamId: undefined, canEditTemplates: true }) };
+});
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -251,14 +234,29 @@ describe('dashboard template lane actions', () => {
   it('opens canonical dashboard and public-library destinations', () => {
     const navigate = vi.fn();
 
-    openDashboardTemplate(navigate, 'template-9');
-    openDashboardCreateTemplate(navigate);
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-9' }), PERSONAL_CONSOLE);
+    openDashboardCreateTemplate(navigate, PERSONAL_CONSOLE);
     openDashboardPublicLibrary(navigate);
 
     expect(navigate.mock.calls).toEqual([
       ['/dashboard/templates/template-9/edit/'],
       ['/dashboard/templates/new/'],
       ['/templates/'],
+    ]);
+  });
+
+  it("opens the editor and New Template inside the Organization the page shows, and a private Organization Template in its own Organization", () => {
+    const navigate = vi.fn();
+    const acme = organizationConsole('team-1');
+
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-9', isPublic: true, teamId: 'team-2' }), acme);
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-8', teamId: 'team-2' }), PERSONAL_CONSOLE);
+    openDashboardCreateTemplate(navigate, acme);
+
+    expect(navigate.mock.calls).toEqual([
+      ['/dashboard/organization/team-1/templates/template-9/edit/'],
+      ['/dashboard/organization/team-2/templates/template-8/edit/'],
+      ['/dashboard/organization/team-1/templates/new/'],
     ]);
   });
 

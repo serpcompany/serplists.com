@@ -101,12 +101,14 @@ vi.mock('@/contexts/TemplatesContext', () => {
 
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
   const roleSetByATestOrImpliedByTheActiveContext = (id: string) =>
     workspaceState.roles[id] ??
     (id === workspaceState.activeTeamId ? (workspaceState.canEditTemplates ? 'editor' : 'runner') : undefined);
   return {
     useWorkspace: () => ({
       ...workspaceState,
+      consoleContext: ownerConsoleContext(workspaceState.activeTeamId),
       getPermissions: (teamId?: string) => getResourcePermissions(teamId, roleSetByATestOrImpliedByTheActiveContext),
       isRoleUnavailable: (teamId?: string) =>
         teamId ? workspaceState.teamsUnavailable && !(teamId in workspaceState.roles) : false,
@@ -204,6 +206,7 @@ export function resetTemplateDetailPageMocks() {
 }
 
 export const hasShareButton = (html: string) => /Share<\/button>/.test(html);
-export const hasEditLink = (html: string) => html.includes('href="/dashboard/templates/tpl-1/edit/"');
+export const hasEditLink = (html: string) =>
+  /href="\/dashboard\/(?:organization\/[^/"]+\/)?templates\/tpl-1\/edit\/"/.test(html);
 export const isVisibilitySwitchDisabled = (html: string) =>
   /<button[^>]*id="template-visibility"[^>]*>/.exec(html)?.[0].includes('disabled=""') ?? false;

@@ -17,6 +17,7 @@ import {
   isSameConsoleContext,
   isWithinConsoleArea,
   organizationConsole,
+  ownerConsoleContext,
   parseConsoleRoute,
   PERSONAL_CONSOLE,
   type ConsoleRoute,
@@ -57,6 +58,12 @@ describe('console route builders', () => {
 
   it('encode ids, so an id is always one path segment', () => {
     expect(buildConsoleRunPath('a/b c', organizationConsole('x/y'))).toBe('/dashboard/organization/x%2Fy/runs/a%2Fb%20c/');
+  });
+
+  it("names the context of a record by the Organization that owns it, and Personal when none does", () => {
+    expect(ownerConsoleContext('team-1')).toEqual(acme);
+    expect(ownerConsoleContext(undefined)).toEqual(PERSONAL_CONSOLE);
+    expect(ownerConsoleContext('')).toEqual(PERSONAL_CONSOLE);
   });
 });
 
@@ -168,8 +175,8 @@ describe('console contexts and areas', () => {
   it('puts every Template page in the Templates area and every Run page in the Runs area, in either context', () => {
     expect(isWithinConsoleArea('/dashboard/organization/team-1/templates/new/', buildConsoleTemplatesPath(acme))).toBe(true);
     expect(isWithinConsoleArea('/dashboard/templates/tpl-1/edit/', buildConsoleTemplatesPath(acme))).toBe(true);
-    expect(isWithinConsoleArea('/dashboard/organization/team-1/runs/run-1/', buildConsoleRunsPath())).toBe(true);
+    expect(isWithinConsoleArea('/dashboard/organization/team-1/runs/run-1/', buildConsoleRunsPath(PERSONAL_CONSOLE))).toBe(true);
     expect(isWithinConsoleArea('/dashboard/organization/team-1/runs/', buildConsoleTemplatesPath(acme))).toBe(false);
-    expect(isWithinConsoleArea('/templates/', buildConsoleTemplatesPath())).toBe(false);
+    expect(isWithinConsoleArea('/templates/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(false);
   });
 });

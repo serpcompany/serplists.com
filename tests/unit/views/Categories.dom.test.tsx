@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { shownConsole } from '../../support/mockedConsoleContext';
 import {
   bundledTemplate,
   libraryState,
@@ -12,6 +13,7 @@ import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../support/elements';
 import { inputNamed, renderSettled, theInMemoryBrowserAsTheWindow, typeInto } from '../../support/renderInTheDom';
 
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import Categories from '@/views/Categories';
 import type { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 
@@ -80,6 +82,18 @@ describe('Categories page catalog states, which never present the bundled starte
     mockUseTemplateLibrary.mockReturnValue(libraryState(catalogState));
 
     expect(renderCategories()).toContain('Create Template');
+  });
+
+  it("opens Create Template in the context the tab is in", () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ templates: [bundledTemplate] }));
+    expect(renderCategories()).toContain('href="/dashboard/templates/new/"');
+
+    shownConsole.context = organizationConsole('team-1');
+    try {
+      expect(renderCategories()).toContain('href="/dashboard/organization/team-1/templates/new/"');
+    } finally {
+      shownConsole.context = PERSONAL_CONSOLE;
+    }
   });
 
   it('lists every category with its count once the catalog has loaded', () => {

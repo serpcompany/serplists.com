@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import '../../support/mockedConsoleContext';
 import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';

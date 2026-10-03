@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   describeTeamInviteError,
   formatTeamRole,
@@ -18,6 +19,7 @@ import {
 } from '@/features/teams/teamInviteMessages';
 import { useTeamInviteLink } from '@/features/teams/useTeamInviteLink';
 import { withReturnPath } from '@/lib/auth/returnPath';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { signOutAndReturn } from '@/features/auth/signOut';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
@@ -57,6 +59,7 @@ export default function TeamInviteAccept() {
   const { token } = useParams<{ token: string }>();
   const router = useAppRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const { consoleContext } = useWorkspace();
   const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
   const preview = invite.preview;
   const invitePath = useCurrentPath();
@@ -91,7 +94,7 @@ export default function TeamInviteAccept() {
 
   const handleSwitch = (teamId: string) => {
     invite.switchToOrganization(teamId);
-    router.push(buildConsoleTemplatesPath());
+    router.push(buildConsoleTemplatesPath(organizationConsole(teamId)));
   };
 
   const renderJoined = (teamId: string, teamName: string, message: string) => (
@@ -101,7 +104,7 @@ export default function TeamInviteAccept() {
       </StatusLine>
       <InviteActions>
         <Button onClick={() => handleSwitch(teamId)}>Switch to {teamName}</Button>
-        <Button variant="outline" onClick={() => router.push(buildConsoleSettingsPath())}>
+        <Button variant="outline" onClick={() => router.push(buildConsoleSettingsPath(organizationConsole(teamId)))}>
           Organization settings
         </Button>
       </InviteActions>
@@ -115,7 +118,7 @@ export default function TeamInviteAccept() {
       </p>
       <InviteActions>
         <Link
-          href={buildConsoleTemplatesPath()}
+          href={buildConsoleTemplatesPath(consoleContext)}
           className={buttonVariants({ variant: 'outline' })}
         >Open templates</Link>
       </InviteActions>
@@ -190,7 +193,7 @@ export default function TeamInviteAccept() {
           <InviteError message={describeTeamInviteError(invite.previewError)} />
           <InviteActions>
             <Link
-              href={buildConsoleSettingsPath()}
+              href={buildConsoleSettingsPath(PERSONAL_CONSOLE)}
               className={buttonVariants({ variant: 'outline' })}
             >Open settings</Link>
           </InviteActions>

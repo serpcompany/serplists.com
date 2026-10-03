@@ -8,6 +8,7 @@ import { capturedGroup } from '../../../support/elements';
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
 import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
@@ -57,9 +58,9 @@ const render = (element: React.ReactElement) => {
 
 const rendered = {
   'the My Templates grid card': () =>
-    render(<TemplateCard onDelete={vi.fn()} onStartRun={vi.fn()} template={template} />),
+    render(<TemplateCard context={PERSONAL_CONSOLE} onDelete={vi.fn()} onStartRun={vi.fn()} template={template} />),
   'the My Templates list row': () =>
-    render(<TemplateListItem onDelete={vi.fn()} onStartRun={vi.fn()} template={template} />),
+    render(<TemplateListItem context={PERSONAL_CONSOLE} onDelete={vi.fn()} onStartRun={vi.fn()} template={template} />),
   'the Runs list row': () =>
     render(
       <RunsDashboardView

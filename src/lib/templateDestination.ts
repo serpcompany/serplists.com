@@ -1,9 +1,18 @@
+import { organizationConsole, type ConsoleContext } from '@/lib/consoleRoutes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 export const resolveTemplateDestinationTeamId = (
   template: Pick<ChecklistTemplate, 'isPublic' | 'teamId'>,
   activeTeamId: string | undefined,
 ): string | undefined => (template.teamId && !template.isPublic ? template.teamId : activeTeamId);
+
+export const resolveTemplateConsoleContext = (
+  template: Pick<ChecklistTemplate, 'isPublic' | 'teamId'>,
+  linkContext: ConsoleContext,
+): ConsoleContext => {
+  const pinnedTeamId = resolveTemplateDestinationTeamId(template, undefined);
+  return pinnedTeamId ? organizationConsole(pinnedTeamId) : linkContext;
+};
 
 export const nameOtherTemplateDestination = (
   template: Pick<ChecklistTemplate, 'isPublic' | 'teamId'>,
