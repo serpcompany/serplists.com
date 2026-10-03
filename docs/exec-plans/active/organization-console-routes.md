@@ -83,6 +83,9 @@ means.
   `resolveTemplateDestinationTeamId`) links to its Organization.
 - A browser test walks an Organization (list, detail, edit, run, archive, settings) and
   checks that no click leaves its URLs.
+- #240's "View runs" on an Organization Template can link to that Organization's Runs
+  (`buildConsoleRunsPath(organizationConsole(teamId))`) as soon as PR 1 lands, without
+  waiting for this step.
 
 ### PR 3: Personal URLs mean Personal (rollout steps 3 and 6)
 
