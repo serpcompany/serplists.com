@@ -385,11 +385,12 @@ existing content, invent nothing):
   - Session check: a spinner. A failed check: "Can't reach SERP Lists", "We couldn't check
     your session. Check your connection and try again.", "Retry".
   - Signed out: redirect to `/login/?next=<path>`.
-  - Organizations failed to load before the stored Organization, or the Organization the URL
-    names, was confirmed: "Couldn't load your Organizations", "Your Organization opens once
-    they load. Check your connection and try again, or continue in Personal.", "Retry",
+  - Organizations failed to load before the Organization the URL names, or on `/dashboard/` the
+    remembered one, was confirmed: "Couldn't load your Organizations", "Your Organization opens
+    once they load. Check your connection and try again, or continue in Personal.", "Retry",
     "Continue in Personal" (in place of the page; on an Organization URL, Continue in Personal
-    opens the same section in Personal).
+    opens the same section in Personal, and on `/dashboard/` Personal's My Templates). A
+    Personal URL never waits for the Organizations.
   - On an Organization URL: a spinner in place of the page until the Organizations load, and
     the [404 page](#404-page) for an Organization the user cannot open (unknown, archived or
     not theirs), with the switcher and the sidebar in the tab's own context.
@@ -1084,8 +1085,8 @@ existing content, invent nothing):
   failed); "Email" ("you@example.com"); "Password" with "Forgot password?" and a show or hide
   button ("Show password", "Hide password"); "Resend verification email" when needed; "Sign
   in"; footer "Don't have an account? Sign up".
-- **PRIMARY ACTION:** "Sign in" → the `next` path, or [My Templates](#my-templates) (the
-  console home) when there is none.
+- **PRIMARY ACTION:** "Sign in" → the `next` path, or `/dashboard/` when there is none, which
+  opens the remembered context's [My Templates](#my-templates).
 - **SECONDARY ACTIONS:** "Forgot password?"; "Sign up"; "Resend verification email"; show or
   hide the password.
 - **STATES:** default; "Signing in..."; wrong credentials (toast "Invalid email or password",
@@ -1379,7 +1380,8 @@ existing content, invent nothing):
     "Start Run", and "Template actions" (roles that can edit). Beside it (under it on phones),
     the stats panel: "Total Tasks" and "Sections".
   - An Organization error notice when the role is unknown ("Start Run waits until they load.
-    Check your connection and try again.", "Retry").
+    Check your connection and try again.", "Retry"); no longer shown, since a private
+    Organization Template opens only at its Organization's URL (TD-82).
   - "Template Structure": the public template page's section cards, always open: numbered
     sections (title, "N tasks") with their numbered tasks (title, description, content
     blocks).
@@ -1427,7 +1429,9 @@ existing content, invent nothing):
   beside the content (the sections follow one another); "Updated <date>" is "Last updated"
   in Details, as before.
 - **NOTES:** Code: `src/views/TemplateDetail.tsx`. An Organization's Template follows the
-  viewer's role while that Organization is active; from any other context it is read-only.
+  viewer's role in that Organization. A private one opened at another context's URL shows
+  "Loading template..." while the URL is replaced with its Organization's; a public one stays
+  where it was opened, read-only from any other context.
 
 ### Template editor
 
@@ -1574,7 +1578,8 @@ existing content, invent nothing):
     "Save title" and "Cancel"), "Complete run" when every task is done, a "Shared" badge,
     "Share", "Stop sharing".
   - An Organization error notice when the role is unknown ("This run's actions wait until they
-    load. Check your connection and try again.", "Retry").
+    load. Check your connection and try again.", "Retry"); no longer shown, since a Run opens
+    only at its own context's URL (TD-82).
   - Below `xl`: a progress block ("N% complete", "X of Y tasks finished", "Task N of M",
     "Tasks" → [Run tasks sheet](#run-tasks-sheet), a progress bar).
   - Task panel (a bordered card): "<section> / Task N of M"; a task checkbox; the task's
@@ -1592,7 +1597,8 @@ existing content, invent nothing):
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Rename"; "Share" →
   [Share link dialog](#share-link-dialog); "Stop sharing"; "Complete run" and "Finish Run" →
   [Run complete dialog](#run-complete-dialog); "Runs".
-- **STATES:** loading (spinner); not found (toast "Run not found", then My Templates); a load
+- **STATES:** loading (spinner, also while a Run opened at another context's URL moves to its
+  own); not found (toast "Run not found", then My Templates); a load
   error ("Unable to load run", the message, "Back"); in progress; every task done (the
   completion prompt, and "Complete run" stays); completed (frozen: "Run completed"); view only
   (viewers); role unknown (the notice); unsaved notes ([browser
@@ -1718,11 +1724,14 @@ existing content, invent nothing):
 
 ### Account Settings
 
-- **SCREEN NAME:** Account Settings (`/dashboard/settings/`)
+- **SCREEN NAME:** Account Settings (`/dashboard/settings/`, always Personal, and
+  `/dashboard/organization/<organizationId>/settings/` for an Organization)
 - **PURPOSE:** Manage the profile, billing, Run Keys, Organizations and security.
-- **HOW USER GETS HERE:** sidebar "Settings"; account menu "Settings"; the context switcher's
-  "Settings"; "Organization settings" and "Open settings" on an invite; "Manage Pro" or
-  "Manage subscription" on Pricing.
+- **HOW USER GETS HERE:** Personal settings: account menu "Settings" (from any context);
+  sidebar "Settings" and the context switcher's "Settings" in Personal; "Open settings" on an
+  invite; "Manage Pro" or "Manage subscription" on Pricing; Stripe's return. An Organization's
+  settings: sidebar "Settings" and the context switcher's "Settings" in that Organization;
+  "Organization settings" on an invite; "Select" on a row of "Your Organizations".
 - **WHAT'S ON THE SCREEN:** page header "Account Settings", "Manage your profile, billing, and
   security settings."; stacked cards:
   - "Profile Information": "Profile Picture" (the avatar with "Upload avatar" and "Remove
@@ -1745,14 +1754,14 @@ existing content, invent nothing):
     permissions as badges, created and last used, "Revoke"), or "No Run Keys yet."
   - "Organizations": "Incoming invites" ("Accept"); a create form ("Organization name",
     "Slug", "Create Organization"); "Your Organizations" (name, role, "Selected" or
-    "Select"); for the active Organization: its name, "Your role: <role>", the role's
+    "Select"); on an Organization's settings only: its name, "Your role: <role>", the role's
     description; for managers: a rename form ("Save Organization") and invites ("Invite
     email", "Role", "Create link", the link with a copy button, "Pending invites" with "New
     link" and revoke); "Owners and admins manage Organization settings, invites, and
     activity." for others; "Members" (name, "You", email, role and status selects, labelled
     "Role" and "Status" on phones where they stack, "Make owner"); "Activity". In Personal:
     "Create or select an Organization to share templates and runs."
-  - "Leave Organization" (in an Organization, not its owner): "Leave <name> and return to your
+  - "Leave Organization" (on an Organization's settings, not its owner): "Leave <name> and return to your
     Personal context. …", "Leave Organization".
   - "Security": "Change password" ("Current password", "New password", "Confirm new password",
     "Sign out other sessions" switch with "Keeps you signed in on this device.", "Update
@@ -1763,7 +1772,7 @@ existing content, invent nothing):
   dialog](#revoke-run-key-dialog); Organization actions ("Leave Organization" and "Make owner"
   ask a [browser confirm](#browser-confirm-prompts)); "Update password"; "Sign out other
   sessions".
-- **STATES:** Personal or Organization context; role-limited Organization controls (owners and
+- **STATES:** Personal (no Organization's management) or an Organization; role-limited Organization controls (owners and
   admins manage); "Couldn't load your Organizations." with "Retry"; members, invites, keys and
   activity each load or fail on their own ("Loading members...", "Couldn't load members.");
   no Run Key permission ticked: "Choose at least one permission." and "Create Run Key"
@@ -1971,7 +1980,8 @@ replaced.
   - DATA FIELDS: contexts (id, name, Personal or Organization, role); active id; status.
 - **PROOF PASS:** Pass (step 1): the console shots; it follows the team switcher of shadcn's
   sidebar block (no reference screenshot).
-- **NOTES:** A switch reloads the page's lists in the new context and is remembered per tab.
+- **NOTES:** A switch opens the chosen context's URL, which reloads the page's lists and becomes
+  the remembered context.
   "Settings" opens the current context's settings. Code: `src/components/workspace/WorkspaceSwitcher.tsx`
   and `src/contexts/useContextSwitch.ts`.
 

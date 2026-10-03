@@ -134,16 +134,25 @@ and agents (MCP) call them directly and do not follow redirects.
   `buildEquivalentConsolePath` gives the same section in another context, which is where the
   switcher goes. ESLint refuses a hand-built `/dashboard/organization` path anywhere else in
   `src/` or `functions/`.
+- The URL decides the context: a Personal console URL always shows Personal, and an
+  Organization URL that Organization. Pages outside the console (the public Template page, the
+  invite page) keep the tab's last context.
 - A link passes the context it means, usually the context its page shows (`consoleContext`
-  from `useWorkspace()`, which names a remembered Organization only once the Organizations
-  list confirms it). A link to a record with one owner uses that owner's
+  from `useWorkspace()`; outside the console it names a remembered Organization only once the
+  Organizations list confirms it). A link to a record with one owner uses that owner's
   context, never the selected one: a Run opens in its own (`ownerConsoleContext(run.teamId)`),
   and a private Organization Template in its Organization (`resolveTemplateConsoleContext` in
   `src/lib/templateDestination.ts`, the rule that sends its Runs and copies there). After an
   action, the page opens what it made (a Run, a copy) in the context that owns it, from the
   created record's `teamId`. The account's own pages name Personal: the account menu's
-  Settings, Pricing's "Manage", the invite page's "Open settings", and sign-in without a
-  return path ([Organization console routes](exec-plans/active/organization-console-routes.md)).
+  Settings, Pricing's "Manage" and the invite page's "Open settings"
+  ([Organization console routes](exec-plans/completed/organization-console-routes.md)).
+- A record opened under another context's URL moves to its owner's: the Template page, the
+  editor and the Run page call `useOwnerContextRedirect` (`src/lib/navigation/`) with the
+  owner's context once the record loads, and it replaces the URL with the same page in that
+  context (`buildOwnerContextPath`, keeping the query and hash), so Back skips the wrong URL.
+  The page shows its loading state meanwhile. A record the API refuses has no owner to move to
+  and keeps the API's 404.
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
   route helpers (`isPathWithin`, `resolveRouteShell`), which accept either form, not with
   `===` or `startsWith` on a literal.
@@ -168,10 +177,14 @@ and agents (MCP) call them directly and do not follow redirects.
   rule. In `canonicalHostRedirects` the profile page and file rules come before `/:path+`,
   which would match them too. The module states Next.js's redirect shape itself, since the
   API imports it and must not import Next.js.
-- `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
-  My Templates for now. Links use `buildConsoleHomePath(context)`, which returns the home itself.
-  `/dashboard/organization/:organizationId/` answers 307 with that Organization's Templates
-  (`ORGANIZATION_HOME_REDIRECT`).
+- `/dashboard/` is a client page (`src/views/DashboardHome.tsx`), because the remembered
+  context lives in browser storage the server cannot read: it waits until the Organizations
+  list confirms or rules out the remembered Organization, then replaces itself with that
+  context's Templates, or Personal's when it is ruled out (a failed list shows the
+  Organizations error with Retry and Continue in Personal). Sign-in without a return path and
+  the legacy `/console` go there. Links use `buildConsoleHomePath(context)`, which returns a
+  context's home itself. `/dashboard/organization/:organizationId/` answers 307 with that
+  Organization's Templates (`ORGANIZATION_HOME_REDIRECT`).
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
   its page without a redirect.
 - Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL

@@ -5,17 +5,19 @@
 
 - Better Auth is the canonical session layer for email sign-up, sign-in, sign-out, password changes, password reset, email verification, session lookup, and session revocation.
 - Browser auth state uses Better Auth httpOnly cookies. The client does not store auth tokens.
-- Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to the console home, `/dashboard/templates` (My Templates); email verification and password reset end on the login page, so they follow the same rule, and sign-up without email verification goes there too (`getPostSignInDestination` in `src/lib/auth/returnPath.ts`).
+- Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to `/dashboard`, which opens the remembered context's Templates (Personal's after a sign-out); email verification and password reset end on the login page, so they follow the same rule, and sign-up without email verification goes there too (`getPostSignInDestination` in `src/lib/auth/returnPath.ts`).
 - Password strength rules are enforced for registration and password changes.
-- `/dashboard/settings` is the canonical settings/account page.
+- `/dashboard/settings` is the canonical settings/account page, always in Personal: the account's profile, security, Personal Run Keys (where enabled) and Personal billing, with incoming invites, Create Organization and the user's Organizations. An Organization's management lives on its own settings page (below).
 - `/account` and `/dashboard/profile` redirect to `/dashboard/settings`, keeping the
   query string and hash (legacy redirects use `LegacyRedirect`).
 - Public profiles remain available at `/profile/:username`.
 
 ## Dashboard Navigation
 
-Canonical private routes:
+Canonical private routes, which always show Personal:
 
+- Home: `/dashboard` opens the remembered context's Templates once the user's Organizations
+  confirm it, and Personal's when they rule it out
 - Templates: `/dashboard/templates`
 - New template: `/dashboard/templates/new`
 - Template detail: `/dashboard/templates/:id`
@@ -34,7 +36,8 @@ Each Organization has the same pages under `/dashboard/organization/:organizatio
 always shows that Organization to its members, after a refresh or in another tab, and the
 links on its pages stay in it. A Run, a private Organization Template, and a Run or copy an
 action just made open at the URL of the context that owns them, whichever context is
-selected. For anyone else, and for an archived or unknown Organization, it
+selected, and one opened at another context's URL moves to its owner's URL (Back skips the
+wrong one). For anyone else, and for an archived or unknown Organization, it
 shows the not-found page and loads none of its data.
 
 A missing page under `/dashboard/` answers 404 with the not-found page: in the console shell for a signed-in user, once the session check answers, and in the public shell (site header and footer) for anyone else.
@@ -43,7 +46,7 @@ A missing page under `/dashboard/` answers 404 with the not-found page: in the c
 
 - Users can create, edit, archive, restore, import, and export templates.
 - Users delete templates and runs: My Templates, the template detail page and My Runs call the action Delete ("Delete template", "Delete run", "Template deleted"), and the Changelog and Organization activity say "Deleted". Behind the scenes the API archives the item (it sets `deleted_at`, makes a template private and ends a run's share link), so the confirmations ask "Are you sure you want to delete ...?" and never say the action cannot be undone. `/dashboard/archive` lists the active context's archived templates and runs and restores them. Every member of the Organization sees both lists, but Restore is offered only to roles the API allows: editors and above for templates, admins and above for runs (the owner restores both in Personal). Restoring respects plan limits and shows the API's reason when it refuses; a role refusal (a role changed since the page loaded) says the role cannot restore templates or runs. An item already restored elsewhere (another tab, a teammate, or a concurrent request; `400 not_archived`) or gone (`404`) makes the page reload its archive and Template and Run lists and say so, so the row does not keep a Restore that fails every time.
-- Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`. The editor opens its form only for someone the API lets save the template: an Organization's Template for an owner, admin, or editor of that Organization (from any context), a Personal Template for its owner. Anyone else who opens an edit link (a runner or viewer, or another user's public template) sees a read-only notice with a link to the template, and `/dashboard/templates/new` shows the same kind of notice to a role that cannot add Templates to the active Organization. The editor waits for the user's Organizations to load before deciding, and a form that has opened stays open (a later role change is still refused by the save).
+- Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`. The editor opens its form only for someone the API lets save the template: an Organization's Template for an owner, admin, or editor of that Organization (an edit link for a private one opens at its Organization's URL), a Personal Template for its owner. Anyone else who opens an edit link (a runner or viewer, or another user's public template) sees a read-only notice with a link to the template, and `/dashboard/templates/new` shows the same kind of notice to a role that cannot add Templates to the active Organization. The editor waits for the user's Organizations to load before deciding, and a form that has opened stays open (a later role change is still refused by the save).
 - In the editor, sections, tasks and a task's content blocks reorder by dragging their handle, or with the Up and Down arrow keys on the focused handle. On a touch screen, where dragging does not work, each shows Move up and Move down buttons instead of the handle. Blocks keep their ids when they move, and runs and public pages show blocks in the saved order.
 - The editor works on a phone: below the `lg` width it is one column, and its outline (Template Settings, Search & SEO, the sections and tasks) opens in a sheet from the Outline button in its top bar, which closes on the entry picked or added.
 - Template detail, public template, and public profile pages say a template or user was not found only when the API answers 404 (or the template is not public under that owner). A server or network failure shows "Unable to load" with a Try again button instead. Because every route is served with HTTP 200, the public template and public profile not-found states set `robots` to `noindex, nofollow` so a removed, private or renamed page drops out of search; the "Unable to load" state does not, so a brief outage never deindexes a live page.
@@ -113,7 +116,7 @@ Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote wh
 
 - Users always have a Personal context and can belong to Organizations.
 - Organization-owned templates and runs are shared with active Organization members.
-- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. Organization URLs decide their context, and every link names the context it means; Personal URLs still show the remembered selection until the last step of issue #212. A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher, Settings, and an Organization's run or private Template say the Organizations couldn't load and offer Retry instead of showing no Organizations or a silent "View only".
+- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. The URL decides the context: a Personal URL always shows Personal and an Organization URL that Organization, and every link names the context it means. The remembered context is the last one a tab opened; it chooses only where `/dashboard` lands and the context of pages outside the console, and switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher and Settings say the Organizations couldn't load and offer Retry instead of showing no Organizations, and an Organization's run or private Template opened at a Personal URL moves to its Organization's URL, which shows the error until the list loads.
 - Organization roles:
   - `owner`: full Organization management and ownership transfer.
   - `admin`: manage Organization settings, members, and invites.
@@ -121,10 +124,10 @@ Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote wh
   - `runner`: start and execute runs.
   - `viewer`: read-only access.
 - The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../design-docs/organizations.md#ui-flow)).
-- Organization management currently lives on Settings: `/dashboard/settings` while the Organization is selected, or the Organization's own `/dashboard/organization/:organizationId/settings`.
+- Organization management lives only on the Organization's own settings, `/dashboard/organization/:organizationId/settings`, which the switcher's Settings opens in that Organization; the account menu's Settings opens Personal settings.
 - Organization names are limited to 120 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Organization name fields stop at the limit, and a longer name gets a clear message instead of the API's schema error.
 - Organization invites are link-based today. A link is shown once; managers can replace a lost one with **New link** on the pending invite, which stops the previous link from working. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance. The link page shows the Organization, inviter, and role and waits for **Accept invite** or **Decline**; accepting does not switch the active context.
-- Members other than the owner can leave an Organization from `/dashboard/settings`.
+- Members other than the owner can leave an Organization from its settings, which then opens Personal settings.
 - Organization and Template changes are recorded in D1-backed audit/history tables.
 
 ## Entitlements

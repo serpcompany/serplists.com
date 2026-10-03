@@ -44,8 +44,9 @@ Role capabilities:
 
 Every page URL ends in a slash, and the other form redirects (308) to it (the SERP URL
 standard, [FRONTEND.md](../FRONTEND.md#urls)); the API routes below do not, and are never
-redirected. Canonical private routes use `/dashboard/*`:
+redirected. Canonical private routes use `/dashboard/*` and always mean Personal:
 
+- `/dashboard/` (opens the remembered context's Templates)
 - `/dashboard/templates/`
 - `/dashboard/templates/new/`
 - `/dashboard/templates/:id/`

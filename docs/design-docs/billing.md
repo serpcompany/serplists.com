@@ -260,10 +260,15 @@ Authenticated:
   subscriptions; Billing refetches status on it and offers Upgrade. While an open
   subscription on a current Pro price is stored, it keeps the customer and asks
   the user to contact support instead (see checkout above).
-- Stripe returns the user to `/dashboard/settings/?billing=success` or
-  `?billing=cancel` after Checkout, and to `/dashboard/settings/` from the Portal.
-  Billing reads `billing=success` and polls Personal status (whichever context is
-  selected) until the plan is Pro, then removes the parameter. Sessions created
+- Stripe returns the user to Personal settings, where Personal billing lives:
+  `/dashboard/settings/?billing=success` or `?billing=cancel` after Checkout, and
+  `/dashboard/settings/` from the Portal. The API builds the path with
+  `buildConsoleSettingsPath(PERSONAL_CONSOLE)` from `src/lib/consoleRoutes.ts`, and a
+  Personal URL always shows Personal, so the buyer lands in Personal whatever another
+  tab remembered. Checkout and the Portal are Personal only: an Organization's Billing
+  card shows its plan and sends subscriptions to Personal, so no Stripe page returns to
+  an Organization's settings. Billing reads `billing=success` and polls Personal status
+  until the plan is Pro, then removes the parameter. Sessions created
   before this return URL send buyers to `/account?billing=...`, which redirects
   with the query intact. A buyer whose session ended while at Stripe signs in
   and lands back on the same URL, query included.
