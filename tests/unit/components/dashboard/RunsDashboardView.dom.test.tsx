@@ -6,9 +6,10 @@ import {
   openTheDeleteDialogWithNoneOpenBefore,
   theDialogsToClose,
 } from '../../../support/confirmDialogs';
-import React from 'react';
+import React, { act } from 'react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { openTheMenu, renderSettled } from '../../../support/renderInTheDom';
+import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../../support/renderInTheDom';
 import { toast } from 'sonner';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
@@ -17,6 +18,8 @@ import { PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+theInMemoryBrowserAsTheWindow();
 
 const run: ChecklistRun = {
   id: 'run-1',
@@ -79,5 +82,68 @@ describe('RunsDashboardView delete', () => {
 
     expect(toast.error).toHaveBeenCalledWith('Checklist not found or unauthorized');
     await theDialogsToClose();
+  });
+});
+
+const runOf = (id: string, templateId: string, title: string): ChecklistRun => ({
+  id,
+  templateId,
+  title,
+  status: 'in_progress',
+  progress: 0,
+  sections: [],
+  startedAt: '2026-09-20T08:00:00Z',
+  userId: 'user-1',
+});
+
+const runs = [runOf('run-1', 'tpl-a', 'Audit One'), runOf('run-2', 'tpl-a', 'Audit Two'), runOf('run-3', 'tpl-b', 'Launch One')];
+const templates = [
+  { id: 'tpl-a', isPublic: false, title: 'Alpha Audit' },
+  { id: 'tpl-b', isPublic: false, title: 'Beta Launch' },
+  { id: 'tpl-quiet', isPublic: false, title: 'Quiet Template' },
+];
+
+async function openTheRunsAt(url: string) {
+  navigation.reset(url);
+  await renderSettled(
+    <RunsDashboardView
+      getRunPermissions={() => PERSONAL_PERMISSIONS}
+      onDeleteRun={vi.fn()}
+      runs={runs}
+      workspaceTemplates={templates}
+    />,
+  );
+}
+
+const shownRunTitles = () => screen.queryAllByRole('link').map((link) => link.textContent).filter((text) => text?.includes(' One') || text?.includes(' Two'));
+
+describe("the runs page's Template filter", () => {
+  it('opens with only the runs of the Template in ?template=, naming it in the Template filter', async () => {
+    await openTheRunsAt('/dashboard/runs/?template=tpl-a');
+
+    expect(shownRunTitles()).toEqual(['Audit One', 'Audit Two']);
+    expect(screen.getByRole('combobox', { name: 'Template' }).textContent).toContain('Alpha Audit');
+  });
+
+  it('shows every run, and All templates, without a Template in the URL', async () => {
+    await openTheRunsAt('/dashboard/runs/');
+
+    expect(shownRunTitles()).toEqual(['Audit One', 'Audit Two', 'Launch One']);
+    expect(screen.getByRole('combobox', { name: 'Template' }).textContent).toContain('All templates');
+  });
+
+  it('says a Template with no runs has none yet, rather than that nothing matched, and Show all runs takes the filter out of the URL', async () => {
+    await openTheRunsAt('/dashboard/runs/?template=tpl-quiet');
+
+    expect(screen.getByText('No runs of this template yet')).toBeTruthy();
+    expect(screen.getByText('Runs started from Quiet Template appear here.')).toBeTruthy();
+    expect(screen.queryByText('No runs found')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show all runs' }));
+    });
+
+    expect(navigation.url()).toBe('/dashboard/runs/');
+    expect(shownRunTitles()).toEqual(['Audit One', 'Audit Two', 'Launch One']);
   });
 });

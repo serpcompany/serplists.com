@@ -56,7 +56,7 @@ import { withReturnPath } from '@/lib/auth/returnPath';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
 import { useOwnerContextRedirect } from '@/lib/navigation/useOwnerContextRedirect';
-import { ownerConsoleContext } from '@/lib/consoleRoutes';
+import { buildConsoleTemplateRunsPath, ownerConsoleContext } from '@/lib/consoleRoutes';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
@@ -403,6 +403,7 @@ const TemplateDetail = () => {
             onExport={() => void handleExport()}
             onShare={() => void handleShare()}
             onStartRun={() => setRunDialogOpen(true)}
+            runsHref={user ? buildConsoleTemplateRunsPath(displayTemplate.id, templateContext) : null}
             showStartRun={canStartRun || !user}
           />
         }

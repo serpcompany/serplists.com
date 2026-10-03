@@ -1378,7 +1378,8 @@ existing content, invent nothing):
     metadata, and run actions."); a "Public" or "Private" badge; actions: "Share" and "Edit"
     (roles that can edit), or a copy button for others ("Copy to Organization", "Copy to My
     Templates", "Upgrade to copy template", "Checking plan...", "Copying...", "Loading..."),
-    "Start Run", and "Template actions" (roles that can edit). Beside it (under it on phones),
+    "View runs" (signed in), "Start Run", and "Template actions" (roles that can edit). Beside
+    it (under it on phones),
     the stats panel: "Total Tasks" and "Sections".
   - An Organization error notice when the role is unknown ("Start Run waits until they load.
     Check your connection and try again.", "Retry"); no longer shown, since a private
@@ -1396,7 +1397,8 @@ existing content, invent nothing):
     right now.", "No template history has been recorded yet."
 - **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog).
 - **SECONDARY ACTIONS:** "Share" → [Share link dialog](#share-link-dialog); "Edit" →
-  [Template editor](#template-editor); the copy button; the visibility switch; "Template
+  [Template editor](#template-editor); "View runs" → [My Runs](#my-runs) of the context the
+  page shows, filtered to this Template; the copy button; the visibility switch; "Template
   actions" → "Duplicate", "Export JSON" (or "Upgrade to export"), "Delete" ([Action
   menus](#action-menus)).
 - **STATES:** "Loading template..."; a load error ("Unable to load template", the message,
@@ -1522,14 +1524,20 @@ existing content, invent nothing):
 
 ### My Runs
 
-- **SCREEN NAME:** My Runs (`/dashboard/runs/`)
+- **SCREEN NAME:** My Runs (`/dashboard/runs/`, and `/dashboard/runs/?template=<id>` filtered to
+  one Template)
 - **PURPOSE:** List the active context's Runs with their progress, and act on them.
 - **HOW USER GETS HERE:** sidebar "Runs"; account menu "My Runs"; "Runs" on the Run page; after
-  completing a Run.
+  completing a Run; "View runs" on [Template detail](#template-detail), filtered to that
+  Template.
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Runs", "N in progress, M completed".
   - Toolbar, each field with its label (stacked on phones): "Search" ("Search runs...");
-    "Status" ("All Runs", "In Progress", "Completed").
+    "Template" ("All templates", then each Template the context's Runs came from, by title, and
+    the Template in the URL even when it has none; "Unknown template" for one the context
+    does not know); "Status" ("All Runs", "In Progress", "Completed"). The three combine. The
+    Template lives in the URL (`?template=<id>`), so a link, a reload and Back keep it; search
+    and status do not.
   - Rows: a status icon tile; the title (a link to `/dashboard/runs/<id>/`); meta ("From
     <template>" as a link, "Started <date>", "Completed <date>"); a progress bar (the Run's
     progress, Sub-tasks included) with "x/y" (tasks only, as on the Run page); a
@@ -1542,8 +1550,9 @@ existing content, invent nothing):
   "Share Run", "Stop sharing", "Delete" ([Action menus](#action-menus)); search; filter.
 - **STATES:** loading (5 skeleton rows); a load error ("Couldn't load your runs", "Retry" or
   "Sign in"); empty ("No runs found", "Start a run from one of your templates", "Browse the
-  Template Library" → [Template Library](#template-library)); no matches ("Try adjusting your
-  search or filters"); "Revalidating...", "Stopping..."; actions follow the role in the Run's
+  Template Library" → [Template Library](#template-library)); a Template with no Runs ("No runs
+  of this template yet", "Runs started from <template> appear here.", "Show all runs", which
+  takes the Template out of the URL); no matches ("Try adjusting your search or filters"); "Revalidating...", "Stopping..."; actions follow the role in the Run's
   Organization.
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (built):** the console's page header and toolbar; rows as [List rows with
@@ -1563,7 +1572,7 @@ existing content, invent nothing):
   column (title, muted meta) and trailing controls. The reference's thumbnail is the status
   icon tile and its trailing chevron the Run's actions.
 - **NOTES:** Code: `src/views/Dashboard.tsx` (the list view is RunsDashboardView, a row
-  `RunListItem`). Rows link to
+  `RunListItem`; the Template filter is `src/features/dashboard-runs/runsTemplateFilter.ts`). Rows link to
   a Run's one URL, `/dashboard/runs/<id>/`, which Start Run opens too.
 
 ### Run page

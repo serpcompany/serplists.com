@@ -79,6 +79,7 @@ const ORGANIZATION_ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildConsoleTemplatePath (an Organization)', consoleRoutes.buildConsoleTemplatePath('tpl-1', acme)],
   ['buildConsoleTemplateEditPath (an Organization)', consoleRoutes.buildConsoleTemplateEditPath('tpl-1', acme)],
   ['buildConsoleRunsPath (an Organization)', consoleRoutes.buildConsoleRunsPath(acme)],
+  ['buildConsoleTemplateRunsPath (an Organization)', consoleRoutes.buildConsoleTemplateRunsPath('tpl-1', acme)],
   ['buildConsoleRunPath (an Organization)', consoleRoutes.buildConsoleRunPath('run-1', acme)],
   ['buildConsoleSettingsPath (an Organization)', consoleRoutes.buildConsoleSettingsPath(acme)],
   ['buildConsoleArchivePath (an Organization)', consoleRoutes.buildConsoleArchivePath(acme)],

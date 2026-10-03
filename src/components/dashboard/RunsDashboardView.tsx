@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { Filter } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Filter, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
@@ -13,20 +14,16 @@ import {
 import { SearchField } from '@/components/layout/SearchField';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { LabeledSelect } from '@/components/shared/LabeledSelect';
 import { RUN_SHARE_LINK_DESCRIPTION } from '@/components/shared/runShareLinkDescription';
 import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Item, ItemContent, ItemGroup } from '@/components/ui/item';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { buildPublicTemplatesPath } from '@/lib/routes';
+import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import type { ChecklistRun } from '@/types/checklist';
 import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
@@ -35,9 +32,11 @@ import {
   buildRunTemplateLookup,
   filterDashboardRuns,
   findRunTemplate,
+  runTemplateFilterOptions,
   type RunSourceTemplate,
   type RunStatusFilter as StatusFilter,
 } from '@/features/dashboard-runs/runTemplateLookup';
+import { buildRunsTemplateFilterUrl, readRunsTemplateFilter } from '@/features/dashboard-runs/runsTemplateFilter';
 import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import type { ResourcePermissions } from '@/lib/organizationPermissions';
 
@@ -64,6 +63,12 @@ const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
   completed: 'Completed',
 };
 
+const ALL_TEMPLATES = 'all';
+const UNKNOWN_TEMPLATE_LABEL = 'Unknown template';
+
+const setTemplateFilter = (templateId: string | null) =>
+  replaceCurrentUrl(buildRunsTemplateFilterUrl(window.location, templateId));
+
 export function RunsDashboardView({
   runs,
   templates = [],
@@ -80,6 +85,7 @@ export function RunsDashboardView({
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const templateFilter = readRunsTemplateFilter(useSearchParams());
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const fieldId = useId();
@@ -95,9 +101,24 @@ export function RunsDashboardView({
   );
 
   const filteredRuns = useMemo(
-    () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter),
-    [runs, searchQuery, statusFilter, templatesById],
+    () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter, templateFilter),
+    [runs, searchQuery, statusFilter, templateFilter, templatesById],
   );
+  const templateLabels = useMemo(
+    (): Record<string, string> => ({
+      [ALL_TEMPLATES]: 'All templates',
+      ...Object.fromEntries(
+        runTemplateFilterOptions(runs, templatesById, templateFilter).map((option) => [
+          option.id,
+          option.title ?? UNKNOWN_TEMPLATE_LABEL,
+        ]),
+      ),
+    }),
+    [runs, templateFilter, templatesById],
+  );
+  const filterTemplateTitle = templateFilter ? templateLabels[templateFilter] : undefined;
+  const templateHasNoRuns = templateFilter !== null && !runs.some((run) => run.templateId === templateFilter);
+  const isFiltering = Boolean(searchQuery) || statusFilter !== 'all' || templateFilter !== null;
 
   const confirmDeleteRun = async () => {
     if (!runToDelete) {
@@ -138,27 +159,23 @@ export function RunsDashboardView({
           />
         </Field>
 
-        <Field className="sm:w-40">
-          <FieldLabel htmlFor={`${fieldId}-status`}>Status</FieldLabel>
-          <Select
-            items={STATUS_FILTER_LABELS}
-            value={statusFilter}
-            onValueChange={(value) => {
-              if (value) setStatusFilter(value);
-            }}
-          >
-            <SelectTrigger className="w-full" id={`${fieldId}-status`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(STATUS_FILTER_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <LabeledSelect
+          className="sm:w-56"
+          id={`${fieldId}-template`}
+          label="Template"
+          labels={templateLabels}
+          onValueChange={(value) => setTemplateFilter(value === ALL_TEMPLATES ? null : value)}
+          value={templateFilter ?? ALL_TEMPLATES}
+        />
+
+        <LabeledSelect
+          className="sm:w-40"
+          id={`${fieldId}-status`}
+          label="Status"
+          labels={STATUS_FILTER_LABELS}
+          onValueChange={setStatusFilter}
+          value={statusFilter}
+        />
       </Toolbar>
 
       <DashboardPageBody>
@@ -176,17 +193,28 @@ export function RunsDashboardView({
           </ItemGroup>
         ) : loadError && runs.length === 0 ? (
           <ListLoadErrorState error={loadError} listName="runs" onRetry={onRetryLoad} />
+        ) : filteredRuns.length === 0 && templateHasNoRuns ? (
+          <DashboardEmptyState
+            icon={<ListChecks />}
+            title="No runs of this template yet"
+            description={`Runs started from ${filterTemplateTitle ?? 'this template'} appear here.`}
+            action={
+              <Button onClick={() => setTemplateFilter(null)} variant="outline">
+                Show all runs
+              </Button>
+            }
+          />
         ) : filteredRuns.length === 0 ? (
           <DashboardEmptyState
             icon={<Filter />}
             title="No runs found"
             description={
-              searchQuery
+              isFiltering
                 ? 'Try adjusting your search or filters'
                 : 'Start a run from one of your templates'
             }
             action={
-              !searchQuery ? (
+              !isFiltering ? (
                 <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
                   Browse the Template Library
                 </Link>

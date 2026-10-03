@@ -56,21 +56,23 @@ const duplicate = async () => {
 };
 
 describe('the Template page links in the context it shows', () => {
-  it('links My Templates and Edit in Personal from Personal', () => {
+  it('links My Templates, Edit and View runs in Personal from Personal', () => {
     const html = openTheTemplate({});
 
     expect(html).toContain('href="/dashboard/templates/"');
     expect(html).toContain('href="/dashboard/templates/tpl-1/edit/"');
+    expect(html).toContain('href="/dashboard/runs/?template=tpl-1"');
     expect(html).not.toContain('/dashboard/organization/');
   });
 
-  it('links My Templates and Edit inside the Organization the page shows', () => {
+  it("links My Templates, Edit and View runs inside the Organization the page shows, whose runs list that Template's runs", () => {
     inTheOrganization('team-1');
 
     const html = openTheTemplate({ teamId: 'team-1' });
 
     expect(html).toContain('href="/dashboard/organization/team-1/templates/"');
     expect(html).toContain('href="/dashboard/organization/team-1/templates/tpl-1/edit/"');
+    expect(html).toContain('href="/dashboard/organization/team-1/runs/?template=tpl-1"');
   });
 
   it("shows no links for a private Organization Template at another context's URL, which it leaves for its Organization's", () => {
