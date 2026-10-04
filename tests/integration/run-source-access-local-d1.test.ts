@@ -1,30 +1,14 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { runsOnLocalD1 } from "./local-d1-runs";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { readJson } from "../support/readJson";
 import { valueAt } from "../support/elements";
-import { schema } from "../../functions/api/db";
-import { checklistRunSelectFor } from "../../functions/api/utils/checklist-runs";
-import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
-
-vi.mock("../../functions/api/utils/session", () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-import { handleChecklists } from "../../functions/api/handlers/checklists";
-import { getSessionUserId } from "../../functions/api/utils/session";
 
 const runRows = z.array(z.object({ id: z.string(), is_stale: z.boolean(), items: z.string() }).passthrough());
-type RunRow = z.output<typeof runRows>[number];
-
-let d1: LocalD1;
 const now = "2026-09-28T00:00:00.000Z";
 const oldItems = JSON.stringify([{ id: "s1", title: "Public", items: [{ id: "i1", title: "Public step", isCompleted: true }] }]);
 const privateItems = JSON.stringify([{ id: "s1", title: "Private", items: [{ id: "i1", title: "Confidential step" }] }]);
 
-async function seed() {
-  const db = d1.env.DB;
+async function seed(db: D1Database) {
   const user = db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)");
   const template = db.prepare(`
     INSERT INTO templates (id, user_id, title, items, is_public, created_at, version, type, owner_type, team_id,
@@ -57,37 +41,22 @@ async function seed() {
   ]);
 }
 
-async function listAs(userId: string, query = ""): Promise<Record<string, RunRow>> {
-  vi.mocked(getSessionUserId).mockResolvedValue(userId);
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists${query}`), d1.env);
-  expect(response.status).toBe(200);
-  const runs = await readJson(response, runRows);
-  return Object.fromEntries(runs.map((run) => [run.id, run]));
-}
+const localD1 = runsOnLocalD1("run-source-access", seed);
+const listAs = (userId: string, query = "") => localD1.listAs(userId, query, runRows);
 
 async function revalidateAs(userId: string, runId: string) {
-  vi.mocked(getSessionUserId).mockResolvedValue(userId);
-  return handleChecklists(new Request(`http://localhost/api/checklists/${runId}/revalidate`, {
+  return localD1.requestAs(userId, `/${runId}/revalidate`, {
     method: "POST",
     body: JSON.stringify({ expected_revision: 1 }),
-  }), d1.env);
+  });
 }
 
 async function storedItems(runId: string): Promise<string> {
-  const row = await d1.env.DB.prepare("SELECT items FROM checklist_runs WHERE id = ?").bind(runId).first<{ items: string }>();
+  const row = await localD1.db().prepare("SELECT items FROM checklist_runs WHERE id = ?").bind(runId).first<{ items: string }>();
   return row?.items ?? "";
 }
 
 describe.sequential("run source access against local D1, where a run whose template the caller can no longer use is never stale and never revalidates", () => {
-  beforeAll(async () => {
-    d1 = await startLocalD1("run-source-access");
-    await seed();
-  }, 120_000);
-
-  afterAll(async () => {
-    await d1?.dispose();
-  });
-
   it("reports staleness only for sources the caller may use", async () => {
     const bRuns = await listAs("user-b");
     expect(valueAt(bRuns, "b-from-private").is_stale).toBe(false);
@@ -123,15 +92,9 @@ describe.sequential("run source access against local D1, where a run whose templ
   });
 
   it("keeps the staleness lookup a primary-key read on templates", async () => {
-    const { checklistRuns } = schema;
-    const query = drizzle(d1.env.DB)
-      .select(checklistRunSelectFor("user-b"))
-      .from(checklistRuns)
-      .where(and(eq(checklistRuns.user_id, "user-b"), isNull(checklistRuns.team_id), isNull(checklistRuns.deleted_at)))
-      .toSQL();
-    const plan = await d1.env.DB.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).bind(...query.params).all<{ detail: string }>();
-    const templateSteps = plan.results.map(({ detail }) => detail).filter((detail) => /\btemplates\b/.test(detail));
-    expect(templateSteps, JSON.stringify(plan.results)).not.toHaveLength(0);
+    const plan = await localD1.personalRunListPlan("user-b");
+    const templateSteps = plan.filter((detail) => /\btemplates\b/.test(detail));
+    expect(templateSteps, JSON.stringify(plan)).not.toHaveLength(0);
     for (const detail of templateSteps) expect(detail).toMatch(/^SEARCH templates USING .*\(id=\?\)/);
   });
 

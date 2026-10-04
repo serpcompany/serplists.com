@@ -169,6 +169,7 @@ export async function createChecklistRun(
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.created',
     after: insertedRun,
+    metadata: { source: 'web' },
     request,
     createdAt: now,
   });

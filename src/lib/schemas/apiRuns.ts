@@ -4,6 +4,20 @@ import { readableRowsOf } from "./apiResponses";
 
 const text = z.string().nullish();
 
+const runActorSchema = z.object({ userId: z.string(), name: z.string().nullable(), username: z.string().nullable() }).nullable();
+
+const runProvenanceSchema = z.object({
+  origin: z.enum(['web', 'mcp', 'unknown']).catch('unknown'),
+  startedBy: runActorSchema,
+  owner: z.object({ type: z.enum(['personal', 'organization']), id: z.string(), name: z.string().nullable() }).optional(),
+  template: z.object({ id: z.string().nullable(), title: z.string().nullable(), version: z.number() }).optional(),
+  agentKeyName: z.string().nullable().optional(),
+  authorizedBy: runActorSchema.optional(),
+  createdBy: runActorSchema.optional(),
+  assignedTo: runActorSchema.optional(),
+  completedBy: runActorSchema.optional(),
+});
+
 export const apiRunSchema = z.object({
   id: z.string(),
   template_id: text,
@@ -25,6 +39,7 @@ export const apiRunSchema = z.object({
   revision: z.number().nullish(),
   is_stale: z.boolean().nullish(),
   is_public: z.union([z.boolean(), z.number()]).nullish(),
+  provenance: runProvenanceSchema.nullish().catch(null),
 });
 
 export const apiRunListSchema = readableRowsOf(apiRunSchema);

@@ -163,6 +163,26 @@ Main server handlers:
 - `functions/api/handlers/admin.ts`
 - `functions/api/handlers/uploads.ts`
 
+## Run provenance
+
+A Run response carries `provenance`, built from the columns and the Run's first audit event
+by `functions/api/utils/run-provenance.ts`, with no migration:
+
+- The runs lists (`GET /api/checklists`, `/archived`) answer `{ origin, startedBy }` per Run,
+  the two columns My Runs shows.
+- One Run (`GET /api/checklists/:id`) answers the whole provenance: `owner` (`personal` or
+  `organization`, with its id and name), `template` (id, the title when the caller may use
+  that Template, and the Run's version), `origin`, `agentKeyName` and `authorizedBy` (an MCP
+  Run's Run Key name and the person whose key it is), and `createdBy`, `startedBy`,
+  `assignedTo` and `completedBy`.
+- `origin` is `web` or `mcp` when the Run's first audit event is its `checklist_run.created`
+  with that `source` (the web app writes `web` since 2026-10-04, MCP has always written
+  `mcp`), and `unknown` otherwise, never a guess. An actor is `{ userId, name, username }`.
+- Nothing else of the audit event leaves the API: no key id, IP hash, user agent or email.
+  Shared Runs (`/api/checklists/shared/:token`) answer no provenance.
+- The client schema (`src/lib/schemas/apiRuns.ts`) reads an origin it does not know as
+  `unknown` and drops provenance it cannot read, never the Run.
+
 ## Caching And Invalidations
 
 The app caches API reads with TanStack Query. Its keys, and how each write refreshes them,
