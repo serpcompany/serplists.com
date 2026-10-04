@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
 import { markRunShared, refreshRunHistory } from '@/lib/queryCache';
@@ -25,6 +25,8 @@ export type RunExecutionHistoryState = {
   data: ChecklistRunHistoryResponse | null;
   isError: boolean;
   isLoading: boolean;
+  onViewAll: () => void;
+  showingAll: boolean;
 };
 
 export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
@@ -125,9 +127,10 @@ export const useRunExecutionModel = (
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
-  const historyQuery = buildRunHistoryQuery({ runId: run?.id, mode, client: api });
+  const [showingAllHistory, setShowingAllHistory] = useState(false);
+  const historyQuery = buildRunHistoryQuery({ runId: run?.id, mode, client: api, showingAll: showingAllHistory });
   const canLoadHistory = historyQuery.enabled;
-  const history = useQuery(historyQuery);
+  const history = useQuery({ ...historyQuery, placeholderData: keepPreviousData });
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
     if (result.kind === 'ok' && result.run) {
@@ -173,6 +176,8 @@ export const useRunExecutionModel = (
       data: history.data ?? null,
       isError: history.isError,
       isLoading: canLoadHistory && history.isLoading,
+      onViewAll: () => setShowingAllHistory(true),
+      showingAll: showingAllHistory,
     } satisfies RunExecutionHistoryState,
     isSharedRun: mode === 'shared',
     loadError,

@@ -1,4 +1,4 @@
-import { ChangelogRows } from '@/components/shared/ChangelogList';
+import { ActivityRows } from '@/components/shared/ActivityList';
 import { QueryListState } from '@/components/shared/QueryListState';
 import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 import type { TeamActivityEvent } from '@/lib/api';
@@ -36,7 +36,7 @@ export function TeamActivityList({ query, onRetry }: TeamActivityListProps) {
         onRetry={onRetry}
         empty={<p className="text-sm text-muted-foreground">No Organization activity recorded yet.</p>}
       >
-        <ChangelogRows
+        <ActivityRows
           entries={(query.data ?? []).map((event) => ({
             actor: getActivityActorName(event),
             key: event.id,

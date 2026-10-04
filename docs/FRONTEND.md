@@ -334,7 +334,7 @@ write: [client data](design-docs/client-data.md).
   fallback) with a query keyed under `['templates']`, so every template invalidation
   (editor saves, visibility, Share, copies, context switches) refetches it
   while it is open and the next write sends the version the server holds. Archiving a
-  template only marks its own detail and Changelog entries stale, since a reload would
+  template only marks its own detail and Activity entries stale, since a reload would
   ask for a template that is gone (`markArchivedTemplateStale` in
   `src/lib/queryCache.ts`). Restoring one removes the detail entries no page shows that
   hold it or a "gone" answer, so it opens with the spinner. A cached "gone" answer that

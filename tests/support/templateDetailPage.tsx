@@ -185,7 +185,7 @@ export const renderTemplateDetail = () => {
 
 export const baseModel = (): Partial<TemplateDetailModel> => ({
   billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: true },
-  history: { data: null, isError: false, isLoading: false },
+  history: { data: null, isError: false, isLoading: false, onViewAll: vi.fn(), showingAll: false },
   loading: false,
   notFound: false,
   saveTemplate: vi.fn(),

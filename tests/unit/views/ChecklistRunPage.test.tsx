@@ -13,7 +13,7 @@ import type { ChecklistRun } from '@/types/checklist';
 
 import { renderPageAt } from '../../support/nextNavigation';
 
-const renderPrivateRunWithAnAgentInItsChangelog = () => {
+const renderPrivateRunWithAnAgentInItsActivity = () => {
   mockUseRunExecutionModel.mockReturnValue(runPageModel({
     counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
     history: {
@@ -35,6 +35,8 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
       },
       isError: false,
       isLoading: false,
+      onViewAll: () => undefined,
+      showingAll: false,
     },
     progress: 35,
     run: baseRun,
@@ -50,7 +52,7 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
 
 describe('ChecklistRunPage layout', () => {
   it('renders the private run inside the shared dashboard shell with one persistent app sidebar and no outline of its own', async () => {
-    const html = renderPrivateRunWithAnAgentInItsChangelog();
+    const html = renderPrivateRunWithAnAgentInItsActivity();
 
     expect(html).toContain('Progress');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -58,7 +60,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('data-run-workspace-shell="true"');
     expect(html).toContain('data-run-progress-panel="true"');
     expect(html).toContain('Overall Progress');
-    expect(html).toContain('Changelog');
+    expect(html).toContain('Activity');
     expect(html).toContain('Created run');
     expect(html).toContain('Codex SOP Runner via MCP · authorized by Jane Runner');
     expect(html).toContain('Share');
@@ -79,14 +81,14 @@ describe('ChecklistRunPage layout', () => {
   });
 
   it('opens the task list from the mobile progress block, since the desktop panel is hidden below xl', () => {
-    const html = renderPrivateRunWithAnAgentInItsChangelog();
+    const html = renderPrivateRunWithAnAgentInItsActivity();
 
     expect(html).toContain('data-mobile-run-progress="true"');
     expect(html).toMatch(/data-mobile-run-progress="true"(?:(?!<\/section>).)*data-mobile-run-tasks-trigger="true"/s);
   });
 
   it('pins the task footer to the bottom of the window, every box around it clipping, since a scroll container would hold the footer instead', () => {
-    const html = renderPrivateRunWithAnAgentInItsChangelog();
+    const html = renderPrivateRunWithAnAgentInItsActivity();
 
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
     expect(html).toMatch(/class="[^"]*\bsticky bottom-0\b[^"]*" data-task-footer="true"/);
@@ -123,7 +125,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('data-slot="card"');
     expect(html).not.toContain('Creating link...');
     expect(html).not.toContain('Overall Progress');
-    expect(html).not.toContain('Changelog');
+    expect(html).not.toContain('>Activity<');
   });
 });
 

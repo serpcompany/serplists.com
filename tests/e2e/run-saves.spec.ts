@@ -107,12 +107,12 @@ test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it
   await deleteRun(page, runId);
 });
 
-test('the run Changelog shows a save without a reload', async ({ page }) => {
+test("the run's Activity shows a save without a reload", async ({ page }) => {
   await loginAsAdmin(page);
-  const runId = await createRun(page, `Changelog QA ${Date.now()}`);
+  const runId = await createRun(page, `Activity QA ${Date.now()}`);
 
   await openTheRunAt(page, runId);
-  const changelog = page.locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) });
+  const changelog = page.locator('section', { has: page.getByRole('heading', { name: 'Activity' }) });
   await expect(changelog.getByText('Created run')).toBeVisible();
   await expect(changelog.getByText('Updated run')).toHaveCount(0);
 
@@ -212,7 +212,7 @@ test('the run title editor stops at the length the API accepts, and the save goe
 });
 
 for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
-  test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
+  test(`at ${viewport.width}px Mark Complete stays in view and in place while Activity grows`, async ({ page }) => {
     await loginAsAdmin(page);
     await page.setViewportSize(viewport);
     const firstTask = 'Check DNS';
@@ -223,7 +223,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     });
     const markComplete = page.getByRole('button', { name: 'Mark Complete' });
     const changelogEntries = page
-      .locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) })
+      .locator('section', { has: page.getByRole('heading', { name: 'Activity' }) })
       .locator('time');
 
     await page.goto(`/dashboard/runs/${runId}/`);

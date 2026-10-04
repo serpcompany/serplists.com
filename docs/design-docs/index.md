@@ -22,7 +22,7 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Agent access](agent-access.md) | current | 2026-09-30 | Run Keys and the MCP endpoint: transport, tool arguments, permissions, result bounds and paging |
 | [SEO and sitemaps](seo-and-sitemaps.md) | current | 2026-09-30 | XML sitemaps (URLs, what is listed, lastmod, caching and revision triggers) and the lookups behind public pages' metadata |
 | [Template content types](template-content-types.md) | current | 2026-09-27 | Adding a checklist content type or editor tab |
-| [Template editor and detail page](template-editor.md) | current | 2026-09-30 | The editor's models (loading, saving and conflicts, uploads in the form, the leave guard, kept drafts, permissions and plan limits) and the detail page's loading, actions, export and Changelog |
+| [Template editor and detail page](template-editor.md) | current | 2026-09-30 | The editor's models (loading, saving and conflicts, uploads in the form, the leave guard, kept drafts, permissions and plan limits) and the detail page's loading, actions, export and Activity |
 | [Run execution](run-execution.md) | current | 2026-09-30 | The run page's model: loading a Run, the save queue and its order, revisions and stale saves, completing, task notes, and moving between tasks |
 | [Development environment](development-environment.md) | current | 2026-09-27 | Setup, running, signing in, UI snapshots, logs, local D1, tests |
 | [Agent workflow](agent-workflow.md) | current | 2026-09-29 | Issue to merge, agent tooling (skills, Chrome, permissions), triage labels, weekly maintenance, admin settings |

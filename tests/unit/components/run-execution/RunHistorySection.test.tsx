@@ -20,6 +20,8 @@ const render = (events: TemplateHistoryEvent[]) =>
         data: { checklistId: 'run-1', events, subject: { type: 'user', id: 'user-1' } },
         isError: false,
         isLoading: false,
+        onViewAll: () => undefined,
+        showingAll: false,
       }}
     />,
   );

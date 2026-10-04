@@ -25,11 +25,11 @@
 - [x] PR 1: the provenance contract (#271, merged 2026-10-04). Web-created Runs record `source: "web"`; the runs list
   answers each Run's `provenance: { origin, startedBy }`, and one Run's read answers the full
   provenance; the client schema accepts both; tests and the rows-read budgets. No UI change.
-- [ ] PR 2 (in review): My Runs as a table on desktop (Run, Template, Status, Progress, Started by, Origin,
+- [x] PR 2: My Runs as a table on desktop (Run, Template, Status, Progress, Started by, Origin,
   Started, Updated, actions; the cards stay on phones) and the Run page header with its
-  provenance line and Show Details.
-- [ ] PR 3: "Changelog" becomes "Activity" on the Run and Template pages, with a View all path
-  instead of the fixed 8 entries.
+  provenance line and Show Details (#272, merged 2026-10-04).
+- [ ] PR 3 (in review): "Changelog" becomes "Activity" on the Run and Template pages, with a View
+  all path instead of the fixed 8 entries.
 
 ## Decision log
 
@@ -59,6 +59,10 @@
   fit, with Run and Template titles clamped to two lines and Revalidate and Stop sharing as
   icon buttons named by their labels. The cards and the table share their
   badges, progress and actions (`src/components/dashboard/RunRowParts.tsx`).
+- 2026-10-04: "View all activity" loads the latest 100 entries, the history API's most
+  (`HISTORY_FULL_LIMIT`, which the API now reads from `src/lib/schemas/historyLimits.ts`), in place of the
+  fixed 8, and says so when it reaches 100. Paging further back needs a cursor the history
+  endpoints do not have. There is no Activity tab, so there is no panel state to deep-link.
 - 2026-10-04: Every column in the provenance subqueries is written table-qualified. Drizzle
   renders a select field's top-level column references unqualified, so the first version's
   `audit_events.resource_id = checklist_runs.id` rendered as `"resource_id" = "id"` and

@@ -1,6 +1,6 @@
 import { Calendar, Clock, Globe, History, Tag } from 'lucide-react';
 
-import { ChangelogList } from '@/components/shared/ChangelogList';
+import { ActivityList, type ActivityViewAll } from '@/components/shared/ActivityList';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -113,19 +113,20 @@ type TemplateHistoryCardProps = {
   entries: TemplateHistoryTimelineEntry[];
   isError: boolean;
   isLoading: boolean;
+  viewAll?: ActivityViewAll | undefined;
 };
 
-export function TemplateHistoryCard({ className, entries, isError, isLoading }: TemplateHistoryCardProps) {
+export function TemplateHistoryCard({ className, entries, isError, isLoading, viewAll }: TemplateHistoryCardProps) {
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
           <History aria-hidden="true" className="size-4 text-muted-foreground" />
-          Changelog
+          Activity
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ChangelogList
+        <ActivityList
           emptyLabel="No template history has been recorded yet."
           entries={entries.map((entry) => ({
             actor: entry.actorName,
@@ -137,6 +138,7 @@ export function TemplateHistoryCard({ className, entries, isError, isLoading }: 
           isError={isError}
           isLoading={isLoading}
           loadingLabel="Loading template history..."
+          viewAll={viewAll}
         />
       </CardContent>
     </Card>

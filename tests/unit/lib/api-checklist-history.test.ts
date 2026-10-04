@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
-import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/schemas/historyLimits';
 
 const stubFetch = () =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(

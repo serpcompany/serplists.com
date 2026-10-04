@@ -160,8 +160,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 7. **Request data only where it is shown.** Rows are billed per request, so a provider
    that loads a list on every route multiplies its cost by page views. Template lists
    load on demand ([FRONTEND.md](../FRONTEND.md)). The same goes for columns and
-   limits: the Changelog cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
-   (`src/lib/history.ts`), history lists never return audit `diff_json` (a template or
+   limits: the Activity cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
+   (`src/lib/schemas/historyLimits.ts`), history lists never return audit `diff_json` (a template or
    run update diff holds the whole template or run), and template history reads the
    newest `LIMIT` versions and the newest `LIMIT` audit events (archive, restore and a
    Share's visibility are recorded only as events). Each read stops at `LIMIT` on its

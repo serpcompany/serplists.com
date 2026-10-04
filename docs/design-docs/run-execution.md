@@ -14,14 +14,14 @@ model in `src/features/run-execution/` works, and why.
 
 | Module (`src/features/run-execution/`) | Holds |
 | --- | --- |
-| `useRunExecutionModel.ts` | The page's state (the Run, the selected task, unsaved notes, the Changelog) and the actions the page calls |
+| `useRunExecutionModel.ts` | The page's state (the Run, the selected task, unsaved notes, the Activity) and the actions the page calls |
 | `runExecutionLoad.ts`, `runExecutionMappers.ts` | Loading a Run, mapping the API's rows, when a task is finished, and which task to select |
 | `saveQueue.ts`, `runSaver.ts` | Saves one at a time, double clicks, and recovery when another session saved first |
 | `runExecutionActions.ts` | Each save (tick, Sub-task tick, notes, title, completion) and the queue entries the page binds |
 | `runPersistence.ts`, `runSharing.ts` | Writing a Run privately or through a share link, Share and Stop sharing |
 | `noteDrafts.ts`, `keptNoteDrafts.ts` | Unsaved task notes, and the notes kept when the session ends |
 | `primaryTaskAction.ts`, `taskReveal.ts` | The task panel's main button, and bringing a newly shown task into view |
-| `runHistory.ts`, `retiredRunItems.ts`, `useRunShareLink.ts`, `runTitle.ts`, `taskCheckboxLabel.ts` | The Changelog preview, work removed from the Template, the share link dialog, renames, and the task checkbox's accessible name |
+| `runHistory.ts`, `retiredRunItems.ts`, `useRunShareLink.ts`, `runTitle.ts`, `taskCheckboxLabel.ts` | The Activity preview, work removed from the Template, the share link dialog, renames, and the task checkbox's accessible name |
 
 The page is `src/views/ChecklistRun.tsx`, and a shared Run's layout is
 `src/components/run-execution/SharedRunView.tsx`.
@@ -133,10 +133,11 @@ error.
 
 ### After the saves settle
 
-Every save writes an audit event, so the Run's Changelog is refreshed once the queue is idle after
+Every save writes an audit event, so the Run's Activity is refreshed once the queue is idle after
 a save that succeeded (`onSaved`), not once per click
-([client data](client-data.md#refreshing-after-a-write)). The Changelog preview
-(`buildRunHistoryQuery`) asks for `HISTORY_DISPLAY_LIMIT` events under the Run's Changelog key, with
+([client data](client-data.md#refreshing-after-a-write)). The Activity preview
+(`buildRunHistoryQuery`) asks for `HISTORY_DISPLAY_LIMIT` events under the Run's Activity key (and
+`HISTORY_FULL_LIMIT`, 100, after "View all activity"), with
 the limit in the key so a longer history never reuses the preview's entry. A shared Run never loads
 its history.
 

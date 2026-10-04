@@ -91,7 +91,7 @@ describe('TemplateDetail Organization permissions', () => {
     expect(hasShareButton(html)).toBe(false);
     expect(hasEditLink(html)).toBe(false);
     expect(html).not.toContain('aria-label="Template actions"');
-    expect(html).not.toContain('Changelog');
+    expect(html).not.toContain('>Activity<');
     expect(isVisibilitySwitchDisabled(html)).toBe(true);
     expect(html).toContain('Upgrade to copy template');
   });

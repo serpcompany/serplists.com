@@ -99,11 +99,11 @@ retried insert drops the column from the statement itself (`withoutColumns`).
   behind an Agent's edit. A versioned template write records its audit event in the
   same batch with the same action and `created_at`, so template history gives each
   version the metadata of its event, found among the newest events read with the same
-  limit, which hold the event of every version the Changelog shows (an older version, or
-  one written before audit events, gets `null`). The template Changelog can then name the
+  limit, which hold the event of every version the Activity shows (an older version, or
+  one written before audit events, gets `null`). The template Activity can then name the
   Run Key and label a Share (`functions/api/utils/history-queries.ts`): a save that changes
   only visibility records `{ visibility }` metadata (`visibilityChangeMetadata`), so the
-  Changelog says "Made template public" without reading the diff.
+  Activity says "Made template public" without reading the diff.
 
 ## Resource Ownership
 

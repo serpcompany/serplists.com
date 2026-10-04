@@ -1,5 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { HISTORY_FULL_LIMIT } from '../../../src/lib/schemas/historyLimits';
 
 type Db = ReturnType<typeof createDb>;
 
@@ -102,11 +103,10 @@ export function serializeTemplateVersionHistory(
 }
 
 const HISTORY_LIMIT_DEFAULT = 50;
-const HISTORY_LIMIT_MAX = 100;
 
 export function parseHistoryLimit(value: string | null): number {
   const requested = value?.trim() ? Number(value) : Number.NaN;
   return Number.isFinite(requested)
-    ? Math.min(Math.max(Math.trunc(requested), 1), HISTORY_LIMIT_MAX)
+    ? Math.min(Math.max(Math.trunc(requested), 1), HISTORY_FULL_LIMIT)
     : HISTORY_LIMIT_DEFAULT;
 }

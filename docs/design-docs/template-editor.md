@@ -283,7 +283,7 @@ the pack format cannot hold is left out of the pack and named in its manifest, s
 empty is not downloaded, and the error names the reason. The file is named after the slug, or the
 id, with control characters and the characters Windows reserves replaced.
 
-### Changelog
+### Activity
 
 `buildTemplateHistoryTimeline` merges the template's versions and audit events into one list,
 newest first. A versioned write records its audit event with the same action and time
@@ -291,3 +291,6 @@ newest first. A versioned write records its audit event with the same action and
 that version's, and shows once. A visibility change reads "Made template public" or "Made template
 private" from its metadata. The page asks the API for `HISTORY_DISPLAY_LIMIT` entries of each
 list, newest first, which always hold the newest `HISTORY_DISPLAY_LIMIT` entries of the merge.
+"View all activity" asks again for `HISTORY_FULL_LIMIT` (100, the API's most) of each, under its
+own cache key, keeping the first entries on screen while it loads; at 100 entries it says it shows
+the latest 100.

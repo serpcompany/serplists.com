@@ -132,7 +132,7 @@ page, so a page's sticky parts stick to the window.
 | `ConfirmDialog` | `src/components/shared/ConfirmDialog.tsx` | The shadcn `AlertDialog` for a destructive action (Delete, Revoke): Cancel and the action, which waits while it runs |
 | `ShareLinkDialog` | `src/components/shared/ShareLinkDialog.tsx` | A created link in a read-only field with a Copy button |
 | `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
-| `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail, the run page and Organization activity |
+| `ActivityList` | `src/components/shared/ActivityList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines, and "View all activity" where a page offers it: template detail, the run page and Organization activity |
 | `RunPageHeader`, `SharedRunView` | `src/components/run-execution/` | The run page's header (the title, or a labelled "Run title" field while renaming; badges; progress from `xl`; the Run's actions), and the shared run page (its own header with Copy Link, a summary Card, a Card per section, the `CtaBanner`) |
 | `TemplateEditorOutline` | `src/components/template-editor/TemplateEditorOutline.tsx` | Where the editor's outline sits: a sticky Card beside the form from `lg`, a bottom `Sheet` below it (opened by the editor header's Outline button; picking or adding an entry closes it and moves focus to that entry's form, while moving or removing one keeps it open). The sheet renders outside the page's locked `fieldset`, so it disables its own while a create saves or a Clipy draft generates, and it scrolls the form to the entry a frame after it closes, once its scroll lock has given the page back its scroll |
 
@@ -250,7 +250,7 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   outline's Card or its Sheet this way. Plain CSS breakpoints stay the default.
 - Controls used again and again keep their place. The run page's task footer (Previous,
   Mark Complete, Next) is sticky at the bottom of the window until the end of the task
-  panel scrolls into view, so content that grows under the panel (the Changelog, after
+  panel scrolls into view, so content that grows under the panel (the Activity, after
   every save) never moves it under the pointer. The panel is at least the window's height
   under the top bar, so the footer starts at the bottom of the window even on a short task.
   A sticky element needs every box around it to clip (`overflow-clip`), not scroll: an

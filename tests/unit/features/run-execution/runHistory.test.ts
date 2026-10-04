@@ -32,7 +32,7 @@ describe('run history query', () => {
     expect(query.enabled).toBe(true);
   });
 
-  it("keys the cache under the run's Changelog key, which the run page's saves refresh, and by limit, so a longer history never reuses the preview entry", () => {
+  it("keys the cache under the run's history key, which the run page's saves refresh, and by limit, so a longer history never reuses the preview entry", () => {
     const client = { getChecklistHistory: vi.fn() };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client });
 
@@ -44,6 +44,17 @@ describe('run history query', () => {
 
     expect(buildRunHistoryQuery({ runId: 'run-1', mode: 'shared', client }).enabled).toBe(false);
     expect(buildRunHistoryQuery({ runId: undefined, mode: 'private', client }).enabled).toBe(false);
+  });
+
+  it('asks for the latest 100 after View all activity, under its own cache key, and shows up to 100', async () => {
+    const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(100)) };
+    const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client, showingAll: true });
+
+    await query.queryFn();
+
+    expect(client.getChecklistHistory).toHaveBeenCalledWith('run-1', { limit: 100 });
+    expect(query.queryKey).toEqual(['checklist-run-history', 'run-1', { limit: 100 }]);
+    expect(selectRunHistoryPreview(response(150), true)).toHaveLength(100);
   });
 
   it('shows at most the preview limit, even if an older server ignores it', () => {

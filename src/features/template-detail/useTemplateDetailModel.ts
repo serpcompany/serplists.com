@@ -1,8 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
+import { historyLimitFor } from '@/lib/schemas/historyLimits';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -52,6 +54,8 @@ export type TemplateDetailHistoryState = {
   data: TemplateHistoryResponse | null;
   isError: boolean;
   isLoading: boolean;
+  onViewAll: () => void;
+  showingAll: boolean;
 };
 
 const replaceTemplateIfStillShown =
@@ -98,10 +102,13 @@ export const useTemplateDetailModel = (
   const canLoadTemplateHistory =
     options.isAuthenticated && permissions.canViewHistory;
 
+  const [showingAllHistory, setShowingAllHistory] = useState(false);
+  const historyLimit = historyLimitFor(showingAllHistory);
   const history = useQuery({
-    queryKey: getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId),
-    queryFn: () => api.getTemplateHistory(template?.id ?? ''),
+    queryKey: [...getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId), { limit: historyLimit }],
+    queryFn: () => api.getTemplateHistory(template?.id ?? '', { limit: historyLimit }),
     enabled: canLoadTemplateHistory,
+    placeholderData: keepPreviousData,
     retry: false,
   });
 
@@ -180,6 +187,8 @@ export const useTemplateDetailModel = (
       data: history.data ?? null,
       isError: history.isError,
       isLoading: canLoadTemplateHistory && history.isLoading,
+      onViewAll: () => setShowingAllHistory(true),
+      showingAll: showingAllHistory,
     } satisfies TemplateDetailHistoryState,
     loadError,
     loading,

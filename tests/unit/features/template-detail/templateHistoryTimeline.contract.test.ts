@@ -3,7 +3,7 @@ import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../suppo
 import { readSuccessfulJson } from '../../../support/readJson';
 
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
-import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/schemas/historyLimits';
 import { templateHistorySchema, type TemplateHistoryResponse } from '@/lib/schemas/historyResponses';
 import { handleTemplates } from '@functions/api/handlers/templates';
 
