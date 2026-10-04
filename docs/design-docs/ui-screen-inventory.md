@@ -1375,7 +1375,9 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:**
   - Breadcrumb: "My Templates" › the title.
   - Header: the type's icon tile; the title; the description (or "Review template structure,
-    metadata, and run actions."); a "Public" or "Private" badge; actions: "Share" and "Edit"
+    metadata, and run actions."); a "Public" or "Private" badge, and beside "Public" a "View
+    public template" link to its live public page (the URL Share gives), or "Public page
+    unavailable until its creator sets a username" when it has none; actions: "Share" and "Edit"
     (roles that can edit), or a copy button for others ("Copy to Organization", "Copy to My
     Templates", "Upgrade to copy template", "Checking plan...", "Copying...", "Loading..."),
     "View runs" (signed in), "Start Run", and "Template actions" (roles that can edit). Beside
