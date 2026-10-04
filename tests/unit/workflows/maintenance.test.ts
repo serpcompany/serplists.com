@@ -11,11 +11,13 @@ import {
   writeTheGuardAndItsLog,
 } from '../../support/workflowGuards';
 
-const workflowSchema = z.object({ jobs: z.record(z.object({ steps: z.array(workflowStepSchema).optional() })) });
+const workflowSchema = z.object({
+  on: z.object({ workflow_dispatch: z.object({ inputs: z.object({ job: z.object({ options: z.array(z.string()) }) }) }) }),
+  jobs: z.record(z.object({ if: z.string().optional(), steps: z.array(workflowStepSchema).optional() })),
+});
 
-const steps = Object.values(workflowSchema.parse(readWorkflowFile('.github/workflows/maintenance.yml')).jobs).flatMap(
-  (job) => job.steps ?? [],
-);
+const maintenance = workflowSchema.parse(readWorkflowFile('.github/workflows/maintenance.yml'));
+const steps = Object.values(maintenance.jobs).flatMap((job) => job.steps ?? []);
 const gardenIndex = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
 const gardenStep = steps[gardenIndex];
 const guardIndex = steps.findIndex(
@@ -80,11 +82,19 @@ describe('weekly doc gardening workflow', () => {
     expect(String(gardenStep?.with?.['claude_args'])).toContain('--strict-mcp-config');
   });
 
-  it('adds no attribution to the commits and PRs it makes', () => {
+  it('adds no attribution to the commits and PRs it makes, set as empty strings since the action ignores false', () => {
     const settings = z
-      .object({ attribution: z.object({ commit: z.literal(false), pr: z.literal(false) }) })
+      .object({ attribution: z.object({ commit: z.literal(''), pr: z.literal('') }) })
       .safeParse(JSON.parse(String(gardenStep?.with?.['settings'] ?? '{}')));
     expect(settings.success).toBe(true);
+  });
+
+  it('re-grades the quality score rows whose code changed, dating each one, and writes the PR body to a file', () => {
+    const prompt = String(gardenStep?.with?.['prompt'] ?? '');
+
+    expect(prompt).toContain('the rows under "Scores to re-grade"');
+    expect(prompt).toContain("Set the row's Graded date to today");
+    expect(prompt).toContain('--body-file tmp/pr-body.md');
   });
 
   it('runs a guard after Claude that reads its log and the open PRs', () => {
@@ -167,5 +177,125 @@ describe('weekly maintenance report workflow', () => {
   it('opens or updates the issue from that same file', () => {
     expect(issueStep?.run).toContain('--body-file tmp/weekly-report.md');
     expect(issueStep?.run).not.toContain('--body-file report.md');
+  });
+});
+
+describe('choosing which weekly job runs', () => {
+  it('runs every job on the schedule, and only the chosen one from the Actions tab', () => {
+    expect(maintenance.on.workflow_dispatch.inputs.job.options).toEqual(['all', 'doc-gardening', 'code-gardening', 'report']);
+    for (const [name, job] of Object.entries(maintenance.jobs)) {
+      expect(job.if, name).toBe(`github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == '${name}'`);
+    }
+  });
+});
+
+const codeSteps = maintenance.jobs['code-gardening']?.steps ?? [];
+const codeGardenIndex = codeSteps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
+const codeGarden = codeSteps[codeGardenIndex];
+const codeGuard = codeSteps.find(
+  (step) => step.run !== undefined && Object.values(step.env ?? {}).some((value) => value.includes(`steps.${codeGarden?.id}.outputs.execution_file`)),
+);
+
+type GardeningPr = OpenPr & { body?: string; commitMessages?: string[] };
+
+const runCodeGuard = (executionLog: unknown, openPrs: GardeningPr[] = [], status = 200) =>
+  withAFakeGitHubApi(
+    (url, response) => {
+      const commitsOf = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/commits$/.exec(url.pathname);
+      let body: unknown = { message: 'Not Found' };
+      let code = 404;
+      if (url.pathname === `/repos/${REPO}/pulls` && url.searchParams.get('base') === 'staging') {
+        code = status;
+        body = status === 200 ? openPrs.map((pr) => ({ number: pr.number, title: 'refactor: split the template routes (TD-8)', body: pr.body ?? 'TD-8', head: { ref: pr.ref }, created_at: pr.createdAt })) : { message: 'Not allowed' };
+      } else if (commitsOf) {
+        code = 200;
+        body = (openPrs.find((pr) => String(pr.number) === commitsOf[1])?.commitMessages ?? ['refactor: split the template routes (TD-8)']).map((message, index) => ({ sha: `sha${index}abcdef`, commit: { message } }));
+      }
+      response.writeHead(code, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    },
+    (apiUrl) => {
+      const { scriptPath, executionFile } = writeTheGuardAndItsLog(workDir, codeGuard?.run ?? '', executionLog);
+      return runNodeScript(scriptPath, {
+        EXECUTION_FILE: executionFile,
+        GARDENING_STARTED_AT: STARTED_AT,
+        GITHUB_API_URL: apiUrl,
+        GITHUB_REPOSITORY: REPO,
+        GITHUB_TOKEN: 'test-token',
+      });
+    },
+  );
+
+const gardenedNow: GardeningPr = { number: 51, ref: 'chore/code-gardening-2026-10-05', createdAt: minutesAfterStart(20) };
+
+describe('weekly code gardening workflow', () => {
+  it('skips the week while a code gardening PR is still open', () => {
+    const skip = codeSteps[0];
+    expect(skip?.run).toContain('startswith("chore/code-gardening-")');
+    expect(skip?.run).toContain('echo "GARDEN=true"');
+    expect(codeSteps.slice(1).every((step) => step.if?.includes("env.GARDEN == 'true'"))).toBe(true);
+  });
+
+  it('fixes the oldest small tracker row, or splits a file near the size limit, passing over anything a person decides', () => {
+    const prompt = String(codeGarden?.with?.['prompt'] ?? '');
+
+    expect(prompt).toContain('the oldest open row of docs/exec-plans/tech-debt-tracker.md whose Size is');
+    expect(prompt).toContain('"Files near the size limit"');
+    expect(prompt).toContain('Pass over an item that needs a migration, production data, billing, product');
+    expect(prompt).toContain('Run `pnpm run verify`');
+    expect(prompt).not.toContain('Check findings');
+  });
+
+  it('runs verify, opens a PR into staging, and adds no attribution', () => {
+    const args = String(codeGarden?.with?.['claude_args'] ?? '');
+
+    expect(args).toContain('Bash(pnpm run verify)');
+    expect(args).toContain('Bash(gh pr create:*)');
+    expect(args).not.toContain('gh pr merge');
+    expect(codeGarden?.with?.['settings']).toBe('{"attribution": {"commit": "", "pr": ""}}');
+    expect(codeGarden?.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
+  });
+
+  it('passes when Claude opened one gardening PR', async () => {
+    const { status, output } = await runCodeGuard([resultEntry({ result: 'Opened #51.' })], [gardenedNow]);
+
+    expect(status).toBe(0);
+    expect(output).toContain('Code gardening opened #51');
+  });
+
+  it('passes when Claude found nothing to garden', async () => {
+    const { status } = await runCodeGuard([resultEntry({ result: 'Nothing to garden: every small row needs the owner.' })]);
+
+    expect(status).toBe(0);
+  });
+
+  it('fails when Claude opened more than one PR, since it fixes one item a week', async () => {
+    const { status, output } = await runCodeGuard([resultEntry()], [gardenedNow, { ...gardenedNow, number: 52 }]);
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('#51, #52');
+  });
+
+  it('fails when the PR or one of its commits carries attribution', async () => {
+    const withTrailer = await runCodeGuard([resultEntry()], [{ ...gardenedNow, commitMessages: ['fix: x (TD-15)\n\nCo-Authored-By: Claude <noreply@anthropic.com>'] }]);
+    const withLine = await runCodeGuard([resultEntry()], [{ ...gardenedNow, body: 'TD-15\n\nGenerated with [Claude Code](https://claude.com/claude-code)' }]);
+
+    expect(withTrailer.status).not.toBe(0);
+    expect(withTrailer.output).toContain('carry attribution');
+    expect(withLine.status).not.toBe(0);
+  });
+
+  it('fails when Claude neither opened a PR nor said there was nothing to garden', async () => {
+    const { status, output } = await runCodeGuard([resultEntry({ result: 'Gardening failed: verify reports 2 lint errors.' })]);
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('Gardening failed: verify reports 2 lint errors.');
+  });
+
+  it('fails when the run left no log or ended in an error, or when it cannot list the PRs', async () => {
+    await expectTheGuardToFailWithNoLogOrAnErrorResult((log) => runCodeGuard(log), resultEntry);
+    const { status, output } = await runCodeGuard([resultEntry()], [], 403);
+    expect(status).not.toBe(0);
+    expect(output).toContain('Could not list the open PRs');
   });
 });

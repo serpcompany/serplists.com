@@ -53,9 +53,12 @@ allow no code comments: code is structured, named and documented so that it need
    budgets; audit the rule overrides; fix what each finds, then enforce it.
 5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback. They were proven in
    the sandbox repository. The owner approved the port on 2026-10-04: `@claude` requests
-   (`.github/workflows/claude.yml`) and the review's summary-by-id fix come first; the code
-   gardener and quality re-grading follow, with the report sections and the tracker's Size
-   column they read. Neither runs here until the workflows reach `main`.
+   (`.github/workflows/claude.yml`) and the review's summary-by-id fix in one PR; the code
+   gardener and quality re-grading in another, with the report's "Scores to re-grade" and
+   "Tech debt" sections, the tracker's Size column and the score tables' Code and Graded
+   columns they read. The sandbox's "Check findings" section is left out: every check here is
+   enforced at zero, so the gardener's second choice is a file near the size limit. None of
+   them runs here until the workflows reach `main`.
 6. [x] Observability: the log query tool and its skill. Follow-up: `d1_query` lines carry
    their request id, so a request's timeline and the route table show rows read.
 7. [x] Docs, `pnpm run verify`, and the full browser suite (2026-10-01: verify, 68 local-D1

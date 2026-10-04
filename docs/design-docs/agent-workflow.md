@@ -123,14 +123,17 @@ Other labels may coexist with the state label:
 Agents copy whatever patterns exist, including bad ones, so the repo is cleaned in
 small steps every week instead of in occasional big cleanups.
 `.github/workflows/maintenance.yml` runs every Monday at 14:00 UTC (or on demand from
-the Actions tab; scheduled workflows run from the default branch). Both of its jobs
-check out `staging` with its full history, since the report compares each doc's last edit
-with the code it references, and start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
-referenced code changed since they were edited, stale design docs and plans, files near
-the size limit, and open tech debt.
+the Actions tab, where "Which job to run" picks one job or all; scheduled workflows run
+from the default branch). Each of its jobs checks out `staging` with its full history,
+since the report compares each doc's last edit with the code it references, and starts from
+`pnpm run maintenance:report`, which lists docs-check results, docs whose referenced code
+changed since they were edited, [QUALITY_SCORE.md](../QUALITY_SCORE.md) rows whose code
+changed since their Graded date ("Scores to re-grade"), open tech debt by Size with the
+oldest small row, stale design docs and plans, and files near the size limit.
 
 - **Doc gardening (automatic):** Claude re-checks up to 8 flagged docs against the
-  code, fixes what is no longer true, updates "Last verified" dates, runs
+  code, fixes what is no longer true, re-grades each row under "Scores to re-grade" and sets
+  its Graded date, updates "Last verified" dates, runs
   `pnpm run docs:check`, and opens one PR into `staging` titled "docs: weekly doc
   gardening". It edits only `AGENTS.md`, `ARCHITECTURE.md`, and `docs/`, skips the
   week if a gardening PR is still open, and opens nothing when there is no drift.
@@ -145,6 +148,15 @@ the size limit, and open tech debt.
   running, or reached none of those outcomes, and a denied tool only warns when Claude got
   there anyway, since it often retries a refused command another way
   (`tests/unit/workflows/maintenance.test.ts`).
+- **Code gardening (automatic):** Claude fixes one item in one PR into `staging`: the
+  oldest `small` row of the [tech debt tracker](../exec-plans/tech-debt-tracker.md) it may
+  fix, or else one file near the size limit, split by responsibility. It passes over items
+  that need a migration, production data, billing, product wording or another decision
+  AGENTS.md leaves to a person, deletes the row it fixed, runs `pnpm run verify`, and opens
+  a PR from `chore/code-gardening-<date>`, or says "Nothing to garden". It skips the week
+  while its last PR is still open. A check after it passes only on one PR or "Nothing to
+  garden", and fails on a second PR, on attribution in the PR or its commits, or on no
+  outcome (`tests/unit/workflows/maintenance.test.ts`).
 - **Report issue:** the full report is posted to the issue "Weekly repository
   maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment. The job
   writes it to `tmp/weekly-report.md`: a Markdown file at the repository root would fail the
