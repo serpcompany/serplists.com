@@ -52,8 +52,10 @@ allow no code comments: code is structured, named and documented so that it need
    conventions, boundary validation, duplicates, dead code, stricter types and rows-read
    budgets; audit the rule overrides; fix what each finds, then enforce it.
 5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback. They were proven in
-   the sandbox repository, but not adopted: Claude Code's safety check refused to add
-   workflows that run Claude with write access to the repository.
+   the sandbox repository. The owner approved the port on 2026-10-04: `@claude` requests
+   (`.github/workflows/claude.yml`) and the review's summary-by-id fix come first; the code
+   gardener and quality re-grading follow, with the report sections and the tracker's Size
+   column they read. Neither runs here until the workflows reach `main`.
 6. [x] Observability: the log query tool and its skill. Follow-up: `d1_query` lines carry
    their request id, so a request's timeline and the route table show rows read.
 7. [x] Docs, `pnpm run verify`, and the full browser suite (2026-10-01: verify, 68 local-D1

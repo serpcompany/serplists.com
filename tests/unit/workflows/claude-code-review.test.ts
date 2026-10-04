@@ -110,6 +110,7 @@ const resultEntry = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 const cleanLog = [{ type: 'system', subtype: 'init' }, resultEntry()];
+const SUMMARY = { body: '## Claude review\nReviewed abc1234.\nNo new findings.' };
 const deniedGhPrView = {
   permission_denials: [{ tool_name: 'Bash', tool_use_id: 'toolu_1', tool_input: { command: 'gh pr view 7 --comments' } }],
 };
@@ -211,7 +212,7 @@ describe('Claude code review workflow', () => {
   });
 
   it.each([
-    ['a summary comment', { issueComments: [{ login: BOT, at: minutesAfterStart(4) }] }],
+    ['a summary comment', { issueComments: [{ login: BOT, at: minutesAfterStart(4), details: SUMMARY }] }],
     ['inline comments', { reviewComments: [{ login: BOT, at: minutesAfterStart(5) }] }],
     ['a review', { reviews: [{ login: BOT, at: minutesAfterStart(5) }] }],
   ])('passes when Claude posted %s during the run', async (_what, pullRequest: PullRequest) => {
@@ -234,11 +235,27 @@ describe('Claude code review workflow', () => {
 
   it('passes when Claude updated its summary comment during the run', async () => {
     const { status, output } = await runGuard(cleanLog, {
-      issueComments: [{ login: BOT, at: minutesAfterStart(-90), updatedAt: minutesAfterStart(4) }],
+      issueComments: [{ login: BOT, at: minutesAfterStart(-90), updatedAt: minutesAfterStart(4), details: SUMMARY }],
     });
 
     expect(output).not.toContain('::error');
     expect(status).toBe(0);
+  });
+
+  it("does not count Claude's reply to an @claude request, or a reply in a review thread, as the review", async () => {
+    const { status, output } = await runGuard(cleanLog, {
+      issueComments: [{ login: BOT, at: minutesAfterStart(3), details: { body: 'Done: I renamed the helper in abc1234.' } }],
+      reviewComments: [{ login: BOT, at: minutesAfterStart(4), details: { in_reply_to_id: 11, body: 'Fixed in abc1234.' } }],
+    });
+
+    expect(output).toContain('::error');
+    expect(status).not.toBe(0);
+  });
+
+  it('lets claude[bot] trigger the review, since its @claude fixes push to the pull request, and lets it edit its summary by id', () => {
+    expect(reviewStep.with?.['allowed_bots']).toBe('claude[bot]');
+    expect(claudeArgs).toContain('Bash(gh api --method PATCH repos/*/issues/comments/*)');
+    expect(SKILL_TOOLS).toContain('Bash(gh api --method PATCH repos/*/issues/comments/*)');
   });
 
   it('fails when Claude reviewed an earlier push but posted and updated nothing now, since every push is reviewed again', async () => {
@@ -317,6 +334,37 @@ describe('earlier findings passed to the review', () => {
     expect(context).toContain('functions/api/log.ts:9 (outdated: the code there changed)');
     expect(context).toContain('Summary comment (https://github.com/c/3): ## Claude review Reviewed abc1234.');
     expect(context).not.toContain('Not Claude.');
+  });
+
+  it("names Claude's summary comment by id, to update in place, and gives its replies to @claude requests as context only", async () => {
+    const { status, context } = await runFindings({
+      issueComments: [
+        { login: BOT, at: minutesAfterStart(-60), details: { id: 99, html_url: 'https://github.com/c/3', ...SUMMARY } },
+        { login: BOT, at: minutesAfterStart(-30), details: { id: 100, html_url: 'https://github.com/c/4', body: 'Done: I renamed the helper.' } },
+      ],
+      reviewComments: [
+        { login: BOT, at: minutesAfterStart(-20), details: { in_reply_to_id: 11, html_url: 'https://github.com/c/5', path: 'x.ts', line: 3, body: 'Fixed in abc1234.' } },
+      ],
+    });
+
+    expect(status).toBe(0);
+    expect(context).toContain(`gh api --method PATCH repos/${REPO}/issues/comments/99 -f body="<summary>"`);
+    expect(context).toContain('Summary comment (https://github.com/c/3)');
+    expect(context).toContain('# Replies to @claude requests');
+    expect(context).toContain('- https://github.com/c/4: Done: I renamed the helper.');
+    expect(context).toContain('- https://github.com/c/5: Fixed in abc1234.');
+    expect(context).not.toContain('Summary comment (https://github.com/c/4)');
+    expect(context).not.toContain('x.ts:3');
+  });
+
+  it('asks the review to create the summary when the pull request has none, and never to edit its latest comment', async () => {
+    const { context } = await runFindings({
+      issueComments: [{ login: BOT, at: minutesAfterStart(-30), details: { id: 100, html_url: 'https://github.com/c/4', body: 'Done: I renamed the helper.' } }],
+    });
+
+    expect(context).toContain(`Create it: \`gh pr comment ${PR} --repo ${REPO} --body "<summary>"\``);
+    expect(context).toContain('None: this is the first review of this pull request.');
+    expect(context).not.toContain('--edit-last');
   });
 
   it('says when this is the first review', async () => {

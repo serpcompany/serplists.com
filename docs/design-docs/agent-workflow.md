@@ -176,10 +176,15 @@ advisory and never blocks merging, but its check goes red when Claude posted or 
 nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<number>`.
 
 - Re-reviews without repeats: before the review, a step reads what Claude posted on
-  earlier pushes (its inline comments and its summary) and passes them in. The skill drops
-  any finding that repeats one, however it is worded or wherever its lines moved, and edits
-  its summary in place (`gh pr comment --edit-last --create-if-none`) rather than adding
-  another.
+  earlier pushes (its top-level inline comments and its summary, the comment that starts
+  with `## Claude review`) and passes them in. The skill drops any finding that repeats
+  one, however it is worded or wherever its lines moved, and edits its summary in place by
+  id (`gh api --method PATCH repos/<owner>/<repo>/issues/comments/<id>`), or creates it
+  when the PR has none, never with `gh pr comment --edit-last`: Claude's latest comment can
+  be its answer to an `@claude` request. Those answers, and its replies in review threads,
+  are passed in as context only, and the check after the review does not count them as the
+  review. `allowed_bots: "claude[bot]"` lets the review run on a push that an `@claude`
+  request made.
 - Rules: before Claude starts, the action replaces `CLAUDE.md`, the .claude folder, and
   .mcp.json with the base branch's copies (a PR's copies are untrusted) and deletes them
   when the base has none. So the skill always comes from the base branch, and a PR cannot
@@ -226,6 +231,24 @@ nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<numbe
   validation") until it is promoted to `main`, and the guard marks that run red because no
   review happened. PRs into `staging` skip the same way while `staging`'s copy of the
   workflow differs from `main`'s. The weekly schedule also runs only from `main`.
+
+## @claude requests
+
+`.github/workflows/claude.yml` answers `@claude` in an issue, a PR comment, a review or a
+review comment, from anyone with write access, and never from a bot, so Claude's own comments
+cannot start it again (one run per issue or PR at a time).
+
+- On a PR it checks out the PR's head and may push fixes to the PR's branch; on an issue it
+  branches from `staging`. Rules appended to its system prompt say to follow `AGENTS.md`, run
+  `pnpm run verify` before pushing, stage files by path (blanket `git add -A`, `.`, `-u` and
+  `git commit -a` are refused, since the action resets `.claude/` on a PR and a blanket add
+  would commit that reset), add no attribution, and never push to `main` or `staging`.
+- A check after it reads Claude's log and the branch: it passes when Claude answered in its
+  comment or pushed, fails when Claude did neither, ended in an error or with subagents
+  running, or pushed a commit with attribution, and warns when a commit changes a file the
+  action resets or Claude pushed without replying (`tests/unit/workflows/claude.test.ts`).
+- It uses the same token and app as the review, and like the review it runs only once the
+  workflow file matches `main`'s copy.
 
 ## Repository settings (admin only)
 
