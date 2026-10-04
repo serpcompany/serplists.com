@@ -7,11 +7,9 @@ import {
   ArrowLeft,
   FileQuestion,
   FileText,
-  Globe,
   Layers,
   List,
   ListChecks,
-  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,19 +20,17 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
 import { Stat } from '@/components/layout/Stat';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { TemplateDetailActions } from '@/components/template/TemplateDetailActions';
+import { TemplateDetailDialogs } from '@/components/template/TemplateDetailDialogs';
 import {
   TemplateCategoriesCard,
   TemplateDetailsCard,
   TemplateHistoryCard,
 } from '@/components/template/TemplateDetailCards';
 import { TemplateSectionList } from '@/components/template/TemplateSectionList';
-import { Badge } from '@/components/ui/badge';
+import { TemplateVisibilityMeta } from '@/components/template/TemplateVisibilityMeta';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
-import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
@@ -379,12 +375,7 @@ const TemplateDetail = () => {
           displayTemplate.description ||
           'Review template structure, metadata, and run actions.'
         }
-        meta={
-          <Badge variant="secondary">
-            {isPublic ? <Globe data-icon="inline-start" /> : <Lock data-icon="inline-start" />}
-            {isPublic ? 'Public' : 'Private'}
-          </Badge>
-        }
+        meta={<TemplateVisibilityMeta template={displayTemplate} />}
         actions={
           <TemplateDetailActions
             canDuplicate={permissions.canDuplicate}
@@ -446,35 +437,19 @@ const TemplateDetail = () => {
         </div>
       </DetailPageLayout>
 
-      <ConfirmDialog
-        confirmLabel="Delete"
-        description={`Are you sure you want to delete "${displayTemplate.title}"?`}
-        onConfirm={() => {
-          setArchiveDialogOpen(false);
-          void handleDelete();
+      <TemplateDetailDialogs
+        deleteDialog={{
+          open: archiveDialogOpen,
+          onOpenChange: setArchiveDialogOpen,
+          pending: isDeleting,
+          onConfirm: () => {
+            setArchiveDialogOpen(false);
+            void handleDelete();
+          },
         }}
-        onOpenChange={setArchiveDialogOpen}
-        open={archiveDialogOpen}
-        pending={isDeleting}
-        pendingLabel="Deleting..."
-        title="Delete template"
-      />
-
-      <ShareLinkDialog
-        copiedMessage="Public link copied"
-        description="Share this template with others. They can view it and copy it into their library."
-        onOpenChange={setShareDialogOpen}
-        open={shareDialogOpen}
-        title="Share Template"
-        url={shareUrl}
-      />
-
-      <RunNameDialog
-        open={runDialogOpen}
-        onOpenChange={setRunDialogOpen}
+        runDialog={{ open: runDialogOpen, onOpenChange: setRunDialogOpen, onConfirm: handleStartRun, loading: isCreatingRun }}
+        shareDialog={{ open: shareDialogOpen, onOpenChange: setShareDialogOpen, url: shareUrl }}
         templateTitle={displayTemplate.title}
-        onConfirm={handleStartRun}
-        loading={isCreatingRun}
       />
     </>
   );
