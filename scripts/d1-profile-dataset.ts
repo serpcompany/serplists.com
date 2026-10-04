@@ -59,7 +59,7 @@ SELECT 'synthetic-template-' || i,
 
 ${numbers(counts.runs)}
 INSERT INTO checklist_runs (id, user_id, template_id, title, items, status, started_at, completed_at, created_at, updated_at,
-  progress, is_public, share_token, team_id, created_by_user_id, deleted_at, template_version, revision, retired_items)
+  progress, is_public, share_token, team_id, created_by_user_id, started_by_user_id, deleted_at, template_version, revision, retired_items)
 SELECT 'synthetic-run-' || i,
   CASE WHEN i % 40 = 0 THEN 'user-1' ELSE ${syntheticUser("i * 3")} END,
   'synthetic-template-' || (i % ${counts.templates} + 1), 'Synthetic run ' || i, ${items},
@@ -70,7 +70,18 @@ SELECT 'synthetic-run-' || i,
   CASE WHEN i % 50 = 0 THEN 'synthetic-share-' || i END,
   CASE WHEN i % 10 = 0 THEN 'team-seed-growth' END,
   CASE WHEN i % 40 = 0 THEN 'user-1' ELSE ${syntheticUser("i * 3")} END,
+  CASE WHEN i % 40 = 0 THEN 'user-1' ELSE ${syntheticUser("i * 3")} END,
   CASE WHEN i % 25 = 7 THEN datetime('now') END, 1, 1, '[]' FROM n;
+
+${numbers(counts.runs)}
+INSERT INTO audit_events (id, actor_user_id, subject_type, subject_id, resource_type, resource_id, action, metadata_json, created_at)
+SELECT 'synthetic-run-created-' || i,
+  CASE WHEN i % 40 = 0 THEN 'user-1' ELSE ${syntheticUser("i * 3")} END,
+  CASE WHEN i % 10 = 0 THEN 'team' ELSE 'user' END,
+  CASE WHEN i % 10 = 0 THEN 'team-seed-growth' WHEN i % 40 = 0 THEN 'user-1' ELSE ${syntheticUser("i * 3")} END,
+  'checklist_run', 'synthetic-run-' || i, 'checklist_run.created',
+  CASE WHEN i % 5 = 0 THEN '{"source":"mcp","personalRunKeyName":"Synthetic Run Key"}' ELSE '{"source":"web"}' END,
+  datetime('now', '-' || (i % 300) || ' days') FROM n;
 
 ${numbers(counts.likes)}
 INSERT OR IGNORE INTO template_likes (user_id, template_id, created_at)

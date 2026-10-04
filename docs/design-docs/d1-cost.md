@@ -40,7 +40,9 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
   - **The dataset** (`scripts/d1-profile-dataset.ts`) gives every 20th template to the
     seeded Organization and every 50th to `admin@test.com`, so the signed-in requests read
     realistic volumes of their own data, and gives the profiled template and run 300
-    history entries each, so history reads are measured on a heavily edited one. Its
+    history entries each, so history reads are measured on a heavily edited one. Every run
+    has its starter and a `checklist_run.created` audit event (every fifth from MCP), as real
+    runs do, so the runs lists measure their provenance lookups. Its
     invites are expired or revoked invites for other emails, which the incoming-invites
     lookup must skip through the email index.
   - **Reuse:** `-- --scale N` adds volume, and `-- --reuse` reuses the dataset instead of
@@ -182,7 +184,7 @@ Open, all unbounded lists:
 | --- | --- | --- |
 | Legacy template list (no `scope`) | 19,219 | Public *or* the user's own, unbounded and uncached; only tabs loaded before the scoped client (TD-15) |
 | Public catalog cache miss (`GET /api/templates`) | 13,009 | Unbounded list of every public template; at most once per data center every 5 minutes, and 0 on a hit |
-| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; loaded only on the runs page |
+| Organization runs | 20,008 (12,007 before run provenance) | Unbounded, plus a correlated template subquery, the starter and the first audit event per run (5 rows per run); loaded only on the runs page |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a deploy or a change to what that sitemap lists, once per data center, and only for pages the index published |
@@ -191,7 +193,11 @@ Every Template list and detail read also joins the owning Organization by primar
 an Organization Template, and reads nothing more for a Personal one (`selectTemplatesWithOwner`
 in `functions/api/utils/template-rows.ts`, [data persistence](data-persistence.md#resource-ownership)).
 That adds one row per Organization Template: the Organization template list's budget went
-from 3 to 4 rows per Template on 2026-10-02. A public Organization Template adds one row to a
+from 3 to 4 rows per Template on 2026-10-02. Each listed run also reads its starter by primary key and its
+first audit event through `idx_audit_events_resource` for its provenance (origin and who
+started it), and one run's read its whole provenance: the Organization run list's budget went
+from 3 to 5 rows per run, and a run by id from 6 to 12 rows, on 2026-10-04
+([run provenance](../exec-plans/active/run-provenance.md)). A public Organization Template adds one row to a
 catalog miss too, although public responses drop the Organization's name and slug.
 
 Everything else (session, detail pages, history, members, billing, run starts, template

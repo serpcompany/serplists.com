@@ -180,8 +180,8 @@ const ROUTES: Route[] = [
   {
     name: "the Organization run list",
     prepare: get("admin", `checklists?teamId=${ORGANIZATION}`),
-    budget: unbounded("3 rows per Organization run", (n) => 3 * n.organizationRuns, 4),
-    reason: "it reads every run of the Organization and a correlated template subquery for each",
+    budget: unbounded("5 rows per Organization run", (n) => 5 * n.organizationRuns, 3),
+    reason: "it reads every run of the Organization, a correlated template subquery, the starter by primary key, and the run's first audit event through idx_audit_events_resource for each",
   },
   {
     name: "the sitemap index on a cache miss",
@@ -268,8 +268,8 @@ const ROUTES: Route[] = [
   {
     name: "a run by id",
     prepare: get("admin", `checklists/${adminRun}`),
-    budget: bounded(6),
-    reason: "one row by primary key and the membership check",
+    budget: bounded(12),
+    reason: "one row by primary key, the membership check, and its provenance: each actor and the owner by primary key, the source Template, and the first audit event with its actor",
   },
   {
     name: "a run's history preview",

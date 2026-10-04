@@ -5,7 +5,13 @@ import { json, jsonError } from '../utils/response';
 import { parseHistoryLimit, selectAuditEventHistory, serializeHistoryEvent } from '../utils/history-queries';
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { canViewRun, canViewRunHistory } from '../utils/run-access';
-import { checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { checklistRunSelectFor, getRunSubject } from '../utils/checklist-runs';
+import {
+  runListProvenanceSelect,
+  runProvenanceSelect,
+  serializeListedRun,
+  serializeRunWithProvenance,
+} from '../utils/run-provenance';
 import { findHiddenShareLinkActors, HIDDEN_ACTOR } from '../utils/share-link-actors';
 
 type Db = ReturnType<typeof createDb>;
@@ -61,7 +67,7 @@ async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checkl
 async function readRun(env: Env, db: Db, userId: string, checklistId: string): Promise<Response> {
   const { checklistRuns } = schema;
   const [checklist] = await db
-    .select(checklistRunSelectFor(userId))
+    .select({ ...checklistRunSelectFor(userId), ...runProvenanceSelect(userId) })
     .from(checklistRuns)
     .where(and(eq(checklistRuns.id, checklistId), isNull(checklistRuns.deleted_at)))
     .limit(1);
@@ -70,7 +76,7 @@ async function readRun(env: Env, db: Db, userId: string, checklistId: string): P
     return jsonError('Checklist not found', 404);
   }
 
-  return json(serializeChecklistRun(checklist));
+  return json(serializeRunWithProvenance(checklist));
 }
 
 async function listRuns(env: Env, db: Db, url: URL, userId: string, archived: boolean): Promise<Response> {
@@ -84,12 +90,12 @@ async function listRuns(env: Env, db: Db, url: URL, userId: string, archived: bo
     : and(eq(checklistRuns.user_id, userId), isNull(checklistRuns.team_id));
 
   const checklists = await db
-    .select(checklistRunSelectFor(userId))
+    .select({ ...checklistRunSelectFor(userId), ...runListProvenanceSelect() })
     .from(checklistRuns)
     .where(and(ownedByContext, archived ? isNotNull(checklistRuns.deleted_at) : isNull(checklistRuns.deleted_at)))
     .orderBy(archived ? desc(checklistRuns.updated_at) : desc(checklistRuns.created_at));
 
-  return json(checklists.map((run) => serializeChecklistRun(run)));
+  return json(checklists.map((run) => serializeListedRun(run)));
 }
 
 export async function handleChecklistReads(
