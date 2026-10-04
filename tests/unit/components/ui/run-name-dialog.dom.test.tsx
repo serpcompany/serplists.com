@@ -1,16 +1,16 @@
 import React from 'react';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 import { inputNamed, renderSettled } from '../../../support/renderInTheDom';
 
-async function openDialog({ templateTitle = 'Launch checklist', loading = false } = {}) {
+async function openDialog({ templateTitle = 'Launch checklist', loading = false, onOpenChange = vi.fn() } = {}) {
   await renderSettled(
     <RunNameDialog
       open
-      onOpenChange={vi.fn()}
+      onOpenChange={onOpenChange}
       onConfirm={vi.fn()}
       templateTitle={templateTitle}
       loading={loading}
@@ -58,5 +58,21 @@ describe('RunNameDialog wording, the same wherever a Run starts: My Templates, t
       { disabled: true, label: 'Cancel' },
       { disabled: true, label: 'Starting…' },
     ]);
+  });
+
+  it('cannot be closed with Close or Escape while the run starts, and closes with Escape otherwise', async () => {
+    const whileStarting = vi.fn();
+    const starting = await openDialog({ loading: true, onOpenChange: whileStarting });
+    expect(buttonsIn(starting).at(-1)).toEqual({ disabled: true, label: 'Close' });
+    fireEvent.keyDown(starting, { key: 'Escape' });
+    expect(whileStarting).not.toHaveBeenCalled();
+  });
+
+  it('closes with Escape when no run is starting', async () => {
+    const onOpenChange = vi.fn();
+    const dialog = await openDialog({ onOpenChange });
+    expect(buttonsIn(dialog).at(-1)).toEqual({ disabled: false, label: 'Close' });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

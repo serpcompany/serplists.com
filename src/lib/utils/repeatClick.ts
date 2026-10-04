@@ -8,18 +8,32 @@ export const onSingleClick =
     if (!isRepeatClick(event)) handler();
   };
 
+type OpenChangeDetails = { reason: string; cancel: () => void };
+
 export const createJustOpenedGuard = (now: () => number = () => Date.now()) => {
   let openedAt = Number.NEGATIVE_INFINITY;
+
+  const onOutsidePress = (cancel: () => void): boolean => {
+    if (now() - openedAt >= DOUBLE_CLICK_MS) return false;
+    cancel();
+    return true;
+  };
 
   return {
     markOpened: (node: unknown): void => {
       if (node) openedAt = now();
     },
-    onOutsidePress: (cancel: () => void): boolean => {
-      if (now() - openedAt >= DOUBLE_CLICK_MS) return false;
-      cancel();
-      return true;
-    },
+    onOutsidePress,
+    handleOpenChange:
+      (busy: boolean, onOpenChange: (open: boolean) => void) =>
+      (nextOpen: boolean, details: OpenChangeDetails): void => {
+        if (!nextOpen && busy) {
+          details.cancel();
+          return;
+        }
+        if (!nextOpen && details.reason === 'outside-press' && onOutsidePress(details.cancel)) return;
+        onOpenChange(nextOpen);
+      },
   };
 };
 

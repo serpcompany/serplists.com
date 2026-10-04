@@ -35,7 +35,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
     setWasOpen(open);
     if (!open) setRunName("");
   }
-  const [{ markOpened, onOutsidePress }] = useState(() => createJustOpenedGuard());
+  const [{ markOpened, handleOpenChange }] = useState(() => createJustOpenedGuard());
 
   const defaultName = buildDefaultRunName(templateTitle);
 
@@ -46,16 +46,8 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen, details) => {
-        if (!nextOpen && details.reason === "outside-press" && onOutsidePress(details.cancel)) {
-          return;
-        }
-        onOpenChange(nextOpen);
-      }}
-    >
-      <DialogContent className="sm:max-w-md" ref={markOpened}>
+    <Dialog open={open} onOpenChange={handleOpenChange(loading, onOpenChange)}>
+      <DialogContent className="sm:max-w-md" closeDisabled={loading} ref={markOpened}>
         <DialogHeader>
           <DialogTitle>Start a Run</DialogTitle>
         </DialogHeader>
