@@ -1,7 +1,7 @@
 ---
 name: pr-review
 description: Review a pull request for real bugs and for breaches of this repository's rules (AGENTS.md and the core beliefs), post each new finding as an inline comment, and keep one summary comment up to date. Re-reviews after every push without repeating earlier findings. The CI review runs it on every pull request; run it locally with /pr-review <owner>/<repo>/pull/<number>.
-allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), mcp__github_inline_comment__create_inline_comment, Task, Read, Glob, Grep
+allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh api --method PATCH repos/*/issues/comments/*), mcp__github_inline_comment__create_inline_comment, Task, Read, Glob, Grep
 ---
 
 # Review a pull request
@@ -20,8 +20,9 @@ Stop without posting anything if the pull request is closed or a draft.
 - **The rules:** AGENTS.md and docs/design-docs/core-beliefs.md. In CI they are already in
   your instructions; otherwise read them.
 - **Earlier findings:** in CI, your instructions list what Claude already posted on this pull
-  request (file, line and text). Otherwise read them with
-  `gh pr view <number> --repo <owner>/<repo> --comments`.
+  request (file, line and text) and name your summary comment. Otherwise read them with
+  `gh pr view <number> --repo <owner>/<repo> --comments`. Claude's replies to `@claude`
+  requests are not findings: they are context, and you never edit them.
 - **The code around the change:** read what a changed line depends on (callers, types,
   tests) with Read, Grep and Glob. The diff alone often hides the bug.
 
@@ -58,9 +59,14 @@ Check every finding yourself against the code at the head commit:
   Link a rule with a full URL to the base branch's copy,
   `https://github.com/<owner>/<repo>/blob/<baseRefName>/<path>`, since relative links do
   not resolve from a pull request comment.
-- **Then the summary**, one comment that each review updates in place:
-  `gh pr comment <number> --repo <owner>/<repo> --edit-last --create-if-none --body "<summary>"`.
-  The summary reads:
+- **Then the summary**, one comment that each review updates in place. Update it with
+  `gh api --method PATCH repos/<owner>/<repo>/issues/comments/<id> -f body="<summary>"`, or,
+  when the pull request has none yet, create it with
+  `gh pr comment <number> --repo <owner>/<repo> --body "<summary>"`. In CI your instructions
+  give the id, or say there is none; locally, it is your comment that starts with
+  `## Claude review` in `gh api repos/<owner>/<repo>/issues/<number>/comments`. Never use
+  `gh pr comment --edit-last`: Claude's latest comment can be its reply to an `@claude`
+  request. The summary reads:
   - `## Claude review` and `Reviewed <short head commit>.`
   - `<N> new finding(s), commented inline.` or `No new findings.`
   - When there are earlier findings: one line each saying whether this commit fixes it or

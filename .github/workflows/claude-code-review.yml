@@ -65,7 +65,8 @@ jobs:
         shell: node {0}
         run: |
           const fs = require('node:fs');
-          const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${repo}`;
           const headers = {
             Accept: 'application/vnd.github+json',
             Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
@@ -87,24 +88,36 @@ jobs:
             const flat = String(text || '').replace(/\s+/g, ' ').trim();
             return flat.length > max ? `${flat.slice(0, max)}…` : flat;
           };
+          const isSummary = (item) => /^## Claude review\b/.test(String(item.body || '').trim());
           const main = async () => {
             const pr = process.env.PR_NUMBER;
             const [inline, comments] = await Promise.all([list(`/pulls/${pr}/comments`), list(`/issues/${pr}/comments`)]);
+            const findings = inline.filter((item) => !item.in_reply_to_id);
+            const summary = comments.filter(isSummary)[0];
+            const repliesToClaudeRequests = [...comments.filter((item) => !isSummary(item)), ...inline.filter((item) => item.in_reply_to_id)];
             const lines = ['', '# Earlier findings on this pull request', ''];
-            if (inline.length === 0 && comments.length === 0) {
+            if (findings.length === 0 && !summary) {
               lines.push('None: this is the first review of this pull request.');
             } else {
               lines.push('Claude posted these on earlier commits. Do not post any of them again, including the same problem reworded or at the lines it moved to. In the summary, say for each whether the current commit fixes it or it still applies.', '');
-              for (const item of inline) {
+              for (const item of findings) {
                 const where = item.line == null ? `${item.path}:${item.original_line} (outdated: the code there changed)` : `${item.path}:${item.line}`;
                 lines.push(`- ${where}, on commit ${String(item.commit_id || '').slice(0, 7)} (${item.html_url}): ${excerpt(item.body, 600)}`);
               }
-              for (const item of comments) {
-                lines.push(`- Summary comment (${item.html_url}): ${excerpt(item.body, 1500)}`);
-              }
+              if (summary) lines.push(`- Summary comment (${summary.html_url}): ${excerpt(summary.body, 1500)}`);
+            }
+            lines.push('', '# Your summary comment', '');
+            lines.push(
+              summary
+                ? `Update your summary comment in place, and no other comment: \`gh api --method PATCH repos/${repo}/issues/comments/${summary.id} -f body="<summary>"\`.`
+                : `This pull request has no summary comment yet. Create it: \`gh pr comment ${pr} --repo ${repo} --body "<summary>"\`.`,
+            );
+            if (repliesToClaudeRequests.length > 0) {
+              lines.push('', '# Replies to @claude requests', '', 'Claude also answered @claude requests on this pull request. They are context, not review findings: do not list them as earlier findings, and never edit them.', '');
+              for (const item of repliesToClaudeRequests) lines.push(`- ${item.html_url}: ${excerpt(item.body, 600)}`);
             }
             fs.appendFileSync(process.env.CONTEXT_FILE, `${lines.join('\n')}\n`);
-            console.log(`Earlier findings passed to the review: ${inline.length} inline, ${comments.length} summary.`);
+            console.log(`Earlier findings passed to the review: ${findings.length} inline, ${summary ? 1 : 0} summary, ${repliesToClaudeRequests.length} replies to @claude requests.`);
           };
           main().catch((error) => {
             console.log(`::error title=Could not read the earlier review::${String(error && error.message).replace(/[\r\n%]+/g, ' ')}`);
@@ -119,13 +132,14 @@ jobs:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "claude[bot]"
           prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: >-
             --model claude-sonnet-5-5
             --strict-mcp-config
             --append-system-prompt-file ${{ runner.temp }}/review-context.md
             --append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Task,Read,Glob,Grep"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api --method PATCH repos/*/issues/comments/*),Task,Read,Glob,Grep"
 
       - name: Keep the review transcript
         if: always() && env.HAS_REVIEW_TOKEN == 'true' && steps.review.outputs.execution_file != ''
@@ -205,8 +219,10 @@ jobs:
               list(`/pulls/${pr}/reviews`),
             ]);
             return [
-              ...comments.map((item) => ({ login: item.user && item.user.login, at: item.updated_at || item.created_at })),
-              ...inline.map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
+              ...comments
+                .filter((item) => /^## Claude review\b/.test(String(item.body || '').trim()))
+                .map((item) => ({ login: item.user && item.user.login, at: item.updated_at || item.created_at })),
+              ...inline.filter((item) => !item.in_reply_to_id).map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
               ...reviews.map((item) => ({ login: item.user && item.user.login, at: item.submitted_at })),
             ].filter((item) => item.login === bot);
           };
