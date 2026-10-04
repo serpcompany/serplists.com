@@ -32,7 +32,9 @@ export function LabeledSelect<Option extends string>({
         }}
       >
         <SelectTrigger className="w-full" id={id}>
-          <SelectValue />
+          <SelectValue className="min-w-0">
+            {(selected: unknown) => <span className="truncate">{isOption(selected) ? labels[selected] : null}</span>}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {Object.entries<string>(labels).map(([option, optionLabel]) => (

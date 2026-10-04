@@ -1,4 +1,4 @@
-import { Copy, Download, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2 } from 'lucide-react';
+import { Copy, Download, History, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -31,6 +31,7 @@ type TemplateDetailActionsProps = {
   onExport: () => void;
   onShare: () => void;
   onStartRun: () => void;
+  runsHref: string | null;
   showStartRun: boolean;
 };
 
@@ -52,6 +53,7 @@ export function TemplateDetailActions({
   onExport,
   onShare,
   onStartRun,
+  runsHref,
   showStartRun,
 }: TemplateDetailActionsProps) {
   return (
@@ -79,6 +81,13 @@ export function TemplateDetailActions({
       ) : copyButton.visible ? (
         <Link href={loginHref} className={buttonVariants({ variant: 'outline' })}>
           Log in to copy template
+        </Link>
+      ) : null}
+
+      {runsHref ? (
+        <Link href={runsHref} className={buttonVariants({ variant: 'outline' })}>
+          <History data-icon="inline-start" />
+          View runs
         </Link>
       ) : null}
 

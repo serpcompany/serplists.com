@@ -92,6 +92,11 @@ export const buildConsoleTemplateEditPath = (
 export const buildConsoleRunsPath = (context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'runs' } });
 
+export const RUNS_TEMPLATE_FILTER_PARAM = 'template';
+
+export const buildConsoleTemplateRunsPath = (templateId: string, context: ConsoleContext): string =>
+  `${buildConsoleRunsPath(context)}?${new URLSearchParams({ [RUNS_TEMPLATE_FILTER_PARAM]: templateId }).toString()}`;
+
 export const buildConsoleRunPath = (runId: string, context: ConsoleContext): string =>
   buildConsoleRoutePath({ context, section: { name: 'run', runId } });
 

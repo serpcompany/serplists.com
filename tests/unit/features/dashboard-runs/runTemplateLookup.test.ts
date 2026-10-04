@@ -4,6 +4,7 @@ import {
   buildRunTemplateLookup,
   filterDashboardRuns,
   findRunTemplate,
+  runTemplateFilterOptions,
 } from '@/features/dashboard-runs/runTemplateLookup';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -87,5 +88,46 @@ describe('filterDashboardRuns', () => {
   it('filters by status and sorts newest first', () => {
     expect(filterDashboardRuns(runs, lookup, '', 'all').map((r) => r.id)).toEqual(['run-other', 'run-acme']);
     expect(filterDashboardRuns(runs, lookup, '', 'in_progress').map((r) => r.id)).toEqual(['run-acme']);
+  });
+
+  it("keeps only the chosen Template's runs, together with the status and search filters", () => {
+    const withADoneAcme = [
+      ...runs,
+      run({ id: 'run-acme-done', templateId: 'private-1', title: 'Acme Done', status: 'completed', startedAt: '2024-01-04T00:00:00Z' }),
+    ];
+
+    expect(filterDashboardRuns(withADoneAcme, lookup, '', 'all', 'private-1').map((r) => r.id)).toEqual(['run-acme-done', 'run-acme']);
+    expect(filterDashboardRuns(withADoneAcme, lookup, '', 'completed', 'private-1').map((r) => r.id)).toEqual(['run-acme-done']);
+    expect(filterDashboardRuns(withADoneAcme, lookup, 'done', 'all', 'private-1').map((r) => r.id)).toEqual(['run-acme-done']);
+    expect(filterDashboardRuns(withADoneAcme, lookup, '', 'all', 'no-such-template')).toEqual([]);
+  });
+});
+
+describe('runTemplateFilterOptions', () => {
+  const lookup = buildRunTemplateLookup(
+    [],
+    [
+      { id: 'tpl-b', title: 'Beta Launch' },
+      { id: 'tpl-a', title: 'Alpha Audit' },
+      { id: 'tpl-quiet', title: 'Quiet Template' },
+    ],
+  );
+  const runs = [
+    run({ id: 'run-1', templateId: 'tpl-b' }),
+    run({ id: 'run-2', templateId: 'tpl-a' }),
+    run({ id: 'run-3', templateId: 'tpl-b' }),
+    run({ id: 'run-4', templateId: 'tpl-deleted' }),
+  ];
+
+  it('offers each known Template the runs came from once, by title', () => {
+    expect(runTemplateFilterOptions(runs, lookup, null)).toEqual([
+      { id: 'tpl-a', title: 'Alpha Audit' },
+      { id: 'tpl-b', title: 'Beta Launch' },
+    ]);
+  });
+
+  it('also offers the chosen Template when none of the runs came from it, untitled when it is unknown', () => {
+    expect(runTemplateFilterOptions(runs, lookup, 'tpl-quiet').map((option) => option.id)).toEqual(['tpl-a', 'tpl-b', 'tpl-quiet']);
+    expect(runTemplateFilterOptions(runs, lookup, 'tpl-gone')).toContainEqual({ id: 'tpl-gone', title: null });
   });
 });
