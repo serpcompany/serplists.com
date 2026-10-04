@@ -1,7 +1,13 @@
+import { ownerConsoleContext } from '@/lib/consoleRoutes';
+import { buildConsoleTemplatePath } from '@/lib/routes';
+import { resolveTemplateConsoleContext } from '@/lib/templateDestination';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 export type RunSourceTemplate = Pick<ChecklistTemplate, 'id' | 'isPublic' | 'ownerProfile' | 'teamId' | 'title'>;
 export type RunStatusFilter = 'all' | 'in_progress' | 'completed';
+
+export const runTemplatePath = (run: ChecklistRun, template: RunSourceTemplate): string =>
+  buildConsoleTemplatePath(template.id, resolveTemplateConsoleContext(template, ownerConsoleContext(run.teamId)));
 
 export function buildRunTemplateLookup<T extends { id: string }>(
   catalog: readonly T[],

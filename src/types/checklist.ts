@@ -95,6 +95,20 @@ export type RetiredRunItem =
   | { kind: "item"; id: string; sectionTitle?: string | undefined; task: RetiredRunTask }
   | { kind: "subItem"; id: string; itemTitle?: string | undefined; subTask: RetiredRunSubTask };
 
+export type RunActor = { userId: string; name: string | null; username: string | null };
+
+export type RunProvenance = {
+  origin: "web" | "mcp" | "unknown";
+  startedBy: RunActor | null;
+  owner?: { type: "personal" | "organization"; id: string; name: string | null } | undefined;
+  template?: { id: string | null; title: string | null; version: number } | undefined;
+  agentKeyName?: string | null | undefined;
+  authorizedBy?: RunActor | null | undefined;
+  createdBy?: RunActor | null | undefined;
+  assignedTo?: RunActor | null | undefined;
+  completedBy?: RunActor | null | undefined;
+};
+
 export type ChecklistRun = {
   id: string;
   templateId: string;
@@ -104,6 +118,8 @@ export type ChecklistRun = {
   sections: ChecklistSection[];
   startedAt: string;
   completedAt?: string | undefined;
+  createdAt?: string | undefined;
+  updatedAt?: string | undefined;
   userId: string;
   templateVersion?: number;
   revision?: number | undefined;
@@ -111,6 +127,7 @@ export type ChecklistRun = {
   isPublic?: boolean;
   teamId?: string | undefined;
   retiredItems?: RetiredRunItem[];
+  provenance?: RunProvenance | undefined;
 };
 
 export type TemplateImportOptions = {

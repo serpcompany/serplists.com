@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
 import { RunListItem } from '@/components/dashboard/RunListItem';
+import type { RunRowControls } from '@/components/dashboard/RunRowParts';
+import { RunsTable } from '@/components/dashboard/RunsTable';
 import {
   DashboardContentShell,
   DashboardEmptyState,
@@ -24,6 +26,7 @@ import { Item, ItemContent, ItemGroup } from '@/components/ui/item';
 import { Skeleton } from '@/components/ui/skeleton';
 import { buildPublicTemplatesPath } from '@/lib/routes';
 import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import type { ChecklistRun } from '@/types/checklist';
 import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
@@ -64,6 +67,7 @@ const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
 };
 
 const ALL_TEMPLATES = 'all';
+const RUNS_TABLE_QUERY = '(min-width: 90rem)';
 const UNKNOWN_TEMPLATE_LABEL = 'Unknown template';
 
 const setTemplateFilter = (templateId: string | null) =>
@@ -86,6 +90,7 @@ export function RunsDashboardView({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const templateFilter = readRunsTemplateFilter(useSearchParams());
+  const showTable = useMediaQuery(RUNS_TABLE_QUERY, false);
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const fieldId = useId();
@@ -119,6 +124,16 @@ export function RunsDashboardView({
   const filterTemplateTitle = templateFilter ? templateLabels[templateFilter] : undefined;
   const templateHasNoRuns = templateFilter !== null && !runs.some((run) => run.templateId === templateFilter);
   const isFiltering = Boolean(searchQuery) || statusFilter !== 'all' || templateFilter !== null;
+  const templateFor = (run: ChecklistRun) => findRunTemplate(templatesById, run.templateId);
+  const controlsFor = (run: ChecklistRun): RunRowControls => ({
+    actions: getRunRowActions(run, getRunPermissions(run)),
+    isRevalidating: isRevalidating(run.id),
+    isStoppingShare: stoppingShareRunId === run.id,
+    onDelete: () => setRunToDelete(run.id),
+    onRevalidate: onRevalidateRun ? () => void revalidate(run) : undefined,
+    onShare: () => void shareRun(run.id),
+    onStopSharing: onStopSharingRun ? () => void stopSharing(run.id) : undefined,
+  });
 
   const confirmDeleteRun = async () => {
     if (!runToDelete) {
@@ -221,21 +236,12 @@ export function RunsDashboardView({
               ) : null
             }
           />
+        ) : showTable ? (
+          <RunsTable controlsFor={controlsFor} runs={filteredRuns} templateFor={templateFor} />
         ) : (
           <ItemGroup className="gap-2">
             {filteredRuns.map((run) => (
-              <RunListItem
-                key={run.id}
-                actions={getRunRowActions(run, getRunPermissions(run))}
-                isRevalidating={isRevalidating(run.id)}
-                isStoppingShare={stoppingShareRunId === run.id}
-                onDelete={() => setRunToDelete(run.id)}
-                onRevalidate={onRevalidateRun ? () => void revalidate(run) : undefined}
-                onShare={() => void shareRun(run.id)}
-                onStopSharing={onStopSharingRun ? () => void stopSharing(run.id) : undefined}
-                run={run}
-                template={findRunTemplate(templatesById, run.templateId)}
-              />
+              <RunListItem key={run.id} run={run} template={templateFor(run)} {...controlsFor(run)} />
             ))}
           </ItemGroup>
         )}

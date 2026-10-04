@@ -5,6 +5,7 @@ import { API_BASE_URL, apiJson } from './support/api-requests';
 import { apiRunSchema, createdRunSchema, runShareCreatedSchema, sectionsOfStoredItems } from './support/api-bodies';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun } from './support/run-saves';
+import { runListEntry } from './support/runs-list';
 
 async function readOwnerRun(page: Page, runId: string) {
   const run = await apiJson(page, `/checklists/${runId}`, apiRunSchema);
@@ -126,7 +127,7 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
   const { guestContext, guest, sharedUrl } = await aGuestWhoseLinkWorks(browser, shareToken);
 
   await page.goto('/dashboard/runs/');
-  const row = page.locator('div.group', { hasText: title });
+  const row = runListEntry(page, runId);
   await expect(row.getByText('Shared', { exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'Run options' }).click();
   await page.getByRole('menuitem', { name: 'Stop sharing' }).click();

@@ -7,7 +7,7 @@ import {
   theDialogsToClose,
 } from '../../../support/confirmDialogs';
 import React, { act } from 'react';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../../support/renderInTheDom';
 import { toast } from 'sonner';
@@ -19,7 +19,16 @@ import type { ChecklistRun } from '@/types/checklist';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-theInMemoryBrowserAsTheWindow();
+const display = { wide: false };
+
+theInMemoryBrowserAsTheWindow({
+  matchMedia: (query: string) => ({
+    matches: display.wide && query === '(min-width: 90rem)',
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }),
+});
 
 const run: ChecklistRun = {
   id: 'run-1',
@@ -34,6 +43,7 @@ const run: ChecklistRun = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  display.wide = false;
 });
 
 async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
@@ -145,5 +155,66 @@ describe("the runs page's Template filter", () => {
 
     expect(navigation.url()).toBe('/dashboard/runs/');
     expect(shownRunTitles()).toEqual(['Audit One', 'Audit Two', 'Launch One']);
+  });
+});
+
+const alice = { userId: 'user-a', name: 'Alice Admin', username: 'alice' };
+const longTitle = 'A run title long enough that the table truncates it instead of wrapping its row';
+const provenanceRuns: ChecklistRun[] = [
+  { ...runOf('run-web', 'tpl-a', 'Audit One'), provenance: { origin: 'web', startedBy: alice }, updatedAt: '2026-09-22T08:00:00Z' },
+  { ...runOf('run-mcp', 'tpl-b', longTitle), provenance: { origin: 'mcp', startedBy: { userId: 'user-b', name: null, username: 'bob' } } },
+  { ...runOf('run-old', 'tpl-gone', 'Legacy One'), status: 'completed' },
+];
+
+const rowOf = (runTitle: string): HTMLElement => {
+  const row = screen.getAllByRole('row').find((candidate) => within(candidate).queryByRole('link', { name: runTitle }));
+  if (!row) throw new Error(`No row for ${runTitle}`);
+  return row;
+};
+
+describe('the runs table on a wide screen', () => {
+  async function openTheWideRuns() {
+    display.wide = true;
+    navigation.reset('/dashboard/runs/');
+    await renderSettled(
+      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
+    );
+  }
+
+  it('lists the runs in a table with their Template, status, progress, starter, origin and dates, instead of cards', async () => {
+    await openTheWideRuns();
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Run', 'Template', 'Status', 'Progress', 'Started by', 'Origin', 'Started', 'Updated', 'Actions',
+    ]);
+    expect(screen.queryAllByRole('listitem')).toEqual([]);
+
+    const web = within(rowOf('Audit One'));
+    expect(web.getByRole('link', { name: 'Alpha Audit' }).getAttribute('href')).toBe('/dashboard/templates/tpl-a/');
+    expect(web.getByText('Alice Admin')).toBeTruthy();
+    expect(web.getByText('Web')).toBeTruthy();
+    expect(web.getByText('In Progress')).toBeTruthy();
+    expect(web.getByText('Sep 22, 2026')).toBeTruthy();
+    expect(web.getByRole('link', { name: 'Continue' }).getAttribute('href')).toBe('/dashboard/runs/run-web/');
+    expect(web.getByRole('button', { name: 'Run options' })).toBeTruthy();
+  });
+
+  it('clamps a long title to two lines with the whole title as its tooltip, and names a starter without a name by username', async () => {
+    await openTheWideRuns();
+
+    const mcp = within(rowOf(longTitle));
+    expect(mcp.getByRole('link', { name: longTitle }).getAttribute('title')).toBe(longTitle);
+    expect(mcp.getByText('@bob')).toBeTruthy();
+    expect(mcp.getByText('MCP')).toBeTruthy();
+  });
+
+  it('says Unknown and shows a dash, never a guess, for a run with no provenance or Template, and offers View for a completed run', async () => {
+    await openTheWideRuns();
+
+    const old = within(rowOf('Legacy One'));
+    expect(old.getByText('Unknown')).toBeTruthy();
+    expect(old.getAllByText('—')).toHaveLength(2);
+    expect(old.getByRole('link', { name: 'View' })).toBeTruthy();
+    expect(old.getByText('Completed')).toBeTruthy();
   });
 });

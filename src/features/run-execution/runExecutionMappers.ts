@@ -57,6 +57,8 @@ export const mapChecklistToRun = (
       asString(checklist.created_at) ??
       new Date().toISOString(),
     completedAt: asString(checklist.completed_at),
+    createdAt: asString(checklist.created_at),
+    updatedAt: asString(checklist.updated_at),
     userId: asString(checklist.user_id) ?? '',
     teamId: asString(checklist.team_id) || undefined,
     templateVersion:
@@ -67,6 +69,7 @@ export const mapChecklistToRun = (
     isStale: checklist.is_stale === true,
     isPublic: checklist.is_public === true || checklist.is_public === 1,
     retiredItems: parseRetiredRunItems(checklist.retired_items),
+    provenance: checklist.provenance ?? undefined,
   };
 };
 
