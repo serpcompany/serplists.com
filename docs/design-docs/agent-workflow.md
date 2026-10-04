@@ -146,7 +146,9 @@ the size limit, and open tech debt.
   there anyway, since it often retries a refused command another way
   (`tests/unit/workflows/maintenance.test.ts`).
 - **Report issue:** the full report is posted to the issue "Weekly repository
-  maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment.
+  maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment. The job
+  writes it to `tmp/weekly-report.md`: a Markdown file at the repository root would fail the
+  docs check the report itself runs.
 
 Work the issue in small PRs, one item each:
 

@@ -197,7 +197,7 @@ from 3 to 4 rows per Template on 2026-10-02. Each listed run also reads its star
 first audit event through `idx_audit_events_resource` for its provenance (origin and who
 started it), and one run's read its whole provenance: the Organization run list's budget went
 from 3 to 5 rows per run, and a run by id from 6 to 12 rows, on 2026-10-04
-([run provenance](../exec-plans/active/run-provenance.md)). A public Organization Template adds one row to a
+([run provenance](../exec-plans/completed/run-provenance.md)). A public Organization Template adds one row to a
 catalog miss too, although public responses drop the Organization's name and slug.
 
 Everything else (session, detail pages, history, members, billing, run starts, template

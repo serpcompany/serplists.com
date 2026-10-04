@@ -211,14 +211,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build report
-        run: pnpm run --silent maintenance:report > report.md
+        run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/weekly-report.md
 
       - name: Open or update the maintenance issue
         run: |
           number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then
-            gh issue edit "$number" --body-file report.md
+            gh issue edit "$number" --body-file tmp/weekly-report.md
             gh issue comment "$number" --body "Report refreshed on $(date -u +%F)."
           else
-            gh issue create --title "$TITLE" --body-file report.md --label chore --label ready-for-agent
+            gh issue create --title "$TITLE" --body-file tmp/weekly-report.md --label chore --label ready-for-agent
           fi

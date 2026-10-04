@@ -26,8 +26,6 @@ have not been updated in 30 days.
   amplification.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
-- [Run provenance](exec-plans/active/run-provenance.md): who owns, created, started and
-  completed a Run, and whether it came from the web app or an agent (issue #202), in three PRs.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
   the proposed migration that makes public Organization Template edits refresh cached
   sitemaps (TD-23).
@@ -39,6 +37,8 @@ have not been updated in 30 days.
 
 ## Completed
 
+- [Run provenance](exec-plans/completed/run-provenance.md): who owns, created, started and
+  completed a Run, and whether it came from the web app or an agent (issue #202), in three PRs.
 - [Organization console routes](exec-plans/completed/organization-console-routes.md): the URL
   decides the Personal or Organization context (issue #212), in three PRs.
 

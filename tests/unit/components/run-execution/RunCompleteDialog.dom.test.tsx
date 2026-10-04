@@ -44,6 +44,24 @@ describe('RunCompleteDialog', () => {
     expect(buttonNamed(dialog, 'Not yet').disabled).toBe(true);
     expect(buttonNamed(dialog, 'Complete Run').disabled).toBe(true);
   });
+
+  it('cannot be closed with Close or Escape while the completion saves, so the request is not left running behind it', async () => {
+    const onOpenChange = vi.fn();
+    const dialog = await openDialog({ completing: true, onOpenChange });
+
+    expect(buttonNamed(dialog, 'Close').disabled).toBe(true);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('closes with Escape when nothing is saving', async () => {
+    const onOpenChange = vi.fn();
+    const dialog = await openDialog({ onOpenChange });
+
+    expect(buttonNamed(dialog, 'Close').disabled).toBe(false);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('RunCompleteDialog buttons', () => {

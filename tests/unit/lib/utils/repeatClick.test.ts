@@ -71,6 +71,37 @@ describe('createJustOpenedGuard', () => {
     expect(guard.onOutsidePress(cancel)).toBe(false);
     expect(cancel).not.toHaveBeenCalled();
   });
+
+  it('refuses every way to close while busy (the X, Escape, a click outside), and closes as usual otherwise', () => {
+    let now = 1_000;
+    const guard = createJustOpenedGuard(() => now);
+    guard.markOpened({});
+    now += DOUBLE_CLICK_MS;
+    const onOpenChange = vi.fn();
+
+    for (const reason of ['close-press', 'escape-key', 'outside-press']) {
+      const cancel = vi.fn();
+      guard.handleOpenChange(true, onOpenChange)(false, { reason, cancel });
+      expect(cancel, reason).toHaveBeenCalledTimes(1);
+    }
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    guard.handleOpenChange(false, onOpenChange)(false, { reason: 'escape-key', cancel: vi.fn() });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('still keeps a just-opened dialog open through the rest of the double click, when not busy', () => {
+    const now = 1_000;
+    const guard = createJustOpenedGuard(() => now);
+    guard.markOpened({});
+    const onOpenChange = vi.fn();
+    const cancel = vi.fn();
+
+    guard.handleOpenChange(false, onOpenChange)(false, { reason: 'outside-press', cancel });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('ignoreRepeatClicksBriefly', () => {

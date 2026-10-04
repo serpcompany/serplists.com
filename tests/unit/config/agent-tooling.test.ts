@@ -80,6 +80,8 @@ describe('.claude/settings.json', () => {
     'pnpm exec wrangler d1 execute DB --remote --preview --command "SELECT 1"',
     'wrangler r2 object put serp-checklists/example.txt --file=example.txt --remote',
     'node scripts/d1-baseline-migrations.mjs --remote --database serp-checklists-db --allow-production',
+    'node --import tsx scripts/d1-baseline-migrations.ts --remote --database serp-checklists-db --allow-production',
+    'node --import tsx scripts/d1-baseline-migrations.ts --allow-production',
     'npx wrangler deploy --env production',
     'npx wrangler versions deploy',
     'npx wrangler versions upload',

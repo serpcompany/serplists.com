@@ -154,3 +154,18 @@ describe('weekly doc gardening workflow', () => {
     expect(output).toContain('Could not list the open PRs');
   });
 });
+
+describe('weekly maintenance report workflow', () => {
+  const reportStep = steps.find((step) => step.run?.includes('maintenance:report') && !step.run.includes('maintenance-report.md'));
+  const issueStep = steps.find((step) => step.run?.includes('--body-file'));
+
+  it('writes the report under tmp/, since a Markdown file at the root fails the docs check the report runs', () => {
+    expect(reportStep?.run).toContain('> tmp/weekly-report.md');
+    expect(reportStep?.run).not.toMatch(/> [\w-]+\.md/);
+  });
+
+  it('opens or updates the issue from that same file', () => {
+    expect(issueStep?.run).toContain('--body-file tmp/weekly-report.md');
+    expect(issueStep?.run).not.toContain('--body-file report.md');
+  });
+});

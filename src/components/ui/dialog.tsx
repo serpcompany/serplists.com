@@ -35,9 +35,11 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeDisabled = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  closeDisabled?: boolean
 }) {
   return (
     <DialogPortal>
@@ -59,6 +61,7 @@ function DialogContent({
                 variant="ghost"
                 className="absolute top-2 right-2"
                 size="icon-sm"
+                disabled={closeDisabled}
               />
             }
           >

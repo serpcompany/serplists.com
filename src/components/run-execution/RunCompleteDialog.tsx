@@ -19,19 +19,11 @@ interface RunCompleteDialogProps {
 }
 
 export function RunCompleteDialog({ completing = false, onComplete, onOpenChange, open }: RunCompleteDialogProps) {
-  const [{ markOpened, onOutsidePress }] = useState(() => createJustOpenedGuard());
+  const [{ markOpened, handleOpenChange }] = useState(() => createJustOpenedGuard());
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen, details) => {
-        if (!nextOpen && details.reason === 'outside-press' && onOutsidePress(details.cancel)) {
-          return;
-        }
-        onOpenChange(nextOpen);
-      }}
-    >
-      <DialogContent ref={markOpened}>
+    <Dialog open={open} onOpenChange={handleOpenChange(completing, onOpenChange)}>
+      <DialogContent closeDisabled={completing} ref={markOpened}>
         <DialogHeader>
           <DialogTitle>Complete this Run?</DialogTitle>
           <DialogDescription>

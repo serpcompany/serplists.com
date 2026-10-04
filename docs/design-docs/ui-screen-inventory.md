@@ -2064,7 +2064,8 @@ replaced.
 - **PRIMARY ACTION:** "Start Run" → [Run page](#run-page) (toast "Checklist run created", or
   "Run started in <Organization>" for another Organization's Template on Template detail).
 - **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
-- **STATES:** "Starting…" (the field and both buttons disabled); a blank name gets the default;
+- **STATES:** "Starting…" (the field, both buttons and the Close button disabled, and Escape or a
+  click outside does not close it); a blank name gets the default;
   a plan limit starts checkout (on My Templates the dialog stays busy until the browser leaves);
   an ended session goes to Log in; a failure keeps the dialog open with the typed name; the
   rest of the double click that opened it neither closes it nor starts a second Run.
@@ -2133,7 +2134,8 @@ replaced.
   [Shared run](#shared-run), which now reads "Completed".
 - **SECONDARY ACTIONS:** "Not yet", Escape or the close button: the Run stays in progress and
   the page keeps offering "Complete run".
-- **STATES:** both buttons wait while the completion saves; a save failure shows a toast and
+- **STATES:** both buttons and the Close button wait while the completion saves, and Escape or a
+  click outside does not close it then; a save failure shows a toast and
   keeps the dialog; the rest of the double click that opened it neither closes it nor
   completes the Run.
 - **NAVIGATION TYPE:** modal dialog.
