@@ -1,6 +1,6 @@
 # Run Provenance
 
-- **Status:** active
+- **Status:** completed
 - **Last updated:** 2026-10-04
 - **Goal:** a Run shows who owns it, which Template version it came from, who created,
   started, was assigned and completed it, and whether it came from the web app or an agent
@@ -28,8 +28,10 @@
 - [x] PR 2: My Runs as a table on desktop (Run, Template, Status, Progress, Started by, Origin,
   Started, Updated, actions; the cards stay on phones) and the Run page header with its
   provenance line and Show Details (#272, merged 2026-10-04).
-- [ ] PR 3 (in review): "Changelog" becomes "Activity" on the Run and Template pages, with a View
-  all path instead of the fixed 8 entries.
+- [x] PR 3: "Changelog" becomes "Activity" on the Run and Template pages, with a View all path
+  instead of the fixed 8 entries (#273, merged 2026-10-04).
+- [ ] Follow-up, not planned: clearer Activity labels where an event's structured diff makes them
+  reliable, which the issue allowed but did not require.
 
 ## Decision log
 
