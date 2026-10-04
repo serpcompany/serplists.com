@@ -6,6 +6,7 @@ import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { confirmTheTemplateDelete, createOneTaskTemplate, ONE_TASK_SECTIONS } from './support/template-editor';
 import { present } from '../support/elements';
+import { runListEntry } from './support/runs-list';
 
 const LATE_READ_WINDOW_MS = 500;
 const DELAYED_READ_MS = 1_500;
@@ -116,7 +117,7 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
 
   await loadArchiveListsIntoCache(page);
   await page.getByRole('link', { name: 'Runs', exact: true }).first().click();
-  const runRow = page.locator('div').filter({ hasText: runTitle }).filter({ has: page.getByRole('button', { name: 'Run options' }) }).last();
+  const runRow = runListEntry(page, runId);
   await expect(runRow).toBeVisible({ timeout: 15_000 });
   await runRow.getByRole('button', { name: 'Run options' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();

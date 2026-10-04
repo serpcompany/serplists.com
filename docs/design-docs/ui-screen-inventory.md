@@ -1538,7 +1538,13 @@ existing content, invent nothing):
     does not know); "Status" ("All Runs", "In Progress", "Completed"). The three combine. The
     Template lives in the URL (`?template=<id>`), so a link, a reload and Back keep it; search
     and status do not.
-  - Rows: a status icon tile; the title (a link to `/dashboard/runs/<id>/`); meta ("From
+  - From 90rem (1440px), a table ("Runs") instead of rows: "Run" (the title, at most two lines
+    with the whole title as its tooltip, and the attention badge), "Template" (a link),
+    "Status" (its icon and badge), "Progress" (the bar and "x/y"), "Started by", "Origin"
+    ("Web", "MCP" or "Unknown"), "Started", "Updated", and the row's actions, where
+    "Revalidate" and "Stop sharing to update" are icon buttons named by their labels; a value
+    the Run never recorded shows "—".
+  - Below 90rem, rows: a status icon tile; the title (a link to `/dashboard/runs/<id>/`); meta ("From
     <template>" as a link, "Started <date>", "Completed <date>"); a progress bar (the Run's
     progress, Sub-tasks included) with "x/y" (tasks only, as on the Run page); a
     status badge ("Completed" or "In Progress"); a "Needs revalidation" or "Shared snapshot is
@@ -1587,6 +1593,14 @@ existing content, invent nothing):
     progress bar with "N%"; actions (under the text on phones): "Runs" (back), "Rename" (or
     "Save title" and "Cancel"), "Complete run" when every task is done, a "Shared" badge,
     "Share", "Stop sharing".
+  - Under the header, the Run's provenance: "Started by <name> via Web", or "Started by <Run
+    Key> via MCP · authorized by <name>" (no origin when it is unknown), "Started <date and
+    time> · Updated <date and time>", and "Show Details" ("Hide Details"), which opens a list:
+    "Run ID" (with "Copy run ID"), "Template", "Template version", "Resource owner"
+    ("Personal" or the Organization's name), "Created by", "Started by", "Assigned to" and
+    "Completed by" (when set), "Origin" ("Web", "MCP" or "Unknown"), "Run Key" and
+    "Authorized by" (MCP), "Created", "Started", "Updated", "Completed", "Revision". A value
+    the Run never recorded reads "Not recorded".
   - An Organization error notice when the role is unknown ("This run's actions wait until they
     load. Check your connection and try again.", "Retry"); no longer shown, since a Run opens
     only at its own context's URL (TD-82).

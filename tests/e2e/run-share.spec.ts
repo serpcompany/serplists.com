@@ -5,6 +5,7 @@ import { createdRunSchema, savedTemplateSchema } from './support/api-bodies';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun } from './support/run-saves';
+import { runListEntry } from './support/runs-list';
 
 const SHARE_URL = /\/share\/[0-9a-f-]{36}\/$/;
 
@@ -110,8 +111,8 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   const { runId, templateId } = await createStaleCompletedRun(page, `Stale share QA ${Date.now()}`);
 
   await page.goto('/dashboard/runs/');
-  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/dashboard/runs/${runId}/"]`) });
-  const row = actions.locator('..');
+  const row = runListEntry(page, runId);
+  const actions = row.locator('[data-run-actions="true"]');
   await expect(row.getByText('Needs revalidation')).toBeVisible();
   await expect(actions.getByRole('button', { name: 'Revalidate' })).toBeVisible();
 

@@ -400,3 +400,26 @@ describe('mapChecklistToRun', () => {
     expect(sectionAt(mapped, 0).items.map((item) => item.isCompleted)).toEqual([true, false]);
   });
 });
+
+describe("a run's provenance and timestamps from the API", () => {
+  it('keeps the provenance the API sent and the created and updated times', () => {
+    const startedBy = { userId: 'user-a', name: 'Alice', username: 'alice' };
+    const mapped = mapChecklistToRun(
+      apiRunSchema.parse({
+        id: 'run-1',
+        items: '[]',
+        created_at: '2026-10-01T00:00:00.000Z',
+        updated_at: '2026-10-02T00:00:00.000Z',
+        provenance: { origin: 'mcp', startedBy, agentKeyName: 'Codex', authorizedBy: startedBy },
+      }),
+      'run-1',
+    );
+
+    expect(mapped).toMatchObject({
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-02T00:00:00.000Z',
+      provenance: { origin: 'mcp', startedBy, agentKeyName: 'Codex', authorizedBy: startedBy },
+    });
+    expect(mapChecklistToRun(apiRunSchema.parse({ id: 'run-2', items: '[]' }), 'run-2').provenance).toBeUndefined();
+  });
+});

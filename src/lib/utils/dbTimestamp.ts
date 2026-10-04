@@ -79,6 +79,13 @@ export const formatMonthYear = (value: unknown): string | null =>
     year: 'numeric',
   }) ?? null;
 
+export const formatShortDate = (value: unknown): string =>
+  parseDbTimestamp(value)?.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }) ?? '';
+
 export const formatLocalDate = (value: unknown): string =>
   parseDbTimestamp(value)?.toLocaleDateString('en-US') ?? '';
 
