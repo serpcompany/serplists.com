@@ -8,6 +8,7 @@ import { handleTemplateBackup } from './template-backup';
 import { cloneTemplate } from './template-clone';
 import { createTemplateForUser } from './template-create';
 import { handleTemplateReads } from './template-reads';
+import { transferTemplate } from './template-transfer';
 import { updateTemplateForUser } from './template-update';
 
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
@@ -40,6 +41,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       return cloneTemplate(request, env, db, userId, templatesSubpath[0]);
+    }
+
+    if (templatesSubpath[0] && templatesSubpath[1] === 'transfer') {
+      const read = await readJsonBody(request);
+      if ('response' in read) return read.response;
+      return transferTemplate(request, env, db, userId, templatesSubpath[0], read.body);
     }
 
     const read = await readJsonBody(request);

@@ -17,6 +17,7 @@ export const TEMPLATE_AUDIT_ACTIONS = [
   'template.cloned',
   'template.deleted',
   'template.restored',
+  'template.transferred_to_organization',
 ] as const;
 
 const ORGANIZATION_AUDIT_ACTIONS = [
@@ -43,6 +44,7 @@ export const TEMPLATE_VERSION_ACTIONS = [
   'template.updated',
   'template.imported',
   'template.cloned',
+  'template.transferred_to_organization',
 ] as const;
 
 export type RunAuditAction = (typeof RUN_AUDIT_ACTIONS)[number];
