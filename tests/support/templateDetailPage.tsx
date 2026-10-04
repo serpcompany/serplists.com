@@ -8,6 +8,7 @@ import { buildConsoleTemplatePath, ownerConsoleContext } from '@/lib/consoleRout
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import type { TeamSummary } from '@/lib/schemas/teamResponses';
 import { present } from './elements';
 import type { ElementProps } from './elementTree';
 
@@ -36,6 +37,7 @@ const {
     isTeamWorkspace: false,
     isWorkspaceLoading: false,
     roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
+    teams: [] as TeamSummary[],
     teamsUnavailable: false,
     workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
@@ -207,6 +209,7 @@ export function resetTemplateDetailPageMocks() {
   workspaceState.isTeamWorkspace = false;
   workspaceState.isWorkspaceLoading = false;
   workspaceState.roles = {};
+  workspaceState.teams = [];
   workspaceState.teamsUnavailable = false;
   workspaceState.workspaceStatus = 'ready';
 }

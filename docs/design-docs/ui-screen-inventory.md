@@ -1403,8 +1403,9 @@ existing content, invent nothing):
 - **SECONDARY ACTIONS:** "Share" → [Share link dialog](#share-link-dialog); "Edit" →
   [Template editor](#template-editor); "View runs" → [My Runs](#my-runs) of the context the
   page shows, filtered to this Template; the copy button; the visibility switch; "Template
-  actions" → "Duplicate", "Export JSON" (or "Upgrade to export"), "Delete" ([Action
-  menus](#action-menus)).
+  actions" → "Duplicate", "Export JSON" (or "Upgrade to export"), "Transfer to Organization"
+  (the owner of a Personal Template) → [Transfer to Organization
+  dialog](#transfer-to-organization-dialog), "Delete" ([Action menus](#action-menus)).
 - **STATES:** "Loading template..."; a load error ("Unable to load template", the message,
   "Try again", "Back to Templates"); not found ("Template Not Found", "This template does not
   exist or you do not have access to it."); read-only for runners, viewers and other contexts;
@@ -2122,6 +2123,41 @@ replaced.
 - **NOTES:** While a Run is shared, Share on the same page shows its link again; a new share
   mints a new link and ends the old one.
 
+### Transfer to Organization dialog
+
+- **SCREEN NAME:** Transfer to Organization dialog ("Transfer to Organization")
+- **PURPOSE:** Move one of the user's Personal Templates into an Organization, in place.
+- **HOW USER GETS HERE:** "Transfer to Organization" in Template detail's "Template actions",
+  on a Personal Template the user owns, when they are an active owner, admin or editor of an
+  Organization.
+- **WHAT'S ON THE SCREEN:** the title; "Move "<title>" out of Personal and into an
+  Organization, where its members can use it."; an "Organization" select of the Organizations
+  where the user can add Templates (the first one chosen); "Runs you already started from it
+  stay in Personal and no longer receive its changes."; "Cancel", "Transfer"; the close
+  button. A public Template shows only "Make "<title>" private first: public Templates can't
+  be transferred to an Organization yet." and "Close".
+- **PRIMARY ACTION:** "Transfer": the Template moves to the Organization (toast "Template
+  transferred to <Organization>") and the page opens it at that Organization's URL.
+- **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
+- **STATES:** "Transferring..." with the buttons disabled, and Escape or a click outside does
+  not close it then; a refusal (the Organization's Template limit, a Template changed
+  meanwhile, which also reloads it) shows a toast and keeps the dialog open.
+- **NAVIGATION TYPE:** modal dialog.
+- **PATTERN CHOICE (built):** shadcn Dialog with a labelled Select (`LabeledSelect`), as the
+  Start a Run dialog.
+- **REFERENCE IMAGES:** none.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, description, close button); the select; the Runs note;
+    footer (two buttons).
+  - COMPONENT TYPES: heading; paragraph; labelled select; muted paragraph; outline and primary
+    buttons.
+  - DATA FIELDS: Template title and visibility; the Organizations (name, role, membership).
+- **PROOF PASS:** not yet run (step 2a); `template-transfer.spec.ts` checks it fits a 390px
+  screen.
+- **NOTES:** Code: `src/components/template/TransferTemplateDialog.tsx`,
+  `src/features/template-detail/useTemplateTransfer.ts`. API: `POST
+  /api/templates/:id/transfer` ([Organizations](organizations.md)).
+
 ### Run complete dialog
 
 - **SCREEN NAME:** Run complete dialog ("Complete this Run?")
@@ -2193,7 +2229,8 @@ replaced.
 - **WHAT'S ON THE SCREEN:**
   - Template card: "Edit", "Start Run", "Duplicate", "Delete" (by role).
   - Template detail: "Duplicate" ("Duplicating..."), "Export JSON" or "Upgrade to export",
-    "Delete".
+    "Transfer to Organization" (the owner of a Personal Template who can add Templates to an
+    Organization), "Delete".
   - Run row: "Share Run", "Stop sharing" (a shared Run), "Delete" (by role).
   - Editor: "Preview" (phones), "Discard changes".
 - **PRIMARY ACTION:** the first item.

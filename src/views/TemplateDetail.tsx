@@ -44,6 +44,7 @@ import {
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
 import { historyLimitFor } from '@/lib/schemas/historyLimits';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import { useTemplateTransfer } from '@/features/template-detail/useTemplateTransfer';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import {
   handleUpgradeRequiredForContext,
@@ -108,6 +109,7 @@ const TemplateDetail = () => {
     startRun,
     template,
     totalItems,
+    transferTemplate,
     history,
   } = useTemplateDetailModel({
     canEditTemplates,
@@ -156,6 +158,14 @@ const TemplateDetail = () => {
     });
 
   const goToLogin = () => navigateToLoginWithReturnPath(router.push);
+  const transfer = useTemplateTransfer({
+    beginVisit,
+    loginRequired: goToLogin,
+    organizations: teams,
+    template: displayTemplate,
+    transfer: transferTemplate,
+    userId: user?.id,
+  });
 
   const handleStartRun = async (runName: string) => {
     const visit = beginVisit();
@@ -381,6 +391,7 @@ const TemplateDetail = () => {
             canDuplicate={permissions.canDuplicate}
             canEdit={canEditTemplate}
             canShare={permissions.canShare}
+            canTransfer={transfer.canTransfer}
             copyButton={copyButton}
             editHref={buildConsoleTemplateEditPath(displayTemplate.id, templateContext)}
             exportDisabled={billingState.isLoading}
@@ -395,6 +406,7 @@ const TemplateDetail = () => {
             onExport={() => void handleExport()}
             onShare={() => void handleShare()}
             onStartRun={() => setRunDialogOpen(true)}
+            onTransfer={transfer.openDialog}
             runsHref={user ? buildConsoleTemplateRunsPath(displayTemplate.id, templateContext) : null}
             showStartRun={canStartRun || !user}
           />
@@ -450,6 +462,7 @@ const TemplateDetail = () => {
         runDialog={{ open: runDialogOpen, onOpenChange: setRunDialogOpen, onConfirm: handleStartRun, loading: isCreatingRun }}
         shareDialog={{ open: shareDialogOpen, onOpenChange: setShareDialogOpen, url: shareUrl }}
         templateTitle={displayTemplate.title}
+        transferDialog={transfer.dialog}
       />
     </>
   );

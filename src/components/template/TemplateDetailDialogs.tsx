@@ -1,6 +1,10 @@
+import type { ComponentProps } from 'react';
+
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
+
+import { TransferTemplateDialog } from './TransferTemplateDialog';
 
 type DialogState = { open: boolean; onOpenChange: (open: boolean) => void };
 
@@ -9,9 +13,16 @@ type TemplateDetailDialogsProps = {
   runDialog: DialogState & { loading: boolean; onConfirm: (runName: string) => void | Promise<void> };
   shareDialog: DialogState & { url: string };
   templateTitle: string;
+  transferDialog: ComponentProps<typeof TransferTemplateDialog>;
 };
 
-export function TemplateDetailDialogs({ deleteDialog, runDialog, shareDialog, templateTitle }: TemplateDetailDialogsProps) {
+export function TemplateDetailDialogs({
+  deleteDialog,
+  runDialog,
+  shareDialog,
+  templateTitle,
+  transferDialog,
+}: TemplateDetailDialogsProps) {
   return (
     <>
       <ConfirmDialog
@@ -41,6 +52,8 @@ export function TemplateDetailDialogs({ deleteDialog, runDialog, shareDialog, te
         onConfirm={runDialog.onConfirm}
         loading={runDialog.loading}
       />
+
+      <TransferTemplateDialog {...transferDialog} />
     </>
   );
 }

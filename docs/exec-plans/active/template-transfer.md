@@ -7,12 +7,13 @@
 
 ## Progress
 
-- [ ] PR 1: `POST /api/templates/:id/transfer` with the `template.transferred_to_organization`
+- [x] PR 1: `POST /api/templates/:id/transfer` with the `template.transferred_to_organization`
   audit action and version, guarded in one batch, with local-D1 integration tests.
-- [ ] PR 2: "Transfer to Organization" in the Template actions menu of a private Personal
-  Template: a dialog that lists the Organizations the user can add Templates to, warns that
-  existing Personal Runs stop syncing, then refreshes both libraries and opens the Template at
-  its Organization's URL. Browser test.
+- [x] PR 2: "Transfer to Organization" in the Template actions menu of a Personal Template
+  the user owns: a dialog that lists the Organizations the user can add Templates to, warns that
+  existing Personal Runs no longer receive its changes, then refreshes both libraries and opens
+  the Template at its Organization's URL. Unit, DOM and browser tests
+  (`template-transfer.spec.ts`).
 
 ## Decision log
 
@@ -29,3 +30,11 @@
   content is unchanged, so no Run turns stale.
 - 2026-10-04: Existing Personal Runs stay in Personal. A private Organization Template never
   supplies a Personal Run, so they stop revalidating from it; the dialog says so first.
+- 2026-10-04: The menu item shows for a public Personal Template too, and its dialog says to
+  make it private first, so the owner learns why the transfer is unavailable instead of
+  missing the item.
+- 2026-10-04: The page writes the new owner into the Template it shows instead of navigating
+  itself, so the redirect that already moves a private Organization Template off another
+  context's URL opens it at its Organization's (a URL replace: Back skips the Personal URL). An
+  explicit navigation after the list refresh would race that redirect, and a redirect that
+  lands first ends the page visit, so the success toast does not wait on the visit.

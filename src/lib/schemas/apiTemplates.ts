@@ -41,6 +41,8 @@ export const apiTemplateListSchema = readableRowsOf(apiTemplateSchema);
 
 export const savedTemplateSchema = z.object({ id: z.string(), slug: z.string().nullish() });
 
+export const templateTransferredSchema = z.object({ success: z.literal(true), id: z.string(), teamId: z.string(), version: z.number() });
+
 export const exportedTemplatePackSchema = z.object({ templates: z.array(z.unknown()) }).passthrough();
 
 export type ApiTemplate = z.infer<typeof apiTemplateSchema>;

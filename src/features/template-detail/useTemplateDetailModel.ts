@@ -20,6 +20,7 @@ import {
 } from './templateActionOutcome';
 import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
 import { getTemplateDetailPermissions } from './templatePermissions';
+import { transferTemplateToOrganization } from './transferTemplate';
 import { setTemplateVisibility } from './templateVisibility';
 import { useTemplateDetailRecord } from './useTemplateDetailRecord';
 
@@ -179,6 +180,15 @@ export const useTemplateDetailModel = (
       template,
     });
 
+  const transferTemplate = async (teamId: string): Promise<TemplateDetailActionResult> =>
+    transferTemplateToOrganization({
+      invalidateTemplates,
+      onTemplateChange: (transferred) => updateTemplate(replaceTemplateIfStillShown(transferred)),
+      reloadAfterConflict: invalidateTemplates,
+      teamId,
+      template,
+    });
+
   return {
     billingState,
     duplicateTemplate,
@@ -201,5 +211,6 @@ export const useTemplateDetailModel = (
     startRun,
     template,
     totalItems: template ? countTemplateItems(template) : 0,
+    transferTemplate,
   };
 };
