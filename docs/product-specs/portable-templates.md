@@ -117,7 +117,7 @@ validation failures by the current runtime.
 Three versions serve different contracts:
 
 - `templates.version` is the template's edit counter, used for save conflict
-  checks (`expected_version`) and Changelog numbers. Create, import, and copy all
+  checks (`expected_version`) and Activity numbers. Create, import, and copy all
   start it at `1` (a copy never inherits its source's counter; the source's
   `version` and `content_version` go in the copy's audit event), and each save that
   changes a stored field advances it. `templates.content_version` counts checklist

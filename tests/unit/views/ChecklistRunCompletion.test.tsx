@@ -63,7 +63,7 @@ const renderRun = (options: RenderRunOptions) => {
     completeRun: options.completeRun,
     createShare: vi.fn(),
     hasUnsavedNotes: false,
-    history: { data: null, isError: false, isLoading: false },
+    history: { data: null, isError: false, isLoading: false, onViewAll: vi.fn(), showingAll: false },
     isSharedRun: options.shared === true,
     loadError: null,
     loading: false,

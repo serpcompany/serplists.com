@@ -1391,10 +1391,12 @@ existing content, invent nothing):
     "Private").
   - "Categories & Tags": the categories or "No categories assigned"; the tags or "No tags
     assigned".
-  - "Changelog" (roles that may see history): entries (label, who, date and time; an
+  - "Activity" (roles that may see history): entries (label, who, date and time; an
     Agent's change names its Run Key, "<Run Key name> via MCP · authorized by <user>", as the
-    run's Changelog does), or "Loading template history...", "Template history is unavailable
-    right now.", "No template history has been recorded yet."
+    run's Activity does), or "Loading template history...", "Template history is unavailable
+    right now.", "No template history has been recorded yet."; with 8 entries shown, "View all
+    activity", which shows the latest 100 ("Showing the latest 100 entries." when it reaches
+    them).
 - **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog).
 - **SECONDARY ACTIONS:** "Share" → [Share link dialog](#share-link-dialog); "Edit" →
   [Template editor](#template-editor); "View runs" → [My Runs](#my-runs) of the context the
@@ -1410,13 +1412,13 @@ existing content, invent nothing):
 - **PATTERN CHOICE (built):** the [Detail page](#detail-page) block shared with the public
   template page (`DetailPageLayout`: breadcrumb My Templates › title, header with the actions,
   stats panel), then `TemplateSectionList` and shadcn Cards for the details, categories and
-  tags, and the Changelog (`ChangelogList`).
+  tags, and Activity (`ActivityList`).
 - **REFERENCE IMAGES:** pattern-detail-1.png, pattern-detail-2.png.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: breadcrumb; a two-column header (icon tile, title, description, badge,
     actions; the stats panel on the right, under it on phones); notice; a separator; "Template
     Structure"; a 2-column grid of Cards (Details, Categories & Tags; stacked on phones);
-    the Changelog Card.
+    the Activity Card.
   - COMPONENT TYPES: breadcrumb; icon tile; badge; outline and primary buttons; dropdown
     menu; `Stat`; section cards with numbered tasks; switch with label; badge list; `Item`
     history rows; `AlertDialog`; Share link dialog.
@@ -1613,8 +1615,10 @@ existing content, invent nothing):
     Complete", "Next Task", "Next unfinished task", "Finish Run", "Run completed" or "View
     only"), "Next" (on phones Previous and Next show only their arrows; their names stay).
   - "Removed from Template (N)" (collapsed; the retired work, read-only).
-  - "Changelog": entries (label, who, time), or "Loading run history...", "Run history is
-    unavailable right now.", "No run history has been recorded yet."
+  - "Activity": entries (label, who, time), or "Loading run history...", "Run history is
+    unavailable right now.", "No run history has been recorded yet."; with 8 entries shown,
+    "View all activity", which shows the latest 100 ("Showing the latest 100 entries." when it
+    reaches them).
   - From `xl`, a right column that stays in view: "Progress", the task list by section,
     "Overall Progress" with "X / Y tasks" and a bar.
 - **PRIMARY ACTION:** "Mark Complete".
@@ -1637,7 +1641,7 @@ existing content, invent nothing):
   view.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: page header; notice; progress Card (below `xl`); main column (the task
-    panel Card with its header, content, notes and sticky footer; retired work; the Changelog
+    panel Card with its header, content, notes and sticky footer; retired work; the Activity
     Card); right column (from `xl`, sticky).
   - COMPONENT TYPES: labelled title field; badges; buttons; shadcn Progress; checkbox;
     content blocks; notes Field (textarea, button, saved indicator); disclosure; `Item`
@@ -1646,7 +1650,7 @@ existing content, invent nothing):
     retired work, history); selected task (section, position, title, description, content,
     done); permissions.
 - **PROOF PASS:** Pass (step 2a): `run-page` and `run-page-changelog` (the window, at the
-  top and scrolled to the Changelog), `run-page-loading`, `run-share-dialog`, each on desktop
+  top and scrolled to the Activity), `run-page-loading`, `run-share-dialog`, each on desktop
   and phone, light and dark, and `run-tasks-sheet-mobile-light` and `-dark`, against
   pattern-detail-2.png and pattern-detail-3.png. Present: a header row with actions; a
   two-column body with a nav column that stays in view (on the right here, as before) and
@@ -1805,7 +1809,7 @@ existing content, invent nothing):
     checkbox choice cards (a `FieldLabel` around a horizontal `Field`: `Checkbox`,
     `FieldTitle`, `FieldDescription`) for Run Key permissions; `Item` rows (Run Keys with
     outline `Badge`s for their permissions, Organizations, invites, members); Alerts; copy
-    InputGroups; `ChangelogList` rows; `AlertDialog`.
+    InputGroups; `ActivityList` rows; `AlertDialog`.
   - DATA FIELDS: User (email, name, username, avatar); plan; Run Keys (name, prefix, status,
     permissions, created and last used); Organizations (name, role) and incoming invites;
     password fields.

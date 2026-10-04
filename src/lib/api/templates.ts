@@ -6,7 +6,7 @@ import {
   templateUpdateResultSchema,
   type TemplateUpdateResult,
 } from "@/lib/templateUpdateResult";
-import { HISTORY_DISPLAY_LIMIT } from "@/lib/history";
+import { HISTORY_DISPLAY_LIMIT } from "@/lib/schemas/historyLimits";
 import type { TemplateImportSummary } from "@/types/checklist";
 import { templateEditorFormSchema } from "@/lib/forms/templateEditorForm";
 import { templateImportSummarySchema } from "@/lib/templates/templateImportSummary";
@@ -56,8 +56,9 @@ export const templatesApi = {
     });
   },
 
-  async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {
-    return apiRequest(`/templates/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`, templateHistorySchema);
+  async getTemplateHistory(id: string, params?: { limit?: number }): Promise<TemplateHistoryResponse> {
+    const limit = params?.limit ?? HISTORY_DISPLAY_LIMIT;
+    return apiRequest(`/templates/${encodeURIComponent(id)}/history?limit=${limit}`, templateHistorySchema);
   },
 
   async getTemplateBySlug(slug: string) {

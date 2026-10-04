@@ -6,7 +6,7 @@ import type {
   TemplateHistoryVersion,
 } from '@/lib/api';
 import { formatAuditAction, getAuditActorName, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
-import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/schemas/historyLimits';
 import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 

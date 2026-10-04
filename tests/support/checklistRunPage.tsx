@@ -75,7 +75,7 @@ export const baseRun: ChecklistRun = {
 
 export const runPageModel = (overrides: Partial<RunExecutionModel>): Partial<RunExecutionModel> => ({
   createShare: vi.fn(),
-  history: { data: null, isError: false, isLoading: false },
+  history: { data: null, isError: false, isLoading: false, onViewAll: vi.fn(), showingAll: false },
   isSharedRun: false,
   loadError: null,
   loading: false,

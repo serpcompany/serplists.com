@@ -46,6 +46,7 @@ import {
   getTemplateExportLabel,
 } from '@/features/template-detail/templateExport';
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
+import { historyLimitFor } from '@/lib/schemas/historyLimits';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import {
@@ -150,7 +151,7 @@ const TemplateDetail = () => {
     isRoleUnavailable(displayTemplate?.teamId);
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
   const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
-  const historyEntries = buildTemplateHistoryTimeline(history?.data);
+  const historyEntries = buildTemplateHistoryTimeline(history?.data, historyLimitFor(Boolean(history?.showingAll)));
 
   const handleUpgrade = () =>
     handleUpgradeRequiredForContext({
@@ -439,6 +440,7 @@ const TemplateDetail = () => {
               entries={historyEntries}
               isError={Boolean(history?.isError)}
               isLoading={Boolean(history?.isLoading)}
+              viewAll={history ? { onViewAll: history.onViewAll, showingAll: history.showingAll } : undefined}
             />
           ) : null}
         </div>

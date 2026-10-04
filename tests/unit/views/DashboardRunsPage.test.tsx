@@ -323,7 +323,7 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('Stop sharing to update');
   });
 
-  it('stops sharing through the API and refreshes the runs list and the run Changelog the API wrote "Stopped sharing" to', async () => {
+  it('stops sharing through the API and refreshes the runs list and the run Activity the API wrote "Stopped sharing" to', async () => {
     const apiClient = {
       createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
       revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-5', isPublic: false }),

@@ -1,4 +1,4 @@
-import { HISTORY_DISPLAY_LIMIT } from "@/lib/history";
+import { HISTORY_DISPLAY_LIMIT } from "@/lib/schemas/historyLimits";
 import { apiRequest } from "@/lib/api/request";
 import { successResponseSchema } from "@/lib/schemas/apiResponses";
 import {

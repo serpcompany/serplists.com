@@ -17,6 +17,8 @@ const historyOf = ({ events, versions }: { events: HistoryEvent[]; versions: Tem
   data: { events, subject: { id: 'user-1', type: 'user' }, templateId: 'tpl-1', versions },
   isError: false,
   isLoading: false,
+  onViewAll: () => undefined,
+  showingAll: false,
 });
 
 const actorNamed = (name: string): HistoryEvent['actor'] => ({ userId: null, email: null, name, username: null });
@@ -70,7 +72,7 @@ describe('TemplateDetail dates', () => {
   });
 });
 
-describe('TemplateDetail Changelog', () => {
+describe('TemplateDetail Activity', () => {
   it('shows a restore and a Share next to the versions, without repeating a version', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),

@@ -146,6 +146,8 @@ describe('TemplateDetail page', () => {
         },
         isError: false,
         isLoading: false,
+        onViewAll: () => undefined,
+        showingAll: false,
       },
     });
 
@@ -159,7 +161,7 @@ describe('TemplateDetail page', () => {
     expect(html).toContain('Template Structure');
     expect(html).toContain('Details');
     expect(html).toContain('Categories &amp; Tags');
-    expect(html).toContain('Changelog');
+    expect(html).toContain('Activity');
     expect(html).toContain('Created template v1');
     expect(html).toContain('John Example');
     expect(html).toContain('Start Run');

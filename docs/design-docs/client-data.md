@@ -67,8 +67,8 @@ and `ownerProfile`, which permissions and Share read, still come from the legacy
   to `{ type: 'team' }`, as a current public response sends it.
 
 History requests ask for what their screen shows, since each entry is an audit row read with
-its user: the run and Template Changelogs ask for `HISTORY_DISPLAY_LIMIT` entries
-(`src/lib/history.ts`), never the API's default of 50, and Organization activity asks for the
+its user: the run and Template Activity lists ask for `HISTORY_DISPLAY_LIMIT` entries
+(`src/lib/schemas/historyLimits.ts`), never the API's default of 50, and Organization activity asks for the
 10 its settings page shows.
 
 ## Error types
@@ -102,10 +102,10 @@ one module:
   Ownership Context, so Personal and Organization data never mix. The public catalog,
   `['templates', 'catalog']`, has no user: it is the same for every visitor. Organization lists
   are fetched by the legacy-named `WorkspaceContext` and keyed by the current user.
-- **Changelogs** (`queryKeys` in `src/lib/queryCache.ts`): a run's is
+- **Activity lists** (`queryKeys` in `src/lib/queryCache.ts`): a run's is
   `['checklist-run-history', runId]` and a Template's
   `['templates', 'history', templateId, user, context]`. `everyTemplateHistory` is the prefix
-  without the last two, so a save refreshes every cached Changelog of the Template, whatever
+  without the last two, so a save refreshes every cached Activity of the Template, whatever
   user or Organization loaded it.
 - **A private template detail page** (`queryKeys.templateDetail` in `src/lib/queryCache.ts`, next
   to `isTemplateDetailOf`, which reads the key by position) is
@@ -127,8 +127,8 @@ one module:
   neutral loading state until the current user's plan is known.
 
 A Template list invalidation reaches every key under `['templates']`: the lists, the detail
-pages and the Template Changelogs. Share, the visibility switch and a restore therefore
-refresh an open detail page and its Changelog too; a context switch and an editor save only
+pages and the Template Activity lists. Share, the visibility switch and a restore therefore
+refresh an open detail page and its Activity too; a context switch and an editor save only
 mark them stale, so they load when a page next shows them.
 
 ## Template and run lists
@@ -152,7 +152,7 @@ wait for the session and the first request, never a background refetch of a cach
   `src/contexts/templateListCache.ts`): a refetch before the edge copy expires could list it
   again. The other lists of every user and context are marked stale, since the Template may
   not belong to the active one.
-- A Template save marks the Template lists stale and refreshes its Changelogs, and refreshes
+- A Template save marks the Template lists stale and refreshes its Activity lists, and refreshes
   the run lists only when it changed the checklist structure (`describeTemplateUpdate`):
   only then were the Template's in-progress runs reconciled.
 - A run whose content cannot be read stays listed with no tasks, so it can still be deleted
@@ -171,14 +171,14 @@ wait for the session and the first request, never a background refetch of a cach
   query. The Organization settings lists (members, activity, pending and incoming invites)
   also cancel first, then refetch only the queries a page observes (`reloadObservedQueries`
   in `src/features/teams/`, and `cancelThenRefetch` in `useTeamSettingsQueries`).
-- **Changelogs.** They stay fresh for the app's default 60 seconds, but every save writes an
+- **Activity lists.** They stay fresh for the app's default 60 seconds, but every save writes an
   audit event (and a Template save a version), so saves refresh them explicitly
   (`refreshRunHistory` and `refreshTemplateHistory`, called by the list refreshes in
-  `src/contexts/templateListCache.ts`). The run page refreshes its run's Changelog once its
+  `src/contexts/templateListCache.ts`). The run page refreshes its run's Activity once its
   save queue is idle after a save, not once per click (each refetch reads D1). Revalidating a
   run, and Share or Stop sharing on the runs list, refresh it too, and saving a Template in the
-  editor refreshes every cached Changelog of that Template.
-- **Archiving a Template** marks its detail entries and Changelogs stale without refetching
+  editor refreshes every cached Activity of that Template.
+- **Archiving a Template** marks its detail entries and Activity lists stale without refetching
   them (`markArchivedTemplateStale`). The detail page can still be open while the delete
   settles, and a refetch (or removing a query a page observes, which fetches it again) would
   cache the `404` as "not found" for the next visit, even after a restore.
@@ -190,8 +190,8 @@ wait for the session and the first request, never a background refetch of a cach
   list (Personal and each Organization) as soon as the API returns, before the link is
   copied, then reloads the lists (`markRunShared`). A shared run cannot be revalidated, so its
   row stops offering Revalidate. The run page's Share calls `markRunShared` alone, since the
-  run page's saver refreshes its open Changelog; the runs list uses `refreshAfterRunShared`,
-  which refreshes the Changelog too.
+  run page's saver refreshes its open Activity; the runs list uses `refreshAfterRunShared`,
+  which refreshes the Activity too.
 - **A change of user** (a sign-out, or a sign-in as someone else in the same tab) makes
   `AuthProvider` remove every cached query no mounted page reads, except the public catalog
   (`removeSignedOutUserQueries`), so nothing the previous user loaded is shown to or
