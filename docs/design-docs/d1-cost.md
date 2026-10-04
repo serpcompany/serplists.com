@@ -184,7 +184,7 @@ Open, all unbounded lists:
 | --- | --- | --- |
 | Legacy template list (no `scope`) | 19,219 | Public *or* the user's own, unbounded and uncached; only tabs loaded before the scoped client (TD-15) |
 | Public catalog cache miss (`GET /api/templates`) | 13,009 | Unbounded list of every public template; at most once per data center every 5 minutes, and 0 on a hit |
-| Organization runs | 12,007 (before provenance) | Unbounded, plus a correlated template subquery, the starter and the first audit event per run (5 rows per run); loaded only on the runs page |
+| Organization runs | 20,008 (12,007 before run provenance) | Unbounded, plus a correlated template subquery, the starter and the first audit event per run (5 rows per run); loaded only on the runs page |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a deploy or a change to what that sitemap lists, once per data center, and only for pages the index published |
