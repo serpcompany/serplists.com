@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "0 14 * * 1"
   workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        type: choice
+        options: [all, doc-gardening, code-gardening, report]
+        default: all
 
 concurrency:
   group: weekly-maintenance
@@ -11,6 +17,7 @@ concurrency:
 
 jobs:
   doc-gardening:
+    if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'doc-gardening'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -62,38 +69,49 @@ jobs:
         uses: anthropics/claude-code-action@v1
         env:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
+          BASH_DEFAULT_TIMEOUT_MS: "900000"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: '{"attribution": {"commit": false, "pr": false}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}}'
           prompt: |
             You are this repository's weekly doc gardener. Follow AGENTS.md.
-            Goal: documentation that no longer matches the code gets fixed in one small PR.
+            Goal: documentation and quality grades that no longer match the code get fixed in one small PR.
 
             0. First run `gh pr list --state open --search "docs: weekly doc gardening in:title"`.
                If it lists a PR, stop and say that a gardening PR is already open, with its number.
             1. Read tmp/maintenance-report.md. Your work list is the "Docs check" failures,
-               the "Docs to re-verify" list, and design docs flagged as stale under
-               "Plans and scores". Handle at most 8 docs; start with the ones whose
-               referenced code changed most.
+               the "Docs to re-verify" list, design docs flagged as stale under
+               "Plans and scores", and the rows under "Scores to re-grade". Handle at most
+               8 docs; start with the ones whose referenced code changed most.
             2. For each doc, read it and the code it describes. Fix statements that are no
                longer true, remove references to things that no longer exist, and keep the
                doc's structure and tone. If a doc is still accurate, change nothing in it.
-            3. Update the "Last verified" date in docs/design-docs/index.md for each design
+            3. Re-grade each row listed under "Scores to re-grade" in docs/QUALITY_SCORE.md.
+               Read the code in its Code column, with its tests and docs, and grade it again
+               on the scale at the top of that file. Rewrite the row's gap or notes to match
+               the code as it is now, and link each gap to the row of
+               docs/exec-plans/tech-debt-tracker.md that covers it (add a row there with the
+               next free ID and a Size when none does). Set the row's Graded date to today
+               (UTC), even when its grades stay the same. Change no other row.
+            4. Update the "Last verified" date in docs/design-docs/index.md for each design
                doc you checked against the code (even if it needed no edits), and the
                "Last updated" line of any exec plan you edit. Use today's date (UTC).
-            4. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
+            5. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
                tests, workflows, baselines, or generated files in docs/generated/.
-            5. Run `pnpm run docs:check`; it must pass.
-            6. If you changed nothing, stop and say "No doc drift found". Otherwise create
+            6. Run `pnpm run docs:check`; it must pass.
+            7. If you changed nothing, stop and say "No doc drift found". Otherwise create
                branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with
                `git commit -m "docs: weekly doc gardening"` and nothing else in the message,
                push it, and open a PR into staging titled
-               "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each doc you
-               changed, what was wrong, and which code you checked it against, and list the
+               "docs: weekly doc gardening (<YYYY-MM-DD>)". Write the PR body to
+               tmp/pr-body.md first and pass it with `--body-file tmp/pr-body.md`. In it,
+               list each doc you changed, what was wrong, and which code you checked it
+               against; each row you re-graded, with its old and new grades and why; and the
                docs you verified without changes.
-            7. This repository's commits and PRs carry no attribution: no Co-Authored-By
+            8. This repository's commits and PRs carry no attribution: no Co-Authored-By
                trailer in the commit, and no "Generated with Claude Code" line in the PR body.
           claude_args: |
+            --model claude-sonnet-5-5
             --max-turns 80
             --strict-mcp-config
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run docs:check),Bash(date:*)"
@@ -182,7 +200,218 @@ jobs:
           };
           main().catch((error) => fail(`The doc gardening check failed: ${error && error.message}`));
 
+  code-gardening:
+    if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'code-gardening'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      id-token: write
+    env:
+      COREPACK_ENABLE_AUTO_PIN: "0"
+      HAS_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - name: Skip this week unless there is room for a gardening PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$HAS_CLAUDE_TOKEN" != "true" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so code gardening is skipped."
+            exit 0
+          fi
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --base staging --state open --limit 100 --json number,headRefName --jq '[.[] | select(.headRefName | startswith("chore/code-gardening-")) | .number] | first // empty')
+          if [ -n "$open" ]; then
+            echo "::notice::Code gardening PR #$open is still open, so code gardening skips this week."
+            exit 0
+          fi
+          echo "GARDEN=true" >> "$GITHUB_ENV"
+
+      - name: Checkout staging
+        if: env.GARDEN == 'true'
+        uses: actions/checkout@v5
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: env.GARDEN == 'true'
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        if: env.GARDEN == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        if: env.GARDEN == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build report
+        if: env.GARDEN == 'true'
+        run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
+
+      - name: Note when code gardening starts
+        if: env.GARDEN == 'true'
+        run: echo "GARDENING_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Garden code with Claude
+        id: garden
+        if: env.GARDEN == 'true'
+        uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
+          BASH_DEFAULT_TIMEOUT_MS: "900000"
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          prompt: |
+            You are this repository's weekly code gardener. Follow AGENTS.md.
+            Goal: one small piece of known debt is paid down in one small PR into staging.
+
+            1. Pick ONE item:
+               a. the oldest open row of docs/exec-plans/tech-debt-tracker.md whose Size is
+                  `small` (the lowest TD number; tmp/maintenance-report.md names it under
+                  "Tech debt"); or, when there is none or you must pass over it,
+               b. one file under "Files near the size limit" in tmp/maintenance-report.md,
+                  split by responsibility so it stays well under the limit.
+               Pass over an item that needs a migration, production data, billing, product
+               wording, or another decision AGENTS.md leaves to a human, and take the next
+               one. If nothing qualifies, stop and say "Nothing to garden".
+            2. Fix that item and nothing else, the way its "Next step" says, in as few lines
+               as it needs. Update the tests and docs that describe the code you change. Write
+               no code comments.
+            3. If the item is a tracker row, delete the row. If the fix shows debt you did not
+               fix, add a row for it with the next free TD number and a Size.
+            4. Run `pnpm run verify` and fix what it reports. If it still fails, stop and say
+               "Gardening failed:" with what fails; open no PR.
+            5. Create branch chore/code-gardening-<YYYY-MM-DD> from the current HEAD. Commit
+               with `git commit -m "<subject>"` and nothing else in the message, where the
+               subject is a conventional commit subject that names the change and ends with
+               the item, such as "refactor: split the template routes (TD-8)". Push the
+               branch and open a PR into staging with the subject as its title. Write the PR
+               body to tmp/pr-body.md first and pass it with `--body-file tmp/pr-body.md`:
+               the item and why you picked it, what you changed, and the last lines of
+               `pnpm run verify`.
+            6. This repository's commits and PRs carry no attribution: no Co-Authored-By
+               trailer in the commit, and no "Generated with Claude Code" line in the PR body.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 80
+            --strict-mcp-config
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr create:*),Bash(pnpm run verify),Bash(date:*)"
+
+      - name: Keep the code gardening transcript
+        if: always() && env.GARDEN == 'true' && steps.garden.outputs.execution_file != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-gardening-transcript
+          path: ${{ steps.garden.outputs.execution_file }}
+          retention-days: 7
+          overwrite: true
+
+      - name: Fail unless Claude opened a PR or found nothing to garden
+        if: env.GARDEN == 'true'
+        env:
+          EXECUTION_FILE: ${{ steps.garden.outputs.execution_file }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          const asOneWorkflowCommandLine = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const clockSkewAllowanceMs = 30 * 1000;
+          const fail = (message) => {
+            console.log(`::error title=Code gardening did not finish::${asOneWorkflowCommandLine(message, 900)}`);
+            process.exit(1);
+          };
+          const readResult = () => {
+            const file = process.env.EXECUTION_FILE;
+            if (!file || !fs.existsSync(file)) fail('Code gardening wrote no execution log.');
+            let messages;
+            try {
+              messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+            } catch (error) {
+              fail(`The execution log is not valid JSON: ${error.message}`);
+            }
+            if (!Array.isArray(messages)) fail('The execution log is not a list of messages.');
+            const result = messages.filter((entry) => entry && entry.type === 'result').pop();
+            if (!result) fail('The execution log has no result entry.');
+            return { messages, result };
+          };
+          const get = async (path) => {
+            const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+            const response = await fetch(`${api}${path}`, {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!response.ok) throw new Error(`GET ${path.split('?')[0]} returned ${response.status}`);
+            return response.json();
+          };
+          const main = async () => {
+            const { messages, result } = readResult();
+            const said = String(result.result || '');
+            console.log(`Code gardening: ${result.num_turns} turns in ${Math.round((result.duration_ms || 0) / 1000)}s, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${asOneWorkflowCommandLine(said || '(nothing)', 400)}`);
+            if (result.is_error) fail(`Code gardening ended with ${result.subtype || 'an error'}.`);
+            const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
+            const backgroundTasksStillRunning = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
+            if (backgroundTasksStillRunning.length) fail(`Code gardening ended with ${backgroundTasksStillRunning.length} background task(s) still running.`);
+            const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${asOneWorkflowCommandLine(d.tool_input.command)})` : String(d.tool_name))))];
+            const warnDenied = (outcome) => {
+              if (denied.length > 0) {
+                console.log(`::warning title=Code gardening was denied tools::Claude was denied ${asOneWorkflowCommandLine(denied.join(', '), 600)} but still ${outcome}. Allow the tool in claude_args if the job needs it.`);
+              }
+            };
+
+            const startedAt = Date.parse(process.env.GARDENING_STARTED_AT || '');
+            if (Number.isNaN(startedAt)) fail('GARDENING_STARTED_AT is not set, so the check cannot tell whether this run opened a PR.');
+            let opened;
+            try {
+              const prs = await get('/pulls?state=open&base=staging&per_page=100');
+              opened = prs.filter((pr) => pr && pr.head && String(pr.head.ref).startsWith('chore/code-gardening-') && Date.parse(pr.created_at) >= startedAt - clockSkewAllowanceMs);
+            } catch (error) {
+              fail(`Could not list the open PRs to check the outcome: ${error.message}`);
+            }
+            if (opened.length > 1) {
+              fail(`Code gardening opened ${opened.map((pr) => `#${pr.number}`).join(', ')}; it fixes one item in one PR each week.`);
+            }
+            if (opened.length === 1) {
+              const pr = opened[0];
+              let commits;
+              try {
+                commits = await get(`/pulls/${pr.number}/commits?per_page=100`);
+              } catch (error) {
+                fail(`Could not read the commits of #${pr.number}: ${error.message}`);
+              }
+              const attribution = /co-authored-by:|generated with \[?claude code/i;
+              const marked = [
+                ...(attribution.test(String(pr.body || '')) ? ['the PR body'] : []),
+                ...commits.filter((item) => attribution.test(String((item.commit && item.commit.message) || ''))).map((item) => `commit ${String(item.sha).slice(0, 7)}`),
+              ];
+              if (marked.length > 0) {
+                fail(`Code gardening opened #${pr.number}, but ${marked.join(' and ')} carry attribution. This repository's commits and PRs carry no Co-Authored-By trailer and no "Generated with Claude Code" line.`);
+              }
+              warnDenied(`opened #${pr.number}`);
+              console.log(`Code gardening opened #${pr.number}: ${asOneWorkflowCommandLine(pr.title, 200)}.`);
+              return;
+            }
+            if (/Nothing to garden/i.test(said)) {
+              warnDenied('found nothing to garden');
+              console.log('Code gardening found nothing to garden.');
+              return;
+            }
+            const reason = denied.length > 0 ? ` Claude was denied ${denied.join(', ')}; allow the tool in claude_args.` : '';
+            fail(`Code gardening finished without opening a PR or reporting "Nothing to garden".${reason} Claude said: ${asOneWorkflowCommandLine(said || '(nothing)', 400)}`);
+          };
+          main().catch((error) => fail(`The code gardening check failed: ${error && error.message}`));
+
   report:
+    if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'report'
     runs-on: ubuntu-latest
     permissions:
       contents: read
