@@ -16,6 +16,7 @@ import {
   apiTemplateSchema,
   exportedTemplatePackSchema,
   savedTemplateSchema,
+  templateTransferredSchema,
   type SavedTemplate,
 } from "@/lib/schemas/apiTemplates";
 import { templateHistorySchema, type TemplateHistoryResponse } from "@/lib/schemas/historyResponses";
@@ -147,6 +148,13 @@ export const templatesApi = {
     return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, templateImportSummarySchema, {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  },
+
+  async transferTemplate(templateId: string, payload: { teamId: string; expectedVersion: number }) {
+    return apiRequest(`/templates/${encodeURIComponent(templateId)}/transfer`, templateTransferredSchema, {
+      method: 'POST',
+      body: JSON.stringify({ teamId: payload.teamId, expected_version: payload.expectedVersion }),
     });
   },
 

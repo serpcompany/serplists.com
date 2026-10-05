@@ -1,4 +1,4 @@
-import { Copy, Download, History, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2 } from 'lucide-react';
+import { Copy, Download, History, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -17,6 +17,7 @@ type TemplateDetailActionsProps = {
   canEdit: boolean;
   canShare: boolean;
   canDuplicate: boolean;
+  canTransfer: boolean;
   copyButton: CopyTemplateButton;
   editHref: string;
   exportDisabled: boolean;
@@ -31,6 +32,7 @@ type TemplateDetailActionsProps = {
   onExport: () => void;
   onShare: () => void;
   onStartRun: () => void;
+  onTransfer: () => void;
   runsHref: string | null;
   showStartRun: boolean;
 };
@@ -39,6 +41,7 @@ export function TemplateDetailActions({
   canDuplicate,
   canEdit,
   canShare,
+  canTransfer,
   copyButton,
   editHref,
   exportDisabled,
@@ -53,6 +56,7 @@ export function TemplateDetailActions({
   onExport,
   onShare,
   onStartRun,
+  onTransfer,
   runsHref,
   showStartRun,
 }: TemplateDetailActionsProps) {
@@ -116,6 +120,12 @@ export function TemplateDetailActions({
               <Download />
               {exportLabel}
             </DropdownMenuItem>
+            {canTransfer ? (
+              <DropdownMenuItem onClick={onTransfer}>
+                <Users />
+                Transfer to Organization
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onDelete} variant="destructive">
               <Trash2 />

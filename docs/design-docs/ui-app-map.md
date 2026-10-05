@@ -100,6 +100,10 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Duplicate a Template:** Template detail → "Template actions" → "Duplicate" → Template
   detail of the copy ("Template duplicated"). Someone else's Public Template: "Copy to My
   Templates" (or "Copy to Organization") → Template detail of the copy.
+- **Transfer a Template to an Organization:** Template detail of a private Personal
+  Template → "Template actions" → "Transfer to Organization" → choose the Organization →
+  "Transfer" → Template detail at the Organization's URL ("Template transferred to
+  <Organization>").
 - **Save a Public Template:** Public template page → "Save" or "Copy to Library" → Template
   detail of the new copy. Signed out: → Log in → back → "Save". Free in Personal: "Upgrade
   to save" → Stripe Checkout.
@@ -197,7 +201,7 @@ Toasts (sonner) report results everywhere.
 | --- | --- | --- | --- | --- |
 | `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start a Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
 | `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
-| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
+| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Transfer to Organization dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs"; "View runs" on Template detail adds `?template=<id>`) | Share link dialog; Delete run dialog; Run options menu; Template and status selects | Template filter (in the URL); status filter; search |
 | `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
