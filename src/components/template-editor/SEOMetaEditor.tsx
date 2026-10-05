@@ -15,6 +15,7 @@ import { buildTemplateSeoPreview } from "@/lib/templates/templateSeoPreview";
 
 interface SEOMetaEditorProps {
   showIntro?: boolean;
+  ownerIsOrganization?: boolean;
   ownerSlug?: string | null;
 }
 
@@ -23,6 +24,7 @@ const browserOrigin = (): string | undefined =>
 
 export const SEOMetaEditor = ({
   showIntro = true,
+  ownerIsOrganization = false,
   ownerSlug = null,
 }: SEOMetaEditorProps): JSX.Element => {
   const { control, formState, setValue } = useFormContext<TemplateEditorDetailsFormValues>();
@@ -131,8 +133,9 @@ export const SEOMetaEditor = ({
               <p className="text-xs break-all text-muted-foreground">{preview.url}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                No public URL yet: the template owner needs a username, which they can set in
-                Settings.
+                {ownerIsOrganization
+                  ? "No public URL yet: the Organization needs a slug, which its owners and admins can set in its settings."
+                  : "No public URL yet: the template owner needs a username, which they can set in Settings."}
               </p>
             )}
             <p className="line-clamp-2 text-sm text-muted-foreground">

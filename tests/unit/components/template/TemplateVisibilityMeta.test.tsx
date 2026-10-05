@@ -7,7 +7,17 @@ import { TemplateVisibilityMeta } from '@/components/template/TemplateVisibility
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-type MetaTemplate = Pick<ChecklistTemplate, 'id' | 'isPublic' | 'ownerProfile' | 'slug' | 'userId'>;
+type MetaTemplate = Pick<
+  ChecklistTemplate,
+  'id' | 'isPublic' | 'ownerProfile' | 'slug' | 'userId' | 'owner' | 'ownerType' | 'teamId'
+>;
+
+const createdForAcme = (owner: ChecklistTemplate['owner']): Partial<MetaTemplate> => ({
+  ownerProfile: { username: 'org-creator' },
+  ownerType: 'team',
+  teamId: 'org-1',
+  owner,
+});
 
 const template: MetaTemplate = {
   id: 'tpl-1',
@@ -28,8 +38,18 @@ describe("the Template page's visibility", () => {
     expect(html).toMatch(/<a[^>]*href="\/profile\/alice\/launch-checklist\/"[^>]*>View public template<\/a>/);
   });
 
-  it("links an Organization's public Template to the URL that serves it today, its creator's", () => {
-    expect(render({ ownerProfile: { username: 'org-creator' } })).toContain('href="/profile/org-creator/launch-checklist/"');
+  it("links an Organization's public Template under its Organization's handle, never its creator's", () => {
+    const html = render(createdForAcme({ type: 'team', teamId: 'org-1', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' }));
+
+    expect(html).toContain('href="/profile/Acme-Launch/launch-checklist/"');
+    expect(html).not.toContain('org-creator');
+  });
+
+  it("says an Organization's public page is unavailable while the Organization has no slug, rather than using its creator's", () => {
+    const html = render(createdForAcme({ type: 'team', teamId: 'org-1', publicHandle: null, displayName: 'Acme Launch' }));
+
+    expect(html).toContain('Public page unavailable until its Organization has a slug');
+    expect(html).not.toContain('<a');
   });
 
   it('falls back to the id when a public Template has no slug, and links a bundled Template under its catalog owner', () => {

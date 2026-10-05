@@ -129,9 +129,12 @@ export const buildPublicFeaturesPath = (): string => '/features/';
 export const buildSharePath = (shareToken: string): string =>
   `/share/${encodeURIComponent(shareToken)}/`;
 
-export const buildCanonicalPublicTemplatePath = (
-  template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
-): string | null => {
+type PublicTemplateUrlFields = Pick<
+  ChecklistTemplate,
+  'id' | 'slug' | 'userId' | 'ownerProfile' | 'owner' | 'ownerType' | 'teamId'
+>;
+
+export const buildCanonicalPublicTemplatePath = (template: PublicTemplateUrlFields): string | null => {
   const ownerSlug = resolvePublicTemplateOwnerSlug(template);
   const templateSlug = template.slug?.trim() || template.id.trim();
 
@@ -142,9 +145,8 @@ export const buildCanonicalPublicTemplatePath = (
   return buildPublicTemplatePath(ownerSlug, templateSlug);
 };
 
-export const hasCanonicalPublicTemplatePath = (
-  template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
-): boolean => buildCanonicalPublicTemplatePath(template) !== null;
+export const hasCanonicalPublicTemplatePath = (template: PublicTemplateUrlFields): boolean =>
+  buildCanonicalPublicTemplatePath(template) !== null;
 
 export const DASHBOARD_PATH = '/dashboard/';
 

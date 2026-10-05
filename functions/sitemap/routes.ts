@@ -21,6 +21,7 @@ import {
   selectPublicTemplatesOfListedOwners,
   sitemapImplementationLastmod,
   staticSitemapEntries,
+  templateOwnerHandle,
   validTemplateSlugCondition,
   validUsernameCondition,
   xmlResponse,
@@ -40,7 +41,7 @@ type ProfileRow = {
 };
 
 type TemplateRow = {
-  username: string | null;
+  handle: string | null;
   slug: string | null;
   created_at: string;
   updated_at: string | null;
@@ -60,7 +61,7 @@ const selectListedProfiles = (db: Db) => db
   .orderBy(users.id);
 
 const selectListedTemplates = (db: Db) =>
-  selectPublicTemplatesOfListedOwners(db, { username: users.username, slug: templates.slug }, validTemplateSlugCondition)
+  selectPublicTemplatesOfListedOwners(db, { handle: templateOwnerHandle, slug: templates.slug }, validTemplateSlugCondition)
     .orderBy(templates.id);
 
 function profileEntry(row: ProfileRow): SitemapEntry | null {
@@ -72,10 +73,10 @@ function profileEntry(row: ProfileRow): SitemapEntry | null {
 }
 
 function templateEntry(row: TemplateRow): SitemapEntry | null {
-  const username = row.username?.trim() ?? '';
+  const handle = row.handle?.trim() ?? '';
   const slug = row.slug?.trim() ?? '';
-  return isValidUsername(username) && isValidTemplateSlug(slug) ? {
-    path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
+  return isValidUsername(handle) && isValidTemplateSlug(slug) ? {
+    path: `/profile/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}/`,
     lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
   } : null;
 }

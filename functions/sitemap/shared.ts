@@ -1,9 +1,10 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
-import type { SelectedFields } from 'drizzle-orm/sqlite-core';
+import type { SelectedFields, SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   sitemapCategoryRevisions,
   sitemapOwnerRevisions,
   sitemapShardRevisions,
+  teams,
   templates,
   users,
 } from '../../db/schema/index';
@@ -61,18 +62,26 @@ export function sitemapImplementationLastmod(): string | null {
   return validLastmod(inventoryMetadata?.implementationLastmod);
 }
 
-export const validUsernameCondition = sql<boolean>`
-  length(trim(${users.username})) between 3 and 30
-  and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.-]*'}`;
+const validHandleCondition = (column: SQLiteColumn) => sql<boolean>`
+  length(trim(${column})) between 3 and 30
+  and trim(${column}) not glob ${'*[^A-Za-z0-9_.-]*'}`;
 
-const publicTemplateCondition = and(
-  eq(templates.is_public, true),
-  isNull(templates.deleted_at),
-  or(
-    and(eq(templates.owner_type, 'user'), isNull(templates.team_id)),
-    and(eq(templates.owner_type, 'team'), isNotNull(templates.team_id), ne(templates.team_id, '')),
-  ),
+export const validUsernameCondition = validHandleCondition(users.username);
+
+export const validOrganizationHandleCondition = validHandleCondition(teams.slug);
+
+const isPersonalTemplate = and(eq(templates.owner_type, 'user'), isNull(templates.team_id));
+
+const isOrganizationTemplate = and(eq(templates.owner_type, 'team'), isNotNull(templates.team_id), ne(templates.team_id, ''));
+
+const publicTemplateCondition = and(eq(templates.is_public, true), isNull(templates.deleted_at));
+
+const listedTemplateOwnerCondition = or(
+  and(isPersonalTemplate, validUsernameCondition),
+  and(isOrganizationTemplate, isNull(teams.archived_at), validOrganizationHandleCondition),
 );
+
+export const templateOwnerHandle = sql<string | null>`coalesce(${teams.slug}, ${users.username})`;
 
 export const validTemplateSlugCondition = sql<boolean>`
   length(trim(${templates.slug})) between 1 and 160
@@ -341,9 +350,10 @@ export function selectPublicTemplatesOfListedOwners<Fields extends SelectedField
       owner_updated_at: sitemapOwnerRevisions.revised_at,
     })
     .from(templates)
-    .innerJoin(users, eq(users.id, templates.user_id))
+    .leftJoin(users, and(isPersonalTemplate, eq(users.id, templates.user_id)))
+    .leftJoin(teams, and(isOrganizationTemplate, eq(teams.id, templates.team_id)))
     .leftJoin(sitemapOwnerRevisions, eq(sitemapOwnerRevisions.user_id, users.id))
-    .where(and(publicTemplateCondition, validUsernameCondition, ...conditions));
+    .where(and(publicTemplateCondition, listedTemplateOwnerCondition, ...conditions));
 }
 
 export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {

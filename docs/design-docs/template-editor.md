@@ -40,8 +40,9 @@ missing from the form and the next save would end in a conflict. From that one r
   ([FRONTEND.md](../FRONTEND.md#template-editor-forms));
 - the `version`, which the next save sends as `expected_version`;
 - the visibility it loaded, so a save can tell whether the editor's own switch changed it;
-- the slug, the Creator's username (`ownerSlug`, under which the Search & SEO panel previews the
-  public URL, also for an Organization's template), and the owner (`ownership`).
+- the slug, the Template Owner's handle (`ownerSlug`, under which the Search & SEO panel previews
+  the public URL: the Creator's username for a Personal template, the Organization's slug for an
+  Organization's; a new template takes the active context's), and the owner (`ownership`).
 
 The page creates the form only once the load has ended without an error and the permission check
 below has answered. The form then follows the model's `initialValues` whenever they change: the
@@ -223,14 +224,16 @@ page's cache key in [client data](client-data.md#cache-keys).
   serve those. Otherwise it looks a UUID up as an id first and then as a slug, since a slug saved
   before the API refused UUID slugs can look like one
   ([import/export](data-persistence.md#importexport)), and anything else as a slug. The answer
-  counts only when the template is public and its Creator's username matches the URL's, in any
-  letter case.
+  counts only when the template is public and its Template Owner's handle
+  (`resolvePublicTemplateOwnerSlug`: a Personal template's username, an Organization's slug while
+  it is active) matches the URL's, in any letter case; an Organization Template's Creator URL is
+  redirected on the server before the page loads ([SEO](seo-and-sitemaps.md#lookups-for-page-metadata)).
 - The private page takes a bundled library template by id, then asks the API by id, and by slug
   only after a `404` for an identifier that does not look like an id: the app links private
   templates by id, and the API never gives out a slug that looks like one.
 - Both fill in the Creator's username from their profile when the row lacks it
-  (`hydrateTemplateOwner`), since the public URL needs it, and only a `404` counts as not found
-  ([missing pages](../FRONTEND.md#missing-pages)).
+  (`hydrateTemplateOwner`), since a Personal template's public URL needs it, and only a `404`
+  counts as not found ([missing pages](../FRONTEND.md#missing-pages)).
 
 ### Actions
 
@@ -256,10 +259,12 @@ the page that started it ([FRONTEND.md](../FRONTEND.md#data-and-state)).
   set before the request, since a second click can arrive before the page re-renders). The item
   reads "Duplicating..." meanwhile, and a failed copy can be tried again.
 - **Share** (`shareTemplateToPublic`) builds the public URL before it changes anything, so a
-  template that cannot be shared (its Creator has no username) is never made public. The URL uses
-  the Creator's current username (`resolveShareOwnerTemplate`): the signed-in Creator's own, which
-  wins over the one a cached copy carries after a rename, or, for someone else's template, the
-  Creator's looked up again, keeping the cached one only when that fails. The server then confirms
+  template that cannot be shared (a Personal template whose owner has no username, an
+  Organization's whose Organization has no slug) is never made public. An Organization's template
+  uses its Organization's handle from `owner`, with no request. A Personal template uses its
+  owner's current username (`resolveShareOwnerTemplate`): the signed-in owner's own, which wins
+  over the one a cached copy carries after a rename, keeping the cached one only when a lookup
+  fails. The server then confirms
   every Share with the loaded version, even when the loaded copy is already public: a template made
   private, archived or given a new slug elsewhere answers `409` or `404`, and the page reloads it
   instead of handing out a dead link. A public library template is not a stored row, so there is

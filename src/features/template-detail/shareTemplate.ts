@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
+import { isOrganizationTemplate } from '@/lib/templates/templateOwnership';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -13,6 +14,10 @@ import {
 } from './templateDetailApi';
 
 const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
+const ORGANIZATION_WITHOUT_HANDLE_MESSAGE =
+  'This Organization needs a slug before its templates can be shared. Its owners and admins can set one in its settings.';
+const CREATOR_WITHOUT_USERNAME_MESSAGE =
+  'Set a username on your account before sharing templates with the canonical public URL.';
 
 export const shareTemplateToPublic = async (params: {
   apiClient?: TemplateDetailApiClient;
@@ -37,20 +42,19 @@ export const shareTemplateToPublic = async (params: {
   }
 
   const apiClient = params.apiClient ?? api;
-  const isCreator = params.template.userId === params.userId;
-  let nextTemplate = await resolveShareOwnerTemplate(
-    params.template,
-    { userId: params.userId, username: params.username },
-    apiClient,
-  );
+  const isOrganizationOwned = isOrganizationTemplate(params.template);
+  let nextTemplate = isOrganizationOwned
+    ? params.template
+    : await resolveShareOwnerTemplate(
+        params.template,
+        { userId: params.userId, username: params.username },
+        apiClient,
+      );
 
   if (!buildCanonicalPublicTemplatePath(nextTemplate)) {
-    return {
-      kind: 'error',
-      message: isCreator
-        ? 'Set a username on your account before sharing templates with the canonical public URL.'
-        : SHARE_FAILED_MESSAGE,
-    };
+    if (isOrganizationOwned) return { kind: 'error', message: ORGANIZATION_WITHOUT_HANDLE_MESSAGE };
+    const isCreator = params.template.userId === params.userId;
+    return { kind: 'error', message: isCreator ? CREATOR_WITHOUT_USERNAME_MESSAGE : SHARE_FAILED_MESSAGE };
   }
 
   const isPublicLibraryTemplate = nextTemplate.isPublic && isRepoTemplate(nextTemplate);

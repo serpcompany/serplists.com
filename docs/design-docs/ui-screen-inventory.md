@@ -651,8 +651,9 @@ existing content, invent nothing):
   - Signed in, when the Organizations failed to load: "Couldn't load your Organizations",
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
-  - The header: an icon tile by template type, the title, the description, the owner's
-    avatar and name (a link to the Public Profile), "Updated <date>" (the Template's last
+  - The header: an icon tile by template type, the title, the description, the Template
+    Owner's avatar and name (a link to its Public Profile: an Organization Template's
+    Organization, never its Creator), "Updated <date>" (the Template's last
     update in the viewer's date format, as template detail's "Last updated"; left out when
     unreadable), the category badges (links to category pages; plain for a category with no
     page), and "Share" (outline), "Save" (outline) and "Start Run" (primary).
@@ -905,8 +906,8 @@ existing content, invent nothing):
 - **SCREEN NAME:** Organization Public Profile (`/profile/<handle>/` for an active
   Organization's handle)
 - **PURPOSE:** Show an Organization and its Public Templates.
-- **HOW USER GETS HERE:** a link to its handle. Until #232's PR 3 moves the owner links on
-  template cards and template pages here, nothing in the app links to it.
+- **HOW USER GETS HERE:** the owner link on an Organization Template's card (the Template
+  Library, a category page) or public template page; a link to its handle.
 - **WHAT'S ON THE SCREEN:**
   - Header: the Organization's avatar (or its initials); its name; "@handle"; its description,
     or without one the summary a User's profile shows ("Public checklist templates from
@@ -1422,7 +1423,8 @@ existing content, invent nothing):
   - Header: the type's icon tile; the title; the description (or "Review template structure,
     metadata, and run actions."); a "Public" or "Private" badge, and beside "Public" a "View
     public template" link to its live public page (the URL Share gives), or "Public page
-    unavailable until its creator sets a username" when it has none; actions: "Share" and "Edit"
+    unavailable until its creator sets a username" (an Organization's: "Public page unavailable
+    until its Organization has a slug") when it has none; actions: "Share" and "Edit"
     (roles that can edit), or a copy button for others ("Copy to Organization", "Copy to My
     Templates", "Upgrade to copy template", "Checking plan...", "Copying...", "Loading..."),
     "View runs" (signed in), "Start Run", and "Template actions" (roles that can edit). Beside

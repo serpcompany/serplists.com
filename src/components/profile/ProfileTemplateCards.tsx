@@ -11,17 +11,17 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { buildCanonicalPublicTemplatePath, buildPublicTemplatesPath } from '@/lib/routes';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 type ProfileTemplateCardsProps = {
   handle: string;
-  templatePath: (template: ChecklistTemplate) => string;
   templates: ChecklistTemplate[];
 };
 
-export function ProfileTemplateCards({ handle, templatePath, templates }: ProfileTemplateCardsProps) {
+export function ProfileTemplateCards({ handle, templates }: ProfileTemplateCardsProps) {
   return (
     <section aria-labelledby="public-templates">
       <SectionHeader
@@ -67,7 +67,7 @@ export function ProfileTemplateCards({ handle, templatePath, templates }: Profil
                     </span>
                   ) : undefined
                 }
-                href={templatePath(template)}
+                href={buildCanonicalPublicTemplatePath(template) || buildPublicTemplatesPath()}
                 icon={<TypeIcon />}
                 title={template.title}
               >

@@ -19,13 +19,15 @@ import { buildCanonicalPublicTemplatePath, buildPublicTemplatePath } from '@/lib
 import { getRequestOrigin, getWorkerEnv } from '../cloudflare';
 import type { PageSeoLookup } from './pageSeoLookup';
 
+export type TemplatePageLookup = PageSeoLookup | { kind: 'moved'; path: string };
+
 type FoundTemplatePage = TemplatePageSource & {
   createdAt?: string | null;
   categories?: string[];
   canonicalPath: string | null;
 };
 
-const toFoundSeo = (template: FoundTemplatePage): PageSeoLookup => {
+const toFoundSeo = (template: FoundTemplatePage): TemplatePageLookup => {
   const text = resolveTemplatePageText(template);
   return {
     kind: 'found',
@@ -40,18 +42,20 @@ const toFoundSeo = (template: FoundTemplatePage): PageSeoLookup => {
   };
 };
 
+const isTheHandle = (handle: string | null | undefined, owner: string) => handle?.trim().toLowerCase() === owner;
+
 export const loadTemplatePageSeo = cache(
-  async (handle: string, identifier: string): Promise<PageSeoLookup> => {
+  async (handle: string, identifier: string): Promise<TemplatePageLookup> => {
     const owner = handle.trim().toLowerCase();
     const id = identifier.trim();
-    const notFound: PageSeoLookup = {
+    const notFound: TemplatePageLookup = {
       kind: 'not_found',
       seo: { ...TEMPLATE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
     };
     if (!owner || !id) return notFound;
 
     const libraryTemplate = findPublicTemplateByIdentifier(repoTemplates, id);
-    if (libraryTemplate && resolvePublicTemplateOwnerSlug(libraryTemplate)?.toLowerCase() === owner) {
+    if (libraryTemplate && isTheHandle(resolvePublicTemplateOwnerSlug(libraryTemplate), owner)) {
       return toFoundSeo({
         ...libraryTemplate,
         canonicalPath: buildCanonicalPublicTemplatePath(libraryTemplate),
@@ -62,11 +66,12 @@ export const loadTemplatePageSeo = cache(
       const [env, origin] = await Promise.all([getWorkerEnv(), getRequestOrigin()]);
       const record = await loadPublicTemplate(env, origin, id);
       const ownerHandle = record?.ownerHandle?.trim();
-      if (!record || !ownerHandle || ownerHandle.toLowerCase() !== owner) return notFound;
-      return toFoundSeo({
-        ...record,
-        canonicalPath: buildPublicTemplatePath(ownerHandle, record.slug?.trim() || record.id),
-      });
+      if (!record || !ownerHandle) return notFound;
+      const canonicalPath = buildPublicTemplatePath(ownerHandle, record.slug?.trim() || record.id);
+      if (isTheHandle(ownerHandle, owner)) return toFoundSeo({ ...record, canonicalPath });
+      return record.isOrganizationTemplate && isTheHandle(record.creatorUsername, owner)
+        ? { kind: 'moved', path: canonicalPath }
+        : notFound;
     } catch (error) {
       log('error', 'template_page_meta_failed', describeErrorForLog(error));
       return { kind: 'unavailable' };

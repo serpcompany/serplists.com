@@ -10,7 +10,7 @@ import { normalizeStringArray } from '../../src/lib/schemas/jsonArrays';
 import { looksLikeTemplateId } from '../api/utils/slug';
 
 const CACHE_TTL_SECONDS = 5 * 60;
-const CACHE_KEY_PREFIX_NAMING_RECORD_SHAPE = '/__page-meta/v3/templates/';
+const CACHE_KEY_PREFIX_NAMING_RECORD_SHAPE = '/__page-meta/v4/templates/';
 
 export interface PublicTemplateRecord {
   id: string;
@@ -20,6 +20,8 @@ export interface PublicTemplateRecord {
   seoTitle: string | null;
   seoDescription: string | null;
   ownerHandle: string | null;
+  isOrganizationTemplate: boolean;
+  creatorUsername: string | null;
   createdAt: string | null;
   categories: string[];
 }
@@ -32,6 +34,8 @@ const recordSchema = z.object({
   seoTitle: z.string().nullable(),
   seoDescription: z.string().nullable(),
   ownerHandle: z.string().nullable(),
+  isOrganizationTemplate: z.boolean(),
+  creatorUsername: z.string().nullable(),
   createdAt: z.string().nullable(),
   categories: z.array(z.string()),
 });
@@ -56,6 +60,7 @@ async function selectPublicTemplate(env: Env, match: SQL): Promise<PublicTemplat
     .limit(1);
   if (!row?.id) return null;
   const { id, slug, title, description, seoTitle, seoDescription, createdAt, category } = row;
+  const owner = templateOwnerOf(row);
   return recordSchema.parse({
     id,
     slug,
@@ -64,7 +69,9 @@ async function selectPublicTemplate(env: Env, match: SQL): Promise<PublicTemplat
     seoTitle,
     seoDescription,
     createdAt,
-    ownerHandle: templateOwnerOf(row).publicHandle,
+    ownerHandle: owner.publicHandle,
+    isOrganizationTemplate: owner.type === 'team',
+    creatorUsername: row.owner_username,
     categories: normalizeStringArray(category),
   });
 }

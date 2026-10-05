@@ -19,13 +19,7 @@ import {
   type ProfileSurfaceRecord,
 } from '@/features/profile/loadPublicProfile';
 import { calculateStats, describePublicProfile, type UserStats } from '@/features/profile/profileSummary';
-import {
-  buildCanonicalPublicTemplatePath,
-  buildPublicTemplatePath,
-  buildPublicTemplatesPath,
-} from '@/lib/routes';
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
-import type { ChecklistTemplate } from '@/types/checklist';
 
 import { ProfileTemplateCards } from './ProfileTemplateCards';
 
@@ -117,12 +111,6 @@ const userProfileMeta = (profile: ProfileSurfaceRecord): ReactNode => {
   );
 };
 
-const templatePathFor = (found: FoundPublicProfile) =>
-  found.kind === 'user'
-    ? (template: ChecklistTemplate) => buildCanonicalPublicTemplatePath(template) || buildPublicTemplatesPath()
-    : (template: ChecklistTemplate) =>
-        buildPublicTemplatePath(found.organization.handle, template.slug?.trim() || template.id);
-
 export function PublicProfileDetails({ found }: { found: FoundPublicProfile }) {
   const stats = useMemo(() => calculateStats(found.templates), [found.templates]);
   const handle = foundProfileHandle(found);
@@ -150,7 +138,7 @@ export function PublicProfileDetails({ found }: { found: FoundPublicProfile }) {
       subtitle={`@${handle}`}
       title={title}
     >
-      <ProfileTemplateCards handle={handle} templatePath={templatePathFor(found)} templates={found.templates} />
+      <ProfileTemplateCards handle={handle} templates={found.templates} />
     </DetailPageLayout>
   );
 }

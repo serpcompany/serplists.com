@@ -88,7 +88,7 @@ type TemplateEditorFormProps = {
 const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const router = useAppRouter();
   const { user } = useAuth();
-  const { consoleContext } = useWorkspace();
+  const { activeWorkspace, consoleContext } = useWorkspace();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const isOutlineBesideForm = useMediaQuery(OUTLINE_BESIDE_FORM_QUERY);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
@@ -303,10 +303,13 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
                 />
 
                 <EditorPanels
+                  publicOwnerIsOrganization={
+                    id ? Boolean(model.ownership?.teamId || model.ownership?.ownerType === "team") : activeWorkspace.type === "team"
+                  }
                   publicOwnerSlug={resolveTemplateEditorOwnerSlug({
                     isNew: !id,
                     loadedOwnerSlug: model.ownerSlug,
-                    viewerUsername: user?.username,
+                    newTemplateOwnerHandle: activeWorkspace.type === "team" ? activeWorkspace.slug : user?.username,
                   })}
                   selectedItemIndex={selectedItemIndex}
                   selectedSectionIndex={selectedSectionIndex}

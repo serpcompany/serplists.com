@@ -14,6 +14,8 @@ const PRIVATE_TEMPLATE_PAGES = [
   "https://serplists.com/profile/admin/internal-publishing-checklist/",
   "https://serplists.com/profile/admin/shared-growth-launch-checklist/",
   "https://serplists.com/profile/jane/client-reporting-qa-checklist/",
+  "https://serplists.com/profile/serp-growth-team/shared-growth-launch-checklist/",
+  "https://serplists.com/profile/local-seo-client-team/client-reporting-qa-checklist/",
 ];
 const SHARDS_THE_INDEX_NEVER_LISTED = ["profiles/999999", "templates/2", "templates/999", "categories/2"];
 const CACHE_DIRECTIVES_THAT_STORE = /^(public|immutable|s-maxage=|stale-|max-age=(?!0$))/;

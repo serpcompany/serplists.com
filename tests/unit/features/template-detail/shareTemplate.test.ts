@@ -13,6 +13,8 @@ import { present } from '../../../support/elements';
 
 const ORIGIN = 'https://serplists.com';
 const SHARED_AT_ALICES_LINK = { kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/camping-checklist/` };
+const SHARED_AT_ACMES_LINK = { kind: 'ok', shareUrl: `${ORIGIN}/profile/Acme-Launch/camping-checklist/` };
+const ACME = { type: 'team', teamId: 'team-1', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' } as const;
 const editConflict = () => createApiError(409, { code: 'edit_conflict', error: 'Template changed' });
 
 const buildTemplate = (
@@ -204,13 +206,15 @@ describe('shareTemplateToPublic', () => {
     );
   });
 
-  it("looks up the Creator's current username when someone else shares their template", async () => {
+  it("builds an Organization Template's link from its Organization's handle, without asking for its Creator's username", async () => {
     const apiClient = buildApiClient({ username: 'alicejones' });
 
     const result = await share(apiClient, {
       template: buildTemplate({
         isPublic: true,
+        owner: ACME,
         ownerProfile: { username: 'alice' },
+        ownerType: 'team',
         teamId: 'team-1',
         userId: 'alice-id',
       }),
@@ -218,11 +222,8 @@ describe('shareTemplateToPublic', () => {
       username: 'bob',
     });
 
-    expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
-    expect(result).toEqual({
-      kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alicejones/camping-checklist/`,
-    });
+    expect(apiClient.getProfileById).not.toHaveBeenCalled();
+    expect(result).toEqual(SHARED_AT_ACMES_LINK);
   });
 
   it('publishes again after the switch made the template private, with a version the server accepts', async () => {
@@ -284,25 +285,41 @@ describe('shareTemplateToPublic', () => {
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
-  it('lets an Organization editor share a template someone else created', async () => {
+  it("lets an Organization editor share a template someone else created, at the Organization's URL", async () => {
     const apiClient = buildApiClient({ username: 'alice' });
 
     const result = await share(apiClient, {
-      template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
+      template: buildTemplate({ owner: ACME, ownerType: 'team', teamId: 'team-1', userId: 'alice-id' }),
       userId: 'bob-id',
       username: 'bob',
     });
 
-    expect(result).toEqual(SHARED_AT_ALICES_LINK);
-    expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
+    expect(result).toEqual(SHARED_AT_ACMES_LINK);
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an Organization Template private while its Organization has no slug, and says so', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+
+    const result = await share(apiClient, {
+      template: buildTemplate({ owner: { ...ACME, publicHandle: null }, ownerType: 'team', teamId: 'team-1', userId: 'alice-id' }),
+      userId: 'alice-id',
+      username: 'alice',
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message:
+        'This Organization needs a slug before its templates can be shared. Its owners and admins can set one in its settings.',
+    });
+    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
   it("never builds the link from the sharer's username for a template someone else created", async () => {
     const apiClient = buildApiClient({ username: null });
 
     const result = await share(apiClient, {
-      template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
+      template: buildTemplate({ userId: 'alice-id' }),
       userId: 'bob-id',
       username: 'bob',
     });

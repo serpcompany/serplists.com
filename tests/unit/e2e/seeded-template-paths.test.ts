@@ -21,7 +21,9 @@ beforeAll(async () => {
   await seedLocalTestData(drizzle(d1.binding, { schema }));
   const seeded = d1.rows<{ username: string; slug: string }>(
     'SELECT users.username AS username, templates.slug AS slug FROM templates ' +
-      'JOIN users ON users.id = templates.user_id WHERE templates.slug IS NOT NULL',
+      'JOIN users ON users.id = templates.user_id WHERE templates.slug IS NOT NULL ' +
+      'UNION SELECT teams.slug, templates.slug FROM templates ' +
+      "JOIN teams ON templates.owner_type = 'team' AND teams.id = templates.team_id WHERE templates.slug IS NOT NULL",
   );
   const bundled = repoTemplates.flatMap((template) => {
     const owner = resolvePublicTemplateOwnerSlug(template);

@@ -136,9 +136,10 @@ Personal data uses User ownership. Organization data uses Organization ownership
     slug and name reach a response only inside `owner`.
   - The Creator stays in the legacy fields, kept for now: `user_id`, `owner_username`,
     `owner_full_name` and `ownerProfile` (the User joined on `templates.user_id`), beside
-    `owner_type` and `team_id`. The public template page and its metadata open an
-    Organization Template only under its Organization's handle; Share links, cards and the
-    sitemaps still build the Creator's URL until #232's PR 3.
+    `owner_type` and `team_id`. Public URLs follow `owner`, not the Creator: an Organization
+    Template's public page, Share link, cards, canonical URL and sitemap entry use its
+    Organization's handle (`resolvePublicTemplateOwnerSlug` in `src/lib/repoTemplateCatalog.ts`,
+    and `templateOwnerHandle` in `functions/sitemap/shared.ts`).
   - MCP tool results build their own Template views and do not carry `owner`.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
 - Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion: the run page sends the run's status with every save, so a rename, a tick or a note on a completed run arrives as `completed` again. Reopening keeps both stamps too; only revalidation clears them. A completion through a share link names nobody, so a reopened run does not keep its previous completer, and an already completed legacy row without a date gets one once, naming nobody. The handler decides from the status it read; the write's revision guard turns it into `409 edit_conflict` if another save changed the run in between, so the decision always matches the stored status.

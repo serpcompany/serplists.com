@@ -142,6 +142,14 @@ An active Organization with a handle (its slug) has a Public Profile at `/profil
 - The page (`src/views/PublicProfile.tsx`, `src/components/profile/PublicProfileDetails.tsx`)
   shows the avatar, name, `@handle`, description, stats and template cards; owners and admins
   set the avatar and description on the Organization's settings page.
+- Every link to an Organization's public Template uses its Organization's handle: Share, "View
+  public template", the library's and the profile's cards, the owner link on the public
+  template page, canonical tags and sitemap entries (`resolvePublicTemplateOwnerSlug` in
+  `src/lib/repoTemplateCatalog.ts`). The Creator URL such a Template had before
+  (`/profile/<creator username>/<slug>/`) answers a permanent redirect (`308`) to it. An
+  Organization without a handle, or an archived one, gives its Templates no public URL: Share
+  leaves the Template private and says the Organization needs a slug, and the library leaves
+  it out.
 
 ## Invite Flow
 

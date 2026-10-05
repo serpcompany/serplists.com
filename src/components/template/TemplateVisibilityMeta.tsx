@@ -2,13 +2,22 @@ import { Globe, Lock } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
+import { isOrganizationTemplate } from '@/lib/templates/templateOwnership';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
 
 type TemplateVisibilityMetaProps = {
-  template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'ownerProfile' | 'slug' | 'userId'>;
+  template: Pick<
+    ChecklistTemplate,
+    'id' | 'isPublic' | 'ownerProfile' | 'slug' | 'userId' | 'owner' | 'ownerType' | 'teamId'
+  >;
 };
+
+const unavailableReason = (template: TemplateVisibilityMetaProps['template']) =>
+  isOrganizationTemplate(template)
+    ? 'Public page unavailable until its Organization has a slug'
+    : 'Public page unavailable until its creator sets a username';
 
 export function TemplateVisibilityMeta({ template }: TemplateVisibilityMetaProps) {
   if (!template.isPublic) {
@@ -32,7 +41,7 @@ export function TemplateVisibilityMeta({ template }: TemplateVisibilityMetaProps
           View public template
         </Link>
       ) : (
-        <span className="text-sm text-muted-foreground">Public page unavailable until its creator sets a username</span>
+        <span className="text-sm text-muted-foreground">{unavailableReason(template)}</span>
       )}
     </>
   );

@@ -109,8 +109,11 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   detail of the new copy. Signed out: → Log in → back → "Save". Free in Personal: "Upgrade
   to save" → Stripe Checkout.
 - **Publish a Template:** Template detail → "Share" → Share Template dialog (the
-  `/profile/<user>/<template>/` link) → copy. Or the "Visibility" switch in Details. No
-  username yet: a toast asks for one → Account Settings → "Username" → "Update Profile".
+  `/profile/<handle>/<template>/` link, under the User's username or, for an Organization's
+  Template, the Organization's slug) → copy. Or the "Visibility" switch in Details. No
+  username yet: a toast asks for one → Account Settings → "Username" → "Update Profile". An
+  Organization without a slug: a toast says it needs one → the Organization's settings →
+  "Slug".
 - **Organization invite:** manager: the Organization's settings
   (`/dashboard/organization/<organizationId>/settings/`, the switcher's "Settings") →
   its card → "Invite email" and "Role" → "Create link" → copy the invite link and send it. Invitee: Organization invite
@@ -243,6 +246,9 @@ the session check answers; everyone else sees it in the public shell
 
 - `/dashboard/organization/<organizationId>/` answers 307 with that Organization's Templates.
   Links use `buildConsoleHomePath(context)`.
+- `/profile/<creator>/<template>/`, the URL a public Organization Template had under its
+  Creator's username, answers 308 with `/profile/<organization handle>/<template>/`, keeping the
+  query (the page's own redirect, after its lookup).
 - Legacy paths answer 308 with their page: `/checklists` with `/templates/`; `/console` with
   `/dashboard/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;
   `/console/templates/<id>` with `/dashboard/templates/<id>/`;

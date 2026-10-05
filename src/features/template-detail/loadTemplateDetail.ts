@@ -67,12 +67,6 @@ const findTemplateById = async (
   }
 };
 
-const templateOwnerHandleOf = (template: ChecklistTemplate): string | null => {
-  const { owner } = template;
-  if (owner?.type !== 'team') return resolvePublicTemplateOwnerSlug(template);
-  return 'publicHandle' in owner ? owner.publicHandle?.trim() || null : null;
-};
-
 const toOwnedPublicTemplate = async (
   rawTemplate: ApiTemplate,
   options: { identifier: string; ownerUsername: string },
@@ -82,7 +76,7 @@ const toOwnedPublicTemplate = async (
     mapApiTemplateToChecklistTemplate(rawTemplate, options.identifier),
     apiClient,
   );
-  const ownerSlug = templateOwnerHandleOf(mappedTemplate);
+  const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
 
   return mappedTemplate.isPublic &&
     ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()

@@ -33,21 +33,26 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 
 ## What is listed
 
-- **Public Templates** (`publicTemplateCondition`): public, not archived, with owner fields
-  that agree, a Personal row (`owner_type = 'user'`, no `team_id`) or an Organization row
-  (`owner_type = 'team'` with a `team_id`); a row whose fields disagree stays out. The
-  library and category pages still list an Organization Template under its Creator's
-  username until #232's PR 3 (the users join on `templates.user_id`), so the sitemaps do too.
-- **Public URLs only.** A profile or Template is listed only when the username is valid (the
+- **Public Templates** (`publicTemplateCondition`, `listedTemplateOwnerCondition`): public,
+  not archived, with owner fields that agree, a Personal row (`owner_type = 'user'`, no
+  `team_id`) or an Organization row (`owner_type = 'team'` with a `team_id`); a row whose
+  fields disagree stays out. Each is listed at its Template Owner's URL, as the library and
+  category pages list it: a Personal Template under its User's username (the users join on
+  `templates.user_id` for Personal rows only), an Organization Template under its
+  Organization's handle while the Organization is active (the teams join on
+  `templates.team_id` for Organization rows only, `templateOwnerHandle`), never under its
+  Creator's username.
+- **Public URLs only.** A profile or Template is listed only when the handle is valid (the
   [public handle rule](database-operations.md#public-handle-registry): 3 to 30 letters, digits,
   `_`, `.` or `-`; the user triggers match it since `0029`), and a Template only when its slug is (lowercase
   letters and digits joined by single hyphens, at most 160): no other one has a public URL.
-  The rules run in SQL (`validUsernameCondition`, `validTemplateSlugCondition`), so a
-  shard page's `LIMIT` and offset count only rows it lists, and again in code on each row.
+  The rules run in SQL (`validUsernameCondition`, `validOrganizationHandleCondition`,
+  `validTemplateSlugCondition`), so a shard page's `LIMIT` and offset count only rows it
+  lists, and again in code on each row.
   Drizzle has no builders for SQLite's `GLOB` or string functions, so the SQL is written by
   hand, and `tests/unit/functions/sitemap-category-entries.test.ts` keeps it equal to the
   code.
-- **Categories.** A category is listed when a public Template with a valid owner username
+- **Categories.** A category is listed when a public Template with a valid owner handle
   uses it, or a bundled starter does. A registry category (`src/data/publicCategories.ts`)
   has a page with its registry name and description, but it is listed only once a public
   Template uses it, since the page is empty otherwise. A category value stored as a plain
@@ -125,10 +130,13 @@ trigger bumps.
 | `categories` | Public categorized Template rows, their owners' `sitemap_owner_revisions`, and `sitemap_category_revisions` (the Template, owner-update and user-delete triggers bump it whenever they change these) |
 | `profiles` | Users with a valid username and `sitemap_profile_revisions` (the user and Template triggers bump it). The triggers ignore `users.updated_at`, so a lastmod that depends on it can lag by up to the `s-maxage` |
 
-The 0023 triggers fire only for Personal Template rows, so an edit to a public Organization
-Template reaches a cached shard only when it expires; the
+The 0023 triggers fire only for Personal Template rows, and no trigger watches `teams`, so
+an edit, publish, unpublish or delete of a public Organization Template, and a change of its
+Organization's slug or an archive, reaches a cached shard only when it expires (up to the
+1-day `s-maxage`): until then a cached templates shard can list an Organization Template
+under its Organization's old handle, which no longer opens it. The
 [Organization Template sitemap plan](../exec-plans/active/sitemap-organization-templates.md)
-proposes the migration that fixes it.
+proposes the migration that fixes it (TD-23).
 
 ## Lookups for page metadata
 
@@ -163,9 +171,17 @@ page render on each request.
   slug or id index instead of `idx_templates_public_created_at`, and categories are read
   the way the API lists them. A found template is cached in the data center for 5 minutes,
   per host (the key starts with the request's origin), under a key prefix that names the
-  record's shape (`/__page-meta/v3/templates/`), so a deploy that changes the shape never
+  record's shape (`/__page-meta/v4/templates/`), so a deploy that changes the shape never
   reads the previous one. A template made private can keep its tags for those 5 minutes;
   the page itself loads it from the API and shows it as not found.
+- **Moved Template page.** The URL a public Organization Template had before #232, its
+  Creator's (`/profile/<creator username>/<identifier>/`), answers `moved` from the same
+  lookup (the record names the Creator's username for this): the route's page awaits it before
+  it renders anything and answers a permanent redirect (`308`, `permanentRedirect`) to the
+  Organization's URL, keeping the query string, and `generateMetadata` redirects the same way.
+  The page awaits the lookup, so its HTML starts only once the lookup (edge-cached for a found
+  template) answers; a redirect thrown later, in a streamed part, would only be a client-side
+  refresh. Another User's handle, or an archived Organization's Template, is not found.
 - **Profile page** (`/profile/<handle>/`, `loadProfilePageSeo` in
   `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, a User's or an
   active Organization's, from the same two requests the page makes (`loadPublicProfile`:

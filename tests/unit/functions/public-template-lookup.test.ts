@@ -85,10 +85,15 @@ describe("public template lookup naming the Template Owner's handle, which publi
     seedProfileOwners(d1);
   });
 
-  it("names an Organization Template's Organization, never its Creator", async () => {
+  it("names an Organization Template's Organization as its owner, and its Creator only for the URL it used to live at", async () => {
     storeProfileTemplate(d1, { id: 'launch-plan', ownerType: 'team' });
 
-    expect(await lookup('launch-plan')).toMatchObject({ id: 'launch-plan', ownerHandle: ACME.handle });
+    expect(await lookup('launch-plan')).toMatchObject({
+      id: 'launch-plan',
+      ownerHandle: ACME.handle,
+      isOrganizationTemplate: true,
+      creatorUsername: 'alice',
+    });
   });
 
   it('names no owner for an Organization Template once its Organization is archived or has no handle', async () => {
@@ -103,7 +108,7 @@ describe("public template lookup naming the Template Owner's handle, which publi
   it("names a Personal Template's User, as before", async () => {
     storeProfileTemplate(d1, { id: 'bob-plan' });
 
-    expect(await lookup('bob-plan')).toMatchObject({ ownerHandle: 'bob' });
+    expect(await lookup('bob-plan')).toMatchObject({ ownerHandle: 'bob', isOrganizationTemplate: false });
   });
 
   it('reads the owning Organization by its primary key', async () => {

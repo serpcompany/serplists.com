@@ -187,6 +187,11 @@ and agents (MCP) call them directly and do not follow redirects.
   Organization's Templates (`ORGANIZATION_HOME_REDIRECT`).
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
   its page without a redirect.
+- A redirect that needs data comes from the page: the URL a public Organization Template had
+  under its Creator's username answers 308 with its Organization's URL from the template
+  page's own lookup, so that page awaits the lookup before it renders
+  ([SEO and sitemaps](design-docs/seo-and-sitemaps.md#lookups-for-page-metadata)). A redirect
+  thrown after the page started streaming would only be a client-side refresh.
 - Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL
   redirect there in one hop (see [RELIABILITY.md](RELIABILITY.md#environments-and-hosts)).
 

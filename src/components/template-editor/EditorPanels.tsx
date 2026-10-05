@@ -10,6 +10,7 @@ import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 interface EditorPanelsProps {
+  publicOwnerIsOrganization: boolean;
   publicOwnerSlug: string | null;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
@@ -60,6 +61,7 @@ function getPanelDescription(
 }
 
 export function EditorPanels({
+  publicOwnerIsOrganization,
   publicOwnerSlug,
   selectedSectionIndex,
   selectedItemIndex,
@@ -106,7 +108,7 @@ export function EditorPanels({
       {showingTemplateInfo ? (
         <TemplateBasicInfo showIntro={false} />
       ) : showingSEO ? (
-        <SEOMetaEditor ownerSlug={publicOwnerSlug} showIntro={false} />
+        <SEOMetaEditor ownerIsOrganization={publicOwnerIsOrganization} ownerSlug={publicOwnerSlug} showIntro={false} />
       ) : selectedSection ? (
         selectedItemIndex === null ? (
           <SectionEditor sectionIndex={selectedSectionIndex} showIntro={false} />

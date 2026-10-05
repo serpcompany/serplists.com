@@ -23,10 +23,12 @@
   public template page, its metadata (`functions/seo/public-template-lookup.ts`) and
   `/api/templates/slug/` answers name the Template Owner, and the page opens a Template only
   under that owner's handle. No migration.
-- [ ] PR 3: the one resolver (`resolvePublicTemplateOwnerSlug`, which
+- [x] PR 3 (2026-10-05): the one resolver (`resolvePublicTemplateOwnerSlug`, which
   `buildCanonicalPublicTemplatePath` uses) gives an Organization Template its Organization's
-  URL, so Share, cards, canonical tags and sitemap entries move together. The Creator URLs
-  Organization Templates have today redirect there with a 308.
+  URL, so Share, "View public template", the library's and profiles' cards, owner links,
+  canonical tags, the editor's URL preview and the sitemap entries moved together
+  (`templateOwnerHandle` in `functions/sitemap/shared.ts`). The Creator URLs Organization
+  Templates had redirect there with a 308. No migration.
 
 ## Decision log
 
@@ -79,3 +81,35 @@
   Template's Creator URL, which no longer opens the Template ("Template not found"); land PR 3
   with PR 2. The server-rendered canonical URL of an Organization Template already follows the
   lookup, so the page found at the Organization's URL names that URL.
+- 2026-10-05 (PR 3): an Organization Template is one whose `owner` is an Organization, or,
+  without `owner`, whose `ownerType` is `team` or that has a `teamId`
+  (`isOrganizationTemplate`); its URL handle is only ever `owner.publicHandle`, so a response
+  that names no handle (an archived Organization, one without a slug, an older response)
+  gives it no public URL rather than its Creator's. The library, category pages and the
+  sitemaps then leave it out, as they leave out a User without a username.
+- 2026-10-05 (PR 3): the 308 comes from the template page itself: the route's page awaits the
+  same lookup its metadata uses (`loadTemplatePageSeo`, edge-cached for 5 minutes for a found
+  Template) and calls `permanentRedirect` before it renders, keeping the query string, since a
+  redirect thrown in a streamed part would only be a client-side refresh. The lookup record
+  carries the Creator's username for it (`/__page-meta/v4/templates/`). Only the Creator's
+  username redirects, in any letter case and by slug or id; another User's handle stays not
+  found, and an archived Organization's Template has no URL to redirect to. A proxy
+  (middleware) redirect was rejected: it would add the same lookup in front of every page.
+- 2026-10-05 (PR 3): an Organization without a handle gives its Templates no public URL, as
+  #234 made safe. Share leaves the Template private with "This Organization needs a slug
+  before its templates can be shared. Its owners and admins can set one in its settings.";
+  the detail page says "Public page unavailable until its Organization has a slug"; the
+  editor's preview says "No public URL yet: the Organization needs a slug, which its owners
+  and admins can set in its settings." Organizations get a slug when they are created, so
+  only data from before that can lack one.
+- 2026-10-05 (PR 3): Share on an Organization Template no longer looks up its Creator's
+  profile (`resolveShareOwnerTemplate` runs for Personal Templates only).
+- 2026-10-05 (PR 3): cached sitemaps (TD-23): the 0023 triggers still fire only for Personal
+  rows and no trigger watches `teams`, so an Organization Template's edit, publish, unpublish
+  or delete, and its Organization's slug change or archive, reach the cached templates and
+  categories shards only when they expire (at most a day). The proposed migration in the
+  [sitemap plan](sitemap-organization-templates.md) needs a `teams` trigger before approval.
+- 2026-10-05 (PR 3): the committed sitemap catalog
+  (`functions/sitemap/bundled-catalog.generated.json`) dates the sitemap code by its newest
+  commit, so it moves with this PR's commit to `functions/sitemap/`; the build regenerates it
+  (`pnpm run sitemap:generate`).

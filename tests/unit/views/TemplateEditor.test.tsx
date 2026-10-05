@@ -18,6 +18,7 @@ import {
 import { editorAccess as buildAccess, editorState } from '../../fixtures/templateEditorHooks';
 import { anyInstanceOf, objectContaining } from '../../support/asymmetricMatchers';
 import type { HookDouble } from '../../support/hookDoubles';
+import type { Workspace } from '@/contexts/WorkspaceContext';
 
 const mockUseTemplateEditorModel = vi.fn<HookDouble<typeof useTemplateEditorModel>>();
 const mockUseTemplateEditorState = vi.fn<HookDouble<typeof useTemplateEditorState>>();
@@ -52,8 +53,11 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+const PERSONAL: Workspace = { id: 'personal', type: 'personal', name: 'Personal', role: 'owner' };
+const ACME: Workspace = { id: 'org-1', type: 'team', name: 'Acme Launch', role: 'editor', teamId: 'org-1', memberId: 'member-1', slug: 'Acme-Launch' };
+const workspace = vi.hoisted(() => ({ active: null as Workspace | null }));
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ canEditTemplates: true, isWorkspaceLoading: false, teams: [] }),
+  useWorkspace: () => ({ activeWorkspace: workspace.active ?? PERSONAL, canEditTemplates: true, isWorkspaceLoading: false, teams: [] }),
 }));
 
 vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
@@ -308,7 +312,7 @@ describe('TemplateEditor page', () => {
     }
   });
 
-  it("previews a new template's public URL under the signed-in user", async () => {
+  const showTheNewTemplatesSearchPanel = () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({ title: 'Launch Checklist' }),
       isSaving: false,
@@ -322,11 +326,29 @@ describe('TemplateEditor page', () => {
       showingSEO: true,
       showingTemplateInfo: false,
     });
+  };
+
+  it("previews a new template's public URL under the signed-in user", async () => {
+    showTheNewTemplatesSearchPanel();
 
     const html = await renderEditorAt('/dashboard/templates/new', '/dashboard/templates/new');
 
     expect(html).toContain('/profile/jane/launch-checklist');
     expect(html).not.toContain('example.com');
+  });
+
+  it("previews a new template's public URL under the active Organization's handle", async () => {
+    workspace.active = ACME;
+    showTheNewTemplatesSearchPanel();
+
+    try {
+      const html = await renderEditorAt('/dashboard/organization/org-1/templates/new', '/dashboard/organization/[organizationId]/templates/new');
+
+      expect(html).toContain('/profile/Acme-Launch/launch-checklist');
+      expect(html).not.toContain('/profile/jane/');
+    } finally {
+      workspace.active = null;
+    }
   });
 
   it("previews an existing template's public URL under its creator", async () => {
