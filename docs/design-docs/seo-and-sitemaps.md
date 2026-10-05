@@ -38,8 +38,9 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   (`owner_type = 'team'` with a `team_id`); a row whose fields disagree stays out. The
   library, category pages and link previews list an Organization Template under its
   Creator's username (the users join on `templates.user_id`), so the sitemaps do too.
-- **Public URLs only.** A profile or Template is listed only when the username is valid (3
-  to 30 letters, digits, `_` or `.`), and a Template only when its slug is (lowercase
+- **Public URLs only.** A profile or Template is listed only when the username is valid (the
+  [public handle rule](database-operations.md#public-handle-registry): 3 to 30 letters, digits,
+  `_`, `.` or `-`; the user triggers match it since `0029`), and a Template only when its slug is (lowercase
   letters and digits joined by single hyphens, at most 160): no other one has a public URL.
   The rules run in SQL (`validUsernameCondition`, `validTemplateSlugCondition`), so a
   shard page's `LIMIT` and offset count only rows it lists, and again in code on each row.

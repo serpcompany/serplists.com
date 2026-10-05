@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError, teamSlugSchema } from "../utils/team-slug";
+import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
+import { publicHandleSchema } from "../../../src/lib/schemas/publicHandle";
 import { canManageTeam, findActiveTeam, type TeamRole } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 import { invalidPayloadResponse } from "../utils/request-json";
@@ -57,7 +58,7 @@ export async function updateTeamSettings(
   }
 
   if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
-    const slug = teamSlugSchema.safeParse(parsed.data.slug);
+    const slug = publicHandleSchema.safeParse(parsed.data.slug);
     if (!slug.success) {
       return jsonError(`slug: ${slug.error.issues[0]?.message ?? "Invalid slug"}`, 400);
     }

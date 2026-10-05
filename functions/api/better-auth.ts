@@ -21,6 +21,7 @@ import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/u
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
 import { rejectInvalidNewPassword } from "./utils/password-length";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
+import { isPublicHandle, PUBLIC_HANDLE_MAX_LENGTH, PUBLIC_HANDLE_MIN_LENGTH } from "../../src/lib/schemas/publicHandle";
 
 function isSignUpRequest(request: Request | undefined): boolean {
   return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
@@ -51,7 +52,11 @@ export function createBetterAuth(env: Env, request: Request) {
 
   const db = createDb(env);
   const plugins = [
-    username(),
+    username({
+      minUsernameLength: PUBLIC_HANDLE_MIN_LENGTH,
+      maxUsernameLength: PUBLIC_HANDLE_MAX_LENGTH,
+      usernameValidator: isPublicHandle,
+    }),
     ...(shouldCheckBreachedPassword(env, request)
       ? [
           haveIBeenPwned({

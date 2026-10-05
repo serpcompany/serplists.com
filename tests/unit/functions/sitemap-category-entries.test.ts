@@ -103,7 +103,7 @@ describe('public Template rule for the sitemaps', () => {
 });
 
 describe('public URL rules for the sitemaps', () => {
-  const usernames = ['alice', 'al', 'a'.repeat(30), 'a'.repeat(31), 'bob_smith.2', ' padded ', 'with space', 'émile', 'semi;colon', ''];
+  const usernames = ['alice', 'al', 'a'.repeat(30), 'a'.repeat(31), 'bob_smith.2', 'jane-doe', '-edge-', 'Mixed-Case', ' padded ', 'with space', 'émile', 'semi;colon', ''];
   const slugs = ['plan', 'plan-2', 'Plan', '-plan', 'plan-', 'pl--an', 'a'.repeat(160), 'a'.repeat(161), ' trimmed ', 'café', 'x', ''];
 
   it("applies the same username and slug rules in SQL as in code, so a shard page's LIMIT counts only rows it lists", async () => {

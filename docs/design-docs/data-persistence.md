@@ -353,6 +353,8 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   namespace (`public_handles`) ahead of Organization public profiles. Its backfill stops on a
   collision, so a database is checked first, and triggers keep the registry in step with every
   write, Better Auth's included ([database operations](database-operations.md#public-handle-registry)).
+  `0029` recreated the four sitemap triggers on `users` so a username with `-`, which the
+  handle rule allows, refreshes the sitemaps like any other.
 
 ## Seeds
 

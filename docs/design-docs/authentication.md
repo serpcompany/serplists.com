@@ -204,6 +204,9 @@ and user-facing failure states when a supporting service is unavailable.
   Saving a new username or name refreshes the cached Template lists, which embed
   the owner's username, and Share always builds the link from the signed-in owner's
   current username. Links shared under an old username stop working after a rename.
+- Usernames follow the [public handle rule](database-operations.md#public-handle-registry)
+  Organization slugs follow: 3 to 30 letters, digits, `_`, `.` and `-` (the username plugin's
+  `usernameValidator` is `isPublicHandle` from `src/lib/schemas/publicHandle.ts`).
 - Usernames are stored lowercase (the username plugin's normalizer) and are unique
   (`idx_users_username`). The plugin's "already taken" check never runs on
   `/update-user` in Better Auth 1.3.4, because it looks for a session before the

@@ -8,6 +8,7 @@ import {
   users,
 } from '../../db/schema/index';
 import { createDb } from '../api/db';
+import { isPublicHandle } from '../../src/lib/schemas/publicHandle';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
@@ -62,7 +63,7 @@ export function sitemapImplementationLastmod(): string | null {
 
 export const validUsernameCondition = sql<boolean>`
   length(trim(${users.username})) between 3 and 30
-  and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.]*'}`;
+  and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.-]*'}`;
 
 const publicTemplateCondition = and(
   eq(templates.is_public, true),
@@ -197,9 +198,7 @@ export function catalogPageEntry(path: '/templates/' | '/categories/'): SitemapE
   return entry;
 }
 
-export function isValidUsername(value: string): boolean {
-  return value.length >= 3 && value.length <= 30 && /^[A-Za-z0-9_.]+$/.test(value);
-}
+export const isValidUsername = isPublicHandle;
 
 export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
