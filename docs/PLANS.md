@@ -24,6 +24,9 @@ have not been updated in 30 days.
   engineering write-up recommends, no exceptions, and no code comments.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
+- [Guest runs](exec-plans/active/guest-runs.md): signed-out visitors run public Templates in the
+  browser, then save the run into an account after signing up or logging in (issue #253), in two
+  PRs.
 - [Public handles](exec-plans/active/public-handles.md): one case-insensitive handle namespace
   for Users and Organizations (issue #233), in two PRs with a staging migration between them.
 - [Organization public profiles](exec-plans/active/organization-profiles.md): an Organization's

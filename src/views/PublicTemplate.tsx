@@ -2,18 +2,16 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, FileX } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PageEmptyState, PageLoadingState } from '@/components/layout/PageState';
-import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
+import { PublicTemplateRecordStates } from '@/components/template/PublicTemplateRecordStates';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
-import { Button } from '@/components/ui/button';
-import { buttonVariants } from '@/components/ui/button-variants';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { startGuestRun } from '@/features/guest-runs/guestRunStore';
+import { useGuestRunStatus } from '@/features/guest-runs/useGuestRunStatus';
 import { buildCopiedTemplatePath, followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { usePageVisit } from '@/hooks/usePageVisit';
@@ -24,15 +22,12 @@ import {
 } from '@/lib/access-flow';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { ownerConsoleContext } from '@/lib/consoleRoutes';
-import { TEMPLATE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
 import {
+  buildCanonicalPublicTemplateRunPath,
   buildConsoleRunPath,
   buildPublicProfilePath,
-  buildPublicTemplatesPath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
-
-import { Link } from '@/components/navigation/Link';
 
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
@@ -41,7 +36,7 @@ const PublicTemplate = () => {
   }>();
   const router = useAppRouter();
   const beginVisit = usePageVisit();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: isSessionLoading } = useAuth();
   const {
     activeTeamId,
     canEditTemplates,
@@ -80,6 +75,11 @@ const PublicTemplate = () => {
     workspaceStatus,
   });
   const displayTemplate = template;
+  const guestRunStatus = useGuestRunStatus(displayTemplate?.id);
+  const guestRunPath =
+    displayTemplate && !isAuthenticated && !isSessionLoading
+      ? buildCanonicalPublicTemplateRunPath(displayTemplate)
+      : null;
 
   useEffect(() => {
     if (!displayTemplate) {
@@ -102,7 +102,7 @@ const PublicTemplate = () => {
 
   const handleStartRunClick = () => {
     if (!template || isWorkspaceLoading || !canRunTemplates) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !guestRunPath) {
       navigateToLoginWithReturnPath(router.push);
       return;
     }
@@ -111,6 +111,14 @@ const PublicTemplate = () => {
 
   const handleStartRun = async (runName: string) => {
     if (!template || isWorkspaceLoading || !canRunTemplates || startRunInFlight.current) return;
+
+    if (guestRunPath) {
+      startGuestRun(template, runName);
+      setRunDialogOpen(false);
+      toast.success('Checklist run created');
+      router.push(guestRunPath);
+      return;
+    }
 
     const visit = beginVisit();
     startRunInFlight.current = true;
@@ -163,88 +171,57 @@ const PublicTemplate = () => {
     }
   };
 
-  const ownerSlug = displayTemplate
-    ? resolvePublicTemplateOwnerSlug(displayTemplate)
-    : null;
-  const ownerPath = ownerSlug ? buildPublicProfilePath(ownerSlug) : null;
-
-  if (loading) {
-    return <PageLoadingState label="Loading template…" />;
-  }
-
-  if (loadError && !displayTemplate) {
-    return (
-      <PageEmptyState
-        actions={
-          <>
-            <Button onClick={reload}>Try again</Button>
-            <Link href={buildPublicTemplatesPath()} className={buttonVariants({ variant: 'outline' })}>
-              Browse the Template Library
-            </Link>
-          </>
-        }
-        description={loadError}
-        title="Unable to load template"
-      />
-    );
-  }
-
-  if (notFound || !displayTemplate) {
-    return (
-      <>
-        <NoIndexMeta follow={false} />
-        <PageEmptyState
-          actions={
-            <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
-              <ArrowLeft data-icon="inline-start" />
-              Browse the Template Library
-            </Link>
-          }
-          description={TEMPLATE_NOT_FOUND_PAGE_TEXT.description}
-          icon={<FileX />}
-          title={TEMPLATE_NOT_FOUND_PAGE_TEXT.title}
-        />
-      </>
-    );
-  }
-
   return (
-    <div className="pb-12">
-      <PublicTemplateView
-        key={displayTemplate.id}
-        template={displayTemplate}
-        totalItems={totalItems}
-        ownerSlug={ownerSlug}
-        ownerPath={ownerPath}
-        isAuthenticated={isAuthenticated}
-        canSaveTemplate={canEditTemplates}
-        canStartRun={canRunTemplates}
-        isBillingError={billingState.isError}
-        isBillingLoading={billingState.isLoading}
-        isProUser={billingState.isPro}
-        isCreatingRun={isCreatingRun}
-        isSaving={isSaving}
-        isTeamWorkspace={isTeamWorkspace}
-        isWorkspaceLoading={isWorkspaceLoading}
-        workspaceError={
-          isAuthenticated && workspaceStatus === 'error'
-            ? {
-                onContinueInPersonal: () => selectWorkspace('personal'),
-                onRetry: retryWorkspace,
+    <PublicTemplateRecordStates
+      loadError={loadError}
+      loading={loading}
+      notFound={notFound}
+      onRetry={reload}
+      template={displayTemplate}
+    >
+      {(shownTemplate) => {
+        const ownerSlug = resolvePublicTemplateOwnerSlug(shownTemplate);
+        return (
+          <div className="pb-12">
+            <PublicTemplateView
+              key={shownTemplate.id}
+              template={shownTemplate}
+              totalItems={totalItems}
+              ownerSlug={ownerSlug}
+              ownerPath={ownerSlug ? buildPublicProfilePath(ownerSlug) : null}
+              isAuthenticated={isAuthenticated}
+              canSaveTemplate={canEditTemplates}
+              canStartRun={canRunTemplates}
+              continueRunPath={guestRunStatus === 'in_progress' ? guestRunPath : null}
+              isBillingError={billingState.isError}
+              isBillingLoading={billingState.isLoading}
+              isProUser={billingState.isPro}
+              isCreatingRun={isCreatingRun}
+              isSaving={isSaving}
+              isTeamWorkspace={isTeamWorkspace}
+              isWorkspaceLoading={isWorkspaceLoading}
+              workspaceError={
+                isAuthenticated && workspaceStatus === 'error'
+                  ? {
+                      onContinueInPersonal: () => selectWorkspace('personal'),
+                      onRetry: retryWorkspace,
+                    }
+                  : null
               }
-            : null
-        }
-        onStartRun={handleStartRunClick}
-        onSaveTemplate={handleSaveTemplate}
-      />
-      <RunNameDialog
-        open={runDialogOpen}
-        onOpenChange={setRunDialogOpen}
-        templateTitle={displayTemplate.title}
-        onConfirm={handleStartRun}
-        loading={isCreatingRun}
-      />
-    </div>
+              onStartRun={handleStartRunClick}
+              onSaveTemplate={handleSaveTemplate}
+            />
+            <RunNameDialog
+              open={runDialogOpen}
+              onOpenChange={setRunDialogOpen}
+              templateTitle={shownTemplate.title}
+              onConfirm={handleStartRun}
+              loading={isCreatingRun}
+            />
+          </div>
+        );
+      }}
+    </PublicTemplateRecordStates>
   );
 };
 

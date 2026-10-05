@@ -54,6 +54,8 @@ const CANONICAL_PAGE_OF_EACH_KIND = [
   '/profile/john.doe/',
   '/profile/serp/ultimate-camping-checklist/',
   '/profile/john.doe/weekly-review/',
+  '/profile/serp/ultimate-camping-checklist/run/',
+  '/profile/john.doe/weekly-review/run/',
   '/share/5b0d4a1e-6c1f-4f55-9d3e-2a7f0c7d9e11/',
   '/team-invites/5b0d4a1e-6c1f-4f55-9d3e-2a7f0c7d9e11-0c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f/',
   '/dashboard/templates/',

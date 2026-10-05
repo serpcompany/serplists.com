@@ -10,6 +10,7 @@ import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import type { ChecklistTemplate } from '@/types/checklist';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { lastOf } from './elements';
+import { renderSettled } from './renderInTheDom';
 
 type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
 type TemplateDetailModel = Partial<ReturnType<typeof useTemplateDetailModel>>;
@@ -130,6 +131,7 @@ export {
 
 export function resetToASignedInUserInPersonal() {
   mockToastError.mockReset();
+  mockToastSuccess.mockReset();
   mockUseTemplateDetailModel.mockReset();
   mockViewProps.mockReset();
   authState.isAuthenticated = true;
@@ -189,7 +191,7 @@ interface RouteVisit {
   hash?: string;
 }
 
-export const CLEAN_VISIT: RouteVisit = {
+const CLEAN_VISIT: RouteVisit = {
   path: '/profile/alice/reviewed-clipy-checklist',
   origin: 'https://serplists.com',
 };
@@ -206,11 +208,7 @@ export function restoreNavigationWindow(): void {
 
 export const robotsTagThePageAdds = (html: string) => html.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 
-export function renderPublishedRoute(
-  template: ChecklistTemplate,
-  modelOverrides: TemplateDetailModel = {},
-  visit: RouteVisit = CLEAN_VISIT,
-) {
+function showThePublishedTemplateAt(template: ChecklistTemplate, modelOverrides: TemplateDetailModel, visit: RouteVisit) {
   mockUseTemplateDetailModel.mockReturnValue({
     billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
     loading: false,
@@ -224,7 +222,24 @@ export function renderPublishedRoute(
   navigation.reset(`${visit.origin}${visit.path}${visit.search ?? ''}${visit.hash ?? ''}`, {
     routes: ['/profile/[username]/[templateSlug]'],
   });
+}
+
+export function renderPublishedRoute(
+  template: ChecklistTemplate,
+  modelOverrides: TemplateDetailModel = {},
+  visit: RouteVisit = CLEAN_VISIT,
+) {
+  showThePublishedTemplateAt(template, modelOverrides, visit);
   return { html: renderToStaticMarkup(<PublicTemplate />) };
+}
+
+export async function openThePublishedRouteInTheDom(
+  template: ChecklistTemplate,
+  { modelOverrides = {}, inThisBrowser = () => undefined }: { modelOverrides?: TemplateDetailModel; inThisBrowser?: () => void } = {},
+) {
+  showThePublishedTemplateAt(template, modelOverrides, CLEAN_VISIT);
+  inThisBrowser();
+  await renderSettled(<PublicTemplate />);
 }
 
 export const lastViewProps = (): ViewProps => lastOf(mockViewProps.mock.calls)[0];

@@ -113,6 +113,7 @@ describe('blank section and sub-task titles saved before the editor defaulted th
         isAuthenticated={false}
         canSaveTemplate={false}
         canStartRun={false}
+        continueRunPath={null}
         isBillingError={false}
         isBillingLoading={false}
         isProUser={false}

@@ -14,6 +14,7 @@ import type {
 import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
 import type { ApiRun } from '@/lib/schemas/apiRuns';
 import { parseJsonArray } from '@/lib/schemas/jsonArrays';
+import { formatCount } from '@/lib/utils/pluralize';
 
 const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
 
@@ -133,6 +134,9 @@ export const countRunExecutionItems = (
   const sections = run?.sections ?? [];
   return { ...countRunTasks(sections), progress: calculateSectionsProgress(sections) };
 };
+
+export const describeRunTaskCounts = (counts: Pick<RunTaskCounts, 'tasksCompleted' | 'tasksTotal'>): string =>
+  `${counts.tasksCompleted} of ${formatCount(counts.tasksTotal, 'task')} finished`;
 
 export const getSelectedRunItem = (
   run: ChecklistRun | null,

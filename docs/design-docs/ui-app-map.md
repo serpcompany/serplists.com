@@ -47,7 +47,8 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 - **Public site:** Home, the Template Library, Categories, Features, Pricing, About, Contact.
 - **Auth:** Log in, Register, Forgot password, Reset password.
 - **Public Profiles and Public Templates:** `/profile/<handle>/` (a User's or an
-  Organization's) and `/profile/<handle>/<template>/`.
+  Organization's) and `/profile/<handle>/<template>/`, and a Public Template's guest run,
+  `/profile/<handle>/<template>/run/`.
 - **Shared runs:** `/share/<token>/`, a Run opened through its share link.
 - **Organization invites:** `/team-invites/<token>/`.
 - **Signed-in console:**
@@ -63,12 +64,20 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 Each step is a screen, and a quoted label is the control that moves the user on.
 
 - **First visit to a first Run:** Home → "Browse the Template Library" → Template Library →
-  template card → Public template page → "Start Run" → Log in (the template page is the return
-  path) → "Sign up" → Register → "Create account" → Log in ("Verify your email first, then sign
-  in.") → verification email link → Log in ("Email verified. You can sign in now.") → "Sign in"
-  → Public template page → "Start Run" → Start a Run dialog → "Start Run" → Run page
-  (`/dashboard/runs/<id>/`). When no email verification is required, Register returns
-  straight to the template page.
+  template card → Public template page → "Start Run" → Start a Run dialog → "Start Run" →
+  Guest run (`/profile/<user>/<template>/run/`, kept in the browser, no account) → task
+  checkbox or "Mark Complete" → … → "Complete this Run?" → "Complete Run" → the same Guest run,
+  now "Completed". Back on the template page while the run is in progress, "Continue Run"
+  opens it again; a plain link to the run page (from a code project or a SKILL.md file) opens
+  it too, and starts one when the browser has none. "Delete run" → "Delete run" dialog →
+  "Delete" → Public template page.
+- **First Run in an account:** any public page → "Get started" → Register → "Create account"
+  → Log in ("Verify your email first, then sign in.") → verification email link → Log in
+  ("Email verified. You can sign in now.") → "Sign in" → My Templates → "Template Library" →
+  Public template page → "Start Run" → Start a Run dialog → "Start Run" → Run page
+  (`/dashboard/runs/<id>/`). Signed in, the public template page's Start Run always starts a
+  Run in the account; a signed-in user who opens a guest run link with no guest run in the
+  browser lands on the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
   My Templates (a sign-in with no return path opens `/dashboard/`, which opens the remembered
@@ -184,7 +193,8 @@ Toasts (sonner) report results everywhere.
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
 | `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
-| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice |
+| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice; "Start Run" becomes "Continue Run" while a visitor who is not signed in has a guest run in progress |
+| `/profile/<handle>/<template>/run/` | [Guest run](ui-screen-inventory.md#guest-run) | Child page of the public template page ("Start Run" signed out, "Continue Run", the breadcrumb back), and a page opened from a plain link | Shell overlays; Run complete dialog; Delete run dialog; Run tasks sheet; browser confirm | Starts a run when the browser has none; selected task; completed (frozen); task list column at `xl` |
 
 ### Auth and invites
 

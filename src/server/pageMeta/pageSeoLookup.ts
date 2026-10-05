@@ -6,3 +6,9 @@ export type PageSeoLookup =
   | { kind: 'unavailable' };
 
 export const seoFoundBy = (lookup: PageSeoLookup): PageSeo | null => (lookup.kind === 'unavailable' ? null : lookup.seo);
+
+export const guestRunSeoFor = (templateLookup: PageSeoLookup): PageSeo | null => {
+  if (templateLookup.kind !== 'found') return seoFoundBy(templateLookup);
+  const { path, ...templateSeo } = templateLookup.seo;
+  return { ...templateSeo, robots: 'noindex, follow' };
+};

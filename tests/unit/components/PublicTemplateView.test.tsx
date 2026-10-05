@@ -19,6 +19,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
       isAuthenticated
       canSaveTemplate
       canStartRun
+      continueRunPath={null}
       isBillingError={false}
       isBillingLoading={false}
       isProUser={false}
@@ -192,6 +193,20 @@ describe('PublicTemplateView', () => {
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       expect(button).toMatch(/<button[^>]*disabled=""/);
+    }
+  });
+
+  it('links both run actions to the run a visitor already started in this browser instead of starting another', () => {
+    const html = renderView({
+      continueRunPath: '/profile/devinschumacher/complete-wedding-planning-checklist/run/',
+      isAuthenticated: false,
+    });
+
+    expect(buttonsLabelled(html, /^Start Run$/)).toEqual([]);
+    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => link.replace(/<[^>]+>/g, '') === 'Continue Run') ?? [];
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toContain('href="/profile/devinschumacher/complete-wedding-planning-checklist/run/"');
     }
   });
 

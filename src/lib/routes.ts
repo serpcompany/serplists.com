@@ -145,6 +145,11 @@ export const buildCanonicalPublicTemplatePath = (template: PublicTemplateUrlFiel
   return buildPublicTemplatePath(ownerSlug, templateSlug);
 };
 
+export const buildCanonicalPublicTemplateRunPath = (template: PublicTemplateUrlFields): string | null => {
+  const templatePath = buildCanonicalPublicTemplatePath(template);
+  return templatePath ? `${templatePath}run/` : null;
+};
+
 export const hasCanonicalPublicTemplatePath = (template: PublicTemplateUrlFields): boolean =>
   buildCanonicalPublicTemplatePath(template) !== null;
 

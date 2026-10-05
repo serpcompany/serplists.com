@@ -670,7 +670,9 @@ existing content, invent nothing):
   - "Ready to use this template?": text that says what the viewer's role allows; "Copy to
     Library" (outline) and "Start Run" (primary).
 - **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog) → [Run
-  page](#run-page). Signed out → [Log in](#log-in), then back.
+  page](#run-page). Signed out, the same dialog starts a run in the browser → [Guest
+  run](#guest-run); while that run is in progress both "Start Run" buttons read "Continue Run"
+  (a link to it).
 - **SECONDARY ACTIONS:** "Share" (copies the page's address: "Link copied to clipboard");
   "Save" or "Copy to Library" (copies the Template into the active context, then opens the
   copy's [Template detail](#template-detail)); a category chip; the owner link; open or close a
@@ -742,6 +744,55 @@ existing content, invent nothing):
     the Template again on every visit (bundled Templates excepted).
   - The view is keyed by the Template's id, so another Template starts with fresh view state:
     its sections as they first open, and Save not yet "Saved".
+  - Its loading, load error and not-found states are `PublicTemplateRecordStates`
+    (`src/components/template/PublicTemplateRecordStates.tsx`), which the Guest run shares.
+
+### Guest run
+
+- **SCREEN NAME:** Guest run (`/profile/<user>/<template>/run/`)
+- **PURPOSE:** Let a visitor who is not signed in work through a Public Template in the browser:
+  tick tasks and Sub-tasks, write notes and complete it, with nothing saved to the server.
+- **HOW USER GETS HERE:** "Start Run" on the [Public template page](#public-template-page)
+  while signed out, through the [Start a Run dialog](#start-a-run-dialog); "Continue Run" there;
+  a plain link to the address (a code project, a SKILL.md file), which starts a run with the
+  default name when the browser has none.
+- **WHAT'S ON THE SCREEN:**
+  - The public shell, then a breadcrumb: Home (an icon) › "Template Library" › the Template's
+    title (a link to its page) › the run's title.
+  - The run page's header, without Rename, Share or a back button: the title, "X of Y tasks
+    finished", "This run is saved in this browser only.", a "Completed" or "In Progress"
+    badge, from `xl` a progress bar with "N%"; actions (under the text on phones): "Complete
+    run" when every task is done, "Delete run" (outline).
+  - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
+    block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
+    is no provenance, Activity or "Removed from Template".
+- **PRIMARY ACTION:** "Mark Complete".
+- **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Complete run" and "Finish
+  Run" → [Run complete dialog](#run-complete-dialog); "Delete run" → [Delete
+  confirmations](#delete-confirmations) → the public template page; the breadcrumb.
+- **STATES:** loading the Template ("Loading template…"), then a spinner while the run opens
+  or starts; the Template's load error and not-found states, as on its page; in progress;
+  every task done; completed (frozen, and the visitor stays); unsaved notes ([browser
+  confirm](#browser-confirm-prompts)); a run another tab deleted or replaced ("Run not found",
+  then the template page); a signed-in user with no guest run in the browser goes to the
+  template page; always `noindex, follow`, with no canonical URL.
+- **NAVIGATION TYPE:** child page of the public template page.
+- **PATTERN CHOICE (built):** the [Run page](#run-page)'s header and two-column workspace inside
+  the public shell, under the [Detail page](#detail-page) breadcrumb.
+- **REFERENCE IMAGES:** pattern-detail-2.png, pattern-detail-3.png (as for the Run page).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: breadcrumb; page header; progress block (below `xl`); task panel with its
+    sticky footer; task column (from `xl`, sticky).
+  - COMPONENT TYPES: breadcrumb; heading; badges; outline and primary buttons; shadcn
+    Progress; checkbox; content blocks; notes Field; task list; Sheet; AlertDialog; Dialog.
+  - DATA FIELDS: the guest run from localStorage (title, status, progress, task counts,
+    sections, tasks, Sub-tasks, notes); the Template (title, page path).
+- **PROOF PASS:** Pending: the lead runs `pnpm run ui:snap` on this page at desktop and phone
+  width before the PR.
+- **NOTES:** Code: `src/views/GuestRun.tsx`, with `GuestRunHeader` and `RunWorkspace` in
+  `src/components/run-execution/`, the model in `src/features/guest-runs/` and the page's
+  metadata in `src/app/(site)/profile/[username]/[templateSlug]/run/page.tsx`. It can't be
+  shared: every visitor of the address sees the run their own browser holds.
 
 ### Categories
 
@@ -2130,13 +2181,14 @@ replaced.
 - **SCREEN NAME:** Start a Run dialog ("Start a Run")
 - **PURPOSE:** Name a new Run of a Template: the one way to start a Run.
 - **HOW USER GETS HERE:** "Start Run" on a My Templates card (hover bar or actions menu) or
-  list row, on Template detail, and on the public template page (signed in; a visitor who is
-  not signed in goes to Log in first and comes back to the template page).
+  list row, on Template detail, and on the public template page (signed in or not).
 - **WHAT'S ON THE SCREEN:** "Start a Run"; "Run name", a labelled field whose placeholder is
   the default name ("<template title> - <date and time>"); "Cancel", "Start Run"; the close
   button.
 - **PRIMARY ACTION:** "Start Run" → [Run page](#run-page) (toast "Checklist run created", or
-  "Run started in <Organization>" for another Organization's Template on Template detail).
+  "Run started in <Organization>" for another Organization's Template on Template detail). For
+  a visitor who is not signed in, on the public template page, it starts a guest run in the
+  browser instead → [Guest run](#guest-run) (toast "Checklist run created").
 - **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
 - **STATES:** "Starting…" (the field, both buttons and the Close button disabled, and Escape or a
   click outside does not close it); a blank name gets the default;
@@ -2235,13 +2287,14 @@ replaced.
 - **SCREEN NAME:** Run complete dialog ("Complete this Run?")
 - **PURPOSE:** Confirm completing a Run whose tasks are all done.
 - **HOW USER GETS HERE:** ticking the last open task; "Complete run"; "Finish Run". On the Run
-  page and on a shared run.
+  page, on a shared run and on a guest run.
 - **WHAT'S ON THE SCREEN:** "Complete this Run?", "Every task is done. Completing the Run
   freezes its tasks: they can no longer be ticked or unticked."; "Not yet" (outline), "Complete
   Run" (primary); the close button.
 - **PRIMARY ACTION:** "Complete Run": completes the Run (toast "Run completed"); a signed-in
-  owner or member then goes to [My Runs](#my-runs), and a guest on a share link stays on the
-  [Shared run](#shared-run), which now reads "Completed".
+  owner or member then goes to [My Runs](#my-runs), a guest on a share link stays on the
+  [Shared run](#shared-run), and a visitor on a [Guest run](#guest-run) stays on it; both now
+  read "Completed".
 - **SECONDARY ACTIONS:** "Not yet", Escape or the close button: the Run stays in progress and
   the page keeps offering "Complete run".
 - **STATES:** both buttons and the Close button wait while the completion saves, and Escape or a
@@ -2270,12 +2323,14 @@ replaced.
 - **PURPOSE:** Confirm a delete. The item moves to [Archive](#archive), where it can be
   restored.
 - **HOW USER GETS HERE:** "Delete" on a My Templates card menu or list row; "Delete" in
-  Template detail's "Template actions"; "Delete" in My Runs' "Run options".
+  Template detail's "Template actions"; "Delete" in My Runs' "Run options"; "Delete run" on a
+  [Guest run](#guest-run).
 - **WHAT'S ON THE SCREEN:** "Delete template" with "Are you sure you want to delete this
   template?" (My Templates) or "Are you sure you want to delete "<title>"?" (Template detail);
   "Delete run" with "Are you sure you want to delete this run?"; "Cancel", "Delete".
 - **PRIMARY ACTION:** "Delete" (toast "Template deleted" or "Run deleted"; Template detail
-  returns to My Templates).
+  returns to My Templates, and a Guest run to its public template page). A guest run is removed
+  from the browser, not archived: it has no Archive entry.
 - **SECONDARY ACTIONS:** "Cancel".
 - **STATES:** "Deleting..."; a failure toast; an item deleted elsewhere closes the dialog and
   reloads the list.
@@ -2374,7 +2429,8 @@ replaced.
 
 - **SCREEN NAME:** Run tasks sheet ("Tasks")
 - **PURPOSE:** Open any task of the Run on narrower screens.
-- **HOW USER GETS HERE:** "Tasks" in the Run page's progress block, below `xl`.
+- **HOW USER GETS HERE:** "Tasks" in the progress block of the Run page or the Guest run, below
+  `xl`.
 - **WHAT'S ON THE SCREEN:** a sheet from the bottom: "Tasks", "Open any task in this run.";
   the task list by section ("Run tasks"), the current task marked.
 - **PRIMARY ACTION:** pick a task (the sheet closes).
@@ -2421,8 +2477,8 @@ replaced.
 - **PURPOSE:** Ask before losing work or access.
 - **HOW USER GETS HERE:**
   - Unsaved changes in the Template editor (form edits, a file still uploading, a save in
-    flight) or on the Run page (unsaved task notes): on an in-app link, Back or Forward, and
-    "Sign out"; the browser's own leave prompt on a reload or tab close.
+    flight) or on the Run page and the Guest run (unsaved task notes): on an in-app link, Back
+    or Forward, and "Sign out"; the browser's own leave prompt on a reload or tab close.
   - In the editor: "Load latest version" with unsaved edits; a Clipy draft or "Restore draft"
     replacing unsaved work.
   - In Organization Settings: "Leave <name>? You will lose access to its Templates and Runs." and

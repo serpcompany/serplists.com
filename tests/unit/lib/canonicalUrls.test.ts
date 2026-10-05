@@ -54,6 +54,7 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['getCanonicalProfilePath', present(routes.getCanonicalProfilePath('Alice', 'alice'), 'the canonical path of a profile')],
   ['buildPublicTemplatePath', routes.buildPublicTemplatePath('alice', 'weekly-review')],
   ['buildCanonicalPublicTemplatePath', present(routes.buildCanonicalPublicTemplatePath(template), 'the canonical path of a template')],
+  ['buildCanonicalPublicTemplateRunPath', present(routes.buildCanonicalPublicTemplateRunPath(template), "the path of a template's guest run")],
   ['buildPublicFeaturesPath', routes.buildPublicFeaturesPath()],
   ['buildPublicFeaturePath', routes.buildPublicFeaturePath('template-builder')],
   ['buildSharePath', routes.buildSharePath('share-token')],

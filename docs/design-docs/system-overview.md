@@ -69,6 +69,7 @@ Public routes include:
 - `/categories/`
 - `/profile/:username/`
 - `/profile/:username/:templateSlug/`
+- `/profile/:username/:templateSlug/run/` (a guest run, kept in the visitor's browser)
 - `/share/:shareToken/`
 - `/team-invites/:token/` (legacy compatibility route for Organization invites)
 

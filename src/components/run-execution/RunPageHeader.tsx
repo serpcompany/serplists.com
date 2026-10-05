@@ -3,11 +3,11 @@ import { ArrowLeft, Edit2 } from 'lucide-react';
 
 import { DashboardPageHeader } from '@/components/dashboard/DashboardContentShell';
 import { RunShareActions } from '@/components/run-execution/RunShareActions';
+import { RunStatusMeta } from '@/components/run-execution/RunStatusMeta';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import type { RunExecutionActionResult } from '@/features/run-execution/useRunExecutionModel';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { onSingleClick } from '@/lib/utils/repeatClick';
@@ -83,16 +83,9 @@ export function RunPageHeader({
       }
       description={description}
       meta={
-        <>
-          <Badge variant={isCompleted ? 'default' : 'secondary'}>
-            {isCompleted ? 'Completed' : 'In Progress'}
-          </Badge>
+        <RunStatusMeta isCompleted={isCompleted} progress={progress}>
           {canUpdateRun || roleUnavailable ? null : <Badge variant="secondary">View only</Badge>}
-          <div className="hidden w-32 items-center gap-2 xl:flex">
-            <Progress aria-label="Run progress" className="flex-1" value={progress} />
-            <span className="text-xs font-medium tabular-nums">{progress}%</span>
-          </div>
-        </>
+        </RunStatusMeta>
       }
       actions={
         <>

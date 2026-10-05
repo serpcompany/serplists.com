@@ -58,14 +58,6 @@ test('a double click on the header Start Run opens the dialog, and one on its St
   await apiRequest(page, `/checklists/${runId}`, bodyNotRead, { method: 'DELETE' });
 });
 
-test('Start Run sends a visitor who is not signed in to sign in', async ({ page }) => {
-  await openPublicTemplate(page);
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-
-  await expect(page).toHaveURL(/\/login\/\?next=%2Fprofile%2Fserp%2Fultimate-camping-checklist%2F$/);
-  await expect(page.getByRole('dialog', { name: 'Start a Run' })).toHaveCount(0);
-});
-
 test('a failed Save keeps the Save button instead of showing Saved', async ({ page }) => {
   await loginAs(page, 'admin');
   const copies = await failLibraryTemplateCopies(page);

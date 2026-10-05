@@ -17,6 +17,7 @@ import { Stat } from '@/components/layout/Stat';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   type WorkspaceErrorActions,
   WorkspaceErrorNotice,
@@ -41,6 +42,7 @@ interface PublicTemplateViewProps {
   isAuthenticated: boolean;
   canSaveTemplate: boolean;
   canStartRun: boolean;
+  continueRunPath: string | null;
   isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
@@ -80,6 +82,7 @@ export function PublicTemplateView({
   isAuthenticated,
   canSaveTemplate,
   canStartRun,
+  continueRunPath,
   isBillingError,
   isBillingLoading,
   isProUser,
@@ -126,7 +129,12 @@ export function PublicTemplateView({
     isWorkspaceLoading,
   });
   const actionDescribedBy = workspaceError ? WORKSPACE_ERROR_ID : undefined;
-  const startRunButton = (
+  const startRunButton = continueRunPath ? (
+    <Link href={continueRunPath} className={buttonVariants()}>
+      <Play data-icon="inline-start" />
+      Continue Run
+    </Link>
+  ) : (
     <Button
       onClick={onStartRun}
       type="button"
