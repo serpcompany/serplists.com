@@ -78,6 +78,15 @@ describe("repo template catalog", () => {
     );
   });
 
+  it("gives a portable pack's templates the same id on every load, from their slug, so a guest run started on one is found after a reload", () => {
+    const first = normalizeRepoTemplateSources(portablePackSource("2026-03-22T00:00:00.000Z"));
+    const second = normalizeRepoTemplateSources(portablePackSource("2026-03-22T00:00:00.000Z"));
+
+    expect(first.map(({ id }) => id)).toEqual(["repo:portable-checklist"]);
+    expect(second.map(({ id }) => id)).toEqual(first.map(({ id }) => id));
+    expect(repoTemplates.map(({ id }) => id)).toEqual(repoTemplates.map(({ slug }) => `repo:${slug}`));
+  });
+
   it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));

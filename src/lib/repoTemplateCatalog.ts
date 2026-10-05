@@ -34,6 +34,7 @@ const getSourceData = (value: unknown): unknown => {
 };
 
 const packDateSchema = z.object({ exportedAt: z.string() });
+const portablePackSchema = z.object({ kind: z.literal('serplists-template-pack') });
 
 const resolveRepoPackTimestamp = (sourceData: unknown): string => {
   const parsed = packDateSchema.safeParse(sourceData);
@@ -47,11 +48,13 @@ const buildRepoTemplateId = (
   sourcePath: string,
   template: ChecklistTemplate,
   index: number,
+  fromPortablePack: boolean,
 ): string => {
   const fallbackId =
     sourcePath.split('/').pop()?.replace('.json', '') ||
     `template-${index + 1}`;
-  const baseId = template.id?.trim() || template.slug?.trim() || fallbackId;
+  const ownId = fromPortablePack ? '' : template.id?.trim();
+  const baseId = ownId || template.slug?.trim() || fallbackId;
   return baseId.startsWith('repo:') ? baseId : `repo:${baseId}`;
 };
 
@@ -62,6 +65,7 @@ export const normalizeRepoTemplateSources = (
 
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
+    const fromPortablePack = portablePackSchema.safeParse(sourceData).success;
     const { templates } = parseTemplatesFromData(sourceData, {
       timestampForUndatedTemplates: resolveRepoPackTimestamp(sourceData),
     });
@@ -73,6 +77,7 @@ export const normalizeRepoTemplateSources = (
           sourcePath,
           template as ChecklistTemplate,
           index,
+          fromPortablePack,
         ),
         isPublic: true,
         userId: REPO_TEMPLATE_USER_ID,
