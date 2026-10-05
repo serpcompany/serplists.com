@@ -26,7 +26,13 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
-  return { useWorkspace: () => ({ ...workspace, consoleContext: ownerConsoleContext(workspace.activeTeamId) }) };
+  const { workspaceShowing } = await import('../../support/workspaceForContext');
+  return {
+    useWorkspace: () => {
+      const consoleContext = ownerConsoleContext(workspace.activeTeamId);
+      return { ...workspace, consoleContext, activeWorkspace: workspaceShowing(consoleContext) };
+    },
+  };
 });
 vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
   const { editorAccess } = await import('../../fixtures/templateEditorHooks');
