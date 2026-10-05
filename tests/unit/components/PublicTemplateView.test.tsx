@@ -35,10 +35,18 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
   );
 };
 
+const textOf = (markup: string): string => {
+  let text = markup;
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text;
+};
+
 const buttonsLabelled = (html: string, label: RegExp): string[] =>
-  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) =>
-    label.test(button.replace(/<[^>]+>/g, '')),
-  );
+  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) => label.test(textOf(button)));
 
 const template: ChecklistTemplate = {
   id: 'template-1',
@@ -203,7 +211,7 @@ describe('PublicTemplateView', () => {
     });
 
     expect(buttonsLabelled(html, /^Start Run$/)).toEqual([]);
-    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => link.replace(/<[^>]+>/g, '') === 'Continue Run') ?? [];
+    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => textOf(link) === 'Continue Run') ?? [];
     expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link).toContain('href="/profile/devinschumacher/complete-wedding-planning-checklist/run/"');
