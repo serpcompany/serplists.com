@@ -12,6 +12,11 @@ import {
   uploadedFileSchema,
 } from "@/lib/schemas/accountResponses";
 import { publicProfileBodySchema } from "@/lib/schemas/publicProfiles";
+import {
+  profileDirectoryPageSchema,
+  profileDirectorySearchParams,
+  type ProfileDirectoryQuery,
+} from "@/lib/schemas/profileDirectory";
 import { apiFormDataRequest, apiRequest } from "@/lib/api/request";
 
 export type { AgentKey, CreatedAgentKey } from "@/lib/schemas/accountResponses";
@@ -38,6 +43,11 @@ export const accountApi = {
 
   async getPublicProfileByHandle(handle: string) {
     return apiRequest(`/profiles/by-handle?handle=${encodeURIComponent(handle)}`, publicProfileBodySchema);
+  },
+
+  async getProfileDirectory(query: ProfileDirectoryQuery) {
+    const search = profileDirectorySearchParams(query).toString();
+    return apiRequest(`/profiles${search ? `?${search}` : ''}`, profileDirectoryPageSchema);
   },
 
   async getProfileById(userId: string) {

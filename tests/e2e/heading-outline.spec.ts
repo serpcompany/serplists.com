@@ -33,6 +33,7 @@ const PUBLIC_PAGES: Array<[string, string]> = [
   ['/templates/', 'Template Library'],
   ['/categories/', 'Browse Categories'],
   ['/categories/outdoor/', 'outdoor'],
+  ['/profiles/', 'Profiles'],
   ['/features/', 'Features that keep work consistent.'],
   ['/features/template-builder/', 'Template Builder'],
   ['/pricing/', 'Simple pricing for checklist workflows.'],

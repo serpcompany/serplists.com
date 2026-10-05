@@ -43,6 +43,7 @@ const staticPageSources = [
   { path: '/contact/', sources: ['src/views/Contact.tsx'] },
   { path: '/templates/', sources: ['src/views/ChecklistLibrary.tsx'] },
   { path: '/categories/', sources: ['src/views/Categories.tsx'] },
+  { path: '/profiles/', sources: ['src/views/ProfilesDirectory.tsx'] },
 ] as const;
 
 const normalizeDate = (value: unknown): string | null => {
