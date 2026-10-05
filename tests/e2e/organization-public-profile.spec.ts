@@ -110,3 +110,30 @@ test("an Organization's Public Profile fits a phone", async ({ page, browser }) 
     }),
   );
 });
+
+test("the context switcher links the active Organization's Public Profile, and only while that Organization is chosen", async ({ page }) => {
+  await loginAsAdmin(page);
+  const stamp = Date.now();
+  const handle = `Switcher-Org-${stamp}`;
+  const name = `Switcher Org ${stamp}`;
+  const organization = await callApi(page, '/teams', 'POST', createdOrganization, { name, slug: handle });
+  const switcher = page.getByRole('button', { name: 'Switch context' });
+  const profileLink = page.getByRole('menuitem', { name: 'View Organization profile' });
+
+  await page.goto('/dashboard/templates/');
+  await switcher.click();
+  await expect(page.getByRole('menuitem', { name: new RegExp(name) })).toBeVisible({ timeout: 30_000 });
+  await expect(profileLink).toHaveCount(0);
+
+  await page.getByRole('menuitem', { name: new RegExp(name) }).click();
+  await expect(page).toHaveURL(new RegExp(`/dashboard/organization/${organization.id}/templates/$`));
+  await switcher.click();
+  await expect(profileLink).toHaveAttribute('href', `/profile/${handle}/`);
+
+  await page.reload();
+  await switcher.click();
+  await expect(profileLink).toHaveAttribute('href', `/profile/${handle}/`, { timeout: 30_000 });
+  await profileLink.click();
+  await expect(page).toHaveURL(new RegExp(`/profile/${handle}/$`));
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible({ timeout: 30_000 });
+});

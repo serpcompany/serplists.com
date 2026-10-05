@@ -96,6 +96,14 @@ export const resolveLegacyTemplatesCategoryRedirectPath = (
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}/`;
 
+export const buildOrganizationProfilePath = (context: {
+  type: 'personal' | 'team';
+  slug?: string | null | undefined;
+}): string | null => {
+  const handle = context.type === 'team' ? context.slug?.trim() : undefined;
+  return handle ? buildPublicProfilePath(handle) : null;
+};
+
 export const buildProfilePreviewPath = (
   formUsername: string,
   savedUsername: string | null | undefined,

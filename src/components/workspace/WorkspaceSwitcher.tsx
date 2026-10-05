@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronsUpDown, RotateCw, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, Globe, RotateCw, Settings, User, Users } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -13,7 +13,7 @@ import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { useSidebar } from '@/components/ui/use-sidebar';
 import { useWorkspace, type Workspace } from '@/contexts/WorkspaceContext';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
-import { buildConsoleSettingsPath } from '@/lib/routes';
+import { buildConsoleSettingsPath, buildOrganizationProfilePath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
 import { Link } from '@/components/navigation/Link';
@@ -43,6 +43,7 @@ export function WorkspaceSwitcher() {
   const { isMobile } = useSidebar();
   const isUnresolved = workspaceStatus === 'loading' || workspaceStatus === 'error';
   const active = getSwitcherLabel(workspaceStatus, activeWorkspace);
+  const organizationProfilePath = isUnresolved ? null : buildOrganizationProfilePath(activeWorkspace);
   const ActiveIcon = active.icon;
 
   return (
@@ -108,6 +109,12 @@ export function WorkspaceSwitcher() {
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
+        {organizationProfilePath ? (
+          <DropdownMenuItem className="gap-3" render={<Link href={organizationProfilePath} />}>
+            <Globe className="text-muted-foreground" />
+            View Organization profile
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem className="gap-3" render={<Link href={buildConsoleSettingsPath(consoleContext)} />}>
           <Settings className="text-muted-foreground" />
           Settings

@@ -18,6 +18,7 @@ import {
   buildConsoleTemplateImportPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
+  buildOrganizationProfilePath,
   buildPublicCategoriesPath,
   buildPublicCategoryPath,
   buildPublicFeaturePath,
@@ -267,6 +268,20 @@ describe('isPathWithin', () => {
     expect(isPathWithin('/dashboard/runs/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(false);
     expect(isPathWithin('/', '/')).toBe(true);
     expect(isPathWithin('/about/', '/')).toBe(false);
+  });
+});
+
+describe('buildOrganizationProfilePath', () => {
+  it("links an Organization's public profile at its handle", () => {
+    expect(buildOrganizationProfilePath({ type: 'team', slug: 'acme-launch' })).toBe('/profile/acme-launch/');
+    expect(buildOrganizationProfilePath({ type: 'team', slug: ' Acme.Launch ' })).toBe('/profile/Acme.Launch/');
+  });
+
+  it('has no profile to link for Personal or for an Organization without a handle', () => {
+    expect(buildOrganizationProfilePath({ type: 'personal', slug: 'alice' })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team' })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team', slug: null })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team', slug: '  ' })).toBeNull();
   });
 });
 

@@ -977,7 +977,9 @@ existing content, invent nothing):
   Organization's handle)
 - **PURPOSE:** Show an Organization and its Public Templates.
 - **HOW USER GETS HERE:** the owner link on an Organization Template's card (the Template
-  Library, a category page) or public template page; a link to its handle.
+  Library, a category page) or public template page; "View Organization profile" in the
+  [Context switcher](#context-switcher) while that Organization is active; a link to its
+  handle.
 - **WHAT'S ON THE SCREEN:**
   - Header: the Organization's avatar (or its initials); its name; "@handle"; its description,
     or without one the summary a User's profile shows ("Public checklist templates from
@@ -2164,9 +2166,11 @@ replaced.
   unconfirmed, "Organizations unavailable" on error), a chevron. Menu: "Personal and
   Organizations"; one item per context (icon, name, "Personal" or the role, a check on the
   active one); when the Organizations failed, "Couldn't load your Organizations" and "Retry
-  loading Organizations"; "Settings".
+  loading Organizations"; "View Organization profile" (a globe icon) while an Organization
+  with a handle is active; "Settings".
 - **PRIMARY ACTION:** pick a context.
-- **SECONDARY ACTIONS:** "Retry loading Organizations"; "Settings".
+- **SECONDARY ACTIONS:** "Retry loading Organizations"; "View Organization profile" →
+  [Organization Public Profile](#organization-public-profile); "Settings".
 - **STATES:** loading (items disabled); error (Personal stays available); Organizations
   unavailable while in Personal.
 - **NAVIGATION TYPE:** dropdown menu; on a console page, picking a context opens the same
@@ -2177,16 +2181,19 @@ replaced.
 - **REFERENCE IMAGES:** none.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: trigger (an icon tile, the context's name, a chevron); label; context items;
-    notice; retry item; separator; link.
+    notice; retry item; separator; links.
   - COMPONENT TYPES: sidebar menu button as the dropdown trigger; menu label; checkable
-    items; link item.
-  - DATA FIELDS: contexts (id, name, Personal or Organization, role); active id; status.
+    items; link items.
+  - DATA FIELDS: contexts (id, name, Personal or Organization, role, handle); active id;
+    status.
 - **PROOF PASS:** Pass (step 1): the console shots; it follows the team switcher of shadcn's
   sidebar block (no reference screenshot).
 - **NOTES:** A switch opens the chosen context's URL, which reloads the page's lists and becomes
   the remembered context.
-  "Settings" opens the current context's settings. Code: `src/components/workspace/WorkspaceSwitcher.tsx`
-  and `src/contexts/useContextSwitch.ts`.
+  "Settings" opens the current context's settings. "View Organization profile" links
+  `/profile/<handle>/` (`buildOrganizationProfilePath` in `src/lib/routes.ts`) and is left out
+  for Personal, an Organization without a handle, and while the context is unconfirmed. Code:
+  `src/components/workspace/WorkspaceSwitcher.tsx` and `src/contexts/useContextSwitch.ts`.
 
 ### Start a Run dialog
 

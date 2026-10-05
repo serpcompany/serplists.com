@@ -159,7 +159,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Public Profile:** Public template page → owner name → Public Profile → template card →
   Public template page. Signed in: account menu → "Profile" (opens a new tab). An
   Organization's handle opens the Organization Public Profile → template card → Public
-  template page.
+  template page. In an Organization with a handle: context switcher → "View Organization
+  profile" → its Organization Public Profile.
 - **Features:** header "Features" menu → a Feature page → "Browse the Template Library" or
   "See Pricing". Or Home "Explore Features" → Features → a feature card → Feature page →
   "Features" in its breadcrumb → Features.

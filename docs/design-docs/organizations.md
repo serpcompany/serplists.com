@@ -144,6 +144,11 @@ An active Organization with a handle (its slug) has a Public Profile at `/profil
 - The page (`src/views/PublicProfile.tsx`, `src/components/profile/PublicProfileDetails.tsx`)
   shows the avatar, name, `@handle`, description, stats and template cards; owners and admins
   set the avatar and description on the Organization's settings page.
+- While an Organization with a handle is the active context, the context switcher links its
+  profile ("View Organization profile", `buildOrganizationProfilePath` in `src/lib/routes.ts`).
+  The link is built from the active Organization's slug alone, so it changes with the context
+  and is absent for Personal, an Organization without a handle, and an unconfirmed context; an
+  archived or removed Organization is never the active one.
 - Every link to an Organization's public Template uses its Organization's handle: Share, "View
   public template", the library's and the profile's cards, the owner link on the public
   template page, canonical tags and sitemap entries (`resolvePublicTemplateOwnerSlug` in
