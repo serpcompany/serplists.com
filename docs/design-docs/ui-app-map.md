@@ -47,7 +47,8 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 - **Public site:** Home, the Template Library, Categories, Features, Pricing, About, Contact.
 - **Auth:** Log in, Register, Forgot password, Reset password.
 - **Public Profiles and Public Templates:** `/profile/<handle>/` (a User's or an
-  Organization's) and `/profile/<handle>/<template>/`.
+  Organization's) and `/profile/<handle>/<template>/`, and a Public Template's guest run,
+  `/profile/<handle>/<template>/run/`.
 - **Shared runs:** `/share/<token>/`, a Run opened through its share link.
 - **Organization invites:** `/team-invites/<token>/`.
 - **Signed-in console:**
@@ -63,12 +64,26 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 Each step is a screen, and a quoted label is the control that moves the user on.
 
 - **First visit to a first Run:** Home → "Browse the Template Library" → Template Library →
-  template card → Public template page → "Start Run" → Log in (the template page is the return
-  path) → "Sign up" → Register → "Create account" → Log in ("Verify your email first, then sign
-  in.") → verification email link → Log in ("Email verified. You can sign in now.") → "Sign in"
-  → Public template page → "Start Run" → Start a Run dialog → "Start Run" → Run page
-  (`/dashboard/runs/<id>/`). When no email verification is required, Register returns
-  straight to the template page.
+  template card → Public template page → "Start Run" → Start a Run dialog → "Start Run" →
+  Guest run (`/profile/<user>/<template>/run/`, kept in the browser, no account) → task
+  checkbox or "Mark Complete" → … → "Complete this Run?" → "Complete Run" → the same Guest run,
+  now "Completed". Back on the template page while the run is in progress, "Continue Run"
+  opens it again; a plain link to the run page (from a code project or a SKILL.md file) opens
+  it too, and starts one when the browser has none. "Delete run" → "Delete run" dialog →
+  "Delete" → Public template page.
+- **Save a guest run into an account:** Guest run → "Log in" (or "sign up" → Register, and
+  email verification) → Log in → "Sign in" → the same Guest run → "Save to account" → Run page
+  (`/dashboard/runs/<id>/`, "Run saved to your account"). Signed in elsewhere: Public template
+  page → "Your run of this Template is saved in this browser only." → "Save to account" → Run
+  page. At the active-run limit: "Save to account" → Stripe Checkout (Personal), and the guest
+  run stays.
+- **First Run in an account:** any public page → "Get started" → Register → "Create account"
+  → Log in ("Verify your email first, then sign in.") → verification email link → Log in
+  ("Email verified. You can sign in now.") → "Sign in" → My Templates → "Template Library" →
+  Public template page → "Start Run" → Start a Run dialog → "Start Run" → Run page
+  (`/dashboard/runs/<id>/`). Signed in, the public template page's Start Run always starts a
+  Run in the account; a signed-in user who opens a guest run link with no guest run in the
+  browser lands on the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
   My Templates (a sign-in with no return path opens `/dashboard/`, which opens the remembered
@@ -78,7 +93,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   `/dashboard/` opens the remembered context's My Templates. A console link opened while signed out → Log in
   (`?next=<path>`) → "Sign in" → that page.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template
-  editor → Template Settings fields → outline "Add section" and "Add task to <section>" →
+  editor → Template Settings fields (Required tools: "Add tool", then each tool's "Name", "URL"
+  and "Required") → outline "Add section" and "Add task to <section>" →
   Task Details → "Add Block" → "Save" → My Templates. Below `lg` the outline is a sheet:
   "Outline" in the editor's top bar → "Add section" or "Add task to <section>" (the sheet
   closes on the new entry's form) → "Outline" again for the next. On a new Template, "Generate from Clipy"
@@ -183,7 +199,8 @@ Toasts (sonner) report results everywhere.
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
 | `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
-| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
+| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice; "Start Run" becomes "Continue Run" while a visitor who is not signed in has a guest run in progress; signed in, a notice with "Save to account" while the browser holds a guest run of it |
+| `/profile/<handle>/<template>/run/` | [Guest run](ui-screen-inventory.md#guest-run) | Child page of the public template page ("Start Run" signed out, "Continue Run", the breadcrumb back), and a page opened from a plain link | Shell overlays; Run complete dialog; Delete run dialog; Run tasks sheet; browser confirm | Starts a run when the browser has none; selected task; completed (frozen); task list column at `xl`; "Log in or sign up to save it to your account." signed out, "Save to account" signed in |
 
 ### Auth and invites
 
@@ -206,11 +223,11 @@ Toasts (sonner) report results everywhere.
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
 | `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start a Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
-| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
-| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Transfer to Organization dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
+| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings with its Required tools, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
+| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Transfer to Organization dialog; Template actions menu | Visibility switch; Required tools list (when the Template has tools); read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs"; "View runs" on Template detail adds `?template=<id>`) | Share link dialog; Delete run dialog; Run options menu; Template and status selects | Template filter (in the URL); status filter; search |
-| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
+| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl`; the source Template's Required tools (when the viewer may see that Template) |
 | `/dashboard/import-templates/` | [Import Templates](ui-screen-inventory.md#import-templates) | Root section (sidebar "Import Templates") | Visibility select | Import preview; last import result; plan and role notices |
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
 | `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings" in Personal, account menu "Settings") | Revoke Run Key dialog | Created Run Key panel; incoming invites |

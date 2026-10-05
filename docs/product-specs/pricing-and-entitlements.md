@@ -44,7 +44,9 @@ User's: starting or restoring a run, and reopening a completed run by revalidati
 setting its status back to in progress, through a share link, or through an agent's Run
 Key. Saves to a run that is already in progress never check the limit, so a context over
 its limit (for example after a downgrade) can still finish its runs
-(`functions/api/utils/active-run-limit.ts`).
+(`functions/api/utils/active-run-limit.ts`). A guest run, kept only in a signed-out
+visitor's browser, belongs to no context and counts against nothing; saving it into an
+account starts a run, which counts like any other ([features](features.md#runs-and-sharing)).
 
 Limits hold under concurrent requests. Starting, restoring, and copying runs and
 Templates check the count once for a clear error, then again inside the write itself

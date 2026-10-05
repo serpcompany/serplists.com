@@ -651,6 +651,9 @@ existing content, invent nothing):
   - Signed in, when the Organizations failed to load: "Couldn't load your Organizations",
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
+  - Signed in, while the browser holds a [guest run](#guest-run) of this Template (and the role
+    can start runs): "Your run of this Template is saved in this browser only." and "Save to
+    account" (`GuestRunSaveOffer`).
   - The header: an icon tile by template type, the title, the description, the Template
     Owner's avatar and name (a link to its Public Profile: an Organization Template's
     Organization, never its Creator), "Updated <date>" (the Template's last
@@ -659,6 +662,10 @@ existing content, invent nothing):
     page), and "Share" (outline), "Save" (outline) and "Start Run" (primary).
   - Beside it (below it on phones), a panel: "Sections", "Tasks", "Type" (checklist or
     recipe).
+  - "Required tools" (only when the Template has tools): one bordered row per tool, two
+    columns from `sm`, with its name as a link that opens the tool's site in a new tab
+    ("<name> (opens in a new tab)" to screen readers), the site's host under it, and a
+    "Required" or "Optional" badge.
   - "What's included": one collapsible card per section (number, title, "N tasks",
     chevron). Open, it lists numbered tasks with their title, description and content
     blocks, read-only.
@@ -666,7 +673,9 @@ existing content, invent nothing):
   - "Ready to use this template?": text that says what the viewer's role allows; "Copy to
     Library" (outline) and "Start Run" (primary).
 - **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog) → [Run
-  page](#run-page). Signed out → [Log in](#log-in), then back.
+  page](#run-page). Signed out, the same dialog starts a run in the browser → [Guest
+  run](#guest-run); while that run is in progress both "Start Run" buttons read "Continue Run"
+  (a link to it).
 - **SECONDARY ACTIONS:** "Share" (copies the page's address: "Link copied to clipboard");
   "Save" or "Copy to Library" (copies the Template into the active context, then opens the
   copy's [Template detail](#template-detail)); a category chip; the owner link; open or close a
@@ -703,7 +712,8 @@ existing content, invent nothing):
     - The Organization error notice, when shown.
     - Header, two columns: left: icon tile, title, description, a meta row (owner, updated
       date, category chips), action row; right: stats panel.
-    - Body: "What's included" (section cards), a tags row, the call-to-action card.
+    - Body: "Required tools" (when the Template has tools), "What's included" (section
+      cards), a tags row, the call-to-action card.
   - COMPONENT TYPES: breadcrumb; icon tile; heading; muted paragraph; chip link; avatar with a
     name link; outline and primary buttons; stats panel (3 rows: icon, value, label);
     collapsible card (a header row with a number badge, title, count and chevron); task row
@@ -711,8 +721,9 @@ existing content, invent nothing):
     two buttons); alert.
   - DATA FIELDS: title; description; type; categories (name, category URL); owner (name,
     initial, Public Profile URL); last update (`updatedAt`, else `createdAt`); section count;
-    task count; sections (title, task count; tasks with title, description, content blocks);
-    tags; Save and Start Run labels; the role-aware call-to-action text.
+    task count; Required tools (name, link, required or optional); sections (title, task
+    count; tasks with title, description, content blocks); tags; Save and Start Run labels;
+    the role-aware call-to-action text.
 - **PROOF PASS:** Pass (step 1): template-desktop-light-signed-out.png,
   template-desktop-dark-signed-out.png, template-mobile-light-signed-out.png,
   template-mobile-dark-signed-out.png and the four signed-in shots, against
@@ -736,6 +747,64 @@ existing content, invent nothing):
     the Template again on every visit (bundled Templates excepted).
   - The view is keyed by the Template's id, so another Template starts with fresh view state:
     its sections as they first open, and Save not yet "Saved".
+  - Its loading, load error and not-found states are `PublicTemplateRecordStates`
+    (`src/components/template/PublicTemplateRecordStates.tsx`), which the Guest run shares.
+
+### Guest run
+
+- **SCREEN NAME:** Guest run (`/profile/<user>/<template>/run/`)
+- **PURPOSE:** Let a visitor who is not signed in work through a Public Template in the browser:
+  tick tasks and Sub-tasks, write notes and complete it, with nothing saved to the server.
+- **HOW USER GETS HERE:** "Start Run" on the [Public template page](#public-template-page)
+  while signed out, through the [Start a Run dialog](#start-a-run-dialog); "Continue Run" there;
+  a plain link to the address (a code project, a SKILL.md file), which starts a run with the
+  default name when the browser has none.
+- **WHAT'S ON THE SCREEN:**
+  - The public shell, then a breadcrumb: Home (an icon) › "Template Library" › the Template's
+    title (a link to its page) › the run's title.
+  - The run page's header, without Rename, Share or a back button: the title, "X of Y tasks
+    finished", "This run is saved in this browser only." (signed out, followed by "Log in or
+    sign up to save it to your account.", both links back to this page), a "Completed" or "In
+    Progress" badge, from `xl` a progress bar with "N%"; actions (under the text on phones):
+    "Save to account" (signed in, for a role that can start runs), "Complete run" when every
+    task is done, "Delete run" (outline).
+  - The Template's Required tools as a compact card, as on the Run page (when it has tools).
+  - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
+    block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
+    is no provenance, Activity or "Removed from Template".
+- **PRIMARY ACTION:** "Mark Complete".
+- **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Complete run" and "Finish
+  Run" → [Run complete dialog](#run-complete-dialog); "Delete run" → [Delete
+  confirmations](#delete-confirmations) → the public template page; "Log in" and "sign up" →
+  [Log in](#log-in) or [Register](#register), then back here; "Save to account" → [Run
+  page](#run-page) ("Run saved to your account"), or Stripe Checkout at the Personal plan's
+  active-run limit; the breadcrumb.
+- **STATES:** loading the Template ("Loading template…"), then a spinner while the run opens
+  or starts; the Template's load error and not-found states, as on its page; in progress;
+  every task done; completed (frozen, and the visitor stays); unsaved notes ([browser
+  confirm](#browser-confirm-prompts)); a run another tab deleted or replaced ("Run not found",
+  then the template page); a signed-in user with no guest run in the browser goes to the
+  template page; "Save to account" disabled while it saves or checkout opens, and while the
+  context loads; always `noindex, follow`, with no canonical URL.
+- **NAVIGATION TYPE:** child page of the public template page.
+- **PATTERN CHOICE (built):** the [Run page](#run-page)'s header and two-column workspace inside
+  the public shell, under the [Detail page](#detail-page) breadcrumb.
+- **REFERENCE IMAGES:** pattern-detail-2.png, pattern-detail-3.png (as for the Run page).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: breadcrumb; page header; progress block (below `xl`); task panel with its
+    sticky footer; task column (from `xl`, sticky).
+  - COMPONENT TYPES: breadcrumb; heading; badges; outline and primary buttons; shadcn
+    Progress; checkbox; content blocks; notes Field; task list; Sheet; AlertDialog; Dialog.
+  - DATA FIELDS: the guest run from localStorage (title, status, progress, task counts,
+    sections, tasks, Sub-tasks, notes); the Template (title, page path).
+- **PROOF PASS:** Pending: the lead runs `pnpm run ui:snap` on this page at desktop and phone
+  width before the PR.
+- **NOTES:** Code: `src/views/GuestRun.tsx`, with `GuestRunHeader` and `RunWorkspace` in
+  `src/components/run-execution/`, the model in `src/features/guest-runs/` and the page's
+  metadata in `src/app/(site)/profile/[username]/[templateSlug]/run/page.tsx`. It can't be
+  shared: every visitor of the address sees the run their own browser holds. An Organization
+  Template's guest run at its Creator's old URL redirects (308) to the Organization's `…/run/`,
+  as the Template page does.
 
 ### Categories
 
@@ -1434,6 +1503,8 @@ existing content, invent nothing):
   - An Organization error notice when the role is unknown ("Start Run waits until they load.
     Check your connection and try again.", "Retry"); no longer shown, since a private
     Organization Template opens only at its Organization's URL (TD-82).
+  - "Required tools" (only when the Template has tools): the public template page's list,
+    above "Template Structure".
   - "Template Structure": the public template page's section cards, always open: numbered
     sections (title, "N tasks") with their numbered tasks (title, description, content
     blocks).
@@ -1467,15 +1538,16 @@ existing content, invent nothing):
 - **REFERENCE IMAGES:** pattern-detail-1.png, pattern-detail-2.png.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: breadcrumb; a two-column header (icon tile, title, description, badge,
-    actions; the stats panel on the right, under it on phones); notice; a separator; "Template
-    Structure"; a 2-column grid of Cards (Details, Categories & Tags; stacked on phones);
+    actions; the stats panel on the right, under it on phones); notice; a separator; "Required
+    tools" (when the Template has tools); "Template Structure"; a 2-column grid of Cards
+    (Details, Categories & Tags; stacked on phones);
     the Activity Card.
   - COMPONENT TYPES: breadcrumb; icon tile; badge; outline and primary buttons; dropdown
     menu; `Stat`; section cards with numbered tasks; switch with label; badge list; `Item`
     history rows; `AlertDialog`; Share link dialog.
-  - DATA FIELDS: Template (title, description, visibility, sections and tasks, created and
-    updated dates, categories, tags); history entries (label, actor, time); role permissions;
-    plan state.
+  - DATA FIELDS: Template (title, description, visibility, Required tools, sections and
+    tasks, created and updated dates, categories, tags); history entries (label, actor, time);
+    role permissions; plan state.
 - **PROOF PASS:** Pass (step 2a): `template-detail`, `template-detail-loading`,
   `template-detail-actions-menu`, `template-detail-delete-dialog` and
   `template-detail-share-dialog`, each on desktop and phone, light and dark, against
@@ -1503,8 +1575,9 @@ existing content, invent nothing):
     (from `sm`), "Outline" (below `lg`), "Preview" (from `sm`; in "More actions" on phones),
     "Save", a theme toggle (from `sm`; the sidebar has it on phones), "More actions". Preview
     and the theme toggle leave the bar on phones, so the title and Save keep their room.
-  - Notices when needed: "Error" with the problems (and "Load latest version" after a
-    conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
+  - Notices when needed: "Error" with the problems (such as "Required tools: give tool 2 a
+    name." or "Required tools: tool 1's URL must start with http:// or https:// and have no
+    spaces.", and "Load latest version" after a conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
     in <context>" ("Switch to <context>", "Discard"); plan or session notices ("Upgrade to Pro
     to save this template" with "Upgrade to Pro", "Organization plan limit", "Upgrade
     unavailable", "Signed out" with "Sign in").
@@ -1522,8 +1595,12 @@ existing content, invent nothing):
   - Panel (beside the outline from `lg`, the page's one column below it), titled by the
     selection:
     - "Template Settings": "Template Name", "Goal / Summary", "Template Type" ("Checklist",
-      "Recipe"), "Categories" ("Select categories..."), "Tags" ("Add tag..."), "Public
-      Template" switch ("Make this template visible in the public library").
+      "Recipe"), "Categories" ("Select categories..."), "Tags" ("Add tag..."), "Required
+      tools" ("The apps or services someone needs to run this template. Each one links to its
+      website."; per tool a bordered card: "Tool N", "Remove tool N", "Name" ("Time tracker"
+      as placeholder), "URL" ("https://"), and a "Required" switch, on for a new tool; "Add
+      tool", disabled at 20 with "A template can list up to 20 tools."), "Public Template"
+      switch ("Make this template visible in the public library").
     - "Search & SEO": "Search Title", "URL Slug", "Search Description", "Preview".
     - "Section Settings": "Section Title", "Tasks in section".
     - "Task Details": "Task Title", "Description (Optional)", "Content Blocks" with "Add
@@ -1558,9 +1635,9 @@ existing content, invent nothing):
     Alerts; mode buttons; tree list with drag handles, Move buttons (touch) and row actions;
     labelled Fields (input, textarea, select, multi-select, tag input, switch); block cards;
     Empty; Sheet; Dialog.
-  - DATA FIELDS: Template (title, description, type, categories, tags, public, search title,
-    URL slug, search description); sections (title, tasks); tasks (title, description, content
-    blocks); save state; kept drafts.
+  - DATA FIELDS: Template (title, description, type, categories, tags, Required tools (name,
+    URL, required), public, search title, URL slug, search description); sections (title,
+    tasks); tasks (title, description, content blocks); save state; kept drafts.
 - **PROOF PASS:** Pass (step 2a): `editor-new`, `editor-task` (a Template open on a task),
   `editor-add-block-menu`, `editor-preview-dialog`, `editor-loading` and `editor-read-only`,
   each on desktop and phone, light and dark, and `editor-outline-sheet-mobile-light` and
@@ -1654,6 +1731,11 @@ existing content, invent nothing):
     "Completed by" (when set), "Origin" ("Web", "MCP" or "Unknown"), "Run Key" and
     "Authorized by" (MCP), "Created", "Started", "Updated", "Completed", "Revision". A value
     the Run never recorded reads "Not recorded".
+  - "Required tools" (only when the source Template has tools and the viewer may use that
+    Template, as for its title in Show Details): a card, as "Activity" is, with one row per
+    tool (its name as a link that opens the tool's site in a new tab, the site's host, and a
+    "Required" or "Optional" badge), two columns from `sm`. They are the source Template's
+    current tools, not a copy the Run keeps. The shared run page does not show them.
   - An Organization error notice when the role is unknown ("This run's actions wait until they
     load. Check your connection and try again.", "Retry"); no longer shown, since a Run opens
     only at its own context's URL (TD-82).
@@ -1691,15 +1773,16 @@ existing content, invent nothing):
 - **REFERENCE IMAGES:** pattern-detail-2.png, pattern-detail-3.png. The reference has no run
   view.
 - **STRUCTURE (built):**
-  - LAYOUT ZONES: page header; notice; progress Card (below `xl`); main column (the task
+  - LAYOUT ZONES: page header; provenance; the Required tools card (when shown); notice;
+    progress Card (below `xl`); main column (the task
     panel Card with its header, content, notes and sticky footer; retired work; the Activity
     Card); right column (from `xl`, sticky).
   - COMPONENT TYPES: labelled title field; badges; buttons; shadcn Progress; checkbox;
     content blocks; notes Field (textarea, button, saved indicator); disclosure; `Item`
     history rows; task list (nav with current-task marker); Sheet.
   - DATA FIELDS: Run (title, status, progress, task counts, shared, sections, tasks, notes,
-    retired work, history); selected task (section, position, title, description, content,
-    done); permissions.
+    retired work, history; the source Template's Required tools); selected task (section,
+    position, title, description, content, done); permissions.
 - **PROOF PASS:** Pass (step 2a): `run-page` and `run-page-changelog` (the window, at the
   top and scrolled to the Activity), `run-page-loading`, `run-share-dialog`, each on desktop
   and phone, light and dark, and `run-tasks-sheet-mobile-light` and `-dark`, against
@@ -2110,13 +2193,14 @@ replaced.
 - **SCREEN NAME:** Start a Run dialog ("Start a Run")
 - **PURPOSE:** Name a new Run of a Template: the one way to start a Run.
 - **HOW USER GETS HERE:** "Start Run" on a My Templates card (hover bar or actions menu) or
-  list row, on Template detail, and on the public template page (signed in; a visitor who is
-  not signed in goes to Log in first and comes back to the template page).
+  list row, on Template detail, and on the public template page (signed in or not).
 - **WHAT'S ON THE SCREEN:** "Start a Run"; "Run name", a labelled field whose placeholder is
   the default name ("<template title> - <date and time>"); "Cancel", "Start Run"; the close
   button.
 - **PRIMARY ACTION:** "Start Run" → [Run page](#run-page) (toast "Checklist run created", or
-  "Run started in <Organization>" for another Organization's Template on Template detail).
+  "Run started in <Organization>" for another Organization's Template on Template detail). For
+  a visitor who is not signed in, on the public template page, it starts a guest run in the
+  browser instead → [Guest run](#guest-run) (toast "Checklist run created").
 - **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
 - **STATES:** "Starting…" (the field, both buttons and the Close button disabled, and Escape or a
   click outside does not close it); a blank name gets the default;
@@ -2215,13 +2299,14 @@ replaced.
 - **SCREEN NAME:** Run complete dialog ("Complete this Run?")
 - **PURPOSE:** Confirm completing a Run whose tasks are all done.
 - **HOW USER GETS HERE:** ticking the last open task; "Complete run"; "Finish Run". On the Run
-  page and on a shared run.
+  page, on a shared run and on a guest run.
 - **WHAT'S ON THE SCREEN:** "Complete this Run?", "Every task is done. Completing the Run
   freezes its tasks: they can no longer be ticked or unticked."; "Not yet" (outline), "Complete
   Run" (primary); the close button.
 - **PRIMARY ACTION:** "Complete Run": completes the Run (toast "Run completed"); a signed-in
-  owner or member then goes to [My Runs](#my-runs), and a guest on a share link stays on the
-  [Shared run](#shared-run), which now reads "Completed".
+  owner or member then goes to [My Runs](#my-runs), a guest on a share link stays on the
+  [Shared run](#shared-run), and a visitor on a [Guest run](#guest-run) stays on it; both now
+  read "Completed".
 - **SECONDARY ACTIONS:** "Not yet", Escape or the close button: the Run stays in progress and
   the page keeps offering "Complete run".
 - **STATES:** both buttons and the Close button wait while the completion saves, and Escape or a
@@ -2250,12 +2335,14 @@ replaced.
 - **PURPOSE:** Confirm a delete. The item moves to [Archive](#archive), where it can be
   restored.
 - **HOW USER GETS HERE:** "Delete" on a My Templates card menu or list row; "Delete" in
-  Template detail's "Template actions"; "Delete" in My Runs' "Run options".
+  Template detail's "Template actions"; "Delete" in My Runs' "Run options"; "Delete run" on a
+  [Guest run](#guest-run).
 - **WHAT'S ON THE SCREEN:** "Delete template" with "Are you sure you want to delete this
   template?" (My Templates) or "Are you sure you want to delete "<title>"?" (Template detail);
   "Delete run" with "Are you sure you want to delete this run?"; "Cancel", "Delete".
 - **PRIMARY ACTION:** "Delete" (toast "Template deleted" or "Run deleted"; Template detail
-  returns to My Templates).
+  returns to My Templates, and a Guest run to its public template page). A guest run is removed
+  from the browser, not archived: it has no Archive entry.
 - **SECONDARY ACTIONS:** "Cancel".
 - **STATES:** "Deleting..."; a failure toast; an item deleted elsewhere closes the dialog and
   reloads the list.
@@ -2308,7 +2395,8 @@ replaced.
 - **HOW USER GETS HERE:** "Preview" in the editor header.
 - **WHAT'S ON THE SCREEN:** "Template preview", "This preview reflects the current draft.
   Saving is not required."; the draft's title (or "Untitled Template") and description; its
-  sections with every task open.
+  "Required tools" (the tools that have a name, trimmed, as the public template page lists
+  them, under an `h3`); its sections with every task open.
 - **PRIMARY ACTION:** close.
 - **SECONDARY ACTIONS:** none.
 - **STATES:** follows the draft as typed.
@@ -2320,9 +2408,9 @@ replaced.
 - **REFERENCE IMAGES:** none.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: header (title, description, close button); a scrolling body (the draft's
-    title and description, then its sections).
+    title and description, its Required tools when it has any, then its sections).
   - COMPONENT TYPES: heading; paragraph; section and task list with disclosure.
-  - DATA FIELDS: draft title, description, sections.
+  - DATA FIELDS: draft title, description, Required tools, sections.
 - **PROOF PASS:** Pass (step 2a), against shadcn's Dialog: `editor-preview-dialog`, on
   desktop and phone, light and dark. It fits a 390px screen (85% of the window's height).
 - **NOTES:** none.
@@ -2353,7 +2441,8 @@ replaced.
 
 - **SCREEN NAME:** Run tasks sheet ("Tasks")
 - **PURPOSE:** Open any task of the Run on narrower screens.
-- **HOW USER GETS HERE:** "Tasks" in the Run page's progress block, below `xl`.
+- **HOW USER GETS HERE:** "Tasks" in the progress block of the Run page or the Guest run, below
+  `xl`.
 - **WHAT'S ON THE SCREEN:** a sheet from the bottom: "Tasks", "Open any task in this run.";
   the task list by section ("Run tasks"), the current task marked.
 - **PRIMARY ACTION:** pick a task (the sheet closes).
@@ -2400,8 +2489,8 @@ replaced.
 - **PURPOSE:** Ask before losing work or access.
 - **HOW USER GETS HERE:**
   - Unsaved changes in the Template editor (form edits, a file still uploading, a save in
-    flight) or on the Run page (unsaved task notes): on an in-app link, Back or Forward, and
-    "Sign out"; the browser's own leave prompt on a reload or tab close.
+    flight) or on the Run page and the Guest run (unsaved task notes): on an in-app link, Back
+    or Forward, and "Sign out"; the browser's own leave prompt on a reload or tab close.
   - In the editor: "Load latest version" with unsaved edits; a Clipy draft or "Restore draft"
     replacing unsaved work.
   - In Organization Settings: "Leave <name>? You will lose access to its Templates and Runs." and

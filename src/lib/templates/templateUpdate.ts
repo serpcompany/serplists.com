@@ -8,6 +8,7 @@ export const buildTemplateUpdateRequest = (template: TemplateSavePayload) => ({
   seoTitle: template.seoTitle,
   seoDescription: template.seoDescription,
   rules: template.rules,
+  requiredTools: template.requiredTools,
   sections: template.sections,
   categories: template.categories,
   tags: template.tags,

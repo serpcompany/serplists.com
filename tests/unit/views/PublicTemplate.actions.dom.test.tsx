@@ -1,25 +1,27 @@
 import { act } from 'react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   authState,
-  CLEAN_VISIT,
   installNavigationWindow,
   lastDialogProps,
   lastViewProps,
   mockCreateBillingCheckout,
   mockDialogProps,
-  mockUseTemplateDetailModel,
+  mockToastSuccess,
+  openThePublishedRouteInTheDom,
   publishedClipyTemplate,
   renderPublishedRoute,
   resetToASignedInUserInPersonal,
   restoreNavigationWindow,
 } from '../../support/publicTemplatePage';
-import PublicTemplate from '@/views/PublicTemplate';
-import { countTemplateItems } from '@/lib/templates/templateItemCount';
+import { readGuestRun, saveGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import { deferred } from '../../support/deferred';
+import { present } from '../../support/elements';
 import { navigation } from '../../support/nextNavigation';
-import { renderSettled } from '../../support/renderInTheDom';
+
+const GUEST_RUN_PATH = '/profile/alice/reviewed-clipy-checklist/run/';
 
 beforeAll(installNavigationWindow);
 afterAll(restoreNavigationWindow);
@@ -129,17 +131,7 @@ describe('PublicTemplate Start a Run dialog', () => {
 
   it('opens the dialog on Start Run instead of starting a run', async () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
-    mockUseTemplateDetailModel.mockReturnValue({
-      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
-      loading: false,
-      notFound: false,
-      saveTemplate: vi.fn(),
-      startRun,
-      template: publishedClipyTemplate,
-      totalItems: countTemplateItems(publishedClipyTemplate),
-    });
-    navigation.reset(`${CLEAN_VISIT.origin}${CLEAN_VISIT.path}`, { routes: ['/profile/[username]/[templateSlug]'] });
-    await renderSettled(<PublicTemplate />);
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, { modelOverrides: { startRun } });
     expect(lastDialogProps().open).toBe(false);
 
     await act(async () => {
@@ -160,17 +152,74 @@ describe('PublicTemplate Start a Run dialog', () => {
     expect(startRun).toHaveBeenCalledWith('Camping weekend');
   });
 
-  it('sends a visitor who is not signed in to sign in, and back here after', async () => {
+  it('offers a visitor who is not signed in the same dialog, and starts the run in this browser, never through the API', async () => {
     authState.isAuthenticated = false;
     authState.user = null;
     const startRun = vi.fn();
-    renderPublishedRoute(publishedClipyTemplate, { startRun });
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, { modelOverrides: { startRun } });
 
-    await lastViewProps().onStartRun();
+    await act(async () => {
+      lastViewProps().onStartRun();
+    });
+    expect(lastDialogProps().open).toBe(true);
+    await act(async () => {
+      await lastDialogProps().onConfirm('Camping weekend');
+    });
 
     expect(startRun).not.toHaveBeenCalled();
+    expect(readGuestRun(publishedClipyTemplate.id)).toMatchObject({ status: 'in_progress', title: 'Camping weekend' });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Checklist run created');
+    expect(navigation.url()).toBe(GUEST_RUN_PATH);
     expect(lastDialogProps().open).toBe(false);
-    expect(navigation.pathname()).toBe('/login/');
-    expect(new URLSearchParams(navigation.search()).get('next')).toBe(CLEAN_VISIT.path);
+  });
+
+  it('links Start Run to the run a visitor not signed in already has in progress here, and starts a new one once that run is completed', async () => {
+    authState.isAuthenticated = false;
+    authState.user = null;
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+    expect(lastViewProps().continueRunPath).toBe(GUEST_RUN_PATH);
+
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => {
+        const started = startGuestRun(publishedClipyTemplate, 'Camping weekend');
+        saveGuestRun({ ...started, status: 'completed' });
+      },
+    });
+    expect(lastViewProps().continueRunPath).toBeNull();
+  });
+
+  it("keeps a signed-in user's Start Run on runs in their account, even with a run started here while signed out", async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      modelOverrides: { startRun },
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+
+    expect(lastViewProps().continueRunPath).toBeNull();
+    await act(async () => {
+      await lastDialogProps().onConfirm('Lake trip');
+    });
+    expect(startRun).toHaveBeenCalledWith('Lake trip');
+    expect(navigation.url()).toBe('/dashboard/runs/run-1/');
+  });
+
+  it('offers a signed-in user to save the run this browser holds into their account, and a visitor not signed in nothing of the kind', async () => {
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+
+    const notice = await screen.findByText('Your run of this Template is saved in this browser only.');
+    const noticeBox = present(notice.closest<HTMLElement>('[data-guest-run-notice]'), 'the notice');
+    expect(within(noticeBox).getByRole('button', { name: 'Save to account' })).toBeTruthy();
+
+    cleanup();
+    authState.isAuthenticated = false;
+    authState.user = null;
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+    expect(screen.queryByText('Your run of this Template is saved in this browser only.')).toBeNull();
   });
 });

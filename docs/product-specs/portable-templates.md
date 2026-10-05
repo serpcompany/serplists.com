@@ -5,7 +5,7 @@ This document describes the portable template contract used for template export/
 The generated JSON Schema is [generated/portable-template-pack.schema.json](../generated/portable-template-pack.schema.json).
 
 Copy-paste examples live in `portable-templates/examples/`: `minimal/` is the smallest
-valid template and `full/` adds metadata, rules, and every content type. In each,
+valid template and `full/` adds metadata, rules, Required tools, and every content type. In each,
 edit `template.yaml`; `template.json`, `template.md`, `README.md`, and `preview.html`
 are generated from it and must pass `pnpm run templates:check`.
 
@@ -75,7 +75,9 @@ id is in the page's template list or its slug is in the pack the server returned
 older than the catalog never writes a template twice. A template both the server
 and the browser skipped is listed once in `manifest.skippedTemplates`. When the
 template list fails to load, the export page shows the load error with Retry
-instead of zero counts, and export still works.
+instead of zero counts, and export still works. Catalog rows carry no Required tools (the
+lists do not read them), so a community template added this way is exported without its
+tools; the context's own templates always carry theirs (TD-83).
 
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
@@ -83,6 +85,8 @@ Portable template fields are intentionally cleaner than app row exports:
 - visibility is represented as `visibility: "public" | "private"`
 - optional SEO metadata is represented as `seoTitle` / `seoDescription`
 - optional portable rules are represented as `rules`
+- optional Required tools are represented as `requiredTools`, a list of `{ name, url, required }`
+  ([below](#required-tools))
 - sections/items/content IDs may be present, but import should not depend on them
 - no run state: exports keep only the portable keys of sections (`id`, `title`,
   `items`), items (`id`, `title`, `description`, `contents`), content blocks (`id`,
@@ -108,7 +112,7 @@ left over from an earlier upload and are not shown. Import fills in
 written without it keep their names (`withImportedLinkSource` in
 `src/lib/utils/mediaSource.ts`).
 
-Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
+Portable round-trips must preserve `seoTitle`, `seoDescription`, `rules`, and `requiredTools`.
 Rules are structurally stored and exported but are not executed or surfaced as
 validation failures by the current runtime.
 
@@ -243,7 +247,8 @@ index, title, human-readable reason, and stable code. Current failure codes are
 `invalid_fields` means a template's fields exceed the bounds every save enforces
 (`src/lib/schemas/templateLimits.ts`): a non-blank title of at most 160 characters,
 description 5000, `seoTitle` 160, `seoDescription` 320, at most 20 categories and 20
-tags of 80 characters, and rules with non-empty `id`, `type`, and `path`. The reason
+tags of 80 characters, rules with non-empty `id`, `type`, and `path`, and at most 20 Required
+tools with names of 80 characters and URLs of 2048. The reason
 names the field (for example `description: String must contain at most 5000
 character(s)`). Imported values are never truncated. Generated slugs (import, clone,
 create, and a de-duplicated slug on save) are shortened to fit 160 characters, and
@@ -310,7 +315,7 @@ We accept:
 Minimal template fields:
 - `title` (required)
 - `sections` **or** legacy `items` (required; JSON array, can be a stringified array)
-- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`, `rules`
+- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`, `rules`, `requiredTools`
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
 
@@ -379,6 +384,21 @@ other code shows as text.
 - Portable template packs can include an optional `rules` array on each template.
 - Import/export preserves `rules` and validates their payload shape.
 - Current runtime support is structural persistence only; rule execution and UI surfacing remain separate work.
+
+### Required tools
+- A template can list the tools a Run of it needs as `requiredTools`: each entry has a `name`
+  that is not blank, a `url`, and `required` (`true` or `false`; left out, it reads as `true`).
+  The schema is `src/lib/schemas/requiredTools.ts`, shared by the API, the app and this format.
+- A `url` is an `http://` or `https://` address with a host and no spaces, `<`, `>` or `"`, so
+  every stored tool can be linked as it is. A pack whose tool fails that is
+  refused for that template (`invalid_sections`), like any other shape the format rejects.
+- The format, like its JSON Schema, sets no lengths (JSON Schema counts characters differently
+  from the importer); the API enforces them on import as it does for titles: at most 20 tools,
+  names of 80 characters and URLs of 2048, else `invalid_fields` naming the field (for example
+  `requiredTools.0.name: Tool names must be 80 characters or fewer`).
+- Exports write `requiredTools` only for a template that has tools. The strict Markdown format
+  keeps them in the YAML frontmatter, and the generated `README.md` and `preview.html` list them.
+- Nothing about a tool is tagged or rewritten: links are exported and imported as written.
 
 ### Visibility defaults
 - If `isPublic` is present, it is preserved by default.

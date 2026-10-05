@@ -19,6 +19,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
       isAuthenticated
       canSaveTemplate
       canStartRun
+      continueRunPath={null}
       isBillingError={false}
       isBillingLoading={false}
       isProUser={false}
@@ -34,10 +35,18 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
   );
 };
 
+const textOf = (markup: string): string => {
+  let text = markup;
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text;
+};
+
 const buttonsLabelled = (html: string, label: RegExp): string[] =>
-  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) =>
-    label.test(button.replace(/<[^>]+>/g, '')),
-  );
+  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) => label.test(textOf(button)));
 
 const template: ChecklistTemplate = {
   id: 'template-1',
@@ -90,6 +99,21 @@ describe(`PublicTemplateView "Updated <date>" under the description, like the pr
 
     expect(html).not.toContain('Updated');
     expect(html).not.toContain('Invalid Date');
+  });
+});
+
+describe('PublicTemplateView Required tools', () => {
+  it("lists the Template's tools before what's included, each opening its site in a new tab", () => {
+    const html = renderView({
+      template: { ...template, requiredTools: [{ name: 'Seating planner', url: 'https://example.com/seating', required: false }] },
+    });
+
+    expect(html).toMatch(/Required tools[\s\S]*Seating planner[\s\S]*Optional[\s\S]*What&#x27;s included/);
+    expect(html).toContain('<a class="font-medium wrap-break-word underline-offset-4 hover:underline" href="https://example.com/seating" rel="noopener noreferrer" target="_blank">');
+  });
+
+  it('shows no Required tools section without tools', () => {
+    expect(renderView()).not.toContain('Required tools');
   });
 });
 
@@ -177,6 +201,20 @@ describe('PublicTemplateView', () => {
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       expect(button).toMatch(/<button[^>]*disabled=""/);
+    }
+  });
+
+  it('links both run actions to the run a visitor already started in this browser instead of starting another', () => {
+    const html = renderView({
+      continueRunPath: '/profile/devinschumacher/complete-wedding-planning-checklist/run/',
+      isAuthenticated: false,
+    });
+
+    expect(buttonsLabelled(html, /^Start Run$/)).toEqual([]);
+    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => textOf(link) === 'Continue Run') ?? [];
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toContain('href="/profile/devinschumacher/complete-wedding-planning-checklist/run/"');
     }
   });
 

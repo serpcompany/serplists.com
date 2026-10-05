@@ -18,6 +18,7 @@ export type PortableExportSource = {
   seoTitle: unknown;
   seoDescription: unknown;
   rules?: unknown[] | undefined;
+  requiredTools?: unknown[] | undefined;
   sections: unknown[];
   categories: unknown[];
   tags: unknown[];
@@ -37,6 +38,7 @@ export function buildPortableTemplatePack(templates: PortableExportSource[], exp
       seoTitle: template.seoTitle || '',
       seoDescription: template.seoDescription || '',
       rules: template.rules,
+      requiredTools: template.requiredTools?.length ? template.requiredTools : undefined,
       sections: toPortableSections(template.sections),
       categories: template.categories,
       tags: template.tags,

@@ -16,6 +16,13 @@ rules:
     type: required-field
     path: sections[].items[].title
     severity: error
+requiredTools:
+  - name: Time tracker
+    url: https://example.com/tools/time-tracker
+    required: true
+  - name: Slideshow app
+    url: https://example.com/tools/slides
+    required: false
 ---
 
 # Launch Checklist

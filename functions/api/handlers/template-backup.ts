@@ -7,6 +7,7 @@ import {
   templateImportFieldsSchema,
 } from '../utils/payloads';
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
+import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { json, jsonError } from '../utils/response';
 import { invalidPayloadResponse, readJsonBody } from '../utils/request-json';
 import { describeErrorForLog, log } from '../utils/logger';
@@ -63,6 +64,7 @@ const templateBackupImportTemplateSchema = z.object({
     value: z.unknown().optional(),
     severity: z.enum(['error', 'warning']).optional(),
   })).optional(),
+  requiredTools: z.unknown().optional(),
 });
 
 const templateBackupImportBodySchema = z.object({
@@ -111,7 +113,7 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
 
   const rows = await withRulesColumnFallback((includeRules) =>
     db
-      .select(getTemplateSelectColumns(includeRules))
+      .select(getTemplateSelectColumns(includeRules, true))
       .from(templates)
       .where(whereClause)
       .orderBy(desc(templates.created_at)),
@@ -129,6 +131,7 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
       seoTitle: typeof parsed.seoTitle === 'string' ? parsed.seoTitle : '',
       seoDescription: typeof parsed.seoDescription === 'string' ? parsed.seoDescription : '',
       rules: Array.isArray(parsed.rules) ? parsed.rules : undefined,
+      requiredTools: parsed.requiredTools,
       sections: parsed.sections || [],
       categories: parsed.categories || [],
       tags: parsed.tags || [],
@@ -292,6 +295,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
             seo_title: fields.data.seoTitle || '',
             seo_description: fields.data.seoDescription || '',
             rules: fields.data.rules && fields.data.rules.length > 0 ? JSON.stringify(fields.data.rules) : null,
+            required_tools: toStoredRequiredTools(fields.data.requiredTools),
             items: JSON.stringify(normalizedSections.sections),
             version: 1,
             is_public: isPublic,

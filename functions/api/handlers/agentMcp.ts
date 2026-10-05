@@ -24,7 +24,7 @@ import {
 } from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-export const MCP_SERVER_VERSION = "0.3.0";
+export const MCP_SERVER_VERSION = "0.4.0";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 
 type JsonRpcId = string | number | null;

@@ -508,8 +508,9 @@ How the editor's models load, save, keep drafts and decide who may edit:
   with "URL Slug: use Latin letters or numbers."; an empty field keeps the stored slug.
 - Keep category autocomplete triggers as real text inputs and use `onKeyDown` for
   tag entry.
-- Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save
-  and reload.
+- Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, `rules`, and `requiredTools`
+  across save and reload. The editor edits Required tools in Template Settings
+  (`RequiredToolsEditor`, rows of a React Hook Form field array) and sends them on every save.
 - The editor never subscribes to a Template list. It loads its template by id and
   keeps the stored `version`. `PUT /api/templates/:id` answers with the `version` and
   `slug` it stored (the slug may carry a `-<id8>` suffix). The next save sends that
@@ -572,6 +573,14 @@ How the editor's models load, save, keep drafts and decide who may edit:
 Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`), the
 only module that imports `react-markdown`. It disables raw HTML and passes links through
 `safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
+
+A Template's Required tools render with `RequiredToolsList`
+(`src/components/template/RequiredToolsList.tsx`) on the public Template page, Template detail, the
+Run page and the editor preview. Like the File and Embed blocks' links, each tool's link passes
+through `absoluteHttpUrl` (`src/lib/utils/embedLink.ts`), opens in a new tab with
+`rel="noopener noreferrer"`, and tells screen readers it opens a new tab; a stored URL that is not
+an http or https address shows as the name alone. No link is tagged or rewritten (no affiliate or
+referral parameters), and none carries `ugc`, as no user link in Template content does yet.
 
 User images (uploads from R2 under any key, and images linked from any host) render with
 `UserContentImage` (`src/components/shared/UserContentImage.tsx`), the one module that renders

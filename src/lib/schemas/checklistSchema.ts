@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { portableRequiredToolSchema } from "./requiredTools";
+
 export const PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION = "2.0.0" as const;
 
 export const checklistSubItemSchema = z.object({
@@ -51,6 +53,7 @@ const templatePublishingFields = {
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   rules: z.array(portableTemplateRuleSchema).optional(),
+  requiredTools: z.array(portableRequiredToolSchema).optional(),
 };
 
 export const checklistTemplateSchema = z.object({
@@ -165,6 +168,7 @@ export const portableChecklistTemplateSchema = z.object({
   tags: z.array(z.string()).optional(),
   sections: z.array(portableChecklistSectionSchema).min(1),
   rules: z.array(portableTemplateRuleSchema).optional(),
+  requiredTools: z.array(portableRequiredToolSchema).optional(),
 });
 
 const portableTemplatePackEnvelopeSchema = z.object({

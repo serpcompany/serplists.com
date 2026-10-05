@@ -18,6 +18,11 @@ import {
   templateEditorDetailsSchema,
   type TemplateEditorDetailsFormValues,
 } from "@/lib/forms/templateEditorDetailsForm";
+import {
+  normalizeTemplateEditorRequiredTools,
+  templateEditorRequiredToolSchema,
+  toTemplateEditorRequiredTools,
+} from "@/lib/forms/templateEditorRequiredTools";
 
 const templateEditorSubItemSchema = z.object({
   id: z.string(),
@@ -50,6 +55,7 @@ const templateEditorSectionSchema = z.object({
 });
 
 export const templateEditorFormSchema = templateEditorDetailsSchema.extend({
+  requiredTools: z.array(templateEditorRequiredToolSchema).default([]),
   sections: z.array(templateEditorSectionSchema),
 });
 
@@ -252,9 +258,10 @@ export type TemplateEditorFormSource = Omit<Partial<ChecklistTemplate>, "section
 export function buildTemplateEditorFormValues(
   template: TemplateEditorFormSource = {},
 ): TemplateEditorFormValues {
-  const { sections, ...details } = template;
+  const { sections, requiredTools, ...details } = template;
   return {
     ...buildTemplateEditorDetailsFormValues(details),
+    requiredTools: toTemplateEditorRequiredTools(requiredTools),
     sections: buildTemplateEditorSections(sections),
   };
 }
@@ -268,6 +275,7 @@ export function normalizeTemplateEditorFormForSave(
 
   return {
     ...normalizedDetails,
+    requiredTools: normalizeTemplateEditorRequiredTools(values.requiredTools),
     sections: values.sections,
   };
 }

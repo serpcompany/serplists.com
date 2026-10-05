@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema } from '../db';
 import { normalizeSectionsPayload } from '../utils/payloads';
+import { readRequiredTools, toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { jsonError } from '../utils/response';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -78,7 +79,7 @@ export async function cloneTemplate(
 
   const [source] = await withRulesColumnFallback((includeRules) =>
     db
-      .select(getTemplateSelectColumns(includeRules))
+      .select(getTemplateSelectColumns(includeRules, true))
       .from(templates)
       .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
       .limit(1),
@@ -106,6 +107,7 @@ export async function cloneTemplate(
       seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
       seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
       rules: typeof source.rules === 'string' ? source.rules : null,
+      required_tools: toStoredRequiredTools(readRequiredTools(source.required_tools)),
       items: withStableItemsColumn(source.items),
       version: 1,
       content_version: 1,

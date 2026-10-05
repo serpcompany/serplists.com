@@ -5,6 +5,11 @@ Checklist for preparing and shipping a release.
 Categories: ops, release
 Tags: launch, qa
 
+## Required tools
+
+- Time tracker (required): <https://example.com/tools/time-tracker>
+- Slideshow app (optional): <https://example.com/tools/slides>
+
 ## Preparation
 
 - [ ] **Review release notes**

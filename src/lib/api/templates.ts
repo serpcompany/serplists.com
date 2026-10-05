@@ -20,6 +20,7 @@ import {
   type SavedTemplate,
 } from "@/lib/schemas/apiTemplates";
 import { templateHistorySchema, type TemplateHistoryResponse } from "@/lib/schemas/historyResponses";
+import type { RequiredTool } from "@/lib/schemas/requiredTools";
 import { apiRequest } from "@/lib/api/request";
 
 export type {
@@ -82,6 +83,7 @@ export const templatesApi = {
     seoTitle?: string | undefined;
     seoDescription?: string | undefined;
     rules?: unknown[] | undefined;
+    requiredTools?: RequiredTool[] | undefined;
     slug?: string | undefined;
     sections?: unknown[];
     items?: unknown[];
@@ -102,6 +104,7 @@ export const templatesApi = {
     seoTitle?: string | undefined;
     seoDescription?: string | undefined;
     rules?: unknown[] | undefined;
+    requiredTools?: RequiredTool[] | undefined;
     sections?: unknown[];
     categories?: string[] | undefined;
     tags?: string[] | undefined;

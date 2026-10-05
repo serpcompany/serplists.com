@@ -1,7 +1,7 @@
 import { isApiError } from '@/lib/api-errors';
 import type { ChecklistRun } from '@/types/checklist';
 
-export type RunExecutionMode = 'private' | 'shared';
+export type RunExecutionMode = 'private' | 'shared' | 'guest';
 
 export type RunExecutionLoadResult =
   | {

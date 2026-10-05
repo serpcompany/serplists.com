@@ -2,7 +2,9 @@
 
 The run page shows one Run and lets people work through it: tick tasks and Sub-tasks, write
 task notes, rename the Run, share it and complete it. A private Run opens at
-`/dashboard/runs/<id>/`, and a shared one at `/share/<token>/` for anyone with the link. What
+`/dashboard/runs/<id>/`, a shared one at `/share/<token>/` for anyone with the link, and a
+[guest run](#guest-runs), kept in a signed-out visitor's browser, at
+`/profile/<user>/<template>/run/`. What
 users see is in [features](../product-specs/features.md#runs-and-sharing). How the API stores,
 reconciles and completes a Run, and what a share-link save may change, is in
 [data persistence](data-persistence.md#stable-ids-and-run-reconciliation) and
@@ -22,9 +24,11 @@ model in `src/features/run-execution/` works, and why.
 | `noteDrafts.ts`, `keptNoteDrafts.ts` | Unsaved task notes, and the notes kept when the session ends |
 | `primaryTaskAction.ts`, `taskReveal.ts` | The task panel's main button, and bringing a newly shown task into view |
 | `runHistory.ts`, `retiredRunItems.ts`, `useRunShareLink.ts`, `runTitle.ts`, `taskCheckboxLabel.ts` | The Activity preview, work removed from the Template, the share link dialog, renames, and the task checkbox's accessible name |
+| `useRunPageActions.ts` | The run pages' handlers for ticks, notes and completion, with their toasts and the completion dialog's state |
 
 The page is `src/views/ChecklistRun.tsx`, and a shared Run's layout is
-`src/components/run-execution/SharedRunView.tsx`.
+`src/components/run-execution/SharedRunView.tsx`. The task panel, the task list and the phone
+progress block are `RunWorkspace`, which the [guest run](#guest-runs) page shares.
 
 ## Loading a Run
 
@@ -200,3 +204,48 @@ its history.
   After a scroll it ignores repeat clicks briefly (`ignoreRepeatClicksBriefly` in
   `src/lib/utils/repeatClick.ts`): the page moved under the pointer, so the rest of a double click
   on Mark Complete or Next must not land on what is there now.
+
+## Guest runs
+
+A visitor who is not signed in runs a Public Template at `/profile/<user>/<template>/run/`
+(`src/views/GuestRun.tsx`; what users see is in
+[features](../product-specs/features.md#runs-and-sharing)). The run lives only in the browser,
+and the page reuses this model rather than a copy of it:
+
+- `src/features/guest-runs/guestRunStore.ts` is the storage boundary: one entry per Template in
+  `localStorage` (`serplists:guest-run:<templateId>`, through `safeLocalStorage`, so a browser
+  that blocks site data keeps the run for the page's life), parsed with a Zod schema whose
+  sections go through `normalizeSections`, the mapper the API's runs use. A value it cannot read
+  counts as no run. Starting copies the Template's sections with every task and Sub-task
+  unticked (`resetSectionsCompletion`) and the dialog's name (`resolveRunName`); while a run is in
+  progress, starting returns it, which is the one-active-run rule.
+- `useGuestRunModel` passes `useRunExecutionModel` a `guest` source in place of the API: its
+  `load` reads the stored run, and its `updateRun` is `saveGuestRun`, so ticks, Sub-task ticks,
+  notes, completion, the save queue and the frozen completed run follow the same code as any Run.
+  The mode is `guest`: no Activity is loaded, and nothing is shared.
+- Each stored run carries a revision. `saveGuestRun` refuses a save made on another revision, or
+  on a run that was deleted or replaced since, with the `409 edit_conflict` an API save gets, so
+  the saver reloads the stored run and retries on it ([when another session saved
+  first](#when-another-session-saved-first)): a second tab never overwrites the first one's
+  ticks. A reload that finds another run (`load` compares the id it opened) marks the run not
+  found, and the page goes back to the template page.
+- Pages in this tab learn of a change through `subscribeToGuestRuns` (`useGuestRunStatus`, a
+  `useSyncExternalStore` reader with a server snapshot of `null`), which the template page uses
+  to offer "Continue Run". Other tabs are not followed live: only the theme and the session
+  listen for `storage` events, and the revision check covers a stale tab's next save.
+- The page waits for the session check: a signed-out visitor with no stored run gets one started
+  with the default name (so a plain link opens a run), and a signed-in user is sent to the
+  template page. Once the run has opened, the page never starts another, so Delete run (which
+  removes the entry and leaves for the template page) cannot be followed by a fresh start.
+- Save to account (`useSaveGuestRunToAccount`, on the guest run page and the public template
+  page) goes through the API as any Run does: `startTemplateRun` with the Templates context's
+  `createRun` (the active context, its plan gates and their messages), then the created Run is
+  loaded by id (`loadRunExecutionData`), so the progress lands on the content the server copied,
+  and `carryGuestRunProgress` (`guestRunProgress.ts`) copies ticks and notes onto it by task id,
+  each Sub-task by id or, without one, by block and row (`findRunSubItem`), before one
+  `updateRun` saves it with the loaded revision. A task with Sub-tasks is done exactly when all
+  of them are, and the Run is completed only when the guest run was and every task carried over
+  done. The browser's copy is removed only after that save. A plan gate keeps it: `upgrade_required`
+  starts Personal checkout (the button stays busy through `useRedirectPending`) or shows the
+  Organization's paid-plan message, as Start Run does. If the save of the progress fails after the
+  Run was created, the guest run stays and the new Run keeps no progress.

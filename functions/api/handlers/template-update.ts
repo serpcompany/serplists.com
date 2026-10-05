@@ -9,6 +9,7 @@ import {
   templateUpdatePayloadSchema,
 } from '../utils/payloads';
 import { normalizeStringArray, parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
+import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { json, jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { buildAuditEventValues, buildTemplateVersionValues } from '../utils/audit';
@@ -61,7 +62,7 @@ export async function updateTemplateForUser(
     return jsonError(message, 400, { details });
   }
 
-  const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
+  const { title, description, type, seoTitle, seoDescription, rules, requiredTools, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
 
   const now = new Date().toISOString();
   const updates: TemplateUpdateValues = {};
@@ -85,6 +86,9 @@ export async function updateTemplateForUser(
   }
   if (Object.prototype.hasOwnProperty.call(body, 'rules')) {
     updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'requiredTools')) {
+    updates.required_tools = toStoredRequiredTools(requiredTools);
   }
   if (Object.prototype.hasOwnProperty.call(body, 'sections') || Object.prototype.hasOwnProperty.call(body, 'items')) {
     const normalizedSections = parseSectionsPayload(sections ?? bodyItems);

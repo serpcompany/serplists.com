@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateMetadata as profileMetadata } from '@/app/(site)/profile/[username]/page';
 import PublicTemplatePage, { generateMetadata as templateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
+import GuestRunPage, { generateMetadata as guestRunMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/run/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import {
   ACME,
@@ -22,6 +23,12 @@ const templateAt = (username: string, templateSlug: string) =>
 
 const templatePageAt = (username: string, templateSlug: string, search: Record<string, string | string[]> = {}) =>
   PublicTemplatePage({ params: Promise.resolve({ username, templateSlug }), searchParams: Promise.resolve(search) });
+
+const guestRunPageAt = (username: string, templateSlug: string, search: Record<string, string | string[]> = {}) =>
+  GuestRunPage({ params: Promise.resolve({ username, templateSlug }), searchParams: Promise.resolve(search) });
+
+const guestRunAt = (username: string, templateSlug: string) =>
+  guestRunMetadata({ params: Promise.resolve({ username, templateSlug }) });
 
 const permanentRedirectTo = (path: string) => ({ digest: `NEXT_REDIRECT;replace;${path};308;` });
 
@@ -90,6 +97,16 @@ describe("an Organization's public Template page, found only under its Organizat
     await expect(
       templatePageAt(CREATOR.username, 'launch-plan', { utm_source: 'newsletter', tag: ['a', 'b'] }),
     ).rejects.toMatchObject(permanentRedirectTo(`/profile/${ACME.handle}/launch-plan/?utm_source=newsletter&tag=a&tag=b`));
+  });
+
+  it("moves the guest run at its Creator's URL to the Organization's, keeping the query string", async () => {
+    const organizationRunUrl = `/profile/${ACME.handle}/launch-plan/run/`;
+
+    await expect(guestRunPageAt(CREATOR.username, 'launch-plan', { ref: 'skill' })).rejects.toMatchObject(
+      permanentRedirectTo(`${organizationRunUrl}?ref=skill`),
+    );
+    await expect(guestRunAt(CREATOR.username, 'launch-plan')).rejects.toMatchObject(permanentRedirectTo(organizationRunUrl));
+    await expect(guestRunPageAt(ACME.handle, 'launch-plan')).resolves.toBeTruthy();
   });
 
   it("renders the page under the Organization's handle without redirecting", async () => {

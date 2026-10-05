@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Bookmark,
   Check,
@@ -17,6 +17,7 @@ import { Stat } from '@/components/layout/Stat';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   type WorkspaceErrorActions,
   WorkspaceErrorNotice,
@@ -28,6 +29,7 @@ import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+import { RequiredToolsList } from './RequiredToolsList';
 import { TemplateSectionList } from './TemplateSectionList';
 
 import { Link } from '@/components/navigation/Link';
@@ -40,6 +42,8 @@ interface PublicTemplateViewProps {
   isAuthenticated: boolean;
   canSaveTemplate: boolean;
   canStartRun: boolean;
+  continueRunPath: string | null;
+  guestRunNotice?: ReactNode;
   isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
@@ -79,6 +83,8 @@ export function PublicTemplateView({
   isAuthenticated,
   canSaveTemplate,
   canStartRun,
+  continueRunPath,
+  guestRunNotice,
   isBillingError,
   isBillingLoading,
   isProUser,
@@ -125,7 +131,12 @@ export function PublicTemplateView({
     isWorkspaceLoading,
   });
   const actionDescribedBy = workspaceError ? WORKSPACE_ERROR_ID : undefined;
-  const startRunButton = (
+  const startRunButton = continueRunPath ? (
+    <Link href={continueRunPath} className={buttonVariants()}>
+      <Play data-icon="inline-start" />
+      Continue Run
+    </Link>
+  ) : (
     <Button
       onClick={onStartRun}
       type="button"
@@ -153,12 +164,17 @@ export function PublicTemplateView({
         { label: template.title },
       ]}
       notice={
-        workspaceError ? (
-          <WorkspaceErrorNotice
-            {...workspaceError}
-            id={WORKSPACE_ERROR_ID}
-            message="Start Run and Save wait until they load. Check your connection and try again, or continue in Personal."
-          />
+        workspaceError || guestRunNotice ? (
+          <div className="flex flex-col gap-3">
+            {workspaceError ? (
+              <WorkspaceErrorNotice
+                {...workspaceError}
+                id={WORKSPACE_ERROR_ID}
+                message="Start Run and Save wait until they load. Check your connection and try again, or continue in Personal."
+              />
+            ) : null}
+            {guestRunNotice}
+          </div>
         ) : undefined
       }
       icon={<TypeIcon />}
@@ -234,6 +250,7 @@ export function PublicTemplateView({
         </div>
       }
     >
+      <RequiredToolsList className="mb-10" tools={template.requiredTools} />
       <section className="flex flex-col gap-4" id="included">
         <h2 className="text-xl font-semibold tracking-tight">What&apos;s included</h2>
         <TemplateSectionList sections={template.sections} />

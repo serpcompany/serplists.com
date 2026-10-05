@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { X } from "lucide-react";
 
+import { RequiredToolsEditor } from "@/components/template-editor/RequiredToolsEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -185,6 +186,8 @@ export const TemplateBasicInfo = ({
             </Button>
           </div>
         </Field>
+
+        <RequiredToolsEditor />
 
         <Field orientation="horizontal">
           <FieldContent>

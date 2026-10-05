@@ -12,7 +12,7 @@ import {
   getSelectionAfterToggle,
 } from './runExecutionMappers';
 import { pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
-import type { RunExecutionActionResult } from './runExecutionResult';
+import type { RunExecutionActionResult, RunExecutionLoadResult } from './runExecutionResult';
 import { buildRunHistoryQuery } from './runHistory';
 import { createRunSaver, type QueuedRunSave } from './runSaver';
 import type { RunExecutionDependencies, UpdateRun } from './runPersistence';
@@ -29,15 +29,21 @@ export type RunExecutionHistoryState = {
   showingAll: boolean;
 };
 
+type GuestRunSource = {
+  load: (opened: ChecklistRun | null) => Promise<RunExecutionLoadResult>;
+  templateId: string;
+};
+
 export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
   updateRun: UpdateRun;
   dependencies?: Omit<RunExecutionDependencies, 'updateRun'>;
+  guest?: GuestRunSource | undefined;
 };
 
 export const useRunExecutionModel = (
   options: UseRunExecutionModelOptions,
 ) => {
-  const mode = resolveMode(options);
+  const mode = options.guest ? 'guest' : resolveMode(options);
   const queryClient = useQueryClient();
   const latestOptions = useRef(options);
   const dependencies = useMemo<RunExecutionDependencies>(
@@ -73,6 +79,7 @@ export const useRunExecutionModel = (
     setNoteDrafts(next);
   };
 
+  const guestTemplateId = options.guest?.templateId;
   useEffect(() => {
     let cancelled = false;
 
@@ -83,13 +90,16 @@ export const useRunExecutionModel = (
       latestNoteDrafts.current = {};
       setNoteDrafts({});
 
-      const result = await loadRunExecutionData(
-        {
-          runId: options.runId,
-          shareToken: options.shareToken,
-        },
-        latestDependencies.current,
-      );
+      const { guest } = latestOptions.current;
+      const result = guest
+        ? await guest.load(null)
+        : await loadRunExecutionData(
+            {
+              runId: options.runId,
+              shareToken: options.shareToken,
+            },
+            latestDependencies.current,
+          );
 
       if (cancelled) {
         return;
@@ -123,7 +133,7 @@ export const useRunExecutionModel = (
     return () => {
       cancelled = true;
     };
-  }, [options.runId, options.shareToken]);
+  }, [guestTemplateId, options.runId, options.shareToken]);
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
@@ -152,13 +162,14 @@ export const useRunExecutionModel = (
     return result;
   };
 
-  const shareToken = options.shareToken;
+  const { guest, shareToken } = options;
   const enqueueSave = (save: QueuedRunSave) =>
     saveRun(save, {
       apply: applyResult,
       latest: () => latestRun.current,
       onNotFound: () => setNotFound(true),
-      reload: () => loadRunExecutionData({ runId: options.runId, shareToken }, dependencies),
+      reload: () =>
+        guest ? guest.load(latestRun.current) : loadRunExecutionData({ runId: options.runId, shareToken }, dependencies),
     });
   const saves = () => bindRunSaves({ dependencies, noteDrafts: () => latestNoteDrafts.current, shareToken });
 

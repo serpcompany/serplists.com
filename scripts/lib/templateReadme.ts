@@ -56,6 +56,13 @@ export const renderTemplateReadme = (template: PortableChecklistTemplate) => {
     parts.push(metadataParts.join("\n"));
   }
 
+  if (normalized.requiredTools?.length) {
+    parts.push("## Required tools");
+    parts.push(normalized.requiredTools
+      .map((tool) => `- ${tool.name} (${tool.required ? "required" : "optional"}): <${tool.url}>`)
+      .join("\n"));
+  }
+
   normalized.sections.forEach((section) => {
     parts.push(`## ${section.title}`);
     section.items.forEach((item) => {

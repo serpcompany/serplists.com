@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
+import { RequiredToolsList } from "@/components/template/RequiredToolsList";
 import {
   Dialog,
   DialogContent,
@@ -9,11 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import { normalizeTemplateEditorRequiredTools } from "@/lib/forms/templateEditorRequiredTools";
 
 interface TemplatePreviewDialogProps {
   description: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  requiredTools: TemplateEditorFormValues["requiredTools"];
   sections: TemplateEditorFormValues["sections"];
   title: string;
 }
@@ -29,6 +32,7 @@ export function TemplatePreviewDialog({
   description,
   onOpenChange,
   open,
+  requiredTools,
   sections,
   title,
 }: TemplatePreviewDialogProps): JSX.Element {
@@ -50,6 +54,11 @@ export function TemplatePreviewDialog({
               <p className="text-sm whitespace-pre-line text-muted-foreground">{description}</p>
             ) : null}
           </div>
+          <RequiredToolsList
+            className="border-b py-4"
+            headingLevel="h3"
+            tools={normalizeTemplateEditorRequiredTools(requiredTools).filter((tool) => tool.name)}
+          />
           <PublicTemplateContent initialExpandedItems={everyTaskExpanded(sections)} sections={sections} />
         </div>
       </DialogContent>

@@ -112,9 +112,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     resolver: zodResolver(templateEditorFormSchema),
     defaultValues: model.initialValues,
   });
-  const [draftTitle, draftDescription, draftSections] = useWatch({
+  const [draftTitle, draftDescription, draftSections, draftRequiredTools] = useWatch({
     control: templateForm.control,
-    name: ["title", "description", "sections"],
+    name: ["title", "description", "sections", "requiredTools"],
   });
   const { uploads, pendingCount } = usePendingTemplateEditorUploads();
   const hasPendingUploads = pendingCount > 0;
@@ -326,6 +326,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         description={draftDescription}
         onOpenChange={setIsPreviewOpen}
         open={isPreviewOpen}
+        requiredTools={draftRequiredTools}
         sections={draftSections}
         title={draftTitle}
       />

@@ -7,6 +7,7 @@ import {
   templatePayloadSchema,
 } from '../utils/payloads';
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
+import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -72,7 +73,7 @@ export async function createTemplateForUser(
     if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
   }
 
-  const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+  const { title, description, type, seoTitle, seoDescription, rules, requiredTools, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
   const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
   if (normalizedSections.error) {
@@ -110,6 +111,7 @@ export async function createTemplateForUser(
       seo_title: seoTitle || '',
       seo_description: seoDescription || '',
       rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
+      required_tools: toStoredRequiredTools(requiredTools),
       items: JSON.stringify(normalizedSections.sections),
       version: 1,
       is_public: isPublic,

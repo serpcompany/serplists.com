@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { readableRowsOf } from "./apiResponses";
+import { requiredToolsSchema } from "./requiredTools";
 
 const text = z.string().nullish();
 
@@ -10,7 +11,12 @@ const runProvenanceSchema = z.object({
   origin: z.enum(['web', 'mcp', 'unknown']).catch('unknown'),
   startedBy: runActorSchema,
   owner: z.object({ type: z.enum(['personal', 'organization']), id: z.string(), name: z.string().nullable() }).optional(),
-  template: z.object({ id: z.string().nullable(), title: z.string().nullable(), version: z.number() }).optional(),
+  template: z.object({
+    id: z.string().nullable(),
+    title: z.string().nullable(),
+    requiredTools: requiredToolsSchema.optional().catch(undefined),
+    version: z.number(),
+  }).optional(),
   agentKeyName: z.string().nullable().optional(),
   authorizedBy: runActorSchema.optional(),
   createdBy: runActorSchema.optional(),

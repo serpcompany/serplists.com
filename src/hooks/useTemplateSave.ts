@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
 import { type AccessFailure, getAccessFailure, isEditConflictError } from "@/lib/api-errors";
+import type { RequiredTool } from "@/lib/schemas/requiredTools";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
@@ -36,6 +37,7 @@ export type SaveTemplateInput = {
   templateType: "checklist" | "recipe";
   categories: string[];
   tags: string[];
+  requiredTools: RequiredTool[];
   isPublic?: boolean | undefined;
   expectedVersion?: number | undefined;
   storedSlug?: string | undefined;
@@ -64,6 +66,7 @@ export const persistTemplateSave = async (
     templateType,
     categories,
     tags,
+    requiredTools,
     isPublic,
     expectedVersion,
     storedSlug,
@@ -91,6 +94,7 @@ export const persistTemplateSave = async (
         type: templateType,
         categories,
         tags,
+        requiredTools,
         isPublic,
         version: expectedVersion,
       };
@@ -109,6 +113,7 @@ export const persistTemplateSave = async (
       type: templateType,
       categories,
       tags,
+      requiredTools,
       isPublic: isPublic ?? false,
     });
 

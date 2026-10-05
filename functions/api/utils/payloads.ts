@@ -5,6 +5,7 @@ import {
   TEMPLATE_SLUG_PATTERN_MESSAGE,
 } from "../../../src/lib/schemas/templateFields";
 import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
+import { requiredToolsSchema } from "../../../src/lib/schemas/requiredTools";
 import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 
@@ -43,6 +44,7 @@ export const templatePayloadSchema = z.object({
   seoTitle: boundedOptionalString(limits.seoTitle),
   seoDescription: boundedOptionalString(limits.seoDescription),
   rules: z.array(templateRuleSchema).optional(),
+  requiredTools: requiredToolsSchema.optional(),
   is_public: z.boolean().optional(),
   categories: stringListField(limits.tagOrCategoryCount, limits.tagOrCategoryLength),
   category: boundedOptionalString(limits.tagOrCategoryLength),
@@ -67,7 +69,7 @@ export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
 });
 
 export const templateImportFieldsSchema = templatePayloadSchema
-  .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true })
+  .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true, requiredTools: true })
   .required({ title: true });
 
 export function formatPayloadIssue(error: z.ZodError, fallback: string): string {

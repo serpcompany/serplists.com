@@ -68,7 +68,7 @@ export const findRoute = (patterns: string[], pathname: string) => {
   return null;
 };
 
-const createStorage = (): Storage => {
+export const createStorage = (): Storage => {
   const values = new Map<string, string>();
   return {
     get length() {
