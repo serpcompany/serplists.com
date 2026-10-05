@@ -175,7 +175,7 @@ and user-facing failure states when a supporting service is unavailable.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-handle?handle=...` (the Public Profile page, which also resolves an
   Organization's handle through the [public handle registry](database-operations.md#public-handle-registry)),
-  `GET /api/profiles/by-id?userId=...` and, for tabs loaded before `by-handle` (TD-83),
+  `GET /api/profiles/by-id?userId=...` and, for tabs loaded before `by-handle` (TD-84),
   `GET /api/profiles/by-username?username=...`. They resolve a User only when they have a
   username; `by-id` returns 404 for anyone else, so an
   id from a public response never turns into the name of someone without a public profile.

@@ -74,7 +74,7 @@
   meta row: an Organization has no location, website or join date to show. A handle in
   another letter case replaces itself with the stored one, as a username does.
 - 2026-10-05 (PR 2): `GET /api/profiles/by-username` stays for tabs loaded before this
-  change (TD-83).
+  change (TD-84).
 - 2026-10-05 (PR 2): until PR 3, cards, Share and the sitemaps still build an Organization
   Template's Creator URL, which no longer opens the Template ("Template not found"); land PR 3
   with PR 2. The server-rendered canonical URL of an Organization Template already follows the
