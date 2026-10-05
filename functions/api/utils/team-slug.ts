@@ -2,8 +2,10 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { jsonError } from "./response";
+import { isPublicHandleUniqueViolation } from "./public-handle";
 import { generateSlug, truncateSlug, withSlugSuffix } from "./slug";
 import { isUniqueViolationOn } from "./unique-violation";
+import { normalizePublicHandle } from "../../../src/lib/schemas/publicHandle";
 import { TEAM_SLUG_MAX } from "../../../src/lib/schemas/templateLimits";
 
 type Db = ReturnType<typeof createDb>;
@@ -16,9 +18,14 @@ export const teamSlugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only");
 
 export async function isTeamSlugTaken(db: Db, slug: string, exceptTeamId?: string): Promise<boolean> {
-  const { teams } = schema;
-  const [existing] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, slug)).limit(1);
-  return existing !== undefined && existing.id !== exceptTeamId;
+  const { publicHandles } = schema;
+  const [holder] = await db
+    .select({ ownerType: publicHandles.owner_type, ownerId: publicHandles.owner_id })
+    .from(publicHandles)
+    .where(eq(publicHandles.handle, normalizePublicHandle(slug)))
+    .limit(1);
+  if (!holder) return false;
+  return !(holder.ownerType === "team" && holder.ownerId === exceptTeamId);
 }
 
 export function teamSlugInUseError(): Response {
@@ -26,7 +33,7 @@ export function teamSlugInUseError(): Response {
 }
 
 export function isTeamSlugUniqueViolation(error: unknown): boolean {
-  return isUniqueViolationOn(error, "teams.slug");
+  return isUniqueViolationOn(error, "teams.slug") || isPublicHandleUniqueViolation(error);
 }
 
 export function teamSlugBase(name: string, teamId: string): string {

@@ -21,6 +21,7 @@ describe("Organization slug helpers", () => {
   it.each([
     ["UNIQUE constraint failed: teams.slug", true],
     ["D1_ERROR: UNIQUE constraint failed: teams.slug: SQLITE_CONSTRAINT", true],
+    ["D1_ERROR: UNIQUE constraint failed: public_handles.handle: SQLITE_CONSTRAINT", true],
     ["D1_ERROR: UNIQUE constraint failed: team_members.team_id, team_members.user_id", false],
     ["D1_ERROR: UNIQUE constraint failed: teams.slug_history", false],
     ["Failed query: insert into \"teams\" (\"slug\") values (?)", false],
