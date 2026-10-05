@@ -44,7 +44,7 @@ test('template detail offers a retry when loading the template fails', async ({ 
 test('a public profile offers a retry when loading the profile fails', async ({ page }) => {
   let failing = true;
   await page.route(
-    (url) => url.pathname.endsWith('/api/profiles/by-username'),
+    (url) => url.pathname.endsWith('/api/profiles/by-handle'),
     async (route) => {
       if (failing) {
         await route.fulfill(serviceUnavailable);

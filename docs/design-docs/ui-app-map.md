@@ -5,8 +5,9 @@ how each page is reached. The [UI screen inventory](ui-screen-inventory.md) hold
 for each screen and overlay (phases 2 and 3). The design reference is
 https://aiuxplayground.com/.
 
-Paths are canonical: a page ends in a slash ([URL standard](../FRONTEND.md#urls)). `<user>`,
-`<template>`, `<id>`, `<slug>` and `<token>` stand for route parameters. Quoted words are
+Paths are canonical: a page ends in a slash ([URL standard](../FRONTEND.md#urls)). `<handle>`
+(a username or an Organization's slug), `<user>`, `<template>`, `<id>`, `<slug>` and `<token>`
+stand for route parameters. Quoted words are
 the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SENSE.md).
 
 ## Shells
@@ -45,8 +46,8 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 
 - **Public site:** Home, the Template Library, Categories, Features, Pricing, About, Contact.
 - **Auth:** Log in, Register, Forgot password, Reset password.
-- **Public Profiles and Public Templates:** `/profile/<user>/` and
-  `/profile/<user>/<template>/`.
+- **Public Profiles and Public Templates:** `/profile/<handle>/` (a User's or an
+  Organization's) and `/profile/<handle>/<template>/`.
 - **Shared runs:** `/share/<token>/`, a Run opened through its share link.
 - **Organization invites:** `/team-invites/<token>/`.
 - **Signed-in console:**
@@ -137,7 +138,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   tile → Category page → template card → Public template page. Or Categories → a tile or
   row → Category page → "All Categories" in its breadcrumb (or a "Related Categories" chip).
 - **Public Profile:** Public template page → owner name → Public Profile → template card →
-  Public template page. Signed in: account menu → "Profile" (opens a new tab).
+  Public template page. Signed in: account menu → "Profile" (opens a new tab). An
+  Organization's handle opens the Organization Public Profile → template card → Public
+  template page.
 - **Features:** header "Features" menu → a Feature page → "Browse the Template Library" or
   "See Pricing". Or Home "Explore Features" → Features → a feature card → Feature page →
   "Features" in its breadcrumb → Features.
@@ -176,8 +179,8 @@ Toasts (sonner) report results everywhere.
 | `/pricing/` | [Pricing](ui-screen-inventory.md#pricing) | Root section (header "Pricing") | Shell overlays | The Pro card's action follows the plan state |
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
-| `/profile/<user>/` | [Public Profile](ui-screen-inventory.md#public-profile) | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found; no public Templates |
-| `/profile/<user>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page) | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
+| `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
+| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
 
 ### Auth and invites
 
@@ -256,7 +259,7 @@ the session check answers; everyone else sees it in the public shell
   another owner's Run or private Organization Template with that owner's;
   `/templates/?category=<slug>` with no other
   filter replaces itself with `/categories/<slug>/`; an old ASCII category slug replaces
-  itself with the current one; `/profile/<user>/` in another letter case replaces itself
+  itself with the current one; `/profile/<handle>/` in another letter case replaces itself
   with the stored casing.
 
 ## Not screens

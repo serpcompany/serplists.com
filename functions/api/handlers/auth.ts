@@ -1,7 +1,18 @@
 import { Env } from '../types';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { findPublicProfileOwner } from '../utils/public-profile-owner';
 import { json, jsonError } from '../utils/response';
+
+export async function handleProfileByHandle(request: Request, env: Env): Promise<Response> {
+  const handle = new URL(request.url).searchParams.get('handle')?.trim();
+  if (!handle) {
+    return jsonError('Handle required', 400);
+  }
+
+  const owner = await findPublicProfileOwner(env, handle);
+  return owner ? json(owner.profile) : jsonError('Profile not found', 404);
+}
 
 export async function handleProfileByUsername(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);

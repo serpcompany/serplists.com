@@ -15,6 +15,7 @@ import {
   buildUpdateRunBody,
   buildUpdateTemplateBody,
   currentResourceSchema,
+  organizationHandle,
   organizationTemplate,
   personalTemplate,
   publicTemplateSlug,
@@ -216,6 +217,24 @@ const ROUTES: Route[] = [
     prepare: get("visitor", "profiles/by-username?username=synth_2"),
     budget: bounded(1),
     reason: "one lookup on the username index",
+  },
+  {
+    name: "a public profile by handle",
+    prepare: get("visitor", "profiles/by-handle?handle=synth_2"),
+    budget: bounded(2),
+    reason: "the handle by the registry's primary key, then its User by primary key",
+  },
+  {
+    name: "an Organization's public profile by handle",
+    prepare: get("visitor", `profiles/by-handle?handle=${organizationHandle}`),
+    budget: bounded(2),
+    reason: "the handle by the registry's primary key, then its Organization by primary key",
+  },
+  {
+    name: "an Organization's public profile Templates",
+    prepare: get("visitor", `templates/public?handle=${organizationHandle}`),
+    budget: bounded(23),
+    reason: "the handle and its Organization by primary key, then that Organization's Templates through idx_templates_team_id",
   },
   {
     name: "a shared run",

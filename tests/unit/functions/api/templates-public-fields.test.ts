@@ -92,8 +92,10 @@ const sortedKeys = (value: Record<string, unknown>) => Object.keys(value).sort()
 
 const THE_ORGANIZATION_AS_OWNER: TemplateOwner = { type: 'team', teamId: 'org-1', publicHandle: 'launch-crew', displayName: 'Launch Crew' };
 const THE_USER_AS_OWNER: TemplateOwner = { type: 'user', userId: 'user-9', publicHandle: 'alice', displayName: 'Alice Example' };
+const THE_ORGANIZATION_IN_PUBLIC = { type: 'team', publicHandle: 'launch-crew', displayName: 'Launch Crew' };
 const AN_ORGANIZATION_UNNAMED = { type: 'team' };
-const THE_ORGANIZATION_BY_ID_SLUG_OR_NAME = /org-1|launch-crew|Launch Crew/;
+const THE_ORGANIZATION_BY_ID = /org-1/;
+const THE_ORGANIZATION_BY_SLUG_OR_NAME = /launch-crew|Launch Crew/;
 
 const publicOwner = z.object({ owner: z.object({ type: z.string() }).passthrough() }).passthrough();
 
@@ -107,9 +109,9 @@ const expectPublicShape = (template: Record<string, unknown>) => {
   expect(template).not.toHaveProperty('owner_team_name');
   const { owner } = publicOwner.parse(template);
   expect(owner.type === 'team' ? owner : sortedKeys(owner)).toEqual(
-    owner.type === 'team' ? AN_ORGANIZATION_UNNAMED : ['displayName', 'publicHandle', 'type', 'userId'],
+    owner.type === 'team' ? THE_ORGANIZATION_IN_PUBLIC : ['displayName', 'publicHandle', 'type', 'userId'],
   );
-  expect(JSON.stringify(template)).not.toMatch(THE_ORGANIZATION_BY_ID_SLUG_OR_NAME);
+  expect(JSON.stringify(template)).not.toMatch(THE_ORGANIZATION_BY_ID);
 };
 
 const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown(), owner: z.unknown() }).passthrough();
@@ -120,7 +122,7 @@ async function get<Output>(path: string, schema: ResponseSchema<Output>) {
   return { status: response.status, body: await readJson(response, schema) };
 }
 
-describe('public template responses, which never say who in an Organization created or edited a template, or which Organization owns it', () => {
+describe("public template responses, which never say who in an Organization created or edited a template, or the owning Organization's id", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chainSelectsUpdatesAndDeletes(dbMocks);
@@ -141,7 +143,19 @@ describe('public template responses, which never say who in an Organization crea
     expectPublicShape(firstOf(body));
     expect(body[0]).toMatchObject({ id: 'template-1', user_id: 'creator-1', owner_type: 'team', version: 4 });
     expect(firstOf(body).sections).toEqual(sections);
+    expect(firstOf(body).owner).toEqual(THE_ORGANIZATION_IN_PUBLIC);
+  });
+
+  it('only says an Organization owns a template once the Organization is archived, naming neither its handle nor its name', async () => {
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      organizationTemplateAnotherMemberEdited({ owner_team_archived_at: '2026-09-03T00:00:00.000Z' }),
+    ]);
+
+    const { body } = await get('/api/templates?scope=public', templateRows);
+
     expect(firstOf(body).owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(JSON.stringify(body)).not.toMatch(THE_ORGANIZATION_BY_SLUG_OR_NAME);
+    expect(firstOf(body)).not.toHaveProperty('owner_team_archived_at');
   });
 
   it.each([
@@ -155,7 +169,7 @@ describe('public template responses, which never say who in an Organization crea
     expect(status).toBe(200);
     expectPublicShape(body);
     expect(body.ownerProfile).toEqual({ username: 'alice', full_name: 'Alice Example' });
-    expect(body.owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(body.owner).toEqual(THE_ORGANIZATION_IN_PUBLIC);
   });
 
   it('a signed-in visitor who is not in the Organization gets only public fields', async () => {
@@ -237,11 +251,14 @@ describe('public template responses, which never say who in an Organization crea
     expect(status).toBe(404);
   });
 
-  it('says only that an Organization owns a template, and keeps only the public fields of a User owner', () => {
+  it('names an Organization only by its public handle and name, says only that one owns a template while it has no handle, and keeps only the public fields of a User owner', () => {
     const organization = { ...THE_ORGANIZATION_AS_OWNER, billingOwnerUserId: 'creator-1', memberIds: ['editor-2'], role: 'owner' };
     const user = { ...THE_USER_AS_OWNER, email: 'alice@example.test' };
 
-    expect(toPublicTemplate({ id: 'template-1', owner: organization }).owner).toEqual(AN_ORGANIZATION_UNNAMED);
+    expect(toPublicTemplate({ id: 'template-1', owner: organization }).owner).toEqual(THE_ORGANIZATION_IN_PUBLIC);
+    expect(toPublicTemplate({ id: 'template-1', owner: { ...organization, publicHandle: null } }).owner).toEqual(
+      AN_ORGANIZATION_UNNAMED,
+    );
     expect(toPublicTemplate({ id: 'template-2', owner: user }).owner).toEqual(THE_USER_AS_OWNER);
   });
 });

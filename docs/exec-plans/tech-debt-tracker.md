@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-83.**
+then you raise it. **Next ID: TD-84.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 "Size" is `small` (an hour or two, no migration or decision), `medium` (a focused PR) or
@@ -30,3 +30,4 @@ then you raise it. **Next ID: TD-83.**
 | TD-26 | Boundaries | The MCP template tools call `createTemplateForUser`/`updateTemplateForUser`, which return HTTP `Response`s that `agentMcpTemplates.ts` re-parses into tool errors. | Have the template write functions return typed results that the route and the MCP each map to their own errors. | None | medium |
 | TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None | small |
 | TD-82 | Organizations | The role-unavailable notices on the Template page ("Start Run waits until they load.") and the Run page ("This run's actions wait until they load."), and `isRoleUnavailable` behind them, appeared only for a private Organization Template or an Organization Run opened from another context. Since #212's PR 3 such a record moves to its Organization's URL, where the route waits for the Organizations list, so they no longer appear. | Remove both notices, `isRoleUnavailable` from `WorkspaceContext` and the Run page header's `roleUnavailable`, with their tests, and drop the sentence about them from `docs/design-docs/organizations.md`. Small. | None | small |
+| TD-83 | Public profiles | `GET /api/profiles/by-username` stays for browser tabs loaded before #232's PR 2; the app now resolves `/profile/:handle` through `GET /api/profiles/by-handle` (the public handle registry). | After a release cycle, delete the route and `handleProfileByUsername`, their tests (`tests/unit/functions/api/profiles-by-username-d1.test.ts` and its cases in `profiles-handler.test.ts`), its rate-limit exemption, its rows-read budget and `d1:profile` scenario, and the docs that name it. | None | small |

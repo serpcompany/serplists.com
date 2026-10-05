@@ -293,6 +293,11 @@ its owner (`user` or `team`, and the id).
   sitemaps follow `src/lib/schemas/publicHandle.ts`: 3 to 30 letters, digits, `_`, `.` and `-`.
   Its `normalizePublicHandle` produces the triggers' key. Values saved before the rule are
   registered as they are. `0029` gave the sitemap's user triggers the same characters.
+- **Lookups.** A Public Profile (`/profile/:handle/`) reads the registry by its primary key with
+  `normalizePublicHandle` (`GET /api/profiles/by-handle`, `findPublicProfileOwner` in
+  `functions/api/utils/public-profile-owner.ts`), so a handle names one Profile Owner and is
+  never tried as a User first and an Organization second. An archived Organization's row
+  stays, but the lookup answers 404 for it ([Organizations](organizations.md#public-profile)).
 
 Rollout, one database at a time:
 

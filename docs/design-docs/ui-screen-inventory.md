@@ -641,7 +641,8 @@ existing content, invent nothing):
 
 ### Public template page
 
-- **SCREEN NAME:** Public template page (`/profile/<user>/<template>/`)
+- **SCREEN NAME:** Public template page (`/profile/<handle>/<template>/`, under its Template
+  Owner's handle: a User's, or an active Organization's)
 - **PURPOSE:** Show one Public Template and let the visitor start a Run or save a copy.
 - **HOW USER GETS HERE:** a template card (library, category page, Public Profile, Home); a
   shared link (this is the Template's only public URL); the "Share Template" dialog's link.
@@ -849,7 +850,7 @@ existing content, invent nothing):
 
 ### Public Profile
 
-- **SCREEN NAME:** Public Profile (`/profile/<user>/`)
+- **SCREEN NAME:** Public Profile (`/profile/<handle>/` for a User's handle)
 - **PURPOSE:** Show a Profile Owner and their Public Templates.
 - **HOW USER GETS HERE:** the owner link on a template card or template page; the account
   menu's "Profile" (a new tab); the "Public profile URL" link in Account Settings.
@@ -893,10 +894,54 @@ existing content, invent nothing):
   and 2-line description. The reference's breadcrumb is left out: a profile has no section
   to trail back to. The cards are `MediaCard`s like the library's rather than the library's
   card itself, which would change their words ("N tasks", "Start", the owner).
-- **NOTES:** Code: `src/views/UserProfile.tsx`. Only Users have Public Profiles today;
-  Organization Public Profiles do not exist yet. The avatar image is decorative (`alt=""`)
-  beside the name. Until step 2b the cards had no media area and a trailing arrow icon, in 2
-  columns.
+- **NOTES:** Code: `src/views/PublicProfile.tsx` (the states and the handle lookup) and
+  `src/components/profile/PublicProfileDetails.tsx`, which an Organization's handle shares
+  ([Organization Public Profile](#organization-public-profile)). The avatar image is
+  decorative (`alt=""`) beside the name. Until step 2b the cards had no media area and a
+  trailing arrow icon, in 2 columns.
+
+### Organization Public Profile
+
+- **SCREEN NAME:** Organization Public Profile (`/profile/<handle>/` for an active
+  Organization's handle)
+- **PURPOSE:** Show an Organization and its Public Templates.
+- **HOW USER GETS HERE:** a link to its handle. Until #232's PR 3 moves the owner links on
+  template cards and template pages here, nothing in the app links to it.
+- **WHAT'S ON THE SCREEN:**
+  - Header: the Organization's avatar (or its initials); its name; "@handle"; its description,
+    or without one the summary a User's profile shows ("Public checklist templates from
+    @<handle> covering <categories>." or "Public checklist templates and repeatable workflow
+    packs published by @<handle>.").
+  - Beside it (under it on phones), the panel with 3 stats: "Templates", "Checklist Items",
+    "Categories".
+  - "Public Templates" with "Browse every public template published from this profile."; the
+    Public Profile's template cards, each opening `/profile/<handle>/<template>/`.
+- **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
+- **SECONDARY ACTIONS:** none.
+- **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
+  "Try again"); not found ("User not found", "This profile does not exist.", noindex), also for
+  an archived Organization, which keeps its handle; no Templates ("No public templates",
+  "@<handle> has not published any public templates yet."); another letter case of the handle
+  replaces itself with the stored one.
+- **NAVIGATION TYPE:** child page.
+- **PATTERN CHOICE (built):** the [Public Profile](#public-profile)'s: a [Detail
+  page](#detail-page) header with the avatar and the stats panel, then a [Section row over a
+  card grid](#section-row-over-a-card-grid). It has no meta row: an Organization has no
+  location, website or join date to show.
+- **REFERENCE IMAGES:** pattern-detail-1.png, teardown-detail-1.png, home-2.png.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (avatar, name, handle, description) with the stats panel beside it; a
+    separator; "Public Templates" (a section header over the card grid or the empty state).
+  - COMPONENT TYPES: as the Public Profile, without the meta items.
+  - DATA FIELDS: Organization (name, handle, avatar, description, stats); Template (title,
+    description, type, categories, section count, item count, URL).
+- **PROOF PASS:** Not run yet: `pnpm run ui:snap` of an Organization's profile on desktop and
+  phone, light and dark, against the references above, is the PR's evidence.
+- **NOTES:** Code: `src/views/PublicProfile.tsx` and
+  `src/components/profile/PublicProfileDetails.tsx`, shared with the Public Profile. The page
+  loads nothing else about the Organization: no members, roles, invites, billing, Runs,
+  activity or private Templates ([Organizations](organizations.md#public-profile)). Owners and
+  admins set the avatar and description on the [Organization Settings](#organization-settings).
 
 ### Features
 

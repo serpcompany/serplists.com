@@ -41,8 +41,8 @@ const toFoundSeo = (template: FoundTemplatePage): PageSeoLookup => {
 };
 
 export const loadTemplatePageSeo = cache(
-  async (username: string, identifier: string): Promise<PageSeoLookup> => {
-    const owner = username.trim().toLowerCase();
+  async (handle: string, identifier: string): Promise<PageSeoLookup> => {
+    const owner = handle.trim().toLowerCase();
     const id = identifier.trim();
     const notFound: PageSeoLookup = {
       kind: 'not_found',
@@ -61,11 +61,11 @@ export const loadTemplatePageSeo = cache(
     try {
       const [env, origin] = await Promise.all([getWorkerEnv(), getRequestOrigin()]);
       const record = await loadPublicTemplate(env, origin, id);
-      const storedOwner = record?.ownerUsername?.trim();
-      if (!record || !storedOwner || storedOwner.toLowerCase() !== owner) return notFound;
+      const ownerHandle = record?.ownerHandle?.trim();
+      if (!record || !ownerHandle || ownerHandle.toLowerCase() !== owner) return notFound;
       return toFoundSeo({
         ...record,
-        canonicalPath: buildPublicTemplatePath(storedOwner, record.slug?.trim() || record.id),
+        canonicalPath: buildPublicTemplatePath(ownerHandle, record.slug?.trim() || record.id),
       });
     } catch (error) {
       log('error', 'template_page_meta_failed', describeErrorForLog(error));

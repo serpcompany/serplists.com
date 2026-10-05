@@ -11,6 +11,7 @@ import {
   serializeHistoryEvent,
   serializeTemplateVersionHistory,
 } from '../utils/history-queries';
+import { findPublicProfileOwner, type PublicProfileOwner } from '../utils/public-profile-owner';
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 import {
@@ -26,8 +27,10 @@ import {
   serializeTemplateForViewer,
 } from '../utils/template-permissions';
 
-const PUBLIC_CATALOG_CACHE_KEY = '/api/templates?scope=public&fields=public-with-owner';
+const PUBLIC_CATALOG_CACHE_KEY = '/api/templates?scope=public&fields=public-with-owner-handles';
 const PUBLIC_CATALOG_CACHE_SECONDS = 5 * 60;
+
+type ProfileTemplatesOwner = Pick<PublicProfileOwner, 'type' | 'id'>;
 
 function isMissingHistoryReadTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -39,29 +42,32 @@ async function canListOrganizationTemplates(env: Env, teamId: string, userId: st
   return membership !== null && canViewTeam(normalizeTeamRole(membership.role));
 }
 
-export function selectPublicProfileTemplates(env: Env, ownerId: string, includeRules: boolean) {
+export function selectPublicProfileTemplates(env: Env, owner: ProfileTemplatesOwner, includeRules: boolean) {
   const { templates } = schema;
   const isPublicWithoutItsIndex = sql`+${templates.is_public} = 1`;
+  const ownedByTheProfileOwner =
+    owner.type === 'user'
+      ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, owner.id), isNull(templates.team_id))
+      : and(sql`+${templates.owner_type} = 'team'`, eq(templates.team_id, owner.id));
   return selectTemplatesWithOwner(env, includeRules)
-    .where(
-      and(
-        eq(templates.owner_type, 'user'),
-        eq(templates.user_id, ownerId),
-        isNull(templates.team_id),
-        isPublicWithoutItsIndex,
-        isNull(templates.deleted_at),
-      ),
-    )
+    .where(and(ownedByTheProfileOwner, isPublicWithoutItsIndex, isNull(templates.deleted_at)))
     .orderBy(desc(templates.created_at));
 }
 
-async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response> {
-  const ownerId = url.searchParams.get('userId');
-  if (!ownerId) {
-    return jsonError('userId required', 400);
-  }
+async function findProfileTemplatesOwner(env: Env, url: URL): Promise<ProfileTemplatesOwner | Response> {
+  const userId = url.searchParams.get('userId');
+  if (userId) return { type: 'user', id: userId };
 
-  const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, ownerId, includeRules));
+  const handle = url.searchParams.get('handle')?.trim();
+  if (!handle) return jsonError('userId or handle required', 400);
+  return (await findPublicProfileOwner(env, handle)) ?? jsonError('Profile not found', 404);
+}
+
+async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response> {
+  const owner = await findProfileTemplatesOwner(env, url);
+  if (owner instanceof Response) return owner;
+
+  const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, owner, includeRules));
   return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row))));
 }
 

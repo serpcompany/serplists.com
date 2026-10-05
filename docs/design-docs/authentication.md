@@ -173,16 +173,20 @@ and user-facing failure states when a supporting service is unavailable.
   `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same limits client-side
   through `src/lib/schemas/passwordLimits.ts`.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
-  `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
-  Both resolve only Users who have a username; `by-id` returns 404 for anyone else, so an
+  `GET /api/profiles/by-handle?handle=...` (the Public Profile page, which also resolves an
+  Organization's handle through the [public handle registry](database-operations.md#public-handle-registry)),
+  `GET /api/profiles/by-id?userId=...` and, for tabs loaded before `by-handle` (TD-83),
+  `GET /api/profiles/by-username?username=...`. They resolve a User only when they have a
+  username; `by-id` returns 404 for anyone else, so an
   id from a public response never turns into the name of someone without a public profile.
-  The username lookup trims the value and ignores its case: it matches the value as
+  `by-handle` compares the handle without regard to case, as the registry keys it. The
+  username lookup trims the value and ignores its case: it matches the value as
   given (usernames saved before Better Auth may be mixed case) or its lowercase
   form, preferring an exact match, with an `IN` list that stays on
-  `idx_users_username`. `/profile/JohnDoe/` then replaces the URL with the stored
-  `/profile/johndoe/`. Account settings links the saved username as stored (a legacy
-  mixed-case one is found only in that casing; since `0028` no other User or Organization
-  can hold it in another case) and previews an unsaved edit as the
+  `idx_users_username`. The profile page finds a User in any letter case and replaces the
+  URL with the stored one (`/profile/JohnDoe/` becomes `/profile/johndoe/`). Account settings
+  links the saved username as stored (a legacy mixed-case one keeps its casing; since `0028`
+  no other User or Organization can hold it in another case) and previews an unsaved edit as the
   lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
   them on every user write (`functions/api/utils/user-profile-validation.ts`), and

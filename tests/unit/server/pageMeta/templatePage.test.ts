@@ -180,7 +180,7 @@ describe('template page metadata cache', () => {
     expect(again.kind).toBe('found');
     expect(d1.queries.length).toBe(queries);
     const [key, stored] = firstOf([...edgeCache.entries]);
-    expect(key).toBe('https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist');
+    expect(key).toBe('https://serplists.com/__page-meta/v3/templates/reviewed-clipy-checklist');
     expect(stored.headers.get('Cache-Control')).toBe('public, s-maxage=300');
   });
 
@@ -196,8 +196,8 @@ describe('template page metadata cache', () => {
 
     expect(d1.queries.length).toBeGreaterThan(queries);
     expect([...edgeCache.entries.keys()]).toEqual([
-      'https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist',
-      'https://staging.serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist',
+      'https://serplists.com/__page-meta/v3/templates/reviewed-clipy-checklist',
+      'https://staging.serplists.com/__page-meta/v3/templates/reviewed-clipy-checklist',
     ]);
   });
 

@@ -27,7 +27,11 @@ const PUBLIC_TEMPLATE_FIELDS = [
 export type PublicTemplateField = (typeof PUBLIC_TEMPLATE_FIELDS)[number];
 
 function publicOwnerOf(owner: TemplateOwner): PublicTemplateOwner {
-  if (owner.type === 'team') return { type: 'team' };
+  if (owner.type === 'team') {
+    return owner.publicHandle
+      ? { type: 'team', publicHandle: owner.publicHandle, displayName: owner.displayName }
+      : { type: 'team' };
+  }
   return { type: 'user', userId: owner.userId, publicHandle: owner.publicHandle, displayName: owner.displayName };
 }
 

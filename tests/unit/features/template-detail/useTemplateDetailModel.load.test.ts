@@ -285,3 +285,31 @@ describe('loadTemplateDetailData', () => {
     expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
   });
 });
+
+describe("loadTemplateDetailData for a public Organization Template, which lives under its Organization's handle", () => {
+  const acmeOwner = { type: 'team', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' };
+  const createdByAlice = (owner: Record<string, unknown>) =>
+    campingChecklistRow({ owner_type: 'team', owner_username: 'alice', owner });
+  const loadUnder = (handle: string, row: Record<string, unknown>) =>
+    loadTemplateDetailData(
+      { mode: 'public', identifier: 'camping-checklist', ownerUsername: handle },
+      { apiClient: templateDetailApiClient({ getTemplateBySlug: vi.fn().mockResolvedValue(row) }) },
+    );
+
+  it("opens under its Organization's handle in any letter case", async () => {
+    expect((await loadUnder('acme-launch', createdByAlice(acmeOwner))).kind).toBe('ok');
+  });
+
+  it("is not found under its Creator's username", async () => {
+    expect(await loadUnder('alice', createdByAlice(acmeOwner))).toEqual({ kind: 'not_found' });
+  });
+
+  it('is not found under any handle while its Organization names none, as when it is archived', async () => {
+    expect(await loadUnder('alice', createdByAlice({ type: 'team' }))).toEqual({ kind: 'not_found' });
+    expect(await loadUnder('acme-launch', createdByAlice({ type: 'team' }))).toEqual({ kind: 'not_found' });
+  });
+
+  it("does not find a Personal Template under an Organization's handle", async () => {
+    expect(await loadUnder('acme-launch', campingChecklistRow({ owner_username: 'alice' }))).toEqual({ kind: 'not_found' });
+  });
+});

@@ -12,9 +12,13 @@
   `teams.description`. The Organizations list and `PUT /api/teams/:id` carry them, and owners
   and admins edit them on the Organization's settings page.
 - [ ] Apply `0030` to staging (owner go-ahead at that step).
-- [ ] PR 2: `/profile/:handle` resolves through the public handle registry (#233) to a User's or
-  an Organization's profile. `/profile/:orgHandle/:slug` serves an Organization's public
-  Template, and public lookups are owner-qualified.
+- [x] PR 2 (2026-10-05): `/profile/:handle` resolves through the public handle registry (#233)
+  to a User's or an active Organization's profile (`GET /api/profiles/by-handle`).
+  `/profile/:orgHandle/:slug` serves an Organization's public Template (`GET
+  /api/templates/public?handle=` lists them), and public lookups are owner-qualified: the
+  public template page, its metadata (`functions/seo/public-template-lookup.ts`) and
+  `/api/templates/slug/` answers name the Template Owner, and the page opens a Template only
+  under that owner's handle. No migration.
 - [ ] PR 3: the one resolver (`resolvePublicTemplateOwnerSlug`, which
   `buildCanonicalPublicTemplatePath` uses) gives an Organization Template its Organization's
   URL, so Share, cards, canonical tags and sitemap entries move together. The Creator URLs
@@ -39,3 +43,35 @@
 - 2026-10-05: The Organizations list (`GET /api/teams`) carries the avatar and description, so
   the settings form and later the switcher read them from the active Organization without
   another request.
+- 2026-10-05 (PR 2): one lookup decides who a handle names: `GET /api/profiles/by-handle`
+  reads `public_handles` by its primary key and joins the User or the Organization by theirs
+  (2 rows). It answers a User with the fields `/api/profiles/by-username` answers, plus
+  `type`, so a User's profile is unchanged, and an Organization with only `type`, `handle`,
+  `name`, `avatar_url` and `description`: never its id, members, roles, invites, billing,
+  runs or audit events. An archived Organization keeps its handle but answers 404, like a
+  handle no one holds, and so do its Templates' pages.
+- 2026-10-05 (PR 2): an Organization's public Templates are listed by its handle
+  (`GET /api/templates/public?handle=`), not its id, so no public response carries an
+  Organization's id. The list reads that Organization's Templates through
+  `idx_templates_team_id` (`+owner_type` and `+is_public` keep the planner off the other
+  indexes), as a User's reads theirs through `idx_templates_owner`, so it needs no new index
+  and no migration.
+- 2026-10-05 (PR 2): public responses now name an Organization Template's Organization by its
+  handle and name (`owner: { type: 'team', publicHandle, displayName }`) while the
+  Organization is active and has a handle; otherwise, as before, only `{ type: 'team' }`. The
+  avatar stays out: no card or template page shows an owner's image. `templateOwnerOf` gives
+  an archived Organization no handle or name, which only public responses can show, since an
+  archived Organization has no active members. The catalog's edge cache key changed with the
+  shape (`fields=public-with-owner-handles`).
+- 2026-10-05 (PR 2): the Organization Public Profile reuses the User profile's layout
+  (`PublicProfileDetails`): the avatar or its initials, the name, `@handle`, the description
+  (or the generated summary of its public Templates when it has none), the same three stats,
+  and the same "Public Templates" cards, linked under the Organization's handle. It has no
+  meta row: an Organization has no location, website or join date to show. A handle in
+  another letter case replaces itself with the stored one, as a username does.
+- 2026-10-05 (PR 2): `GET /api/profiles/by-username` stays for tabs loaded before this
+  change (TD-83).
+- 2026-10-05 (PR 2): until PR 3, cards, Share and the sitemaps still build an Organization
+  Template's Creator URL, which no longer opens the Template ("Template not found"); land PR 3
+  with PR 2. The server-rendered canonical URL of an Organization Template already follows the
+  lookup, so the page found at the Organization's URL names that URL.

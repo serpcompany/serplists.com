@@ -131,7 +131,7 @@ Key checklist/template screens:
 - `src/views/ChecklistRun.tsx`
 - `src/views/Dashboard.tsx`
 - `src/views/ChecklistLibrary.tsx`
-- `src/views/UserProfile.tsx`
+- `src/views/PublicProfile.tsx`
 
 Assessment:
 
@@ -193,7 +193,7 @@ Examples:
 - `src/views/ChecklistRun.tsx`
 - `src/views/TemplateDetail.tsx`
 - `src/views/TemplateEditor.tsx`
-- `src/views/UserProfile.tsx`
+- `src/views/PublicProfile.tsx`
 - `src/components/TemplateBackup.tsx`
 - `src/components/shared/AvatarUpload.tsx`
 - `UserInfo.tsx` (removed 2026-09-27)
@@ -241,7 +241,7 @@ Examples:
 - `src/views/PublicTemplate.tsx`
 - `src/views/TemplateDetail.tsx`
 - `src/views/ChecklistRun.tsx`
-- `src/views/UserProfile.tsx`
+- `src/views/PublicProfile.tsx`
 
 Why this matters:
 
@@ -577,7 +577,7 @@ Priority routes:
 - `src/views/ChecklistRun.tsx`
 - `src/views/TemplateDetail.tsx`
 - `src/views/TemplateEditor.tsx`
-- `src/views/UserProfile.tsx`
+- `src/views/PublicProfile.tsx`
 
 Expected result:
 

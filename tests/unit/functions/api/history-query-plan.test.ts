@@ -60,11 +60,22 @@ describe('history query plans from the real migrations and Drizzle SQL, which fa
 });
 
 describe('public profile template query plan', () => {
+  const planFor = (owner: { type: 'user' | 'team'; id: string }) =>
+    explain(migratedDatabase(), selectPublicProfileTemplates(apiEnv({ DB: d1ThatRunsNoQuery() }), owner, true));
+
   it("reads a Creator's public templates from the owner index, not by scanning every public template", () => {
-    const db = migratedDatabase();
-    const plan = explain(db, selectPublicProfileTemplates(apiEnv({ DB: d1ThatRunsNoQuery() }), 'user-1', true));
+    const plan = planFor({ type: 'user', id: 'user-1' });
 
     expect(plan).toContain('idx_templates_owner');
     expect(plan).not.toContain('idx_templates_public_created_at');
+  });
+
+  it("reads an Organization's public templates from its own Templates on the team index, not every Organization Template", () => {
+    const plan = planFor({ type: 'team', id: 'org-1' });
+
+    expect(plan).toContain('idx_templates_team_id');
+    expect(plan).not.toContain('idx_templates_owner');
+    expect(plan).not.toContain('idx_templates_public_created_at');
+    expect(plan).not.toMatch(/SCAN templates/);
   });
 });

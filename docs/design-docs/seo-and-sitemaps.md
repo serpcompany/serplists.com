@@ -36,8 +36,8 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 - **Public Templates** (`publicTemplateCondition`): public, not archived, with owner fields
   that agree, a Personal row (`owner_type = 'user'`, no `team_id`) or an Organization row
   (`owner_type = 'team'` with a `team_id`); a row whose fields disagree stays out. The
-  library, category pages and link previews list an Organization Template under its
-  Creator's username (the users join on `templates.user_id`), so the sitemaps do too.
+  library and category pages still list an Organization Template under its Creator's
+  username until #232's PR 3 (the users join on `templates.user_id`), so the sitemaps do too.
 - **Public URLs only.** A profile or Template is listed only when the username is valid (the
   [public handle rule](database-operations.md#public-handle-registry): 3 to 30 letters, digits,
   `_`, `.` or `-`; the user triggers match it since `0029`), and a Template only when its slug is (lowercase
@@ -146,13 +146,16 @@ The data-center cache keys start with the request's origin (`getRequestOrigin` i
 cache, so neither reads the other's entries. Reading the request's headers also makes the
 page render on each request.
 
-- **Template page** (`/profile/<user>/<identifier>/`, `loadTemplatePageSeo` in
+- **Template page** (`/profile/<handle>/<identifier>/`, `loadTemplatePageSeo` in
   `src/server/pageMeta/templatePage.ts`): a bundled library template first, since the API
-  cannot serve one and it wins on a slug clash; otherwise a public template whose owner has
-  this username in any letter case. The canonical URL uses the stored username and the slug
-  (the id when there is none), as the sitemap does. The D1 read (`loadPublicTemplate` in
-  `functions/seo/public-template-lookup.ts`) is one indexed row (`idx_templates_slug_unique`,
-  or the primary key for an id), under the visibility rule `GET /api/templates/slug/:slug`
+  cannot serve one and it wins on a slug clash; otherwise a public template whose Template
+  Owner has this handle in any letter case: a Personal Template's User, or an Organization
+  Template's Organization while it is active (`templateOwnerOf` in
+  `functions/api/utils/template-rows.ts`), never its Creator. The canonical URL uses the
+  owner's stored handle and the slug (the id when there is none). The D1 read
+  (`loadPublicTemplate` in `functions/seo/public-template-lookup.ts`) is one indexed row
+  (`idx_templates_slug_unique`, or the primary key for an id) with its Creator and, for an
+  Organization Template, its Organization by primary key, under the visibility rule `GET /api/templates/slug/:slug`
   applies for a visitor: public and not archived. Like the page, it reads a UUID as a
   template id first and then as a slug, since a slug saved before the API refused UUID
   slugs can look like an id (a UUID no id matches reads one more row); anything else is a
@@ -160,18 +163,20 @@ page render on each request.
   slug or id index instead of `idx_templates_public_created_at`, and categories are read
   the way the API lists them. A found template is cached in the data center for 5 minutes,
   per host (the key starts with the request's origin), under a key prefix that names the
-  record's shape (`/__page-meta/v2/templates/`), so a deploy that changes the shape never
+  record's shape (`/__page-meta/v3/templates/`), so a deploy that changes the shape never
   reads the previous one. A template made private can keep its tags for those 5 minutes;
   the page itself loads it from the API and shows it as not found.
-- **Profile page** (`/profile/<user>/`, `loadProfilePageSeo` in
-  `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, from the same
-  two requests the page makes (`loadUserProfile`), sent to the API router in the same Worker
-  (`fetchApiJson` in `src/server/api.ts`) as a visitor with no session: the same handlers,
-  visibility rules and edge caches, without a network hop. A found profile's tags are cached
-  for 5 minutes, so a busy profile reads D1 once per 5 minutes per data center, and a new
-  name or public template can take that long to reach them; the page itself always loads
-  the profile from the API. The canonical URL uses the stored username, the one the page
-  moves other letter cases to.
+- **Profile page** (`/profile/<handle>/`, `loadProfilePageSeo` in
+  `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, a User's or an
+  active Organization's, from the same two requests the page makes (`loadPublicProfile`:
+  `GET /api/profiles/by-handle`, then the owner's public Templates), sent to the API router
+  in the same Worker (`fetchApiJson` in `src/server/api.ts`) as a visitor with no session:
+  the same handlers, visibility rules and edge caches, without a network hop. A found
+  profile's tags are cached for 5 minutes under `/__page-meta/v2/profiles/`, so a busy
+  profile reads D1 once per 5 minutes per data center, and a new name, description or
+  public template can take that long to reach them; the page itself always loads the
+  profile from the API. The canonical URL uses the stored handle, the one the page moves
+  other letter cases to. An archived Organization's handle is not found.
 - **Category page** (`/categories/<slug>/`, `loadCategoryPageSeo` in
   `src/server/pageMeta/categoryPage.ts`): the category pages count the public catalog in
   the browser, so the server counts the same list with the library's own functions: the

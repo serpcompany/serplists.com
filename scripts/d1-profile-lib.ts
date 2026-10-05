@@ -18,6 +18,7 @@ export const personalTemplate = "synthetic-template-50";
 export const organizationTemplate = "synthetic-template-40";
 export const publicTemplateSlug = "synthetic-template-5";
 export const publicTemplateOwner = "synth_6";
+export const organizationHandle = "serp-growth-team";
 export const adminRun = "synthetic-run-40";
 export const shareToken = "synthetic-share-50";
 
@@ -35,9 +36,14 @@ export function scenarios(): Scenario[] {
     get("public template page (repeat)", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}/`),
     get("public profile page", "anon", "/profile/synth_2/"),
     get("public profile page (repeat)", "anon", "/profile/synth_2/"),
+    get("Organization public profile page", "anon", `/profile/${organizationHandle}/`),
+    get("Organization public profile page (repeat)", "anon", `/profile/${organizationHandle}/`),
     get("category page", "anon", "/categories/business/"),
     get("shared run page", "anon", `/share/${shareToken}/`),
     get("public profile templates", "anon", "/api/templates/public?userId=synthetic-user-2"),
+    get("Organization public profile templates", "anon", `/api/templates/public?handle=${organizationHandle}`),
+    get("public profile by handle", "anon", "/api/profiles/by-handle?handle=synth_2"),
+    get("Organization public profile by handle", "anon", `/api/profiles/by-handle?handle=${organizationHandle}`),
     get("public profile by username", "anon", "/api/profiles/by-username?username=synth_2"),
     get("shared run", "anon", `/api/checklists/shared/${shareToken}`),
     get("sitemap index", "anon", "/sitemap.xml"),

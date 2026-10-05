@@ -44,7 +44,7 @@ Every mapper from an API template row to a `ChecklistTemplate` reads its Organiz
 `readApiTemplateTeamId` (`src/lib/templates/apiTemplateOwner.ts`), which follows the server's
 rule (a row is the Organization's only with a `team_id`, and with `owner_type` `team` when the
 row has an owner type), so permission checks that compare `teamId` agree wherever a template
-was loaded from. Public catalog rows never name an Organization
+was loaded from. Public catalog rows never carry an Organization's id
 ([SECURITY.md](../SECURITY.md#model)), so `isPersonalTemplateOf`
 (`src/lib/templates/templateOwnership.ts`) also checks the owner type to tell a user's
 Organization template apart from their Personal ones.
@@ -53,9 +53,11 @@ Both mappers also keep the Template Owner the API names in `owner`
 ([data persistence](data-persistence.md#resource-ownership)) as `owner` on
 `ChecklistTemplate`: its type, its User or Organization id, its handle and its name
 (`readApiTemplateOwner` in `src/lib/templates/apiTemplateOwner.ts`). A public response
-names no Organization, so there an Organization Template's owner is only `{ type: 'team' }`,
-and the type says so: an Organization owner's id, handle and name may all be absent
-(`PublicTemplateOwner` in `src/lib/schemas/templateOwner.ts`). `teamId`, `ownerType`
+names an Organization only by its handle and name, and only while it is active and has a
+handle, so there an Organization Template's owner is `{ type: 'team', publicHandle,
+displayName }` or only `{ type: 'team' }`, and the type says so: an Organization owner's id
+is always absent there, and its handle and name may be too (`PublicTemplateOwner` in
+`src/lib/schemas/templateOwner.ts`). `teamId`, `ownerType`
 and `ownerProfile`, which permissions and Share read, still come from the legacy fields.
 - A response can lack `owner` for a while after the deploy that added it: an open tab, or a
   Worker still on the older version, keeps sending the shape it had. The schema accepts a

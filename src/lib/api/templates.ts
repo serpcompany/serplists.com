@@ -70,6 +70,10 @@ export const templatesApi = {
     return apiRequest(`/templates/public?userId=${encodeURIComponent(userId)}`, apiTemplateListSchema);
   },
 
+  async getPublicTemplatesForOrganization(handle: string) {
+    return apiRequest(`/templates/public?handle=${encodeURIComponent(handle)}`, apiTemplateListSchema);
+  },
+
   async createTemplate(template: {
     title: string;
     teamId?: string | undefined;

@@ -38,6 +38,7 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const RATE_LIMIT_EXEMPT_ROUTES: Record<string, string> = {
   auth: 'auth-rate-limit.ts limits every /api/auth route',
   health: 'read-only',
+  'profiles/by-handle': 'read-only',
   'profiles/by-username': 'read-only',
   'profiles/by-id': 'read-only',
   stripe:

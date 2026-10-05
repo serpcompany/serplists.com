@@ -121,21 +121,24 @@ Personal data uses User ownership. Organization data uses Organization ownership
     `{ type: 'team', teamId, publicHandle, displayName }`, the Organization's id, slug and
     name. A Template counts its `team_id` only while its `owner_type` is `team`, so a
     Personal Template that still names an Organization stays its User's.
-  - Public responses never name an Organization ([SECURITY.md](../SECURITY.md#model)):
-    `toPublicTemplate` (`functions/api/utils/template-public.ts`) keeps a Personal
-    Template's owner whole and sends an Organization Template's as `{ type: 'team' }`
-    only, with no id, slug or name.
+  - Public responses name an Organization only by its public handle and name
+    ([SECURITY.md](../SECURITY.md#model)): `toPublicTemplate`
+    (`functions/api/utils/template-public.ts`) keeps a Personal Template's owner whole and
+    sends an Organization Template's as `{ type: 'team', publicHandle, displayName }`, never
+    its id, or as `{ type: 'team' }` alone when the Organization has no handle.
   - The type values are the stored `owner_type` values (renaming them is TD-5).
-    `publicHandle` and `displayName` are `null` when the User or Organization has none.
+    `publicHandle` and `displayName` are `null` when the User or Organization has none, and
+    for an archived Organization, which keeps its slug but has no public identity: only
+    public responses can show that, since an archived Organization has no active members.
   - `selectTemplatesWithOwner` joins `teams` by primary key only for rows whose `owner_type`
     is `team`, so a Personal row reads no `teams` row and each Organization Template reads
-    one ([D1 cost](d1-cost.md)), whose name and slug a public response then drops. The
-    Organization's slug and name reach a member's response only inside `owner`.
+    one ([D1 cost](d1-cost.md)), with its slug, name and `archived_at`. The Organization's
+    slug and name reach a response only inside `owner`.
   - The Creator stays in the legacy fields, kept for now: `user_id`, `owner_username`,
     `owner_full_name` and `ownerProfile` (the User joined on `templates.user_id`), beside
-    `owner_type` and `team_id`. Share links and the public routes, lookups and sitemaps
-    still use the Creator's username for an Organization Template until Organization
-    Public Profiles exist.
+    `owner_type` and `team_id`. The public template page and its metadata open an
+    Organization Template only under its Organization's handle; Share links, cards and the
+    sitemaps still build the Creator's URL until #232's PR 3.
   - MCP tool results build their own Template views and do not carry `owner`.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
 - Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion: the run page sends the run's status with every save, so a rename, a tick or a note on a completed run arrives as `completed` again. Reopening keeps both stamps too; only revalidation clears them. A completion through a share link names nobody, so a reopened run does not keep its previous completer, and an already completed legacy row without a date gets one once, naming nobody. The handler decides from the status it read; the write's revision guard turns it into `409 edit_conflict` if another save changed the run in between, so the decision always matches the stored status.

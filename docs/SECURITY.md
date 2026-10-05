@@ -151,11 +151,13 @@
 - **Invites** store only a token hash, never the raw token.
 - **Public responses are allowlisted, not spread from a row.** Public Template
   responses use the fields in `functions/api/utils/template-public.ts`, so they
-  never name an Organization or the members who edited a Template; an Organization
-  Template's public `owner` says only that its owner is an Organization
-  (`{ type: 'team' }`). Add a field there only when visitors need it. The
-  `/api/profiles/by-id` lookup resolves only Users who have a username
-  ([system overview](design-docs/system-overview.md)).
+  never carry an Organization's id or the members who edited a Template; an Organization
+  Template's public `owner` names the Organization only by its public handle and name, and
+  only while it is active and has a handle (`{ type: 'team', publicHandle, displayName }`,
+  otherwise `{ type: 'team' }`). Add a field there only when visitors need it. The
+  `/api/profiles/by-id` lookup resolves only Users who have a username, and
+  `/api/profiles/by-handle` answers an Organization with its handle, name, avatar and
+  description only, never an archived one ([Organizations](design-docs/organizations.md#public-profile)).
 
 ## Secrets and environment
 

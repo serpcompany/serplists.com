@@ -1,0 +1,89 @@
+import { serveTheSiteFrom } from '../../../support/mockedServerContext';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { generateMetadata as profileMetadata } from '@/app/(site)/profile/[username]/page';
+import { generateMetadata as templateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
+import { APP_BRAND_NAME } from '@/lib/brand';
+import {
+  ACME,
+  ARCHIVED_ORGANIZATION,
+  CREATOR,
+  seedProfileOwners,
+  storeProfileTemplate,
+} from '../../../support/publicProfiles';
+import { SqliteD1 } from '../../../support/sqlite-d1';
+
+let d1: SqliteD1;
+
+const profileAt = (username: string) => profileMetadata({ params: Promise.resolve({ username }) });
+
+const templateAt = (username: string, templateSlug: string) =>
+  templateMetadata({ params: Promise.resolve({ username, templateSlug }) });
+
+const expectNotFound = (metadata: Awaited<ReturnType<typeof profileAt>>, title: string) => {
+  expect(metadata.robots).toBe('noindex, nofollow');
+  expect(metadata.title).toEqual({ absolute: `${title} | ${APP_BRAND_NAME}` });
+  expect(metadata.alternates?.canonical).toBeUndefined();
+};
+
+beforeEach(() => {
+  d1 = new SqliteD1();
+  serveTheSiteFrom(d1);
+  seedProfileOwners(d1);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('an Organization Public Profile page', () => {
+  it('names the Organization, gives its description and points the canonical URL at its stored handle', async () => {
+    const metadata = await profileAt('acme-launch');
+
+    expect(metadata.title).toEqual({ absolute: `${ACME.name} | ${APP_BRAND_NAME}` });
+    expect(metadata.description).toBe(ACME.description);
+    expect(metadata.alternates?.canonical).toBe(`https://serplists.com/profile/${ACME.handle}/`);
+    expect(metadata.robots).toBe('index, follow');
+  });
+
+  it('summarizes its public Templates when it has no description', async () => {
+    d1.run('UPDATE teams SET description = NULL WHERE id = ?', ACME.id);
+    storeProfileTemplate(d1, { id: 'launch-plan', ownerType: 'team', category: '["Launch"]' });
+
+    const metadata = await profileAt(ACME.handle);
+
+    expect(metadata.description).toBe(`Public checklist templates from @${ACME.handle} covering Launch.`);
+  });
+
+  it('keeps an archived Organization out of search, as a profile that is not there', async () => {
+    expectNotFound(await profileAt(ARCHIVED_ORGANIZATION.handle), 'Profile not found');
+  });
+});
+
+describe("an Organization's public Template page, found only under its Organization's handle", () => {
+  beforeEach(() => {
+    storeProfileTemplate(d1, { id: 'launch-plan', ownerType: 'team' });
+    storeProfileTemplate(d1, { id: 'bob-plan' });
+    storeProfileTemplate(d1, { id: 'archived-plan', ownerType: 'team', teamId: ARCHIVED_ORGANIZATION.id });
+  });
+
+  it("is found under the Organization's handle in any letter case, with the Organization's URL as its canonical", async () => {
+    const metadata = await templateAt('ACME-LAUNCH', 'launch-plan');
+
+    expect(metadata.robots).toBe('index, follow');
+    expect(metadata.alternates?.canonical).toBe(`https://serplists.com/profile/${ACME.handle}/launch-plan/`);
+  });
+
+  it("is not found under its Creator's username", async () => {
+    expectNotFound(await templateAt(CREATOR.username, 'launch-plan'), 'Template not found');
+  });
+
+  it("does not find a Personal Template under an Organization's handle", async () => {
+    expectNotFound(await templateAt(ACME.handle, 'bob-plan'), 'Template not found');
+  });
+
+  it('does not find the Template of an archived Organization under any handle', async () => {
+    expectNotFound(await templateAt(ARCHIVED_ORGANIZATION.handle, 'archived-plan'), 'Template not found');
+    expectNotFound(await templateAt(CREATOR.username, 'archived-plan'), 'Template not found');
+  });
+});

@@ -25,6 +25,7 @@ describe('routeRateLimitBucket', () => {
     ['GET', 'checklists/shared/abc', null],
     ['POST', 'auth/sign-in/email', null],
     ['POST', 'profiles/by-username', null],
+    ['POST', 'profiles/by-handle', null],
   ])('%s %s -> %s', (method, path, expected) => {
     expect(routeRateLimitBucket(method, path)).toBe(expected);
   });

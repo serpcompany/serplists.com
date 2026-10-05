@@ -324,7 +324,7 @@ test.describe('route structure', () => {
     page,
   }) => {
     await serveLocalAppAsProduction(page);
-    await page.route('**/api/profiles/by-username**', (route) =>
+    await page.route('**/api/profiles/by-handle**', (route) =>
       fulfillJson(route, { error: 'Profile not found' }, 404),
     );
     await page.route('**/api/templates/slug/**', (route) =>

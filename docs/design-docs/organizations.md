@@ -119,9 +119,29 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 Template list and detail responses for the owner and members name an Organization
 Template's Template Owner as the Organization in `owner` (`type` `team`, its id, slug as
 `publicHandle` and name as `displayName`), never its Creator, who stays in `user_id` and
-`owner_username`. Public responses never name the Organization: their `owner` is only
-`{ type: 'team' }`, and they carry no `team_id`, members, roles, billing or invites
-([data persistence](data-persistence.md#resource-ownership)).
+`owner_username`. Public responses name the Organization only by its handle and name
+(`{ type: 'team', publicHandle, displayName }`), and only while it is active and has a
+handle; otherwise their `owner` is only `{ type: 'team' }`. They carry no `team_id`,
+members, roles, billing or invites ([data persistence](data-persistence.md#resource-ownership)).
+
+## Public Profile
+
+An active Organization with a handle (its slug) has a Public Profile at `/profile/:handle/`
+([features](../product-specs/features.md#auth-and-account)), and its public Templates open at
+`/profile/:handle/:templateSlug/`. Both resolve the handle through the
+[public handle registry](database-operations.md#public-handle-registry):
+
+- `GET /api/profiles/by-handle?handle=` answers the Profile Owner a handle names, in any
+  letter case: a User (`type: 'user'`, the fields `/api/profiles/by-username` answers) or an
+  Organization (`type: 'team'`, `handle`, `name`, `avatar_url`, `description`, and nothing
+  else). An archived Organization keeps its handle but answers 404, like a handle no one
+  holds. It reads the registry by its primary key and the owner by theirs.
+- `GET /api/templates/public?handle=` lists that Profile Owner's public, non-deleted
+  Templates, newest first: an Organization's through `idx_templates_team_id`, a User's
+  Personal ones as `?userId=` does. It answers 404 for an archived Organization.
+- The page (`src/views/PublicProfile.tsx`, `src/components/profile/PublicProfileDetails.tsx`)
+  shows the avatar, name, `@handle`, description, stats and template cards; owners and admins
+  set the avatar and description on the Organization's settings page.
 
 ## Invite Flow
 
