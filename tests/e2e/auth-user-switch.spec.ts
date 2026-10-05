@@ -9,6 +9,7 @@ import { runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-save
 async function signIn(page: Page, user: TestUser) {
   await navigateInApp(page, '/login/');
   await submitTheSignInForm(page, user);
+  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible({ timeout: 15_000 });
 }
 
 async function createRun(page: Page, title: string): Promise<string> {
