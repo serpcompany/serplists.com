@@ -46,9 +46,10 @@ starts with the same tools. Personal settings go in `.claude/settings.local.json
 ignores.
 
 Claude Code puts a sub-agent's worktree in `.claude/worktrees/`, inside the main checkout.
-Git, Vitest and ESLint ignore that folder (`.gitignore`, `vitest.config.ts`,
-`eslint.config.ts`), so tests, lint and `pnpm run verify` in the main checkout never pick up
-an agent's copy of the repository while it works.
+Git, Vitest, ESLint and the template source check ignore that folder (`.gitignore`,
+`vitest.config.ts`, `eslint.config.ts`, `scripts/check-template-sources.ts`), so tests, lint and
+`pnpm run verify` in the main checkout never pick up an agent's copy of the repository while it
+works.
 
 - **Chrome (`.mcp.json`):** the `chrome-devtools` MCP server
   ([chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp), pinned to an
