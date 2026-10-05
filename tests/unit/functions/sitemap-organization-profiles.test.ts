@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { handleProfileDirectory } from '../../../functions/api/handlers/profile-directory';
 import { serveProfilesSitemap } from '../../../functions/sitemap/routes';
+import { profileDirectoryPageSchema } from '@/lib/schemas/profileDirectory';
+import { apiEnvOn } from '../../support/apiEnv';
 import { ACME, ARCHIVED_ORGANIZATION, CREATOR, PERSONAL_OWNER, seedProfileOwners } from '../../support/publicProfiles';
+import { readSuccessfulJson } from '../../support/readJson';
 import { sitemapEntries, sitemapLocations } from '../../support/sitemapLocations';
 import { SqliteD1 } from '../../support/sqlite-d1';
 
@@ -10,6 +14,19 @@ let d1: SqliteD1;
 const profileLocations = () => sitemapLocations(d1, serveProfilesSitemap, '/sitemaps/profiles/1.xml');
 
 const pathOf = (handle: string) => `/profile/${handle}/`;
+
+async function directoryPaths(collection: 'people' | 'organizations'): Promise<string[]> {
+  const paths: string[] = [];
+  let after: string | null = null;
+  do {
+    const query = new URLSearchParams({ collection, ...(after ? { after } : {}) });
+    const response = await handleProfileDirectory(new Request(`http://localhost/api/profiles?${query.toString()}`), apiEnvOn(d1));
+    const page = await readSuccessfulJson(response, profileDirectoryPageSchema);
+    paths.push(...page.profiles.map(({ handle }) => pathOf(handle)));
+    after = page.next_cursor;
+  } while (after);
+  return paths;
+}
 
 beforeEach(() => {
   d1 = new SqliteD1();
@@ -49,5 +66,17 @@ describe('the profiles sitemap, which lists every Profile Owner with a public pr
       d1.run(change, ACME.id);
       expect(await profileLocations(), change).toEqual([pathOf(CREATOR.username), pathOf(PERSONAL_OWNER.username)]);
     }
+  });
+
+  it('lists exactly the owners the profile directory lists, since both apply one eligibility rule in SQL', async () => {
+    for (const [id, username] of [['spaced', 'jane doe'], ['short', 'ab'], ['hyphen', 'jane-doe'], ['none', null]] as const) {
+      d1.run("INSERT INTO users (id, email, username, created_at) VALUES (?, ?, ?, '2026-01-02')", id, `${id}@example.test`, username);
+    }
+    for (const [id, slug] of [['no-slug', null], ['bad-slug', 'not a handle'], ['zeta', 'zeta-org']] as const) {
+      d1.run("INSERT INTO teams (id, name, slug, created_by_user_id, created_at) VALUES (?, ?, ?, ?, '2026-01-02')", id, id, slug, CREATOR.id);
+    }
+
+    const listedByTheDirectory = [...(await directoryPaths('people')), ...(await directoryPaths('organizations'))];
+    expect([...(await profileLocations())].sort()).toEqual([...listedByTheDirectory].sort());
   });
 });

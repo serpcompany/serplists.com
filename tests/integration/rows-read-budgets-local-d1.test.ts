@@ -8,7 +8,7 @@ import type { Env } from "../../functions/api/types";
 import { withD1Profiling } from "../../functions/api/utils/d1-profiler";
 import { loadPublicTemplate } from "../../functions/seo/public-template-lookup";
 import { loadSharedRunTitle } from "../../functions/seo/shared-run-lookup";
-import { serveSitemapIndex, serveTemplatesSitemap } from "../../functions/sitemap/routes";
+import { serveProfilesSitemap, serveSitemapIndex, serveTemplatesSitemap } from "../../functions/sitemap/routes";
 import { buildSyntheticSql, datasetCounts } from "../../scripts/d1-profile-dataset";
 import {
   adminRun,
@@ -42,6 +42,7 @@ const seededCountsSchema = z.object({
   organizationRuns: z.number(),
   users: z.number(),
   usersWithUsername: z.number(),
+  teams: z.number(),
 });
 type SeededCounts = z.infer<typeof seededCountsSchema>;
 
@@ -53,7 +54,8 @@ const SEEDED_COUNTS_SQL = `SELECT
   (SELECT COUNT(*) FROM checklist_runs WHERE user_id = 'user-1') AS adminRuns,
   (SELECT COUNT(*) FROM checklist_runs WHERE team_id = '${ORGANIZATION}' AND deleted_at IS NULL) AS organizationRuns,
   (SELECT COUNT(*) FROM users) AS users,
-  (SELECT COUNT(*) FROM users WHERE username IS NOT NULL) AS usersWithUsername`;
+  (SELECT COUNT(*) FROM users WHERE username IS NOT NULL) AS usersWithUsername,
+  (SELECT COUNT(*) FROM teams) AS teams`;
 
 type Actor = "visitor" | "admin" | "john";
 type Send = (env: Env) => Promise<unknown>;
@@ -188,8 +190,8 @@ const ROUTES: Route[] = [
     name: "the sitemap index on a cache miss",
     prepare: call((env) => serveSitemapIndex(sitemapContext(env, "/sitemap.xml"))),
     budget: unbounded(
-      "every user and username, every public Template twice and each live one three times",
-      (n) => n.users + n.usersWithUsername + 2 * n.publicTemplates + 3 * n.livePublicTemplates,
+      "every user, username and Organization, every public Template twice and each live one three times",
+      (n) => n.users + n.usersWithUsername + n.teams + 2 * n.publicTemplates + 3 * n.livePublicTemplates,
       93,
     ),
     reason: "it builds every entry; it misses only after a deploy or a change to what it lists",
@@ -199,6 +201,30 @@ const ROUTES: Route[] = [
     prepare: call((env) => serveTemplatesSitemap(sitemapContext(env, "/sitemaps/templates/1.xml"), "1")),
     budget: unbounded("every public Template and each live one twice", (n) => n.publicTemplates + 2 * n.livePublicTemplates, 15),
     reason: "it builds every public Template entry; it misses only after a change to what it lists",
+  },
+  {
+    name: "the profiles sitemap shard on a cache miss",
+    prepare: call((env) => serveProfilesSitemap(sitemapContext(env, "/sitemaps/profiles/1.xml"), "1")),
+    budget: unbounded("every user, username and Organization", (n) => n.users + n.usersWithUsername + n.teams, 10),
+    reason: "it lists every User with a valid username, then every active Organization with a valid handle; it misses only after a change to what it lists",
+  },
+  {
+    name: "the People page of the profile directory",
+    prepare: get("visitor", "profiles"),
+    budget: bounded(250),
+    reason: "25 Users in username order through idx_users_username, then one grouped count of their Personal Templates through idx_templates_owner",
+  },
+  {
+    name: "a later People page of the profile directory",
+    prepare: get("visitor", "profiles?after=jane"),
+    budget: bounded(250),
+    reason: "a cursor seek on idx_users_username, so a later page reads no more than the first",
+  },
+  {
+    name: "the Organizations page of the profile directory",
+    prepare: get("visitor", "profiles?collection=organizations"),
+    budget: bounded(30),
+    reason: "25 Organizations in handle order through idx_teams_slug_unique, then one grouped count of their Templates through idx_templates_team_id",
   },
   {
     name: "a public Template by slug",
