@@ -94,7 +94,8 @@
   carries the Creator's username for it (`/__page-meta/v4/templates/`). Only the Creator's
   username redirects, in any letter case and by slug or id; another User's handle stays not
   found, and an archived Organization's Template has no URL to redirect to. A proxy
-  (middleware) redirect was rejected: it would add the same lookup in front of every page.
+  (middleware) redirect was rejected: it would run a second lookup before every template
+  page, outside the request's `cache()` that the page and its metadata share.
 - 2026-10-05 (PR 3): an Organization without a handle gives its Templates no public URL, as
   #234 made safe. Share leaves the Template private with "This Organization needs a slug
   before its templates can be shared. Its owners and admins can set one in its settings.";
@@ -111,5 +112,6 @@
   [sitemap plan](sitemap-organization-templates.md) needs a `teams` trigger before approval.
 - 2026-10-05 (PR 3): the committed sitemap catalog
   (`functions/sitemap/bundled-catalog.generated.json`) dates the sitemap code by its newest
-  commit, so it moves with this PR's commit to `functions/sitemap/`; the build regenerates it
-  (`pnpm run sitemap:generate`).
+  commit, so it moves with this PR's commit to `functions/sitemap/`. Every build regenerates
+  it; regenerate and commit it (`pnpm run sitemap:generate`) once the merge commit dates the
+  sources, as after #281.
