@@ -96,6 +96,7 @@ describe('public sitemap behavior', () => {
 
   it('validates the same public usernames, template slugs, and category values', () => {
     expect(isValidUsername('alice_bob.1')).toBe(true);
+    expect(isValidUsername('jane-doe')).toBe(true);
     expect(isValidUsername('invalid owner')).toBe(false);
     expect(isValidTemplateSlug('technical-seo')).toBe(true);
     expect(isValidTemplateSlug('Technical SEO')).toBe(false);

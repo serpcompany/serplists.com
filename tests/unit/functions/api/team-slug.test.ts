@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import { isTeamSlugUniqueViolation, suffixTeamSlug, teamSlugBase } from "@functions/api/utils/team-slug";
+import { isPublicHandle } from "@/lib/schemas/publicHandle";
 
 describe("Organization slug helpers", () => {
-  it("keeps a suffixed slug within the 120 characters the update schema accepts", () => {
-    const base = teamSlugBase(`${"a".repeat(110)} ${"b".repeat(9)}`, "12345678-team");
-    expect(base).toHaveLength(120);
+  it("keeps a name-derived slug, and a suffixed one, within the 30-character handle rule", () => {
+    const base = teamSlugBase(`${"a".repeat(20)} ${"b".repeat(9)}`, "12345678-team");
+    expect(base).toHaveLength(30);
 
     const suffixed = suffixTeamSlug(base, "1a2b3c4d");
 
-    expect(suffixed.length).toBeLessThanOrEqual(120);
-    expect(suffixed).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    expect(suffixed.length).toBeLessThanOrEqual(30);
+    expect(isPublicHandle(suffixed)).toBe(true);
     expect(suffixed.endsWith("-1a2b3c4d")).toBe(true);
+  });
+
+  it("falls back to team-<id8> for a name whose slug would be shorter than a handle may be", () => {
+    expect(teamSlugBase("QA", "12345678-team")).toBe("team-12345678");
   });
 
   it("falls back to team-<id8> for a name with no usable characters", () => {

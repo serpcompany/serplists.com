@@ -289,9 +289,10 @@ its owner (`user` or `team`, and the id).
   a name avoids usernames too.
 - **Why triggers.** Better Auth writes usernames itself, and D1 has batches, not interactive
   transactions, so a claim made in a handler could not be atomic with that write.
-- **The rule.** New values follow `src/lib/schemas/publicHandle.ts` (3 to 30 letters, digits,
-  `_`, `.` and `-`); its `normalizePublicHandle` produces the triggers' key. Values saved
-  before the rule are registered as they are.
+- **The rule.** Usernames (Better Auth's `usernameValidator`), Organization slugs and the
+  sitemaps follow `src/lib/schemas/publicHandle.ts`: 3 to 30 letters, digits, `_`, `.` and `-`.
+  Its `normalizePublicHandle` produces the triggers' key. Values saved before the rule are
+  registered as they are. `0029` gave the sitemap's user triggers the same characters.
 
 Rollout, one database at a time:
 

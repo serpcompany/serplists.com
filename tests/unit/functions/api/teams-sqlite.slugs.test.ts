@@ -97,6 +97,22 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(d1.queryPlan(lookup).join("\n")).toMatch(/SEARCH public_handles USING INDEX sqlite_autoindex_public_handles_1 \(handle=\?\)/);
     });
 
+    it("accepts a slug in the full handle rule as typed, refuses one outside it, and lets an Organization change only the case of its own", async () => {
+      const created = await asUser("new-user", "POST", "", { name: "Ops", slug: "Acme_Ops.2" });
+      const refused = await Promise.all([
+        asUser("new-user", "POST", "", { name: "Short", slug: "ab" }),
+        asUser("admin-user", "PUT", "/team-1", { slug: "a".repeat(31) }),
+        asUser("admin-user", "PUT", "/team-1", { slug: "acme ops" }),
+      ]);
+      const recased = await asUser("admin-user", "PUT", "/team-1", { slug: "ACME" });
+
+      expect(created.status).toBe(200);
+      expect(created.data?.slug).toBe("Acme_Ops.2");
+      expect(refused.map(({ status }) => status)).toEqual([400, 400, 400]);
+      expect(recased.status).toBe(200);
+      expect(teamSlugs()).toEqual(["ACME", "Acme_Ops.2"]);
+    });
+
     it("suffixes a name-derived slug that is a User's username", async () => {
       d1.run("UPDATE users SET username = 'marketing' WHERE id = 'other-user'");
 

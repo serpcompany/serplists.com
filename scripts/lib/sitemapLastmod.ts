@@ -133,9 +133,11 @@ const CATEGORY_SLUGS_AND_THE_ORIGIN_EVERY_LOC_STARTS_WITH = [
   'src/lib/seo/siteOrigin.ts',
 ] as const;
 const THE_CANONICAL_FORM_OF_EVERY_LOC = ['src/lib/http/urlStandard.ts'] as const;
+const WHICH_USERNAMES_HAVE_A_PUBLIC_URL = ['src/lib/schemas/publicHandle.ts'] as const;
 
 export const SITEMAP_IMPLEMENTATION_SOURCES = [
   ...SITEMAP_ROUTE_HANDLERS_AND_WHAT_THEY_HAND_THE_SITEMAP_CODE,
   ...CATEGORY_SLUGS_AND_THE_ORIGIN_EVERY_LOC_STARTS_WITH,
   ...THE_CANONICAL_FORM_OF_EVERY_LOC,
+  ...WHICH_USERNAMES_HAVE_A_PUBLIC_URL,
 ] as const;

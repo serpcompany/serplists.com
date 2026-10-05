@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { templatePayloadSchema } from '@functions/api/utils/payloads';
 import { generateSlug, truncateSlug, withSlugSuffix } from '@functions/api/utils/slug';
-import { TEAM_SLUG_MAX, TEMPLATE_SLUG_MAX } from '@/lib/schemas/templateLimits';
+import { PUBLIC_HANDLE_MAX_LENGTH } from '@/lib/schemas/publicHandle';
+import { TEMPLATE_SLUG_MAX } from '@/lib/schemas/templateLimits';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const words = ['Launch', 'SEO!', 'checklist:', '2026', '(draft)', 'a-b', '--', 'x'];
@@ -16,7 +17,7 @@ const titlesOfEveryLengthUpTo300 = Array.from({ length: 300 }, (_, length) =>
 describe('bounded slugs', () => {
   it.each([
     ['template', TEMPLATE_SLUG_MAX],
-    ['Organization', TEAM_SLUG_MAX],
+    ['Organization', PUBLIC_HANDLE_MAX_LENGTH],
   ])('keeps %s slugs within %i characters and the slug pattern wherever truncation lands: a hyphen, a removed character or a word boundary', (_label, max) => {
     for (const title of titlesOfEveryLengthUpTo300) {
       const base = truncateSlug(generateSlug(title), max) || 'template';

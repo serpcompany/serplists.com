@@ -149,6 +149,17 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
     expect(userRow('alice@example.com')).toMatchObject({ username: 'alex' });
   });
 
+  it('accepts a hyphen, as the handle rule Users share with Organizations does, and refuses a username outside that rule', async () => {
+    const hyphenated = await authRequest('update-user', { cookie: bobCookie, body: { username: 'Bob-Smith' } });
+    const refused = await Promise.all(['bob smith', 'bob@smith', 'b'.repeat(31)].map((username) =>
+      authRequest('update-user', { cookie: aliceCookie, body: { username } })));
+
+    expect(hyphenated.status).toBe(200);
+    expect(refused.map((response) => response.status)).toEqual([422, 422, 422]);
+    expect(userRow('bob@example.com')).toMatchObject({ username: 'bob-smith' });
+    expect(userRow('alice@example.com')).toMatchObject({ username: 'alex' });
+  });
+
   it('saves a free username and a name-only change', async () => {
     const rename = await authRequest('update-user', { cookie: bobCookie, body: { username: 'Robert' } });
     expect(rename.status).toBe(200);

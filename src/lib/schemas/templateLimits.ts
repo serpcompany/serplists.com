@@ -5,5 +5,4 @@ export const TEMPLATE_SEO_DESCRIPTION_MAX = 320;
 export const TEMPLATE_LIST_MAX_ITEMS = 20;
 export const TEMPLATE_LIST_ITEM_MAX = 80;
 export const TEMPLATE_SLUG_MAX = 160;
-export const TEAM_SLUG_MAX = 120;
 export const RUN_TITLE_MAX = 160;

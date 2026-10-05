@@ -10,15 +10,19 @@
 
 - [x] Read-only collision check of staging D1 (`pnpm run check:public-handles:staging`,
   2026-10-05): 6 usernames and Organization slugs, no collisions, none outside the rule.
-- [ ] PR 1: the shared handle rule, the collision check script, migration `0028` (the
+- [x] PR 1 (#280): the shared handle rule, the collision check script, migration `0028` (the
   `public_handles` registry, its backfill and six triggers on `users` and `teams`), and the API
   answering a registry conflict as it answers the per-table unique indexes.
-- [ ] Apply `0028` to staging after a backup (owner go-ahead at that step), then
-  `pnpm run check:staging:d1-schema`.
+- [x] `0028` applied to staging (2026-10-05, owner go-ahead): collision check rerun first (0 of
+  6), Time Travel bookmark `00000ab2-00000000-000050fb-bd7954aae6b6ac1af0b53fa7ab762d76`
+  noted, `verify:staging` passes, 4 User and 2 Organization handles registered, and the
+  staging deploy ran.
 - [ ] PR 2: the rule on the inputs: usernames also accept `-`, and Organization slugs accept the
-  full rule (uppercase, `_` and `.`) with 30 characters at most instead of 120.
-- [ ] Production: the collision check, a backup and `0028`, each after a separate owner
-  go-ahead.
+  full rule (uppercase, `_` and `.`) with 30 characters at most instead of 120. Migration
+  `0029` gives the sitemap's user triggers `-` too.
+- [ ] Apply `0029` to staging (owner go-ahead at that step).
+- [ ] Production: the collision check, a backup, `0028` and `0029`, each after a separate
+  owner go-ahead.
 
 ## Decision log
 
@@ -43,3 +47,10 @@
   stays for legacy mixed-case usernames.
 - 2026-10-05: Clearing a username or deleting a User or Organization frees its handle;
   archiving changes no slug, so an archived Organization keeps its own.
+- 2026-10-05: Allowing `-` in usernames needs migration `0029`: `0023`'s sitemap triggers on
+  `users` match `[A-Za-z0-9_.]` in SQL, so without it a hyphenated username would never refresh
+  the cached profile sitemaps. `0029` drops and recreates those four triggers with `-` added;
+  the code-side sitemap check is `isPublicHandle` itself.
+- 2026-10-05: Organization slugs are kept as typed (the full rule allows capitals) and compared
+  without regard to case, like the registry. A name-derived slug stays lowercase, truncated to
+  30 characters, and falls back to `team-<id8>` when the name gives fewer than 3.

@@ -10,12 +10,12 @@ import {
   suffixTeamSlug,
   teamSlugBase,
   teamSlugInUseError,
-  teamSlugSchema,
 } from "../utils/team-slug";
+import { publicHandleSchema } from "../../../src/lib/schemas/publicHandle";
 
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
-  slug: teamSlugSchema.optional(),
+  slug: publicHandleSchema.optional(),
 });
 
 const MAX_CREATE_ATTEMPTS = 3;
