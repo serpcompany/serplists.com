@@ -12,6 +12,10 @@
   `teams.description`. The Organizations list and `PUT /api/teams/:id` carry them, and owners
   and admins edit them on the Organization's settings page.
 - [ ] Apply `0030` to staging (owner go-ahead at that step).
+- [ ] Before promoting PR 2 to production: production needs `0028` and `0029` (the
+  [public handles plan](public-handles.md)) and `0030`, since `/api/profiles/by-handle` reads
+  `public_handles` and the Organization's avatar and description (`verify:prod:d1` fails
+  until then). Each migration waits for the owner's go-ahead.
 - [x] PR 2 (2026-10-05): `/profile/:handle` resolves through the public handle registry (#233)
   to a User's or an active Organization's profile (`GET /api/profiles/by-handle`).
   `/profile/:orgHandle/:slug` serves an Organization's public Template (`GET
