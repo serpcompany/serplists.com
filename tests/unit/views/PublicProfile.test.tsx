@@ -29,7 +29,10 @@ const organizationTemplate: ChecklistTemplate = {
   owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' },
 };
 
-const acme = (overrides: Partial<Extract<LoadPublicProfileResult, { kind: 'organization' }>['organization']> = {}) =>
+const acme = (
+  overrides: Partial<Extract<LoadPublicProfileResult, { kind: 'organization' }>['organization']> = {},
+  templates: ChecklistTemplate[] = [organizationTemplate],
+) =>
   renderProfile({
     kind: 'organization',
     organization: {
@@ -39,14 +42,14 @@ const acme = (overrides: Partial<Extract<LoadPublicProfileResult, { kind: 'organ
       name: 'Acme Launch',
       ...overrides,
     },
-    templates: [organizationTemplate],
+    templates,
   });
 
 describe('PublicProfile search engine tags', () => {
   it('tells search engines to drop a profile that does not exist', () => {
     const { html, robots } = renderProfile({ kind: 'not_found' });
 
-    expect(html).toContain('User not found');
+    expect(html).toContain('Profile not found');
     expect(robots).toBe('noindex, nofollow');
   });
 
@@ -58,7 +61,7 @@ describe('PublicProfile search engine tags', () => {
 
     expect(html).toContain('Unable to load profile');
     expect(html).toContain('Try again');
-    expect(html).not.toContain('User not found');
+    expect(html).not.toContain('Profile not found');
     expect(robots).toBeUndefined();
   });
 
@@ -105,6 +108,13 @@ describe('an Organization Public Profile', () => {
     const { html } = acme({ description: null });
 
     expect(html).toContain('Public checklist templates from @Acme-Launch covering Operations.');
+  });
+
+  it("describes a Template without a description as the Organization's, not a creator's", () => {
+    const { html } = acme({}, [{ ...organizationTemplate, description: '' }]);
+
+    expect(html).toContain('Public template pack published by this Organization.');
+    expect(html).not.toContain('creator profile');
   });
 
   it("shows the Organization's initials until its avatar loads", () => {

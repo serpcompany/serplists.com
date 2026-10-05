@@ -49,54 +49,49 @@ export function TransferTemplateDialog({
         <DialogHeader>
           <DialogTitle>Transfer to Organization</DialogTitle>
           <DialogDescription>
-            {isPublic
-              ? `Make "${templateTitle}" private first: public Templates can't be transferred to an Organization yet.`
-              : `Move "${templateTitle}" out of Personal and into an Organization, where its members can use it.`}
+            {`Move "${templateTitle}" out of Personal and into an Organization, where its members can use it.`}
           </DialogDescription>
         </DialogHeader>
-        {isPublic ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!pending && teamId) onConfirm(teamId);
+          }}
+        >
+          {teamId ? (
+            <LabeledSelect
+              className="w-full"
+              id="transfer-organization"
+              label="Organization"
+              labels={labels}
+              onValueChange={setChosen}
+              value={teamId}
+            />
+          ) : null}
+          <p className="text-sm text-muted-foreground">
+            Runs you already started from it stay in Personal and no longer receive its changes.
+          </p>
+          {isPublic ? (
+            <p className="text-sm text-muted-foreground">
+              Its public page moves to the Organization&apos;s profile, and its current link redirects there.
+            </p>
+          ) : null}
           <DialogFooter>
-            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
-              Close
+            <Button disabled={pending} onClick={() => onOpenChange(false)} type="button" variant="outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={pending || !teamId}
+              onClick={(event) => {
+                if (isRepeatClick(event)) event.preventDefault();
+              }}
+              type="submit"
+            >
+              {pending ? 'Transferring...' : 'Transfer'}
             </Button>
           </DialogFooter>
-        ) : (
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!pending && teamId) onConfirm(teamId);
-            }}
-          >
-            {teamId ? (
-              <LabeledSelect
-                className="w-full"
-                id="transfer-organization"
-                label="Organization"
-                labels={labels}
-                onValueChange={setChosen}
-                value={teamId}
-              />
-            ) : null}
-            <p className="text-sm text-muted-foreground">
-              Runs you already started from it stay in Personal and no longer receive its changes.
-            </p>
-            <DialogFooter>
-              <Button disabled={pending} onClick={() => onOpenChange(false)} type="button" variant="outline">
-                Cancel
-              </Button>
-              <Button
-                disabled={pending || !teamId}
-                onClick={(event) => {
-                  if (isRepeatClick(event)) event.preventDefault();
-                }}
-                type="submit"
-              >
-                {pending ? 'Transferring...' : 'Transfer'}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+        </form>
       </DialogContent>
     </Dialog>
   );

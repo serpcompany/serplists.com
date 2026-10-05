@@ -18,10 +18,16 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 type ProfileTemplateCardsProps = {
   handle: string;
+  ownerKind: 'user' | 'organization';
   templates: ChecklistTemplate[];
 };
 
-export function ProfileTemplateCards({ handle, templates }: ProfileTemplateCardsProps) {
+const FALLBACK_DESCRIPTION: Record<ProfileTemplateCardsProps['ownerKind'], string> = {
+  user: 'Public template pack published in this creator profile.',
+  organization: 'Public template pack published by this Organization.',
+};
+
+export function ProfileTemplateCards({ handle, ownerKind, templates }: ProfileTemplateCardsProps) {
   return (
     <section aria-labelledby="public-templates">
       <SectionHeader
@@ -54,7 +60,7 @@ export function ProfileTemplateCards({ handle, templates }: ProfileTemplateCards
                 key={template.id}
                 clampDescription
                 description={
-                  template.description || 'Public template pack published in this creator profile.'
+                  template.description || FALLBACK_DESCRIPTION[ownerKind]
                 }
                 eyebrow={
                   categories.length ? (

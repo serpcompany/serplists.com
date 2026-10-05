@@ -8,27 +8,33 @@
 
 ## Progress
 
-- [ ] PR 1: Organization avatar and description. Migration `0030` adds `teams.avatar_url` and
+One PR (owner, 2026-10-05: a couple of self-contained PRs at most, none that breaks the site
+until the next one lands), built in three steps:
+
+- [x] Organization avatar and description. Migration `0030` adds `teams.avatar_url` and
   `teams.description`. The Organizations list and `PUT /api/teams/:id` carry them, and owners
   and admins edit them on the Organization's settings page.
-- [ ] Apply `0030` to staging (owner go-ahead at that step).
-- [ ] Before promoting PR 2 to production: production needs `0028` and `0029` (the
-  [public handles plan](public-handles.md)) and `0030`, since `/api/profiles/by-handle` reads
-  `public_handles` and the Organization's avatar and description (`verify:prod:d1` fails
-  until then). Each migration waits for the owner's go-ahead.
-- [x] PR 2 (2026-10-05): `/profile/:handle` resolves through the public handle registry (#233)
+- [x] Public profiles: `/profile/:handle` resolves through the public handle registry (#233)
   to a User's or an active Organization's profile (`GET /api/profiles/by-handle`).
   `/profile/:orgHandle/:slug` serves an Organization's public Template (`GET
   /api/templates/public?handle=` lists them), and public lookups are owner-qualified: the
   public template page, its metadata (`functions/seo/public-template-lookup.ts`) and
   `/api/templates/slug/` answers name the Template Owner, and the page opens a Template only
-  under that owner's handle. No migration.
-- [x] PR 3 (2026-10-05): the one resolver (`resolvePublicTemplateOwnerSlug`, which
+  under that owner's handle.
+- [x] The URLs move: the one resolver (`resolvePublicTemplateOwnerSlug`, which
   `buildCanonicalPublicTemplatePath` uses) gives an Organization Template its Organization's
   URL, so Share, "View public template", the library's and profiles' cards, owner links,
   canonical tags, the editor's URL preview and the sitemap entries moved together
   (`templateOwnerHandle` in `functions/sitemap/shared.ts`). The Creator URLs Organization
-  Templates had redirect there with a 308. No migration.
+  Templates had redirect there with a 308.
+- [x] Owner follow-ups (2026-10-05): "Profile not found" for any missing profile; Transfer to
+  Organization moves public Templates too; Organization cards say "Public template pack
+  published by this Organization." when a Template has no description.
+- [ ] Apply `0030` to staging after the PR merges (owner go-ahead at that step).
+- [ ] Before promoting to production: production needs `0028` and `0029` (the
+  [public handles plan](public-handles.md)) and `0030`, since `/api/profiles/by-handle` reads
+  `public_handles` and the Organization's avatar and description (`verify:prod:d1` fails
+  until then). Each migration waits for the owner's go-ahead.
 
 ## Decision log
 
@@ -115,3 +121,15 @@
   commit, so it moves with this PR's commit to `functions/sitemap/`. Every build regenerates
   it; regenerate and commit it (`pnpm run sitemap:generate`) once the merge commit dates the
   sources, as after #281.
+- 2026-10-05 (owner): the work ships as one PR, not three. The profile pages without the URL
+  move would have turned the Creator URLs that cards, Share and the sitemaps still linked into
+  "Template not found" until the next PR landed.
+- 2026-10-05 (owner): a missing profile says "Profile not found", whether no one holds the
+  handle or its Organization is archived.
+- 2026-10-05 (owner): Transfer to Organization moves public Templates too, since their old URL
+  now redirects to the Organization's. A public Template moves only to an Organization with a
+  slug (`409 organization_handle_required`), so it never loses its public URL. After the move,
+  the page replaces its URL with the Organization's itself, since only private Organization
+  Templates are pinned to their Organization's URL.
+- 2026-10-05 (owner, following #232's text): an Organization's profile shows no creation
+  date, and Organizations join no profiles sitemap; the directory and its sitemap are #237.

@@ -5,5 +5,5 @@ test('a mixed-case profile URL shows the profile at its lowercase URL, since use
 
   await expect(page).toHaveURL(/\/profile\/john\/$/, { timeout: 30_000 });
   await expect(page.getByText('@john').first()).toBeVisible();
-  await expect(page.getByText('User not found')).toHaveCount(0);
+  await expect(page.getByText('Profile not found')).toHaveCount(0);
 });

@@ -138,7 +138,7 @@ export function PublicProfileDetails({ found }: { found: FoundPublicProfile }) {
       subtitle={`@${handle}`}
       title={title}
     >
-      <ProfileTemplateCards handle={handle} templates={found.templates} />
+      <ProfileTemplateCards handle={handle} ownerKind={found.kind} templates={found.templates} />
     </DetailPageLayout>
   );
 }

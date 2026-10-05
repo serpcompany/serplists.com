@@ -56,7 +56,7 @@ test('a public profile offers a retry when loading the profile fails', async ({ 
 
   await page.goto('/profile/john/');
   await expect(page.getByRole('heading', { name: 'Unable to load profile' })).toBeVisible();
-  await expect(page.getByText('User not found')).toHaveCount(0);
+  await expect(page.getByText('Profile not found')).toHaveCount(0);
 
   failing = false;
   await page.getByRole('button', { name: 'Try again' }).click();

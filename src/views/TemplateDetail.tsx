@@ -161,6 +161,7 @@ const TemplateDetail = () => {
   const transfer = useTemplateTransfer({
     beginVisit,
     loginRequired: goToLogin,
+    navigate: (path) => router.replace(path),
     organizations: teams,
     template: displayTemplate,
     transfer: transferTemplate,

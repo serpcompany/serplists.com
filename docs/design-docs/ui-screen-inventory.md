@@ -862,12 +862,13 @@ existing content, invent nothing):
     "Checklist Items"; "Total Runs" or "Categories".
   - "Public Templates" with "Browse every public template published from this profile.";
     template cards in the card grid (up to 3 category badges, the title, the description or
-    "Public template pack published in this creator profile.", then "@username", "N
+    "Public template pack published in this creator profile." ("…by this Organization." on an
+    Organization's profile), then "@username", "N
     sections", "N items").
 - **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
 - **SECONDARY ACTIONS:** the website link (a new tab).
 - **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
-  "Try again"); not found ("User not found", "This profile does not exist.", noindex); no
+  "Try again"); not found ("Profile not found", "This profile does not exist.", noindex); no
   Templates ("No public templates", "@<user> has not published any public templates yet.");
   another letter case of the username replaces itself with the stored one.
 - **NAVIGATION TYPE:** child page.
@@ -920,7 +921,7 @@ existing content, invent nothing):
 - **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
 - **SECONDARY ACTIONS:** none.
 - **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
-  "Try again"); not found ("User not found", "This profile does not exist.", noindex), also for
+  "Try again"); not found ("Profile not found", "This profile does not exist.", noindex), also for
   an archived Organization, which keeps its handle; no Templates ("No public templates",
   "@<handle> has not published any public templates yet."); another letter case of the handle
   replaces itself with the stored one.
@@ -2183,15 +2184,16 @@ replaced.
 - **WHAT'S ON THE SCREEN:** the title; "Move "<title>" out of Personal and into an
   Organization, where its members can use it."; an "Organization" select of the Organizations
   where the user can add Templates (the first one chosen); "Runs you already started from it
-  stay in Personal and no longer receive its changes."; "Cancel", "Transfer"; the close
-  button. A public Template shows only "Make "<title>" private first: public Templates can't
-  be transferred to an Organization yet." and "Close".
+  stay in Personal and no longer receive its changes."; for a public Template, "Its public page
+  moves to the Organization's profile, and its current link redirects there."; "Cancel",
+  "Transfer"; the close button.
 - **PRIMARY ACTION:** "Transfer": the Template moves to the Organization (toast "Template
   transferred to <Organization>") and the page opens it at that Organization's URL.
 - **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
 - **STATES:** "Transferring..." with the buttons disabled, and Escape or a click outside does
   not close it then; a refusal (the Organization's Template limit, a Template changed
-  meanwhile, which also reloads it) shows a toast and keeps the dialog open.
+  meanwhile, which also reloads it, or a public Template sent to an Organization without a
+  slug) shows a toast and keeps the dialog open.
 - **NAVIGATION TYPE:** modal dialog.
 - **PATTERN CHOICE (built):** shadcn Dialog with a labelled Select (`LabeledSelect`), as the
   Start a Run dialog.

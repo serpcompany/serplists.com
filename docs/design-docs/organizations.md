@@ -103,15 +103,17 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 - `PUT /api/templates/:id` in the active ownership context
 - `POST /api/templates/:id/clone` with `teamId`
 - `POST /api/templates/:id/transfer` with `teamId` and `expected_version`: moves one of the
-  caller's private Personal Templates into an Organization where they are an editor or above,
-  in place (same id, content, versions, likes and Creator; `owner_type` becomes `team`). One
+  caller's Personal Templates into an Organization where they are an editor or above, in place
+  (same id, content, visibility, versions, likes and Creator; `owner_type` becomes `team`). One
   batch writes a `template.transferred_to_organization` version and audit event (subject the
   Organization) and the update, and applies only while the Template is still the caller's,
-  Personal, private, at that version, and within the Organization's Template limit. A public
-  Template answers `409 template_public` (make it private first; public Organization Templates
-  wait for Organization profiles, #232), a stale version `409 edit_conflict`, the limit
-  `403 limit_reached`, an Organization Template or someone else's `403 not_transferable` or
-  `404`. Its existing Personal Runs stay in Personal and no longer revalidate from it.
+  Personal, at that version, and within the Organization's Template limit. A public Template
+  moves too: its public page becomes the Organization's (`/profile/<orgHandle>/<slug>`), and
+  its old URL redirects there with a 308. So it moves only to an Organization with a slug;
+  otherwise `409 organization_handle_required`. A stale version answers `409 edit_conflict`,
+  the limit `403 limit_reached`, an Organization Template or someone else's
+  `403 not_transferable` or `404`. Its existing Personal Runs stay in Personal and no longer
+  revalidate from it.
 - `GET /api/checklists?teamId=...`
 - `GET /api/checklists/archived?teamId=...`
 - `POST /api/checklists` with `teamId`

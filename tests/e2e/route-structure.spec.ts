@@ -333,7 +333,7 @@ test.describe('route structure', () => {
 
     await page.goto(`${PRODUCTION_ORIGIN}${MISSING_PROFILE_PATH}`);
     await expect(
-      page.getByRole('heading', { name: 'User not found' }),
+      page.getByRole('heading', { name: 'Profile not found' }),
     ).toBeVisible();
     await expectRobots(page, 'noindex, nofollow');
     await expect(page).toHaveTitle(/Profile not found/);

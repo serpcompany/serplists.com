@@ -48,7 +48,7 @@ export const PublicProfileContent = ({
         <PageEmptyState
           description={PROFILE_NOT_FOUND_PAGE_TEXT.description}
           icon={<Sparkles />}
-          title="User not found"
+          title={PROFILE_NOT_FOUND_PAGE_TEXT.title}
         />
       </>
     );
