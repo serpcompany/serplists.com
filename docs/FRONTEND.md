@@ -62,7 +62,7 @@ mounting shows one: the public template page's "Updated" date can, since the pag
 template in an effect and the server never renders it.
 A view that reads the query with `useSearchParams` on a statically rendered page is
 wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/`,
-`/reset-password/`): the server sends the fallback and the browser renders the rest.
+`/reset-password/`, `/profiles/`): the server sends the fallback and the browser renders the rest.
 
 In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
 `useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work

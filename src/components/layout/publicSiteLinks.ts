@@ -4,6 +4,7 @@ import {
   buildAboutPath,
   buildContactPath,
   buildPricingPath,
+  buildProfilesDirectoryPath,
   buildPublicCategoriesPath,
   buildPublicFeaturePath,
   buildPublicFeaturesPath,
@@ -48,8 +49,10 @@ export const publicHeaderItems: readonly PublicHeaderItem[] = [
   { kind: 'link', link: { href: buildPricingPath(), label: 'Pricing' } },
 ];
 
+const profilesLink: PublicSiteLink = { href: buildProfilesDirectoryPath(), label: 'Profiles' };
+
 export const publicFooterGroups: readonly PublicFooterGroup[] = [
-  { title: 'Templates', items: templateLinks },
+  { title: 'Templates', items: [...templateLinks, profilesLink] },
   { title: 'Company', items: [{ href: buildAboutPath(), label: 'About' }] },
   { title: 'Support', items: [{ href: buildContactPath(), label: 'Contact' }] },
 ];

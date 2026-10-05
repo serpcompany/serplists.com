@@ -149,6 +149,10 @@ An active Organization with a handle (its slug) has a Public Profile at `/profil
   The link is built from the active Organization's slug alone, so it changes with the context
   and is absent for Personal, an Organization without a handle, and an unconfirmed context; an
   archived or removed Organization is never the active one.
+- The Profiles directory's Organizations tab (`/profiles/?collection=organizations`) and the
+  profiles sitemap list the same Organizations: active, with a handle that passes the
+  [public handle rule](database-operations.md#public-handle-registry)
+  ([SEO and sitemaps](seo-and-sitemaps.md#profiles-directory)).
 - Every link to an Organization's public Template uses its Organization's handle: Share, "View
   public template", the library's and the profile's cards, the owner link on the public
   template page, canonical tags and sitemap entries (`resolvePublicTemplateOwnerSlug` in

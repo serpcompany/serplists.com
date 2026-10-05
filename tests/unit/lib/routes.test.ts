@@ -171,6 +171,8 @@ describe('routes', () => {
     expect(resolvePublicRouteTier('/share/share-123')).toBe('minimal');
     expect(resolvePublicRouteTier('/templates/')).toBe('core');
     expect(resolvePublicRouteTier('/profile/alice/')).toBe('core');
+    expect(resolvePublicRouteTier('/profiles')).toBe('core');
+    expect(resolvePublicRouteTier('/profiles/')).toBe('core');
     expect(resolvePublicRouteTier('/categories/')).toBe('secondary');
     expect(resolvePublicRouteTier('/categories/outdoor/')).toBe('secondary');
     expect(resolvePublicRouteTier('/features/template-builder/')).toBe('secondary');

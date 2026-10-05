@@ -50,6 +50,8 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['resolveLegacyTemplatesCategoryRedirectPath', present(routes.resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=SEO')), 'the redirect of a legacy category link')],
   ['buildPublicProfilePath', routes.buildPublicProfilePath('alice')],
   ['buildPublicProfilePath (a username that looks like a file)', routes.buildPublicProfilePath('john.doe')],
+  ['buildProfilesDirectoryPath', routes.buildProfilesDirectoryPath()],
+  ['buildProfilesDirectoryPath (a later page of Organizations)', routes.buildProfilesDirectoryPath({ collection: 'organizations', after: 'acme' })],
   ['buildProfilePreviewPath', present(routes.buildProfilePreviewPath('Alice', 'alice'), 'the preview path of a profile')],
   ['getCanonicalProfilePath', present(routes.getCanonicalProfilePath('Alice', 'alice'), 'the canonical path of a profile')],
   ['buildPublicTemplatePath', routes.buildPublicTemplatePath('alice', 'weekly-review')],

@@ -32,14 +32,14 @@ have not been updated in 30 days.
 - [Organization public profiles](exec-plans/active/organization-profiles.md): an Organization's
   avatar, description and public profile at `/profile/:handle`, and its Templates' URLs there
   (issue #232), in one PR.
+- [Profiles directory](exec-plans/active/profiles-directory.md): the public `/profiles/`
+  directory of People and Organizations, Organizations in the profiles sitemap, and migration
+  `0032` (issue #237).
 - [Required tools](exec-plans/active/required-tools.md): the tools a Template's Runs need, edited
   in the Template editor and carried by packs and MCP (issue #241), in one PR with guest runs and
   migration `0031`.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
-- [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
-  the proposed migration that makes public Organization Template edits refresh cached
-  sitemaps (TD-23).
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
 - [Upload quota and ownership](exec-plans/active/upload-quota-and-ownership.md): record uploads
@@ -48,6 +48,9 @@ have not been updated in 30 days.
 
 ## Completed
 
+- [Sitemap revisions for Organization Templates](exec-plans/completed/sitemap-organization-templates.md):
+  migration `0032` makes public Organization Template and Organization changes refresh cached
+  sitemaps (TD-23).
 - [Template transfer](exec-plans/completed/template-transfer.md): move a private Personal
   Template into an Organization in place (issue #236), in two PRs.
 - [Run provenance](exec-plans/completed/run-provenance.md): who owns, created, started and

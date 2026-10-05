@@ -62,11 +62,11 @@ describe('public site links in the header and every public footer', () => {
     }
   });
 
-  it('links the Template Library and Categories from the footer too', () => {
-    expect(publicFooterGroups.map((group) => [group.title, group.items.map((item) => item.href)])).toEqual([
-      ['Templates', ['/templates/', '/categories/']],
-      ['Company', ['/about/']],
-      ['Support', ['/contact/']],
+  it('links the Template Library, Categories and the Profiles directory from the footer', () => {
+    expect(publicFooterGroups.map((group) => [group.title, group.items.map((item) => `${item.label} ${item.href}`)])).toEqual([
+      ['Templates', ['Template Library /templates/', 'Categories /categories/', 'Profiles /profiles/']],
+      ['Company', ['About /about/']],
+      ['Support', ['Contact /contact/']],
     ]);
   });
 });

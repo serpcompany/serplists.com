@@ -23,6 +23,11 @@ export const TEMPLATE_NOT_FOUND_PAGE_TEXT = {
   description: 'The template you are looking for does not exist or is no longer public.',
 } as const;
 
+export const PROFILES_DIRECTORY_PAGE_TEXT = {
+  title: 'Profiles',
+  description: 'Browse the public profiles of people and Organizations, and the templates they publish.',
+} as const;
+
 export const PROFILE_NOT_FOUND_PAGE_TEXT = {
   title: 'Profile not found',
   description: 'This profile does not exist.',

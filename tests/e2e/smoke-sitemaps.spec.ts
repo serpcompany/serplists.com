@@ -102,6 +102,8 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   }
 
   expect(allPageLocations).toContain("https://serplists.com/profile/admin/");
+  expect(allPageLocations).toContain("https://serplists.com/profile/serp-growth-team/");
+  expect(allPageLocations).toContain("https://serplists.com/profiles/");
   expect(allPageLocations).toContain(
     "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist/",
   );

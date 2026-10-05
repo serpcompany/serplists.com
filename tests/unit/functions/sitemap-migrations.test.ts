@@ -94,10 +94,14 @@ describe('sitemap revision migrations', () => {
     db.close();
   });
 
-  it('bumps only the revision kinds whose sitemaps a write changes', () => {
+  it.each<[string, string[]]>([
+    ['0023', []],
+    ['0023 and the migrations that rewrote its triggers since', ['0029_sitemap_usernames_allow_hyphen.sql', '0032_sitemap_organization_revisions.sql']],
+  ])('bumps only the revision kinds whose sitemaps a write changes, after %s', (_, laterMigrations) => {
     const db = new DatabaseSync(':memory:');
     db.exec(`
       PRAGMA foreign_keys = ON;
+      CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT, archived_at TEXT, created_at TEXT, updated_at TEXT);
       CREATE TABLE users (
         id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, email TEXT,
         email_verified INTEGER, created_at TEXT NOT NULL, updated_at TEXT, auth_updated_at INTEGER
@@ -115,6 +119,7 @@ describe('sitemap revision migrations', () => {
       INSERT INTO templates VALUES ('categorized', 'author', 'user', NULL, 1, NULL, '2026-09-01 00:00:00', NULL, 'SEO');
     `);
     db.exec(migration('0023_add_sitemap_revision_state.sql'));
+    for (const name of laterMigrations) db.exec(migration(name));
 
     const bumped = (write: string) => {
       db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);

@@ -376,6 +376,15 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   to the tools is not a checklist structure change and never stales Runs, and the lists can leave
   it unread. It is additive: code that predates it never names it, and a save that leaves the
   tools out keeps them ([Required tools plan](../exec-plans/active/required-tools.md)).
+- **Sitemap revisions for Organizations.** `0032` recreated the three sitemap triggers on
+  `templates` so a public Organization Template's writes refresh the cached templates and
+  categories sitemaps, as a Personal one's do (never a User's profile), and added three on
+  `teams`, since the profiles sitemap and the Profiles directory list Organizations (issue
+  #237): they refresh the profiles sitemap when a listed Organization is created, deleted,
+  archived or changes its slug or dates, and the templates and categories sitemaps when one
+  with public Templates changes its slug or archive. Its backfill dated the categories only
+  public Organization Templates used. It changes triggers and revision rows only, no table
+  ([SEO and sitemaps](seo-and-sitemaps.md#caching), TD-23).
 
 ## Seeds
 

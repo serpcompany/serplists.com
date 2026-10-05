@@ -1,9 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { unionAll } from 'drizzle-orm/sqlite-core';
 
-import { sitemapProfileRevisions, templates, users } from '../../db/schema/index';
+import { sitemapProfileRevisions, teams, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { cachedSitemap, type SitemapContext, type SitemapRevisions } from './cache';
+import { listedOrganizationCondition, validUsernameCondition } from './listedOwners';
 import {
   buildDurableShardIndex,
   bundledInventoryLastmod,
@@ -23,7 +25,6 @@ import {
   staticSitemapEntries,
   templateOwnerHandle,
   validTemplateSlugCondition,
-  validUsernameCondition,
   xmlResponse,
   type SitemapEntry,
 } from './shared';
@@ -34,7 +35,7 @@ export const shardPageParam = (fileName: string): string =>
 type Db = ReturnType<typeof createDb>;
 
 type ProfileRow = {
-  username: string | null;
+  handle: string | null;
   created_at: string;
   updated_at: string | null;
   profile_revision: string | null;
@@ -48,26 +49,43 @@ type TemplateRow = {
   owner_updated_at: string | null;
 };
 
-const selectListedProfiles = (db: Db) => db
-  .select({
-    username: users.username,
-    created_at: users.created_at,
-    updated_at: users.updated_at,
-    profile_revision: sitemapProfileRevisions.revised_at,
-  })
-  .from(users)
-  .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
-  .where(validUsernameCondition)
-  .orderBy(users.id);
+const USERS_FIRST = 0;
+const ORGANIZATIONS_AFTER_EVERY_USER = 1;
+
+const selectListedProfiles = (db: Db) => unionAll(
+  db
+    .select({
+      handle: users.username,
+      created_at: users.created_at,
+      updated_at: users.updated_at,
+      profile_revision: sitemapProfileRevisions.revised_at,
+      owner_order: sql<number>`${USERS_FIRST}`.as('owner_order'),
+      owner_id: users.id,
+    })
+    .from(users)
+    .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
+    .where(validUsernameCondition),
+  db
+    .select({
+      handle: teams.slug,
+      created_at: teams.created_at,
+      updated_at: teams.updated_at,
+      profile_revision: sql<string | null>`null`.as('profile_revision'),
+      owner_order: sql<number>`${ORGANIZATIONS_AFTER_EVERY_USER}`.as('owner_order'),
+      owner_id: teams.id,
+    })
+    .from(teams)
+    .where(listedOrganizationCondition),
+).orderBy(sql`owner_order`, sql`id`);
 
 const selectListedTemplates = (db: Db) =>
   selectPublicTemplatesOfListedOwners(db, { handle: templateOwnerHandle, slug: templates.slug }, validTemplateSlugCondition)
     .orderBy(templates.id);
 
 function profileEntry(row: ProfileRow): SitemapEntry | null {
-  const username = row.username?.trim() ?? '';
-  return isValidUsername(username) ? {
-    path: `/profile/${encodeURIComponent(username)}/`,
+  const handle = row.handle?.trim() ?? '';
+  return isValidUsername(handle) ? {
+    path: `/profile/${encodeURIComponent(handle)}/`,
     lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
   } : null;
 }

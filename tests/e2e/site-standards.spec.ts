@@ -18,6 +18,7 @@ const PAGES = [
   '/templates/',
   '/categories/',
   '/categories/outdoor/',
+  '/profiles/',
   '/features/',
   '/features/template-builder/',
   '/login/',
@@ -102,6 +103,7 @@ test.describe('URL form', () => {
     for (const [name, path] of [
       ['Template Library', '/templates/'],
       ['Categories', '/categories/'],
+      ['Profiles', '/profiles/'],
       ['About', '/about/'],
       ['Contact', '/contact/'],
     ] as const) {

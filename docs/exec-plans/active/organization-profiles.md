@@ -117,7 +117,7 @@ until the next one lands), built in three steps:
   rows and no trigger watches `teams`, so an Organization Template's edit, publish, unpublish
   or delete, and its Organization's slug change or archive, reach the cached templates and
   categories shards only when they expire (at most a day). The proposed migration in the
-  [sitemap plan](sitemap-organization-templates.md) needs a `teams` trigger before approval.
+  [sitemap plan](../completed/sitemap-organization-templates.md) needs a `teams` trigger before approval.
 - 2026-10-05 (PR 3): the committed sitemap catalog
   (`functions/sitemap/bundled-catalog.generated.json`) dates the sitemap code by its newest
   commit, so it moves with this PR's commit to `functions/sitemap/`. Every build regenerates
