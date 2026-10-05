@@ -20,6 +20,7 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
 import { Stat } from '@/components/layout/Stat';
+import { RequiredToolsList } from '@/components/template/RequiredToolsList';
 import { TemplateDetailActions } from '@/components/template/TemplateDetailActions';
 import { TemplateDetailDialogs } from '@/components/template/TemplateDetailDialogs';
 import {
@@ -419,6 +420,7 @@ const TemplateDetail = () => {
           </div>
         }
       >
+        <RequiredToolsList className="mb-10" tools={displayTemplate.requiredTools} />
         <section aria-labelledby="template-structure" className="flex flex-col gap-4">
           <h2 className="text-xl font-semibold tracking-tight" id="template-structure">
             Template Structure

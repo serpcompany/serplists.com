@@ -17,9 +17,11 @@
   source rule; MCP `get_template` returns them and the MCP server goes to 0.4.0. Tests on the
   migrated tables (`template-required-tools-d1.test.ts`, `template-required-tools-pack-d1.test.ts`,
   `agent-mcp-required-tools.test.ts`) and the pack schema parity cases.
-- [ ] PR 2 (`fl/required-tools-ui`, stacked on PR 1): the editor's Required tools fields in
-  Template Settings, and the list on the public Template page, Template detail, the Run page and
-  the editor preview, with DOM tests and a browser spec.
+- [x] PR 2 (`fl/required-tools-ui`, stacked on PR 1): the editor's Required tools fields in
+  Template Settings (`RequiredToolsEditor`, with the save rules in
+  `src/lib/forms/templateEditorRequiredTools.ts`), and `RequiredToolsList` on the public Template
+  page, Template detail, the Run page (a card under the provenance) and the editor preview, with
+  DOM tests and a browser spec (`tests/e2e/required-tools.spec.ts`, not yet run).
 - [ ] After PR 1 merges into `staging`: the lead applies `0031` to staging
   (`pnpm run verify:staging`, `pnpm run db:migrate:d1:staging`, `pnpm run check:staging:d1-schema`).
   The staging deploy refuses to ship while it is pending. Production waits for the owner.
@@ -83,3 +85,12 @@ new migration that drops it; never edit `0031`.
   Between them, the editor's saves leave `requiredTools` out and keep the stored tools.
 - 2026-10-05: The shared run page (`/share/:token/`) does not show tools: the owner named the Run
   page, and a guest may not be allowed to see the source Template. Open question for the owner.
+- 2026-10-05: The editor keeps the tools in Template Settings, under Tags, rather than a new
+  outline entry: they describe the whole Template, like its categories. A save drops tools left
+  blank (as it drops blank Sub-tasks) and names a tool by its place in the list, counted before
+  the blank ones are dropped. Its rules come from the API's schema; only the wording is the
+  editor's.
+- 2026-10-05: The list sits before the checklist on the public Template page and Template detail,
+  and under the provenance on the Run page as a card like Activity, since a Run needs its tools
+  before its first task. Each row shows the link's host, so the destination of a user-supplied
+  link is visible before it is opened, and says to screen readers that it opens a new tab.

@@ -78,7 +78,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   `/dashboard/` opens the remembered context's My Templates. A console link opened while signed out → Log in
   (`?next=<path>`) → "Sign in" → that page.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template
-  editor → Template Settings fields → outline "Add section" and "Add task to <section>" →
+  editor → Template Settings fields (Required tools: "Add tool", then each tool's "Name", "URL"
+  and "Required") → outline "Add section" and "Add task to <section>" →
   Task Details → "Add Block" → "Save" → My Templates. Below `lg` the outline is a sheet:
   "Outline" in the editor's top bar → "Add section" or "Add task to <section>" (the sheet
   closes on the new entry's form) → "Outline" again for the next. On a new Template, "Generate from Clipy"
@@ -183,7 +184,7 @@ Toasts (sonner) report results everywhere.
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
 | `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
-| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
+| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice |
 
 ### Auth and invites
 
@@ -206,11 +207,11 @@ Toasts (sonner) report results everywhere.
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
 | `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start a Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
-| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
-| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Transfer to Organization dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
+| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings with its Required tools, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
+| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Transfer to Organization dialog; Template actions menu | Visibility switch; Required tools list (when the Template has tools); read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs"; "View runs" on Template detail adds `?template=<id>`) | Share link dialog; Delete run dialog; Run options menu; Template and status selects | Template filter (in the URL); status filter; search |
-| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
+| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl`; the source Template's Required tools (when the viewer may see that Template) |
 | `/dashboard/import-templates/` | [Import Templates](ui-screen-inventory.md#import-templates) | Root section (sidebar "Import Templates") | Visibility select | Import preview; last import result; plan and role notices |
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
 | `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings" in Personal, account menu "Settings") | Revoke Run Key dialog | Created Run Key panel; incoming invites |

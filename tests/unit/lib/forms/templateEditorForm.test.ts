@@ -92,6 +92,7 @@ describe("templateEditorForm", () => {
       seoTitle: "  SEO Audit Template ",
       seoDescription: "  Repeatable audit ",
       seoUrl: "  technical-seo-audit  ",
+      requiredTools: [],
       sections: [
         {
           id: "section-1",

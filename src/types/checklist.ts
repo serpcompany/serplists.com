@@ -75,6 +75,7 @@ export type TemplateSavePayload = {
   seoDescription?: string;
   seoUrl?: string | undefined;
   rules?: TemplateRule[];
+  requiredTools?: RequiredTool[];
   categories?: string[];
   tags?: string[];
   slug?: string | undefined;

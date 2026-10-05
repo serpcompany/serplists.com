@@ -15,6 +15,7 @@ import {
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
 import { findTemplateEditorSlugIssue } from "@/lib/forms/templateEditorDetailsForm";
+import { findTemplateEditorRequiredToolsIssues } from "@/lib/forms/templateEditorRequiredTools";
 import { api } from "@/lib/api";
 import { resolvePublicTemplateOwnerSlug } from "@/lib/routes";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -82,6 +83,7 @@ export const buildTemplateEditorSavedState = (
       slug,
       categories: normalizedForm.categories,
       tags: normalizedForm.tags,
+      requiredTools: normalizedForm.requiredTools,
       type: normalizedForm.templateType,
       isPublic: normalizedForm.isPublic,
     }),
@@ -219,6 +221,7 @@ export const saveTemplateEditorData = async (
   const slugIssue = findTemplateEditorSlugIssue(options.values.seoUrl, options.storedSlug);
   const validationErrors = [
     ...validateTemplateEditorFormForSave(normalizedForm),
+    ...findTemplateEditorRequiredToolsIssues(options.values.requiredTools).map((message) => ({ type: "validation" as const, message })),
     ...(slugIssue ? [{ type: "validation" as const, message: slugIssue }] : []),
   ];
   if (validationErrors.length > 0) {
@@ -239,6 +242,7 @@ export const saveTemplateEditorData = async (
     templateType: normalizedForm.templateType,
     categories: normalizedForm.categories,
     tags: normalizedForm.tags,
+    requiredTools: normalizedForm.requiredTools,
     isPublic: visibilityUnchanged ? undefined : normalizedForm.isPublic,
   });
 };

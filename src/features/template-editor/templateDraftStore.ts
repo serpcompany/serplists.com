@@ -34,6 +34,7 @@ const storedDraftSchema = z.object({
     seoTitle: z.string(),
     seoDescription: z.string(),
     seoUrl: z.string(),
+    requiredTools: templateEditorFormSchema.shape.requiredTools,
     sections: templateEditorFormSchema.shape.sections,
   }),
 });
@@ -72,7 +73,7 @@ const writeDraft = (
 
 const readDraft = <T>(
   key: string,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   storage: Pick<Storage, "getItem"> | null,
 ): T | null => {
   if (!storage) {

@@ -143,6 +143,7 @@ describe("template editor versions", () => {
       seoTitle: "",
       seoDescription: "",
       seoUrl: "taken-slug",
+      requiredTools: [],
       sections: [],
     };
 

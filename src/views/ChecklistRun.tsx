@@ -22,6 +22,7 @@ import { RetiredRunItems } from '@/components/run-execution/RetiredRunItems';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { RunPageHeader } from '@/components/run-execution/RunPageHeader';
 import { RunProvenancePanel } from '@/components/run-execution/RunProvenancePanel';
+import { RequiredToolsList } from '@/components/template/RequiredToolsList';
 import { SharedRunView } from '@/components/run-execution/SharedRunView';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
@@ -327,6 +328,7 @@ const ChecklistRunPage = () => {
             titleChanged={isRunTitleChange(editTitle, displayRun.title)}
           />
           <RunProvenancePanel run={displayRun} />
+          <RequiredToolsList compact tools={displayRun.provenance?.template?.requiredTools} />
           <DashboardPageBody className="overflow-clip">
             {roleUnavailable ? (
               <WorkspaceErrorNotice id="run-workspace-error" message="This run's actions wait until they load. Check your connection and try again." onRetry={retryWorkspace} />

@@ -76,10 +76,15 @@ still refused.
 2. The page sends a deep copy of the form taken at click time
    ([FRONTEND.md](../FRONTEND.md#template-editor-forms)).
 3. `saveTemplateEditorData` validates the copy, and when a field breaks a rule it returns errors
-   that name the field without calling the API.
+   that name the field without calling the API. Required tools
+   (`src/lib/forms/templateEditorRequiredTools.ts`) drop the tools left blank and trim the rest,
+   then check them with the API's own schema (`requiredToolSchema`), naming a tool by its place in
+   the list ("Required tools: give tool 2 a name."), counted before the blank ones are dropped so
+   the number matches what the user sees.
 4. `useTemplateSave` applies the save defaults and sends a create or an update. An update sends
    the `expected_version` the editor holds, and refuses to save without one. It leaves out
-   `rules` and an unchanged slug ([FRONTEND.md](../FRONTEND.md#template-editor-forms)), and it
+   `rules` and an unchanged slug ([FRONTEND.md](../FRONTEND.md#template-editor-forms)), sends the
+   Required tools it holds (an empty list once every tool is removed, which clears them), and it
    sends visibility only when the editor's switch changed it: a Share, or a switch to private,
    made on the detail page or in another tab after the editor loaded would otherwise be undone by
    the next save of an unrelated edit.

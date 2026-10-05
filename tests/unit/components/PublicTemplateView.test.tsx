@@ -93,6 +93,21 @@ describe(`PublicTemplateView "Updated <date>" under the description, like the pr
   });
 });
 
+describe('PublicTemplateView Required tools', () => {
+  it("lists the Template's tools before what's included, each opening its site in a new tab", () => {
+    const html = renderView({
+      template: { ...template, requiredTools: [{ name: 'Seating planner', url: 'https://example.com/seating', required: false }] },
+    });
+
+    expect(html).toMatch(/Required tools[\s\S]*Seating planner[\s\S]*Optional[\s\S]*What&#x27;s included/);
+    expect(html).toContain('<a class="font-medium wrap-break-word underline-offset-4 hover:underline" href="https://example.com/seating" rel="noopener noreferrer" target="_blank">');
+  });
+
+  it('shows no Required tools section without tools', () => {
+    expect(renderView()).not.toContain('Required tools');
+  });
+});
+
 describe('PublicTemplateView', () => {
   it('renders the v0-style public template detail surface', () => {
     const html = renderView({ isAuthenticated: false });

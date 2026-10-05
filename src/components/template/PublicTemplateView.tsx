@@ -28,6 +28,7 @@ import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+import { RequiredToolsList } from './RequiredToolsList';
 import { TemplateSectionList } from './TemplateSectionList';
 
 import { Link } from '@/components/navigation/Link';
@@ -234,6 +235,7 @@ export function PublicTemplateView({
         </div>
       }
     >
+      <RequiredToolsList className="mb-10" tools={template.requiredTools} />
       <section className="flex flex-col gap-4" id="included">
         <h2 className="text-xl font-semibold tracking-tight">What&apos;s included</h2>
         <TemplateSectionList sections={template.sections} />

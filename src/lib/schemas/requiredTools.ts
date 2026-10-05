@@ -18,7 +18,7 @@ export const portableRequiredToolSchema = z.object({
   required: z.boolean().default(true),
 });
 
-const requiredToolSchema = portableRequiredToolSchema.extend({
+export const requiredToolSchema = portableRequiredToolSchema.extend({
   name: toolName.max(REQUIRED_TOOL_NAME_MAX, `Tool names must be ${REQUIRED_TOOL_NAME_MAX} characters or fewer`),
   url: toolUrl.max(REQUIRED_TOOL_URL_MAX, `Tool URLs must be ${REQUIRED_TOOL_URL_MAX} characters or fewer`),
 });

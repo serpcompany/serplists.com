@@ -21,6 +21,7 @@ const existingTemplateValues = (overrides: Partial<EditorValues> = {}): EditorVa
   seoTitle: "",
   seoDescription: "",
   seoUrl: "",
+  requiredTools: [],
   sections: [],
   ...overrides,
 });
@@ -63,6 +64,7 @@ describe("saveTemplateEditorData", () => {
           seoTitle: "  Search title  ",
           seoDescription: "  Search description  ",
           seoUrl: "  new-template  ",
+          requiredTools: [],
           sections: [
             {
               id: "section-1",
@@ -86,6 +88,7 @@ describe("saveTemplateEditorData", () => {
       seoTitle: "Search title",
       seoDescription: "Search description",
       seoUrl: "new-template",
+      requiredTools: [],
       sections: [
         {
           id: "section-1",

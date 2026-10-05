@@ -41,6 +41,18 @@ describe("template draft store", () => {
     expect(readTemplateDraft(owner, storage)?.values).toEqual(draftValues);
   });
 
+  it("keeps the draft's Required tools, and restores a draft kept before them with none", () => {
+    const storage = createStorage();
+    const owner = { userId: "u1" };
+    const withTools = { ...draftValues, requiredTools: [{ name: "Timer", url: "https://example.com/timer", required: false }] };
+    saveTemplateDraft(owner, withTools, storage);
+    expect(readTemplateDraft(owner, storage)?.values.requiredTools).toEqual(withTools.requiredTools);
+
+    const { requiredTools, ...keptBeforeRequiredTools } = draftValues;
+    storage.setItem(getTemplateDraftKey(owner), JSON.stringify({ format: 1, savedAt: "2026-10-01T00:00:00.000Z", values: keptBeforeRequiredTools }));
+    expect(readTemplateDraft(owner, storage)?.values).toEqual({ ...keptBeforeRequiredTools, requiredTools: [] });
+  });
+
   it("never restores a draft into another user or context", () => {
     const storage = createStorage();
     saveTemplateDraft({ userId: "u1" }, draftValues, storage);

@@ -30,6 +30,7 @@ const buildInput = (overrides: Partial<Parameters<typeof persistTemplateSave>[1]
   templateType: "checklist" as const,
   categories: ["SEO"],
   tags: ["audit"],
+  requiredTools: [],
   isPublic: true,
   ...overrides,
 });
@@ -324,5 +325,16 @@ describe("persistTemplateSave", () => {
 
     expect(result.success).toBe(false);
     expect(result.editConflict).toBe(true);
+  });
+
+  it("sends the Required tools the editor holds with an update and with a create", async () => {
+    const requiredTools = [{ name: "Time tracker", url: "https://example.com/track", required: false }];
+    const dependencies = buildDependencies({});
+
+    await persistTemplateSave(dependencies, buildInput({ id: "template-1", expectedVersion: 2, requiredTools }));
+    await persistTemplateSave(dependencies, buildInput({ requiredTools }));
+
+    expect(firstOf(dependencies.updateTemplate.mock.calls)[0].requiredTools).toEqual(requiredTools);
+    expect(firstOf(dependencies.createTemplate.mock.calls)[0].requiredTools).toEqual(requiredTools);
   });
 });

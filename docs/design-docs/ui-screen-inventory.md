@@ -659,6 +659,10 @@ existing content, invent nothing):
     page), and "Share" (outline), "Save" (outline) and "Start Run" (primary).
   - Beside it (below it on phones), a panel: "Sections", "Tasks", "Type" (checklist or
     recipe).
+  - "Required tools" (only when the Template has tools): one bordered row per tool, two
+    columns from `sm`, with its name as a link that opens the tool's site in a new tab
+    ("<name> (opens in a new tab)" to screen readers), the site's host under it, and a
+    "Required" or "Optional" badge.
   - "What's included": one collapsible card per section (number, title, "N tasks",
     chevron). Open, it lists numbered tasks with their title, description and content
     blocks, read-only.
@@ -703,7 +707,8 @@ existing content, invent nothing):
     - The Organization error notice, when shown.
     - Header, two columns: left: icon tile, title, description, a meta row (owner, updated
       date, category chips), action row; right: stats panel.
-    - Body: "What's included" (section cards), a tags row, the call-to-action card.
+    - Body: "Required tools" (when the Template has tools), "What's included" (section
+      cards), a tags row, the call-to-action card.
   - COMPONENT TYPES: breadcrumb; icon tile; heading; muted paragraph; chip link; avatar with a
     name link; outline and primary buttons; stats panel (3 rows: icon, value, label);
     collapsible card (a header row with a number badge, title, count and chevron); task row
@@ -711,8 +716,9 @@ existing content, invent nothing):
     two buttons); alert.
   - DATA FIELDS: title; description; type; categories (name, category URL); owner (name,
     initial, Public Profile URL); last update (`updatedAt`, else `createdAt`); section count;
-    task count; sections (title, task count; tasks with title, description, content blocks);
-    tags; Save and Start Run labels; the role-aware call-to-action text.
+    task count; Required tools (name, link, required or optional); sections (title, task
+    count; tasks with title, description, content blocks); tags; Save and Start Run labels;
+    the role-aware call-to-action text.
 - **PROOF PASS:** Pass (step 1): template-desktop-light-signed-out.png,
   template-desktop-dark-signed-out.png, template-mobile-light-signed-out.png,
   template-mobile-dark-signed-out.png and the four signed-in shots, against
@@ -1434,6 +1440,8 @@ existing content, invent nothing):
   - An Organization error notice when the role is unknown ("Start Run waits until they load.
     Check your connection and try again.", "Retry"); no longer shown, since a private
     Organization Template opens only at its Organization's URL (TD-82).
+  - "Required tools" (only when the Template has tools): the public template page's list,
+    above "Template Structure".
   - "Template Structure": the public template page's section cards, always open: numbered
     sections (title, "N tasks") with their numbered tasks (title, description, content
     blocks).
@@ -1467,15 +1475,16 @@ existing content, invent nothing):
 - **REFERENCE IMAGES:** pattern-detail-1.png, pattern-detail-2.png.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: breadcrumb; a two-column header (icon tile, title, description, badge,
-    actions; the stats panel on the right, under it on phones); notice; a separator; "Template
-    Structure"; a 2-column grid of Cards (Details, Categories & Tags; stacked on phones);
+    actions; the stats panel on the right, under it on phones); notice; a separator; "Required
+    tools" (when the Template has tools); "Template Structure"; a 2-column grid of Cards
+    (Details, Categories & Tags; stacked on phones);
     the Activity Card.
   - COMPONENT TYPES: breadcrumb; icon tile; badge; outline and primary buttons; dropdown
     menu; `Stat`; section cards with numbered tasks; switch with label; badge list; `Item`
     history rows; `AlertDialog`; Share link dialog.
-  - DATA FIELDS: Template (title, description, visibility, sections and tasks, created and
-    updated dates, categories, tags); history entries (label, actor, time); role permissions;
-    plan state.
+  - DATA FIELDS: Template (title, description, visibility, Required tools, sections and
+    tasks, created and updated dates, categories, tags); history entries (label, actor, time);
+    role permissions; plan state.
 - **PROOF PASS:** Pass (step 2a): `template-detail`, `template-detail-loading`,
   `template-detail-actions-menu`, `template-detail-delete-dialog` and
   `template-detail-share-dialog`, each on desktop and phone, light and dark, against
@@ -1503,8 +1512,9 @@ existing content, invent nothing):
     (from `sm`), "Outline" (below `lg`), "Preview" (from `sm`; in "More actions" on phones),
     "Save", a theme toggle (from `sm`; the sidebar has it on phones), "More actions". Preview
     and the theme toggle leave the bar on phones, so the title and Save keep their room.
-  - Notices when needed: "Error" with the problems (and "Load latest version" after a
-    conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
+  - Notices when needed: "Error" with the problems (such as "Required tools: give tool 2 a
+    name." or "Required tools: tool 1's URL must start with http:// or https:// and have no
+    spaces.", and "Load latest version" after a conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
     in <context>" ("Switch to <context>", "Discard"); plan or session notices ("Upgrade to Pro
     to save this template" with "Upgrade to Pro", "Organization plan limit", "Upgrade
     unavailable", "Signed out" with "Sign in").
@@ -1522,8 +1532,12 @@ existing content, invent nothing):
   - Panel (beside the outline from `lg`, the page's one column below it), titled by the
     selection:
     - "Template Settings": "Template Name", "Goal / Summary", "Template Type" ("Checklist",
-      "Recipe"), "Categories" ("Select categories..."), "Tags" ("Add tag..."), "Public
-      Template" switch ("Make this template visible in the public library").
+      "Recipe"), "Categories" ("Select categories..."), "Tags" ("Add tag..."), "Required
+      tools" ("The apps or services someone needs to run this template. Each one links to its
+      website."; per tool a bordered card: "Tool N", "Remove tool N", "Name" ("Time tracker"
+      as placeholder), "URL" ("https://"), and a "Required" switch, on for a new tool; "Add
+      tool", disabled at 20 with "A template can list up to 20 tools."), "Public Template"
+      switch ("Make this template visible in the public library").
     - "Search & SEO": "Search Title", "URL Slug", "Search Description", "Preview".
     - "Section Settings": "Section Title", "Tasks in section".
     - "Task Details": "Task Title", "Description (Optional)", "Content Blocks" with "Add
@@ -1558,9 +1572,9 @@ existing content, invent nothing):
     Alerts; mode buttons; tree list with drag handles, Move buttons (touch) and row actions;
     labelled Fields (input, textarea, select, multi-select, tag input, switch); block cards;
     Empty; Sheet; Dialog.
-  - DATA FIELDS: Template (title, description, type, categories, tags, public, search title,
-    URL slug, search description); sections (title, tasks); tasks (title, description, content
-    blocks); save state; kept drafts.
+  - DATA FIELDS: Template (title, description, type, categories, tags, Required tools (name,
+    URL, required), public, search title, URL slug, search description); sections (title,
+    tasks); tasks (title, description, content blocks); save state; kept drafts.
 - **PROOF PASS:** Pass (step 2a): `editor-new`, `editor-task` (a Template open on a task),
   `editor-add-block-menu`, `editor-preview-dialog`, `editor-loading` and `editor-read-only`,
   each on desktop and phone, light and dark, and `editor-outline-sheet-mobile-light` and
@@ -1654,6 +1668,11 @@ existing content, invent nothing):
     "Completed by" (when set), "Origin" ("Web", "MCP" or "Unknown"), "Run Key" and
     "Authorized by" (MCP), "Created", "Started", "Updated", "Completed", "Revision". A value
     the Run never recorded reads "Not recorded".
+  - "Required tools" (only when the source Template has tools and the viewer may use that
+    Template, as for its title in Show Details): a card, as "Activity" is, with one row per
+    tool (its name as a link that opens the tool's site in a new tab, the site's host, and a
+    "Required" or "Optional" badge), two columns from `sm`. They are the source Template's
+    current tools, not a copy the Run keeps. The shared run page does not show them.
   - An Organization error notice when the role is unknown ("This run's actions wait until they
     load. Check your connection and try again.", "Retry"); no longer shown, since a Run opens
     only at its own context's URL (TD-82).
@@ -1691,15 +1710,16 @@ existing content, invent nothing):
 - **REFERENCE IMAGES:** pattern-detail-2.png, pattern-detail-3.png. The reference has no run
   view.
 - **STRUCTURE (built):**
-  - LAYOUT ZONES: page header; notice; progress Card (below `xl`); main column (the task
+  - LAYOUT ZONES: page header; provenance; the Required tools card (when shown); notice;
+    progress Card (below `xl`); main column (the task
     panel Card with its header, content, notes and sticky footer; retired work; the Activity
     Card); right column (from `xl`, sticky).
   - COMPONENT TYPES: labelled title field; badges; buttons; shadcn Progress; checkbox;
     content blocks; notes Field (textarea, button, saved indicator); disclosure; `Item`
     history rows; task list (nav with current-task marker); Sheet.
   - DATA FIELDS: Run (title, status, progress, task counts, shared, sections, tasks, notes,
-    retired work, history); selected task (section, position, title, description, content,
-    done); permissions.
+    retired work, history; the source Template's Required tools); selected task (section,
+    position, title, description, content, done); permissions.
 - **PROOF PASS:** Pass (step 2a): `run-page` and `run-page-changelog` (the window, at the
   top and scrolled to the Activity), `run-page-loading`, `run-share-dialog`, each on desktop
   and phone, light and dark, and `run-tasks-sheet-mobile-light` and `-dark`, against
@@ -2308,7 +2328,8 @@ replaced.
 - **HOW USER GETS HERE:** "Preview" in the editor header.
 - **WHAT'S ON THE SCREEN:** "Template preview", "This preview reflects the current draft.
   Saving is not required."; the draft's title (or "Untitled Template") and description; its
-  sections with every task open.
+  "Required tools" (the tools that have a name, trimmed, as the public template page lists
+  them, under an `h3`); its sections with every task open.
 - **PRIMARY ACTION:** close.
 - **SECONDARY ACTIONS:** none.
 - **STATES:** follows the draft as typed.
@@ -2320,9 +2341,9 @@ replaced.
 - **REFERENCE IMAGES:** none.
 - **STRUCTURE (built):**
   - LAYOUT ZONES: header (title, description, close button); a scrolling body (the draft's
-    title and description, then its sections).
+    title and description, its Required tools when it has any, then its sections).
   - COMPONENT TYPES: heading; paragraph; section and task list with disclosure.
-  - DATA FIELDS: draft title, description, sections.
+  - DATA FIELDS: draft title, description, Required tools, sections.
 - **PROOF PASS:** Pass (step 2a), against shadcn's Dialog: `editor-preview-dialog`, on
   desktop and phone, light and dark. It fits a 390px screen (85% of the window's height).
 - **NOTES:** none.
