@@ -32,9 +32,9 @@ export type TemplateSeoPreview =
 export const resolveTemplateEditorOwnerSlug = (params: {
   isNew: boolean;
   loadedOwnerSlug?: string | null | undefined;
-  viewerUsername?: string | null | undefined;
+  newTemplateOwnerHandle?: string | null | undefined;
 }): string | null =>
-  params.isNew ? params.viewerUsername?.trim() || null : params.loadedOwnerSlug ?? null;
+  params.isNew ? params.newTemplateOwnerHandle?.trim() || null : params.loadedOwnerSlug ?? null;
 
 const slugTheSaveSends = (seoUrl: string, storedSlug: string | undefined): string =>
   findTemplateEditorSlugIssue(seoUrl, storedSlug) ? "" : normalizeTemplateEditorSlugForSave(seoUrl, storedSlug);

@@ -7,6 +7,7 @@ import { getOrganizationPermissions } from '@/lib/organizationPermissions';
 import type { TeamSummary } from '@/lib/schemas/teamResponses';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { buildCopiedTemplatePath } from './templateActionOutcome';
 import type { TemplateDetailActionResult } from './templateDetailApi';
 
 type TransferableTemplate = Pick<ChecklistTemplate, 'isPublic' | 'ownerType' | 'teamId' | 'title' | 'userId'>;
@@ -20,6 +21,7 @@ export const transferTargetsFor = (organizations: readonly TeamSummary[]): TeamS
 export function useTemplateTransfer(params: {
   beginVisit: () => PageVisit;
   loginRequired: () => void;
+  navigate: (path: string) => void;
   organizations: readonly TeamSummary[];
   template: TransferableTemplate | null;
   transfer: (teamId: string) => Promise<TemplateDetailActionResult>;
@@ -44,6 +46,7 @@ export function useTemplateTransfer(params: {
       if (result.kind === 'ok') {
         setOpen(false);
         toast.success(`Template transferred to ${organization.name}`);
+        if (visit.isCurrent()) params.navigate(buildCopiedTemplatePath(result));
       } else if (result.kind === 'login_required') {
         if (visit.isCurrent()) params.loginRequired();
       } else {

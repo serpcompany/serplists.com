@@ -46,6 +46,24 @@ describe('TemplateCard', () => {
     expect(markup).toContain('>D</span>');
   });
 
+  it("names an Organization Template's Organization and links the card and its owner to the Organization's URL, never its Creator's", () => {
+    navigation.reset('/');
+    const markup = renderToStaticMarkup(
+      <TemplateCard
+        template={{
+          ...template,
+          ownerType: 'team',
+          owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' },
+        }}
+      />,
+    );
+
+    expect(markup).toMatch(/<h3[^>]*><a href="\/profile\/Acme-Launch\/website-launch-checklist\/"/);
+    expect(markup).toContain('href="/profile/Acme-Launch/"');
+    expect(markup).toContain('>A</span>');
+    expect(markup).not.toContain('designops');
+  });
+
   it('keeps the hover shortcut out of the tab order and away from assistive technology', () => {
     navigation.reset('/');
     const markup = renderToStaticMarkup(<TemplateCard template={template} />);

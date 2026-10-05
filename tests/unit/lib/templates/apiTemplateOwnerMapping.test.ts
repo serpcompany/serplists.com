@@ -52,6 +52,12 @@ describe('the API Template schema', () => {
     expect(asReceived(publicOrganizationRow).owner).toEqual(AN_ORGANIZATION_UNNAMED);
   });
 
+  it('reads the owner of a public Organization Template that names its Organization by handle and name, without its id', () => {
+    const owner = { type: 'team', publicHandle: 'launch-crew', displayName: 'Launch Crew' } as const;
+
+    expect(asReceived({ ...publicOrganizationRowFromBeforeTheOwner, owner }).owner).toEqual(owner);
+  });
+
   it('keeps only the owner fields it knows', () => {
     const owner = { ...THE_ORGANIZATION, billingOwnerUserId: 'creator-1' };
 

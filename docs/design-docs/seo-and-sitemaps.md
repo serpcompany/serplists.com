@@ -33,21 +33,26 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 
 ## What is listed
 
-- **Public Templates** (`publicTemplateCondition`): public, not archived, with owner fields
-  that agree, a Personal row (`owner_type = 'user'`, no `team_id`) or an Organization row
-  (`owner_type = 'team'` with a `team_id`); a row whose fields disagree stays out. The
-  library, category pages and link previews list an Organization Template under its
-  Creator's username (the users join on `templates.user_id`), so the sitemaps do too.
-- **Public URLs only.** A profile or Template is listed only when the username is valid (the
+- **Public Templates** (`publicTemplateCondition`, `listedTemplateOwnerCondition`): public,
+  not archived, with owner fields that agree, a Personal row (`owner_type = 'user'`, no
+  `team_id`) or an Organization row (`owner_type = 'team'` with a `team_id`); a row whose
+  fields disagree stays out. Each is listed at its Template Owner's URL, as the library and
+  category pages list it: a Personal Template under its User's username (the users join on
+  `templates.user_id` for Personal rows only), an Organization Template under its
+  Organization's handle while the Organization is active (the teams join on
+  `templates.team_id` for Organization rows only, `templateOwnerHandle`), never under its
+  Creator's username.
+- **Public URLs only.** A profile or Template is listed only when the handle is valid (the
   [public handle rule](database-operations.md#public-handle-registry): 3 to 30 letters, digits,
   `_`, `.` or `-`; the user triggers match it since `0029`), and a Template only when its slug is (lowercase
   letters and digits joined by single hyphens, at most 160): no other one has a public URL.
-  The rules run in SQL (`validUsernameCondition`, `validTemplateSlugCondition`), so a
-  shard page's `LIMIT` and offset count only rows it lists, and again in code on each row.
+  The rules run in SQL (`validUsernameCondition`, `validOrganizationHandleCondition`,
+  `validTemplateSlugCondition`), so a shard page's `LIMIT` and offset count only rows it
+  lists, and again in code on each row.
   Drizzle has no builders for SQLite's `GLOB` or string functions, so the SQL is written by
   hand, and `tests/unit/functions/sitemap-category-entries.test.ts` keeps it equal to the
   code.
-- **Categories.** A category is listed when a public Template with a valid owner username
+- **Categories.** A category is listed when a public Template with a valid owner handle
   uses it, or a bundled starter does. A registry category (`src/data/publicCategories.ts`)
   has a page with its registry name and description, but it is listed only once a public
   Template uses it, since the page is empty otherwise. A category value stored as a plain
@@ -125,10 +130,13 @@ trigger bumps.
 | `categories` | Public categorized Template rows, their owners' `sitemap_owner_revisions`, and `sitemap_category_revisions` (the Template, owner-update and user-delete triggers bump it whenever they change these) |
 | `profiles` | Users with a valid username and `sitemap_profile_revisions` (the user and Template triggers bump it). The triggers ignore `users.updated_at`, so a lastmod that depends on it can lag by up to the `s-maxage` |
 
-The 0023 triggers fire only for Personal Template rows, so an edit to a public Organization
-Template reaches a cached shard only when it expires; the
+The 0023 triggers fire only for Personal Template rows, and no trigger watches `teams`, so
+an edit, publish, unpublish or delete of a public Organization Template, and a change of its
+Organization's slug or an archive, reaches a cached shard only when it expires (up to the
+1-day `s-maxage`): until then a cached templates shard can list an Organization Template
+under its Organization's old handle, which no longer opens it. The
 [Organization Template sitemap plan](../exec-plans/active/sitemap-organization-templates.md)
-proposes the migration that fixes it.
+proposes the migration that fixes it (TD-23).
 
 ## Lookups for page metadata
 
@@ -146,13 +154,16 @@ The data-center cache keys start with the request's origin (`getRequestOrigin` i
 cache, so neither reads the other's entries. Reading the request's headers also makes the
 page render on each request.
 
-- **Template page** (`/profile/<user>/<identifier>/`, `loadTemplatePageSeo` in
+- **Template page** (`/profile/<handle>/<identifier>/`, `loadTemplatePageSeo` in
   `src/server/pageMeta/templatePage.ts`): a bundled library template first, since the API
-  cannot serve one and it wins on a slug clash; otherwise a public template whose owner has
-  this username in any letter case. The canonical URL uses the stored username and the slug
-  (the id when there is none), as the sitemap does. The D1 read (`loadPublicTemplate` in
-  `functions/seo/public-template-lookup.ts`) is one indexed row (`idx_templates_slug_unique`,
-  or the primary key for an id), under the visibility rule `GET /api/templates/slug/:slug`
+  cannot serve one and it wins on a slug clash; otherwise a public template whose Template
+  Owner has this handle in any letter case: a Personal Template's User, or an Organization
+  Template's Organization while it is active (`templateOwnerOf` in
+  `functions/api/utils/template-rows.ts`), never its Creator. The canonical URL uses the
+  owner's stored handle and the slug (the id when there is none). The D1 read
+  (`loadPublicTemplate` in `functions/seo/public-template-lookup.ts`) is one indexed row
+  (`idx_templates_slug_unique`, or the primary key for an id) with its Creator and, for an
+  Organization Template, its Organization by primary key, under the visibility rule `GET /api/templates/slug/:slug`
   applies for a visitor: public and not archived. Like the page, it reads a UUID as a
   template id first and then as a slug, since a slug saved before the API refused UUID
   slugs can look like an id (a UUID no id matches reads one more row); anything else is a
@@ -160,18 +171,28 @@ page render on each request.
   slug or id index instead of `idx_templates_public_created_at`, and categories are read
   the way the API lists them. A found template is cached in the data center for 5 minutes,
   per host (the key starts with the request's origin), under a key prefix that names the
-  record's shape (`/__page-meta/v2/templates/`), so a deploy that changes the shape never
+  record's shape (`/__page-meta/v4/templates/`), so a deploy that changes the shape never
   reads the previous one. A template made private can keep its tags for those 5 minutes;
   the page itself loads it from the API and shows it as not found.
-- **Profile page** (`/profile/<user>/`, `loadProfilePageSeo` in
-  `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, from the same
-  two requests the page makes (`loadUserProfile`), sent to the API router in the same Worker
-  (`fetchApiJson` in `src/server/api.ts`) as a visitor with no session: the same handlers,
-  visibility rules and edge caches, without a network hop. A found profile's tags are cached
-  for 5 minutes, so a busy profile reads D1 once per 5 minutes per data center, and a new
-  name or public template can take that long to reach them; the page itself always loads
-  the profile from the API. The canonical URL uses the stored username, the one the page
-  moves other letter cases to.
+- **Moved Template page.** The URL a public Organization Template had before #232, its
+  Creator's (`/profile/<creator username>/<identifier>/`), answers `moved` from the same
+  lookup (the record names the Creator's username for this): the route's page awaits it before
+  it renders anything and answers a permanent redirect (`308`, `permanentRedirect`) to the
+  Organization's URL, keeping the query string, and `generateMetadata` redirects the same way.
+  The page awaits the lookup, so its HTML starts only once the lookup (edge-cached for a found
+  template) answers; a redirect thrown later, in a streamed part, would only be a client-side
+  refresh. Another User's handle, or an archived Organization's Template, is not found.
+- **Profile page** (`/profile/<handle>/`, `loadProfilePageSeo` in
+  `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, a User's or an
+  active Organization's, from the same two requests the page makes (`loadPublicProfile`:
+  `GET /api/profiles/by-handle`, then the owner's public Templates), sent to the API router
+  in the same Worker (`fetchApiJson` in `src/server/api.ts`) as a visitor with no session:
+  the same handlers, visibility rules and edge caches, without a network hop. A found
+  profile's tags are cached for 5 minutes under `/__page-meta/v2/profiles/`, so a busy
+  profile reads D1 once per 5 minutes per data center, and a new name, description or
+  public template can take that long to reach them; the page itself always loads the
+  profile from the API. The canonical URL uses the stored handle, the one the page moves
+  other letter cases to. An archived Organization's handle is not found.
 - **Category page** (`/categories/<slug>/`, `loadCategoryPageSeo` in
   `src/server/pageMeta/categoryPage.ts`): the category pages count the public catalog in
   the browser, so the server counts the same list with the library's own functions: the

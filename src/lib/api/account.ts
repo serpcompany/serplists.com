@@ -11,6 +11,7 @@ import {
   revokedAgentKeySchema,
   uploadedFileSchema,
 } from "@/lib/schemas/accountResponses";
+import { publicProfileBodySchema } from "@/lib/schemas/publicProfiles";
 import { apiFormDataRequest, apiRequest } from "@/lib/api/request";
 
 export type { AgentKey, CreatedAgentKey } from "@/lib/schemas/accountResponses";
@@ -35,8 +36,8 @@ export const accountApi = {
     return apiRequest(`/agent-keys/${encodeURIComponent(id)}`, revokedAgentKeySchema, { method: 'DELETE' });
   },
 
-  async getProfileByUsername(username: string) {
-    return apiRequest(`/profiles/by-username?username=${encodeURIComponent(username)}`, publicProfileSchema);
+  async getPublicProfileByHandle(handle: string) {
+    return apiRequest(`/profiles/by-handle?handle=${encodeURIComponent(handle)}`, publicProfileBodySchema);
   },
 
   async getProfileById(userId: string) {

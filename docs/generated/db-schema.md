@@ -296,6 +296,8 @@ Indexes:
 | `created_at` | text | no |  |  |
 | `updated_at` | text | yes |  |  |
 | `archived_at` | text | yes |  |  |
+| `avatar_url` | text | yes |  |  |
+| `description` | text | yes |  |  |
 
 Indexes:
 

@@ -158,6 +158,9 @@ const buildLoadResult = (
         id: template.id,
         userId: template.userId ?? "",
         ownerProfile: template.ownerProfile,
+        owner: template.owner,
+        ownerType: template.ownerType,
+        teamId: template.teamId,
       })
     : undefined,
   ownership: template?.id

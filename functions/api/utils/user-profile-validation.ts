@@ -37,22 +37,25 @@ function firstIssue(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid value.';
 }
 
-function parseAvatarUrl(value: unknown, policy: UserProfileWritePolicy): string | null {
-  if (value === null || value === '') return null;
-  if (typeof value !== 'string') reject('Avatar image must be a URL.');
+export function uploadedAvatarUrlError(value: string, policy: UserProfileWritePolicy): string | null {
   if (value.length > USER_IMAGE_URL_MAX_LENGTH) {
-    reject(`Avatar image URL must be ${USER_IMAGE_URL_MAX_LENGTH} characters or fewer.`);
+    return `Avatar image URL must be ${USER_IMAGE_URL_MAX_LENGTH} characters or fewer.`;
   }
 
   let href: string;
   try {
     href = new URL(value).href;
   } catch {
-    reject('Avatar image must be a URL.');
+    return 'Avatar image must be a URL.';
   }
-  if (!policy.avatarUrlPrefixes.some((prefix) => href.startsWith(prefix))) {
-    reject('Upload the avatar image to SERP Lists.');
-  }
+  return policy.avatarUrlPrefixes.some((prefix) => href.startsWith(prefix)) ? null : 'Upload the avatar image to SERP Lists.';
+}
+
+function parseAvatarUrl(value: unknown, policy: UserProfileWritePolicy): string | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string') reject('Avatar image must be a URL.');
+  const error = uploadedAvatarUrlError(value, policy);
+  if (error) reject(error);
   return value;
 }
 

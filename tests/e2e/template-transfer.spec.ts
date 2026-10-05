@@ -68,15 +68,16 @@ test('Transfer to Organization moves a private Personal Template into the chosen
   expect(transfers).toEqual([{ teamId: 'team-2', expected_version: 3 }]);
 });
 
-test('a public Personal Template asks to be made private before it can be transferred', async ({ page }) => {
+test('a public Personal Template transfers too, after the dialog says its public page moves and its current link redirects', async ({ page }) => {
   const transfers = await mockATransferablePersonalTemplate(page, { ...personalTemplate, is_public: 1 });
   await page.goto(`/dashboard/templates/${personalTemplate.id}/`);
 
   const dialog = await openTheTransferDialog(page);
+  await expect(dialog.getByText("Its public page moves to the Organization's profile, and its current link redirects there.")).toBeVisible();
+  await dialog.getByRole('button', { name: 'Transfer' }).click();
 
-  await expect(dialog.getByText(`Make "${personalTemplate.title}" private first`)).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Transfer' })).toHaveCount(0);
-  expect(transfers).toEqual([]);
+  await expect(page).toHaveURL(`/dashboard/organization/team-1/templates/${personalTemplate.id}/`);
+  expect(transfers).toEqual([{ teamId: 'team-1', expected_version: 3 }]);
 });
 
 test('the transfer dialog fits a phone', async ({ page }) => {

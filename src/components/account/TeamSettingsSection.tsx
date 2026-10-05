@@ -1,13 +1,21 @@
 import { useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Users } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import type { TeamMember, TeamMemberStatus, TeamRole } from '@/lib/api';
-import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
+import { isApiError } from '@/lib/api-errors';
+import {
+  getOrganizationNameError,
+  ORGANIZATION_DESCRIPTION_MAX,
+  ORGANIZATION_NAME_MAX,
+} from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import {
@@ -48,10 +56,15 @@ export function TeamSettingsSection() {
   } = useWorkspace();
   const teamSettingsForm = useTeamSettingsForm(
     activeWorkspace.type === 'team'
-      ? { teamId: activeWorkspace.teamId, name: activeWorkspace.name, slug: activeWorkspace.slug ?? '' }
+      ? {
+          teamId: activeWorkspace.teamId,
+          name: activeWorkspace.name,
+          slug: activeWorkspace.slug ?? '',
+          description: activeWorkspace.description ?? '',
+        }
       : null,
   );
-  const { name: editTeamName, slug: editTeamSlug } = teamSettingsForm.values;
+  const { name: editTeamName, slug: editTeamSlug, description: editTeamDescription } = teamSettingsForm.values;
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [transferringOwnerMemberId, setTransferringOwnerMemberId] = useState<string | null>(null);
@@ -75,8 +88,22 @@ export function TeamSettingsSection() {
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
   const changedTeamSettings = isTeamWorkspace
-    ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
+    ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug, description: editTeamDescription }, activeWorkspace)
     : null;
+
+  const saveOrganizationAvatar = async (avatarUrl: string | null): Promise<string | null> => {
+    if (!activeTeamId) return 'Select an Organization before updating its settings';
+    const teamId = activeTeamId;
+    try {
+      const result = await saveTeamSettings(teamId, { avatar_url: avatarUrl });
+      patchTeam(teamId, { avatar_url: result.team.avatar_url ?? null });
+    } catch (error) {
+      if (isApiError(error)) return errorMessage(error, 'Failed to update the Organization avatar');
+      throw error;
+    }
+    void reload.activity();
+    return null;
+  };
 
   const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -97,7 +124,7 @@ export function TeamSettingsSection() {
     }
 
     const teamId = activeTeamId;
-    const submitted = { name: editTeamName, slug: editTeamSlug };
+    const submitted = { name: editTeamName, slug: editTeamSlug, description: editTeamDescription };
     setIsUpdatingTeam(true);
     try {
       await runTeamWrite({
@@ -105,8 +132,12 @@ export function TeamSettingsSection() {
         onSaved: (result) => {
           const team = result?.team;
           if (team) {
-            teamSettingsForm.applySaved(teamId, submitted, { name: team.name, slug: team.slug ?? '' });
-            patchTeam(teamId, { name: team.name, slug: team.slug ?? null });
+            teamSettingsForm.applySaved(teamId, submitted, {
+              name: team.name,
+              slug: team.slug ?? '',
+              description: team.description ?? '',
+            });
+            patchTeam(teamId, { name: team.name, slug: team.slug ?? null, description: team.description ?? null });
           }
           toast.success('Organization updated');
         },
@@ -199,8 +230,19 @@ export function TeamSettingsSection() {
           </p>
         </div>
 
+        <Field>
+          <FieldTitle>Organization avatar</FieldTitle>
+          <AvatarUpload
+            currentAvatarUrl={activeWorkspace.avatarUrl ?? null}
+            editable={canManageTeam}
+            fallbackIcon={Users}
+            saveAvatar={saveOrganizationAvatar}
+            size="lg"
+          />
+        </Field>
+
         {canManageTeam ? (
-          <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleUpdateTeam}>
+          <form className="grid gap-3 md:grid-cols-2" onSubmit={handleUpdateTeam}>
             <Field>
               <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
               <Input
@@ -220,9 +262,21 @@ export function TeamSettingsSection() {
                 placeholder="agency-ops"
               />
             </Field>
-            <Button type="submit" disabled={isUpdatingTeam || !changedTeamSettings}>
-              {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
-            </Button>
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="team-settings-description">Description</FieldLabel>
+              <Textarea
+                id="team-settings-description"
+                maxLength={ORGANIZATION_DESCRIPTION_MAX}
+                rows={3}
+                value={editTeamDescription}
+                onChange={(event) => teamSettingsForm.setDescription(event.target.value)}
+              />
+            </Field>
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={isUpdatingTeam || !changedTeamSettings}>
+                {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
+              </Button>
+            </div>
           </form>
         ) : null}
 

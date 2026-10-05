@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, User, X } from "lucide-react";
+import { Camera, User, X, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -15,15 +15,28 @@ interface AvatarUploadProps {
   onAvatarUpdate?: (newAvatarUrl: string) => void;
   size?: "sm" | "md" | "lg";
   editable?: boolean;
+  fallbackIcon?: LucideIcon;
+  saveAvatar?: (avatarUrl: string | null) => Promise<string | null>;
 }
 
-export const AvatarUpload = ({ 
-  currentAvatarUrl, 
-  onAvatarUpdate, 
-  size = "md", 
-  editable = true 
+export const AvatarUpload = ({
+  currentAvatarUrl,
+  onAvatarUpdate,
+  size = "md",
+  editable = true,
+  fallbackIcon: FallbackIcon = User,
+  saveAvatar,
 }: AvatarUploadProps) => {
   const { user, refreshProfile } = useAuth();
+  const saveOnTheAccount = async (avatarUrl: string | null): Promise<string | null> => {
+    const result = await authClient.updateUser({ image: avatarUrl });
+    if (result?.error) {
+      return result.error.message || (avatarUrl ? "Failed to update avatar. Please try again." : "Failed to remove avatar. Please try again.");
+    }
+    await refreshProfile();
+    return null;
+  };
+  const save = saveAvatar ?? saveOnTheAccount;
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,17 +66,16 @@ export const AvatarUpload = ({
 
     try {
       const upload = await uploadAvatar(file);
-      const result = await authClient.updateUser({ image: upload.url });
-      if (result?.error) {
+      const refusal = await save(upload.url);
+      if (refusal) {
         await deleteUploadedAsset(upload.url);
-        toast.error(result.error.message || "Failed to update avatar. Please try again.");
+        toast.error(refusal);
         return;
       }
 
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
       }
-      await refreshProfile();
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {
@@ -80,14 +92,13 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      const result = await authClient.updateUser({ image: null });
-      if (result?.error) {
-        toast.error(result.error.message || "Failed to remove avatar. Please try again.");
+      const refusal = await save(null);
+      if (refusal) {
+        toast.error(refusal);
         return;
       }
 
       await deleteUploadedAsset(currentAvatarUrl);
-      await refreshProfile();
       toast.success("Avatar removed successfully!");
       onAvatarUpdate?.("");
     } catch (error) {
@@ -103,7 +114,7 @@ export const AvatarUpload = ({
       <Avatar className={sizeClasses[size]}>
         <AvatarImage src={currentAvatarUrl || undefined} />
         <AvatarFallback>
-          <User className="size-1/2" />
+          <FallbackIcon className="size-1/2" />
         </AvatarFallback>
       </Avatar>
 

@@ -145,6 +145,7 @@ export default tseslint.config(
       ".open-next",
       "next-env.d.ts",
       "cloudflare-env.d.ts",
+      ".claude/worktrees",
     ],
   },
   ...nextVitals,

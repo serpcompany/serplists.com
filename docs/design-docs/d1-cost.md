@@ -139,7 +139,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes, the template lists' client
      `staleTime`: a hit reads nothing. Its cache key names the response shape
-     (`/api/templates?scope=public&fields=public-with-owner`), so a deploy that changes the shape
+     (`/api/templates?scope=public&fields=public-with-owner-handles`), so a deploy that changes the shape
      misses rather than serving the old one. So do the
      lookups behind the public pages' server-rendered metadata (docs/FRONTEND.md), which
      run on every visit: the template page's single-row read by slug or id
@@ -198,7 +198,11 @@ first audit event through `idx_audit_events_resource` for its provenance (origin
 started it), and one run's read its whole provenance: the Organization run list's budget went
 from 3 to 5 rows per run, and a run by id from 6 to 12 rows, on 2026-10-04
 ([run provenance](../exec-plans/completed/run-provenance.md)). A public Organization Template adds one row to a
-catalog miss too, although public responses drop the Organization's name and slug.
+catalog miss too, the Organization whose handle and name public responses carry while it is
+active. A Public Profile reads its handle and owner by primary key (`GET /api/profiles/by-handle`,
+2 rows), and an Organization's public Templates read every Template of that Organization
+through `idx_templates_team_id`, as a User's read every Personal Template of theirs through
+`idx_templates_owner` ([Organizations](organizations.md#public-profile)).
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per

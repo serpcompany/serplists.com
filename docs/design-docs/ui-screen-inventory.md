@@ -641,7 +641,8 @@ existing content, invent nothing):
 
 ### Public template page
 
-- **SCREEN NAME:** Public template page (`/profile/<user>/<template>/`)
+- **SCREEN NAME:** Public template page (`/profile/<handle>/<template>/`, under its Template
+  Owner's handle: a User's, or an active Organization's)
 - **PURPOSE:** Show one Public Template and let the visitor start a Run or save a copy.
 - **HOW USER GETS HERE:** a template card (library, category page, Public Profile, Home); a
   shared link (this is the Template's only public URL); the "Share Template" dialog's link.
@@ -650,8 +651,9 @@ existing content, invent nothing):
   - Signed in, when the Organizations failed to load: "Couldn't load your Organizations",
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
-  - The header: an icon tile by template type, the title, the description, the owner's
-    avatar and name (a link to the Public Profile), "Updated <date>" (the Template's last
+  - The header: an icon tile by template type, the title, the description, the Template
+    Owner's avatar and name (a link to its Public Profile: an Organization Template's
+    Organization, never its Creator), "Updated <date>" (the Template's last
     update in the viewer's date format, as template detail's "Last updated"; left out when
     unreadable), the category badges (links to category pages; plain for a category with no
     page), and "Share" (outline), "Save" (outline) and "Start Run" (primary).
@@ -849,7 +851,7 @@ existing content, invent nothing):
 
 ### Public Profile
 
-- **SCREEN NAME:** Public Profile (`/profile/<user>/`)
+- **SCREEN NAME:** Public Profile (`/profile/<handle>/` for a User's handle)
 - **PURPOSE:** Show a Profile Owner and their Public Templates.
 - **HOW USER GETS HERE:** the owner link on a template card or template page; the account
   menu's "Profile" (a new tab); the "Public profile URL" link in Account Settings.
@@ -860,12 +862,13 @@ existing content, invent nothing):
     "Checklist Items"; "Total Runs" or "Categories".
   - "Public Templates" with "Browse every public template published from this profile.";
     template cards in the card grid (up to 3 category badges, the title, the description or
-    "Public template pack published in this creator profile.", then "@username", "N
+    "Public template pack published in this creator profile." ("…by this Organization." on an
+    Organization's profile), then "@username", "N
     sections", "N items").
 - **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
 - **SECONDARY ACTIONS:** the website link (a new tab).
 - **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
-  "Try again"); not found ("User not found", "This profile does not exist.", noindex); no
+  "Try again"); not found ("Profile not found", "This profile does not exist.", noindex); no
   Templates ("No public templates", "@<user> has not published any public templates yet.");
   another letter case of the username replaces itself with the stored one.
 - **NAVIGATION TYPE:** child page.
@@ -893,10 +896,54 @@ existing content, invent nothing):
   and 2-line description. The reference's breadcrumb is left out: a profile has no section
   to trail back to. The cards are `MediaCard`s like the library's rather than the library's
   card itself, which would change their words ("N tasks", "Start", the owner).
-- **NOTES:** Code: `src/views/UserProfile.tsx`. Only Users have Public Profiles today;
-  Organization Public Profiles do not exist yet. The avatar image is decorative (`alt=""`)
-  beside the name. Until step 2b the cards had no media area and a trailing arrow icon, in 2
-  columns.
+- **NOTES:** Code: `src/views/PublicProfile.tsx` (the states and the handle lookup) and
+  `src/components/profile/PublicProfileDetails.tsx`, which an Organization's handle shares
+  ([Organization Public Profile](#organization-public-profile)). The avatar image is
+  decorative (`alt=""`) beside the name. Until step 2b the cards had no media area and a
+  trailing arrow icon, in 2 columns.
+
+### Organization Public Profile
+
+- **SCREEN NAME:** Organization Public Profile (`/profile/<handle>/` for an active
+  Organization's handle)
+- **PURPOSE:** Show an Organization and its Public Templates.
+- **HOW USER GETS HERE:** the owner link on an Organization Template's card (the Template
+  Library, a category page) or public template page; a link to its handle.
+- **WHAT'S ON THE SCREEN:**
+  - Header: the Organization's avatar (or its initials); its name; "@handle"; its description,
+    or without one the summary a User's profile shows ("Public checklist templates from
+    @<handle> covering <categories>." or "Public checklist templates and repeatable workflow
+    packs published by @<handle>.").
+  - Beside it (under it on phones), the panel with 3 stats: "Templates", "Checklist Items",
+    "Categories".
+  - "Public Templates" with "Browse every public template published from this profile."; the
+    Public Profile's template cards, each opening `/profile/<handle>/<template>/`.
+- **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
+- **SECONDARY ACTIONS:** none.
+- **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
+  "Try again"); not found ("Profile not found", "This profile does not exist.", noindex), also for
+  an archived Organization, which keeps its handle; no Templates ("No public templates",
+  "@<handle> has not published any public templates yet."); another letter case of the handle
+  replaces itself with the stored one.
+- **NAVIGATION TYPE:** child page.
+- **PATTERN CHOICE (built):** the [Public Profile](#public-profile)'s: a [Detail
+  page](#detail-page) header with the avatar and the stats panel, then a [Section row over a
+  card grid](#section-row-over-a-card-grid). It has no meta row: an Organization has no
+  location, website or join date to show.
+- **REFERENCE IMAGES:** pattern-detail-1.png, teardown-detail-1.png, home-2.png.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (avatar, name, handle, description) with the stats panel beside it; a
+    separator; "Public Templates" (a section header over the card grid or the empty state).
+  - COMPONENT TYPES: as the Public Profile, without the meta items.
+  - DATA FIELDS: Organization (name, handle, avatar, description, stats); Template (title,
+    description, type, categories, section count, item count, URL).
+- **PROOF PASS:** Not run yet: `pnpm run ui:snap` of an Organization's profile on desktop and
+  phone, light and dark, against the references above, is the PR's evidence.
+- **NOTES:** Code: `src/views/PublicProfile.tsx` and
+  `src/components/profile/PublicProfileDetails.tsx`, shared with the Public Profile. The page
+  loads nothing else about the Organization: no members, roles, invites, billing, Runs,
+  activity or private Templates ([Organizations](organizations.md#public-profile)). Owners and
+  admins set the avatar and description on the [Organization Settings](#organization-settings).
 
 ### Features
 
@@ -1377,7 +1424,8 @@ existing content, invent nothing):
   - Header: the type's icon tile; the title; the description (or "Review template structure,
     metadata, and run actions."); a "Public" or "Private" badge, and beside "Public" a "View
     public template" link to its live public page (the URL Share gives), or "Public page
-    unavailable until its creator sets a username" when it has none; actions: "Share" and "Edit"
+    unavailable until its creator sets a username" (an Organization's: "Public page unavailable
+    until its Organization has a slug") when it has none; actions: "Share" and "Edit"
     (roles that can edit), or a copy button for others ("Copy to Organization", "Copy to My
     Templates", "Upgrade to copy template", "Checking plan...", "Copying...", "Loading..."),
     "View runs" (signed in), "Start Run", and "Template actions" (roles that can edit). Beside
@@ -1857,8 +1905,10 @@ existing content, invent nothing):
     kept; the status error with "Retry"; "Billing checkout is currently unavailable."; the
     Organization billing message ("Paid Organization entitlements apply while this
     Organization is selected." or "Personal subscriptions are managed from Personal.").
-  - "<name>": "Your role: <role>", the role's description; for managers: a rename form
-    ("Organization name", "Slug", "Save Organization") and invites ("Invite email", "Role",
+  - "<name>": "Your role: <role>", the role's description; "Organization avatar" (the
+    avatar, or a people icon; for managers "Upload avatar" and "Remove avatar", saved at once:
+    "Avatar updated successfully!", "Avatar removed successfully!"); for managers: a form
+    ("Organization name", "Slug", "Description", "Save Organization") and invites ("Invite email", "Role",
     "Create link", the link with a copy button, "Pending invites" with "New link" and
     revoke); "Owners and admins manage Organization settings, invites, and activity." for
     others; "Members" (name, "You", email, role and status selects, labelled "Role" and
@@ -1879,7 +1929,8 @@ existing content, invent nothing):
 - **STRUCTURE (built):**
   - LAYOUT ZONES: page header; one column of Cards: <name> billing, <name>, Leave
     Organization.
-  - DATA FIELDS: Organization (name, slug, role, members, invites, activity); plan.
+  - DATA FIELDS: Organization (name, slug, avatar, description, role, members, invites,
+    activity); plan.
 - **NOTES:** Code: `src/views/OrganizationSettings.tsx`; the Organization's card is
   `src/components/account/TeamSettingsSection.tsx`, Leave is
   `src/components/account/LeaveOrganizationCard.tsx`, and billing is
@@ -2133,15 +2184,16 @@ replaced.
 - **WHAT'S ON THE SCREEN:** the title; "Move "<title>" out of Personal and into an
   Organization, where its members can use it."; an "Organization" select of the Organizations
   where the user can add Templates (the first one chosen); "Runs you already started from it
-  stay in Personal and no longer receive its changes."; "Cancel", "Transfer"; the close
-  button. A public Template shows only "Make "<title>" private first: public Templates can't
-  be transferred to an Organization yet." and "Close".
+  stay in Personal and no longer receive its changes."; for a public Template, "Its public page
+  moves to the Organization's profile, and its current link redirects there."; "Cancel",
+  "Transfer"; the close button.
 - **PRIMARY ACTION:** "Transfer": the Template moves to the Organization (toast "Template
   transferred to <Organization>") and the page opens it at that Organization's URL.
 - **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
 - **STATES:** "Transferring..." with the buttons disabled, and Escape or a click outside does
   not close it then; a refusal (the Organization's Template limit, a Template changed
-  meanwhile, which also reloads it) shows a toast and keeps the dialog open.
+  meanwhile, which also reloads it, or a public Template sent to an Organization without a
+  slug) shows a toast and keeps the dialog open.
 - **NAVIGATION TYPE:** modal dialog.
 - **PATTERN CHOICE (built):** shadcn Dialog with a labelled Select (`LabeledSelect`), as the
   Start a Run dialog.

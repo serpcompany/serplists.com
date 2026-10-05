@@ -111,6 +111,22 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('Template details');
   });
 
+  it("names an Organization Template's Organization, never its Creator, on the link to the Organization's Public Profile", () => {
+    const html = renderView({
+      template: {
+        ...template,
+        ownerType: 'team',
+        ownerProfile: { full_name: 'Devin Creator', username: 'devinschumacher' },
+        owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' },
+      },
+      ownerSlug: 'Acme-Launch',
+      ownerPath: '/profile/Acme-Launch/',
+    });
+
+    expect(html).toMatch(/<a[^>]*href="\/profile\/Acme-Launch\/"[^>]*>(?:(?!<\/a>).)*Acme Launch<\/span><\/a>/);
+    expect(html).not.toContain('Devin Creator');
+  });
+
   it('shows template and task descriptions exactly as saved, line breaks and backslashes alike', () => {
     const html = renderView({
       isAuthenticated: false,

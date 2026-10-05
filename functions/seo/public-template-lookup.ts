@@ -1,15 +1,16 @@
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { templates, users } from '../../db/schema/index';
+import { templates } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { withEdgeCache } from '../api/utils/edge-cache';
+import { selectWithTemplateOwner, templateOwnerOf } from '../api/utils/template-rows';
 import { normalizeStringArray } from '../../src/lib/schemas/jsonArrays';
 import { looksLikeTemplateId } from '../api/utils/slug';
 
 const CACHE_TTL_SECONDS = 5 * 60;
-const CACHE_KEY_PREFIX_NAMING_RECORD_SHAPE = '/__page-meta/v2/templates/';
+const CACHE_KEY_PREFIX_NAMING_RECORD_SHAPE = '/__page-meta/v4/templates/';
 
 export interface PublicTemplateRecord {
   id: string;
@@ -18,7 +19,9 @@ export interface PublicTemplateRecord {
   description: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
-  ownerUsername: string | null;
+  ownerHandle: string | null;
+  isOrganizationTemplate: boolean;
+  creatorUsername: string | null;
   createdAt: string | null;
   categories: string[];
 }
@@ -30,7 +33,9 @@ const recordSchema = z.object({
   description: z.string().nullable(),
   seoTitle: z.string().nullable(),
   seoDescription: z.string().nullable(),
-  ownerUsername: z.string().nullable(),
+  ownerHandle: z.string().nullable(),
+  isOrganizationTemplate: z.boolean(),
+  creatorUsername: z.string().nullable(),
   createdAt: z.string().nullable(),
   categories: z.array(z.string()),
 });
@@ -38,25 +43,37 @@ const recordSchema = z.object({
 const isPublicWithoutItsIndex = sql`+${templates.is_public} = 1`;
 
 async function selectPublicTemplate(env: Env, match: SQL): Promise<PublicTemplateRecord | null> {
-  const [row] = await createDb(env)
-    .select({
-      id: templates.id,
-      slug: templates.slug,
-      title: templates.title,
-      description: templates.description,
-      seoTitle: templates.seo_title,
-      seoDescription: templates.seo_description,
-      ownerUsername: users.username,
-      createdAt: templates.created_at,
-      category: templates.category,
-    })
-    .from(templates)
-    .leftJoin(users, eq(users.id, templates.user_id))
+  const [row] = await selectWithTemplateOwner(createDb(env), {
+    id: templates.id,
+    slug: templates.slug,
+    title: templates.title,
+    description: templates.description,
+    seoTitle: templates.seo_title,
+    seoDescription: templates.seo_description,
+    createdAt: templates.created_at,
+    category: templates.category,
+    owner_type: templates.owner_type,
+    team_id: templates.team_id,
+    user_id: templates.user_id,
+  })
     .where(and(match, isPublicWithoutItsIndex, isNull(templates.deleted_at)))
     .limit(1);
   if (!row?.id) return null;
-  const { category, ...record } = row;
-  return recordSchema.parse({ ...record, categories: normalizeStringArray(category) });
+  const { id, slug, title, description, seoTitle, seoDescription, createdAt, category } = row;
+  const owner = templateOwnerOf(row);
+  return recordSchema.parse({
+    id,
+    slug,
+    title,
+    description,
+    seoTitle,
+    seoDescription,
+    createdAt,
+    ownerHandle: owner.publicHandle,
+    isOrganizationTemplate: owner.type === 'team',
+    creatorUsername: row.owner_username,
+    categories: normalizeStringArray(category),
+  });
 }
 
 async function queryPublicTemplate(env: Env, identifier: string): Promise<PublicTemplateRecord | null> {

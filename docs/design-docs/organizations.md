@@ -63,7 +63,7 @@ change the same rows between the handler's read and its write:
 
 Source of truth: `db/migrations/0021_add_teams_audit_history.sql` and `db/migrations/0022_enforce_single_active_team_owner.sql`.
 
-- `teams`: legacy implementation table for Organization identity, slug, creator, billing owner, and archive status.
+- `teams`: legacy implementation table for Organization identity, slug, avatar, description, creator, billing owner, and archive status.
 - `team_members`: legacy implementation table for Organization Membership, role, status, inviter, and join timestamps.
 - `team_invites`: legacy implementation table for hashed Organization invite tokens and their lifecycle.
 - `team_entitlement_overrides`: legacy implementation table for D1-backed Organization plan overrides.
@@ -79,7 +79,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams`: list active Organizations for the current User.
 - `POST /api/teams`: create an Organization and its `owner` membership (`functions/api/handlers/team-create.ts`). A requested `slug` that another Organization (archived ones included) or a User's username holds, in any case, returns 409 `team_slug_exists`, as `PUT` does; a slug derived from the name (lowercase, at most 30 characters, or `team-<id8>` when the name gives fewer than 3) gets a suffix instead. Usernames and Organization slugs share one namespace ([public handle registry](database-operations.md#public-handle-registry)). If another request takes the slug between the check and the write, `idx_teams_slug_unique` or the registry fails the batch, which writes nothing: a requested slug returns the same 409, and a name-derived slug is retried with a random suffix (up to 3 attempts, then 409).
 - `GET /api/teams/:teamId`: read Organization details for a member.
-- `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`. A slug another Organization or a User holds, in any case, returns 409 `team_slug_exists`, including when it is taken between this request's check and its write. A body that names neither field is a 400; values that match the current ones (after trimming) return 200 without a write or audit event. A slug the caller sets follows the [public handle rule](database-operations.md#public-handle-registry) usernames follow (3 to 30 letters, digits, `_`, `.` and `-`), is kept as typed and compared without regard to case, so an Organization can also change just the case of its slug; the settings form resends the stored slug, which can predate the rule (up to 120 characters before it), so `PUT` checks it only when it changes. The settings form keeps Save disabled until a field changes and sends only the changed fields; clearing the slug field keeps the current slug. A refresh of the Organizations list (Make owner, or a refetch that sees a change to any of the user's Organizations) does not replace a field the user has edited; an unedited field follows the saved value, and after a save both fields show what the server stored, such as a slug it adjusted (`useTeamSettingsForm`, `syncTeamSettingsForm`).
+- `PUT /api/teams/:teamId`: update an Organization's name, slug, `description` or `avatar_url`. Requires `owner` or `admin`. The description is trimmed, at most 500 characters, and an empty one clears it; the avatar must be an upload SERP Lists serves (the account avatar's rule, `uploadedAvatarUrlError`), and `null` removes it. `GET /api/teams` lists both with each Organization. A slug another Organization or a User holds, in any case, returns 409 `team_slug_exists`, including when it is taken between this request's check and its write. A body that names neither field is a 400; values that match the current ones (after trimming) return 200 without a write or audit event. A slug the caller sets follows the [public handle rule](database-operations.md#public-handle-registry) usernames follow (3 to 30 letters, digits, `_`, `.` and `-`), is kept as typed and compared without regard to case, so an Organization can also change just the case of its slug; the settings form resends the stored slug, which can predate the rule (up to 120 characters before it), so `PUT` checks it only when it changes. The settings form keeps Save disabled until a field changes and sends only the changed fields; clearing the slug field keeps the current slug. A refresh of the Organizations list (Make owner, or a refetch that sees a change to any of the user's Organizations) does not replace a field the user has edited; an unedited field follows the saved value, and after a save both fields show what the server stored, such as a slug it adjusted (`useTeamSettingsForm`, `syncTeamSettingsForm`).
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization, and disabling an owner or admin or demoting them below admin revokes the pending invites they created.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
@@ -103,15 +103,17 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 - `PUT /api/templates/:id` in the active ownership context
 - `POST /api/templates/:id/clone` with `teamId`
 - `POST /api/templates/:id/transfer` with `teamId` and `expected_version`: moves one of the
-  caller's private Personal Templates into an Organization where they are an editor or above,
-  in place (same id, content, versions, likes and Creator; `owner_type` becomes `team`). One
+  caller's Personal Templates into an Organization where they are an editor or above, in place
+  (same id, content, visibility, versions, likes and Creator; `owner_type` becomes `team`). One
   batch writes a `template.transferred_to_organization` version and audit event (subject the
   Organization) and the update, and applies only while the Template is still the caller's,
-  Personal, private, at that version, and within the Organization's Template limit. A public
-  Template answers `409 template_public` (make it private first; public Organization Templates
-  wait for Organization profiles, #232), a stale version `409 edit_conflict`, the limit
-  `403 limit_reached`, an Organization Template or someone else's `403 not_transferable` or
-  `404`. Its existing Personal Runs stay in Personal and no longer revalidate from it.
+  Personal, at that version, and within the Organization's Template limit. A public Template
+  moves too: its public page becomes the Organization's (`/profile/<orgHandle>/<slug>`), and
+  its old URL redirects there with a 308. So it moves only to an Organization with a slug;
+  otherwise `409 organization_handle_required`. A stale version answers `409 edit_conflict`,
+  the limit `403 limit_reached`, an Organization Template or someone else's
+  `403 not_transferable` or `404`. Its existing Personal Runs stay in Personal and no longer
+  revalidate from it.
 - `GET /api/checklists?teamId=...`
 - `GET /api/checklists/archived?teamId=...`
 - `POST /api/checklists` with `teamId`
@@ -119,9 +121,37 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 Template list and detail responses for the owner and members name an Organization
 Template's Template Owner as the Organization in `owner` (`type` `team`, its id, slug as
 `publicHandle` and name as `displayName`), never its Creator, who stays in `user_id` and
-`owner_username`. Public responses never name the Organization: their `owner` is only
-`{ type: 'team' }`, and they carry no `team_id`, members, roles, billing or invites
-([data persistence](data-persistence.md#resource-ownership)).
+`owner_username`. Public responses name the Organization only by its handle and name
+(`{ type: 'team', publicHandle, displayName }`), and only while it is active and has a
+handle; otherwise their `owner` is only `{ type: 'team' }`. They carry no `team_id`,
+members, roles, billing or invites ([data persistence](data-persistence.md#resource-ownership)).
+
+## Public Profile
+
+An active Organization with a handle (its slug) has a Public Profile at `/profile/:handle/`
+([features](../product-specs/features.md#auth-and-account)), and its public Templates open at
+`/profile/:handle/:templateSlug/`. Both resolve the handle through the
+[public handle registry](database-operations.md#public-handle-registry):
+
+- `GET /api/profiles/by-handle?handle=` answers the Profile Owner a handle names, in any
+  letter case: a User (`type: 'user'`, the fields `/api/profiles/by-username` answers) or an
+  Organization (`type: 'team'`, `handle`, `name`, `avatar_url`, `description`, and nothing
+  else). An archived Organization keeps its handle but answers 404, like a handle no one
+  holds. It reads the registry by its primary key and the owner by theirs.
+- `GET /api/templates/public?handle=` lists that Profile Owner's public, non-deleted
+  Templates, newest first: an Organization's through `idx_templates_team_id`, a User's
+  Personal ones as `?userId=` does. It answers 404 for an archived Organization.
+- The page (`src/views/PublicProfile.tsx`, `src/components/profile/PublicProfileDetails.tsx`)
+  shows the avatar, name, `@handle`, description, stats and template cards; owners and admins
+  set the avatar and description on the Organization's settings page.
+- Every link to an Organization's public Template uses its Organization's handle: Share, "View
+  public template", the library's and the profile's cards, the owner link on the public
+  template page, canonical tags and sitemap entries (`resolvePublicTemplateOwnerSlug` in
+  `src/lib/repoTemplateCatalog.ts`). The Creator URL such a Template had before
+  (`/profile/<creator username>/<slug>/`) answers a permanent redirect (`308`) to it. An
+  Organization without a handle, or an archived one, gives its Templates no public URL: Share
+  leaves the Template private and says the Organization needs a slug, and the library leaves
+  it out.
 
 ## Invite Flow
 

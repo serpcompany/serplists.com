@@ -187,6 +187,11 @@ and agents (MCP) call them directly and do not follow redirects.
   Organization's Templates (`ORGANIZATION_HOME_REDIRECT`).
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
   its page without a redirect.
+- A redirect that needs data comes from the page: the URL a public Organization Template had
+  under its Creator's username answers 308 with its Organization's URL from the template
+  page's own lookup, so that page awaits the lookup before it renders
+  ([SEO and sitemaps](design-docs/seo-and-sitemaps.md#lookups-for-page-metadata)). A redirect
+  thrown after the page started streaming would only be a client-side refresh.
 - Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL
   redirect there in one hop (see [RELIABILITY.md](RELIABILITY.md#environments-and-hosts)).
 
@@ -420,7 +425,7 @@ write: [client data](design-docs/client-data.md).
 - Query functions reject when a request fails; never catch and return `[]`, which
   caches an empty list as fresh data and hides the error. Template and run list
   fetchers (`src/contexts/templateListFetchers.ts`) parse rows one at a time and skip a
-  malformed row. They, a profile's public Templates (`loadUserProfile`) and a category
+  malformed row. They, a profile's public Templates (`loadPublicProfile`) and a category
   page's metadata turn an API Template into the app's with one mapper, `mapApiTemplate`
   (`src/lib/templates/apiTemplateMapper.ts`), so a card shows the same type, description,
   categories and visibility wherever it is listed; a missing `is_public` reads as private,
@@ -664,8 +669,8 @@ server's lookup gives it a not-found title and `noindex, nofollow`. Only a settl
 counts: a lookup that failed keeps the site's defaults, and a page whose own load in the
 browser fails (a network failure, 5xx or rate limit may be brief) shows a retry state; both
 stay indexable. See `loadTemplateDetailData`
-(`src/features/template-detail/loadTemplateDetail.ts`) and `loadUserProfile`
-(`src/features/profile/loadUserProfile.ts`); only an API 404 (`isNotFoundError` in
+(`src/features/template-detail/loadTemplateDetail.ts`) and `loadPublicProfile`
+(`src/features/profile/loadPublicProfile.ts`); only an API 404 (`isNotFoundError` in
 `src/lib/api-errors.ts`) is settled.
 
 When the browser learns that a page has nothing to index after the server rendered it (a

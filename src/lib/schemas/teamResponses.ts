@@ -11,6 +11,8 @@ export const teamSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: optionalText,
+  avatar_url: optionalText,
+  description: optionalText,
   role: storedTeamRole,
   membershipStatus: storedMemberStatus,
   memberId: z.string(),
@@ -25,6 +27,8 @@ export const teamDetailSchema = z.object({
   created_at: z.string(),
   updated_at: optionalText,
   archived_at: optionalText,
+  avatar_url: optionalText,
+  description: optionalText,
   membership: z.object({ id: z.string(), role: storedTeamRole, status: storedMemberStatus }),
 });
 

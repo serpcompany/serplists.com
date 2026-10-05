@@ -22,6 +22,7 @@ import {
   WorkspaceErrorNotice,
 } from '@/components/workspace/WorkspaceErrorNotice';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { resolvePublicTemplateOwnerName } from '@/lib/repoTemplateCatalog';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -90,8 +91,7 @@ export function PublicTemplateView({
   onSaveTemplate,
 }: PublicTemplateViewProps) {
   const [isSaved, setIsSaved] = useState(false);
-  const ownerName =
-    template.ownerProfile?.full_name || template.ownerProfile?.username || 'Template Library';
+  const ownerName = resolvePublicTemplateOwnerName(template) || 'Template Library';
   const TypeIcon = template.type === 'recipe' ? List : FileText;
   const lastUpdated = template.updatedAt || template.createdAt;
   const updatedDate = formatLocalDate(lastUpdated);

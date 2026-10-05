@@ -10,6 +10,12 @@
 
 - [x] The sitemaps list public Organization Templates under the Creator's username:
   `publicTemplateCondition` in `functions/sitemap/shared.ts` (commit 7e2befeb).
+- [x] Since #232's PR 3 (2026-10-05) they are listed under their Organization's handle, while
+  the Organization is active, never the Creator's username (`templateOwnerHandle`). The
+  proposed migration below predates that: it still needs a trigger on `teams` that bumps
+  `templates` and `categories` when an Organization with public Templates changes its slug or
+  is archived, and its Creator branches for Organization rows (`sitemap_users_update_owner`,
+  `sitemap_users_delete`) are no longer needed. Rework it before asking for approval.
 - [ ] Human approval (escalate): the migration below writes to the triggers and
   revision tables on staging and production D1.
 - [ ] Land the migration with the next free number in `db/migrations/`, and the

@@ -1,6 +1,7 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { uniqueCategoryNames } from '@/lib/categorySlug';
+import { resolvePublicTemplateOwnerName } from '@/lib/repoTemplateCatalog';
 import { buildCategorySlug, findCategoryNameByLegacySlug } from '@/lib/routes';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { getTemplateRecencyTime } from '@/lib/templates/templateRecency';
@@ -22,7 +23,7 @@ export const getTemplateSectionCount = (
 
 export const getTemplateOwnerLabel = (
   template: ChecklistTemplate,
-): string => template.ownerProfile?.full_name ?? template.ownerProfile?.username ?? 'Community';
+): string => resolvePublicTemplateOwnerName(template) ?? 'Community';
 
 const getTemplateSearchText = (template: ChecklistTemplate): string =>
   [

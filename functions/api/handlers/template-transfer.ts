@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { Env } from '../types';
@@ -29,6 +29,16 @@ const editConflict = (expectedVersion: number, currentVersion: number | null) =>
     details: { expectedVersion, currentVersion },
   });
 
+async function organizationHasHandle(db: TemplateDb, teamId: string): Promise<boolean> {
+  const { teams } = schema;
+  const [team] = await db
+    .select({ slug: teams.slug })
+    .from(teams)
+    .where(and(eq(teams.id, teamId), isNull(teams.archived_at)))
+    .limit(1);
+  return Boolean(team?.slug?.trim());
+}
+
 export async function transferTemplate(
   request: Request,
   env: Env,
@@ -52,11 +62,13 @@ export async function transferTemplate(
   if (!ownedPersonally) {
     return jsonError('Only your own Personal Templates can be transferred.', 403, { code: 'not_transferable' });
   }
-  if (existing.is_public) {
-    return jsonError('Make the Template private before transferring it to an Organization.', 409, { code: 'template_public' });
-  }
   const accessError = await assertTeamTemplateCreateAccess(env, teamId, userId);
   if (accessError) return accessError;
+  if (existing.is_public && !(await organizationHasHandle(db, teamId))) {
+    return jsonError('Give the Organization a slug before moving a public Template to it.', 409, {
+      code: 'organization_handle_required',
+    });
+  }
 
   const currentVersion = typeof existing.version === 'number' ? existing.version : 1;
   if (expectedVersion !== currentVersion) return editConflict(expectedVersion, currentVersion);
@@ -90,8 +102,6 @@ export async function transferTemplate(
     isNull(templates.deleted_at),
     eq(templates.version, currentVersion),
   ];
-  const privateTemplate = or(eq(templates.is_public, false), isNull(templates.is_public));
-  if (privateTemplate) stillTransferable.push(privateTemplate);
   if (capacity) stillTransferable.push(templateCapacityAvailableSql(capacity));
   const guard = and(...stillTransferable);
   if (!guard) return jsonError('Template not found', 404);

@@ -161,20 +161,21 @@ describe("client and server generateSlug, which must agree so a new template's p
 });
 
 describe('resolveTemplateEditorOwnerSlug', () => {
-  it('uses the signed-in user for a new template', () => {
+  it("uses the handle a new template is created under: the signed-in user's, or the active Organization's", () => {
     expect(
-      resolveTemplateEditorOwnerSlug({ isNew: true, loadedOwnerSlug: 'other', viewerUsername: ' jane ' }),
+      resolveTemplateEditorOwnerSlug({ isNew: true, loadedOwnerSlug: 'other', newTemplateOwnerHandle: ' jane ' }),
     ).toBe('jane');
-    expect(resolveTemplateEditorOwnerSlug({ isNew: true, viewerUsername: '' })).toBeNull();
+    expect(resolveTemplateEditorOwnerSlug({ isNew: true, newTemplateOwnerHandle: 'Acme-Launch' })).toBe('Acme-Launch');
+    expect(resolveTemplateEditorOwnerSlug({ isNew: true, newTemplateOwnerHandle: '' })).toBeNull();
     expect(resolveTemplateEditorOwnerSlug({ isNew: true })).toBeNull();
   });
 
-  it("uses a loaded template's creator, not the person editing it, so a member editing a teammate's template sees the teammate's URL", () => {
+  it("uses a loaded template's Template Owner, not the person editing it, so a member editing an Organization's template sees the Organization's URL", () => {
     expect(
-      resolveTemplateEditorOwnerSlug({ isNew: false, loadedOwnerSlug: 'teammate', viewerUsername: 'jane' }),
-    ).toBe('teammate');
+      resolveTemplateEditorOwnerSlug({ isNew: false, loadedOwnerSlug: 'Acme-Launch', newTemplateOwnerHandle: 'jane' }),
+    ).toBe('Acme-Launch');
     expect(
-      resolveTemplateEditorOwnerSlug({ isNew: false, loadedOwnerSlug: null, viewerUsername: 'jane' }),
+      resolveTemplateEditorOwnerSlug({ isNew: false, loadedOwnerSlug: null, newTemplateOwnerHandle: 'jane' }),
     ).toBeNull();
   });
 });

@@ -48,8 +48,8 @@ const CURRENT_KEY = 'avatars/u1/old.png';
 const NEW_URL = '/api/uploads/file?key=avatars%2Fu1%2Fnew.png';
 const NEW_KEY = 'avatars/u1/new.png';
 
-function render(onAvatarUpdate = vi.fn()) {
-  const tree = AvatarUpload({ currentAvatarUrl: CURRENT_URL, onAvatarUpdate });
+function render(onAvatarUpdate = vi.fn(), saveAvatar?: (avatarUrl: string | null) => Promise<string | null>) {
+  const tree = AvatarUpload({ currentAvatarUrl: CURRENT_URL, onAvatarUpdate, ...(saveAvatar ? { saveAvatar } : {}) });
   const input = findElement(tree, (element) => element.props.type === 'file');
   const removeButton = findByAriaLabel(tree, 'Remove avatar');
   assert.exists(input, 'the file input');
@@ -161,6 +161,29 @@ describe('AvatarUpload', () => {
     expect(prepareAvatarImage).toHaveBeenCalledWith(photo);
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'avatars', file: preparedAvatar });
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('saves through the save it is given, as an Organization avatar does, never the signed-in account', async () => {
+    const saveAvatar = vi.fn().mockResolvedValue(null);
+    const view = render(vi.fn(), saveAvatar);
+
+    await view.selectFile(png());
+    await view.remove();
+
+    expect(saveAvatar.mock.calls).toEqual([[NEW_URL], [null]]);
+    expect(authClient.updateUser).not.toHaveBeenCalled();
+    expect(refreshProfile).not.toHaveBeenCalled();
+    expect(api.deleteFromR2).toHaveBeenCalledWith(CURRENT_KEY);
+  });
+
+  it('deletes the new upload when that save is refused, and keeps it when the save fails in a way that may have applied', async () => {
+    await render(vi.fn(), vi.fn().mockResolvedValue('Avatar image must be a URL.')).selectFile(png());
+    expect(api.deleteFromR2).toHaveBeenCalledWith(NEW_KEY);
+    expect(toast.error).toHaveBeenCalledWith('Avatar image must be a URL.');
+
+    vi.mocked(api.deleteFromR2).mockClear();
+    await render(vi.fn(), vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))).selectFile(png());
+    expect(api.deleteFromR2).not.toHaveBeenCalled();
   });
 
   it('accepts only the image types the API stores for avatars', async () => {

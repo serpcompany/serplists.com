@@ -4,6 +4,7 @@ import { lintSingleTemplateSource, lintTemplatePair, lintYamlTemplateBundle, typ
 
 const EXCLUDED_DIRS = new Set([
   ".git",
+  ".claude",
   "node_modules",
   "dist",
   "coverage",

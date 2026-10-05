@@ -30,6 +30,7 @@ dist-ssr
 out
 *.vsix
 .claude/settings.local.json
+.claude/worktrees/
 CLAUDE.md
 CLAUDE.local.md
 

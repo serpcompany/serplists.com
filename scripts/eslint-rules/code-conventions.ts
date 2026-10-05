@@ -242,6 +242,8 @@ export const E2E_TEMPLATE_PAGES = [
   "admin/internal-publishing-checklist",
   "admin/shared-growth-launch-checklist",
   "jane/client-reporting-qa-checklist",
+  "serp-growth-team/shared-growth-launch-checklist",
+  "local-seo-client-team/client-reporting-qa-checklist",
   "serp/ultimate-camping-checklist",
   "serp/full-website-launch-qa-checklist",
 ];

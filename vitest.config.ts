@@ -22,6 +22,7 @@ const NEVER_TEST_FILES = [
   '**/playwright-report/**',
   '**/test-results/**',
   'tests/e2e/**',
+  '.claude/worktrees/**',
 ];
 
 const workerLimit = testWorkerLimit(process.env, availableParallelism());

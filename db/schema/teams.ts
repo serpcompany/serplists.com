@@ -13,6 +13,8 @@ export const teams = sqliteTable(
     created_at: text("created_at").notNull(),
     updated_at: text("updated_at"),
     archived_at: text("archived_at"),
+    avatar_url: text("avatar_url"),
+    description: text("description"),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

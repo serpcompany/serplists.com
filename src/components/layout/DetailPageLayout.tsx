@@ -48,10 +48,10 @@ export function DetailPageLayout({
           {media ?? (icon ? <IconTile size="lg">{icon}</IconTile> : null)}
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-3xl font-semibold tracking-tight text-balance wrap-break-word sm:text-4xl">{title}</h1>
-            {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+            {subtitle ? <p className="text-sm wrap-anywhere text-muted-foreground">{subtitle}</p> : null}
           </div>
           {description ? (
-            <p className="text-base whitespace-pre-line text-pretty text-muted-foreground sm:text-lg">
+            <p className="text-base whitespace-pre-line text-pretty wrap-anywhere text-muted-foreground sm:text-lg">
               {description}
             </p>
           ) : null}

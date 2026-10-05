@@ -1,5 +1,5 @@
 import React, { act } from 'react';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -18,6 +18,7 @@ type TeamWorkspace = {
   name: string;
   role: 'owner' | 'admin';
   slug: string | null;
+  description?: string | null;
 };
 
 type UpdateTeam = (typeof api)['updateTeam'];
@@ -125,6 +126,29 @@ const organizationSettingsForm = () => {
 
 const nameField = () => inputNamed('Organization name', organizationSettingsForm());
 const slugField = () => inputNamed('Slug', organizationSettingsForm());
+const descriptionField = () => {
+  const field = within(organizationSettingsForm()).getByLabelText('Description');
+  if (!(field instanceof HTMLTextAreaElement)) throw new Error('The description field is not a textarea');
+  return field;
+};
+
+const serverSaved = (team: { name: string; slug: string; description?: string | null }) => ({
+  success: true as const,
+  team: {
+    id: 'team-1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    created_by_user_id: 'user-1',
+    membership: { id: 'member-1', status: 'active' as const, role: 'owner' as const },
+    ...team,
+  },
+});
+
+const submitTheSettingsForm = async () => {
+  await act(async () => {
+    fireEvent.submit(organizationSettingsForm());
+  });
+  await renderWithCurrentWorkspace();
+};
 
 describe('TeamSettingsSection keeps what the user typed in the Organization name and slug when the context rebuilds the active Organization object', () => {
   it('keeps a typed name when Make owner patches the role', async () => {
@@ -175,29 +199,32 @@ describe('TeamSettingsSection keeps what the user typed in the Organization name
   });
 
   it('shows what the server saved after Save, even when it adjusted the slug, leaving nothing to save', async () => {
-    workspace.updateTeam.mockResolvedValue({
-      success: true,
-      team: {
-        id: 'team-1',
-        name: 'Acme Marketing',
-        slug: 'acme-mkt-2',
-        created_at: '2026-01-01T00:00:00.000Z',
-        created_by_user_id: 'user-1',
-        membership: { id: 'member-1', status: 'active', role: 'owner' },
-      },
-    });
+    workspace.updateTeam.mockResolvedValue(serverSaved({ name: 'Acme Marketing', slug: 'acme-mkt-2' }));
     await mount();
     await typeInto(nameField(), ' Acme Marketing ');
     await typeInto(slugField(), 'acme-mkt');
 
-    await act(async () => {
-      fireEvent.submit(organizationSettingsForm());
-    });
-    await renderWithCurrentWorkspace();
+    await submitTheSettingsForm();
 
     expect(workspace.updateTeam).toHaveBeenCalledWith('team-1', { name: 'Acme Marketing', slug: 'acme-mkt' });
     expect(nameField().value).toBe('Acme Marketing');
     expect(slugField().value).toBe('acme-mkt-2');
+    expect(saveButton().getAttribute('disabled')).not.toBeNull();
+  });
+
+  it('keeps a typed description through a rebuild, then saves it trimmed and shows what the server stored', async () => {
+    workspace.updateTeam.mockResolvedValue(serverSaved({ name: 'Acme', slug: 'acme', description: 'Paid search agency' }));
+    await mount();
+    await typeInto(descriptionField(), ' Paid search agency ');
+
+    workspace.patchTeam('team-1', { role: 'admin' });
+    await renderWithCurrentWorkspace();
+    expect(descriptionField().value).toBe(' Paid search agency ');
+
+    await submitTheSettingsForm();
+
+    expect(workspace.updateTeam).toHaveBeenCalledWith('team-1', { description: 'Paid search agency' });
+    expect(descriptionField().value).toBe('Paid search agency');
     expect(saveButton().getAttribute('disabled')).not.toBeNull();
   });
 });

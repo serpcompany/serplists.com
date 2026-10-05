@@ -59,6 +59,7 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
         id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, email TEXT,
         email_verified INTEGER, created_at TEXT NOT NULL, updated_at TEXT, auth_updated_at INTEGER
       );
+      CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT, archived_at TEXT);
       CREATE TABLE templates (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL, owner_type TEXT NOT NULL,
         team_id TEXT, is_public INTEGER, deleted_at TEXT, created_at TEXT NOT NULL,

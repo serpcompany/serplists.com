@@ -11,8 +11,9 @@ import { getAuthEmailPolicy, isProductionAuthPolicy } from './utils/auth-policy'
 import { checkRequestBodyLimit } from './utils/body-limit';
 import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE, blockedTestEmailDomain } from './utils/test-email-block';
-import { 
-  handleProfileByUsername, 
+import {
+  handleProfileByHandle,
+  handleProfileByUsername,
   handleProfileById
 } from './handlers/auth';
 import { handleTemplates } from './handlers/templates';
@@ -204,6 +205,8 @@ async function respondToRequest(context: { request: Request; env: Env }, request
     } else if (path.startsWith('auth')) {
       const auth = createBetterAuth(env, request);
       response = await auth.handler(request);
+    } else if (path === 'profiles/by-handle') {
+      response = await handleProfileByHandle(request, env);
     } else if (path === 'profiles/by-username') {
       response = await handleProfileByUsername(request, env);
     } else if (path === 'profiles/by-id') {

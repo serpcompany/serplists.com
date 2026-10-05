@@ -50,7 +50,10 @@ export const teamsApi = {
     return apiRequest(`/teams/${encodeURIComponent(teamId)}`, teamDetailSchema);
   },
 
-  async updateTeam(teamId: string, payload: { name?: string; slug?: string }) {
+  async updateTeam(
+    teamId: string,
+    payload: { name?: string; slug?: string; description?: string | null; avatar_url?: string | null },
+  ) {
     return apiRequest(`/teams/${encodeURIComponent(teamId)}`, updatedTeamSchema, {
       method: 'PUT',
       body: JSON.stringify(payload),

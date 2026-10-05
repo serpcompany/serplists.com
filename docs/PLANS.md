@@ -26,6 +26,9 @@ have not been updated in 30 days.
   amplification.
 - [Public handles](exec-plans/active/public-handles.md): one case-insensitive handle namespace
   for Users and Organizations (issue #233), in two PRs with a staging migration between them.
+- [Organization public profiles](exec-plans/active/organization-profiles.md): an Organization's
+  avatar, description and public profile at `/profile/:handle`, and its Templates' URLs there
+  (issue #232), in one PR.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):

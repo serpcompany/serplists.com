@@ -45,22 +45,22 @@ describe('transferTemplateToOrganization', () => {
     expect(result).toEqual({ kind: 'error', message: 'This template changed elsewhere. It was reloaded; try again.' });
   });
 
-  it("shows the server's reason when the Organization is at its Template limit or the Template is public", async () => {
+  it("shows the server's reason when the Organization is at its Template limit or has no slug for a public Template", async () => {
     const limitReached = createApiError(403, {
       code: 'limit_reached',
       error: 'This Organization has reached its Template limit.',
       details: { context: 'organization', resource: 'templates' },
     });
-    const templatePublic = createApiError(409, { code: 'template_public', error: 'Make the Template private before transferring it to an Organization.' });
+    const organizationWithoutSlug = createApiError(409, { code: 'organization_handle_required', error: 'Give the Organization a slug before moving a public Template to it.' });
 
     const refusedWith = (error: unknown) =>
       transferTemplateToOrganization({ apiClient: apiClientAnswering(vi.fn().mockRejectedValue(error)), onTemplateChange: vi.fn(), teamId: 'org-acme', template: privateTemplate });
 
     const atLimit = await refusedWith(limitReached);
-    const isPublic = await refusedWith(templatePublic);
+    const withoutSlug = await refusedWith(organizationWithoutSlug);
 
     expect(atLimit).toEqual({ kind: 'error', message: 'This Organization has reached its Template limit.' });
-    expect(isPublic).toEqual({ kind: 'error', message: 'Make the Template private before transferring it to an Organization.' });
+    expect(withoutSlug).toEqual({ kind: 'error', message: 'Give the Organization a slug before moving a public Template to it.' });
   });
 
   it('sends nothing when no Template is loaded', async () => {

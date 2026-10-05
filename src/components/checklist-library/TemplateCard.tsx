@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,
+  resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
 import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { countTemplateItems } from '@/lib/templates/templateItemCount';
@@ -35,7 +36,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
   const sectionCount = getTemplateSectionCount(template);
   const itemCount = countTemplateItems(template);
   const ownerLabel = getTemplateOwnerLabel(template);
-  const ownerHandle = template.ownerProfile?.username;
+  const ownerHandle = resolvePublicTemplateOwnerSlug(template);
   const categories = uniqueCategoryNames(template.categories ?? []);
   const templatePath = buildCanonicalPublicTemplatePath({
     ...template,

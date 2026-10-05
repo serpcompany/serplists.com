@@ -35,6 +35,7 @@ type Transferable = Pick<ChecklistTemplate, 'isPublic' | 'ownerType' | 'teamId' 
 const personalTemplate: Transferable = { isPublic: false, ownerType: 'user', teamId: undefined, title: 'Launch Playbook', userId: 'user-1' };
 
 const loginRequired = vi.fn();
+const navigate = vi.fn();
 
 function TransferHarness(props: {
   organizations?: readonly TeamSummary[];
@@ -44,6 +45,7 @@ function TransferHarness(props: {
   const transfer = useTemplateTransfer({
     beginVisit: () => ({ isCurrent: () => true }),
     loginRequired,
+    navigate,
     organizations: props.organizations ?? ORGANIZATIONS,
     template: props.template ?? personalTemplate,
     transfer: props.transfer,
@@ -118,6 +120,7 @@ describe('Transfer to Organization on a Template page', () => {
     });
 
     expect(toast.success).toHaveBeenCalledWith('Template transferred to Acme');
+    expect(navigate).toHaveBeenCalledWith('/dashboard/organization/org-acme/templates/tpl-1/');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -133,13 +136,15 @@ describe('Transfer to Organization on a Template page', () => {
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Transfer' })).toBeTruthy();
   });
 
-  it('asks to make a public Template private first, without offering the transfer', async () => {
-    const transfer = vi.fn();
+  it('transfers a public Template too, saying first that its public page moves and its current link redirects', async () => {
+    const transfer = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'tpl-1', teamId: 'org-acme' });
     await renderSettled(<TransferHarness template={{ ...personalTemplate, isPublic: true }} transfer={transfer} />);
 
     const dialog = await openTheTransferDialog();
+    expect(dialog.textContent).toContain("Its public page moves to the Organization's profile, and its current link redirects there.");
+    await clickTransfer(dialog);
 
-    expect(dialog.textContent).toContain('Make "Launch Playbook" private first');
-    expect(within(dialog).queryByRole('button', { name: 'Transfer' })).toBeNull();
+    expect(transfer).toHaveBeenCalledWith('org-acme');
+    expect(navigate).toHaveBeenCalledWith('/dashboard/organization/org-acme/templates/tpl-1/');
   });
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { templatePackModules } from '@/data/public-template-packs';
+import { isOrganizationTemplate } from '@/lib/templates/templateOwnership';
 import { parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -101,9 +102,24 @@ export const getRepoCatalogCreatedAt = (
     : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
 };
 
-export const resolvePublicTemplateOwnerSlug = (
-  template: Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile'>,
-): string | null => {
+type PublicTemplateOwnerFields = Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile' | 'owner' | 'ownerType' | 'teamId'>;
+
+const organizationOf = (template: PublicTemplateOwnerFields) =>
+  template.owner?.type === 'team' && 'publicHandle' in template.owner ? template.owner : null;
+
+export const resolvePublicTemplateOwnerName = (template: PublicTemplateOwnerFields): string | null => {
+  if (isOrganizationTemplate(template)) {
+    const organization = organizationOf(template);
+    return organization?.displayName?.trim() || organization?.publicHandle?.trim() || null;
+  }
+  return template.ownerProfile?.full_name?.trim() || template.ownerProfile?.username?.trim() || null;
+};
+
+export const resolvePublicTemplateOwnerSlug = (template: PublicTemplateOwnerFields): string | null => {
+  if (isOrganizationTemplate(template)) {
+    return organizationOf(template)?.publicHandle?.trim() || null;
+  }
+
   const username = template.ownerProfile?.username?.trim();
 
   if (username) {

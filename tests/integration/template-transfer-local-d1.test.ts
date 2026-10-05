@@ -21,11 +21,13 @@ async function seed(db: D1Database) {
     team.bind("org-free", "Free Org", "free-org", now),
     team.bind("org-runner", "Runner Org", "runner-org", now),
     team.bind("org-other", "Other Org", "other-org", now),
+    team.bind("org-no-slug", "No Slug Org", null, now),
     db.prepare("INSERT INTO team_entitlement_overrides (team_id, plan, note, created_at) VALUES ('org-paid', 'team', 'test', ?)").bind(now),
     member.bind("m-1", "org-paid", "user-a", "editor", now),
     member.bind("m-2", "org-free", "user-a", "owner", now),
     member.bind("m-3", "org-runner", "user-a", "runner", now),
     member.bind("m-4", "org-paid", "user-b", "viewer", now),
+    member.bind("m-5", "org-no-slug", "user-a", "editor", now),
     template.bind("t-private", "user-a", "Launch Playbook", items, 0, now, "user", null, "user-a", "launch-playbook"),
     template.bind("t-limit", "user-a", "Limit Playbook", items, 0, now, "user", null, "user-a", "limit-playbook"),
     template.bind("t-public", "user-a", "Public Playbook", items, 1, now, "user", null, "user-a", "public-playbook"),
@@ -99,14 +101,25 @@ describe.sequential("transferring a Personal Template to an Organization, agains
     expect(await inPersonal.text()).not.toContain("t-private");
   });
 
-  it("refuses a public Template until it is made private, an Organization's Template, and someone else's", async () => {
-    const publicOne = await transfer("user-a", "t-public", { teamId: "org-paid", expected_version: 3 });
+  it("refuses an Organization's Template and someone else's", async () => {
     const organizationOne = await transfer("user-a", "t-org", { teamId: "org-paid", expected_version: 3 });
     const someoneElses = await transfer("user-a", "t-bob", { teamId: "org-paid", expected_version: 3 });
 
-    expect([publicOne.status, organizationOne.status, someoneElses.status]).toEqual([409, 403, 404]);
-    expect(errorBody.parse(await publicOne.json()).code).toBe("template_public");
+    expect([organizationOne.status, someoneElses.status]).toEqual([403, 404]);
     expect(errorBody.parse(await organizationOne.json()).code).toBe("not_transferable");
+  });
+
+  it("moves a public Template too, still public under the Organization, but only to an Organization with a slug, so it keeps a public URL", async () => {
+    const noHandle = await transfer("user-a", "t-public", { teamId: "org-no-slug", expected_version: 3 });
+
+    expect(noHandle.status).toBe(409);
+    expect(errorBody.parse(await noHandle.json()).code).toBe("organization_handle_required");
+    expect(await templateRow("t-public")).toMatchObject({ owner_type: "user", team_id: null, is_public: 1 });
+
+    const moved = await transfer("user-a", "t-public", { teamId: "org-paid", expected_version: 3 });
+
+    expect(moved.status).toBe(200);
+    expect(await templateRow("t-public")).toMatchObject({ owner_type: "team", team_id: "org-paid", is_public: 1 });
   });
 
   it("refuses an Organization where the user cannot add Templates, or is not a member", async () => {

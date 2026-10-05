@@ -170,6 +170,8 @@ export const REQUIRED_D1_SCHEMA: ByTable<readonly string[]> = Object.freeze({
     "created_at",
     "updated_at",
     "archived_at",
+    "avatar_url",
+    "description",
   ],
   team_members: [
     "id",

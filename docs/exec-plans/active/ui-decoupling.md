@@ -20,7 +20,8 @@ any more, and the rule has no baseline.
   `UserInfo.tsx` was dead code and was deleted on 2026-09-27.
   `TemplateBackup.tsx` stopped calling `api` on 2026-09-28 (billing status through
   `useBillingStatus`, export through `features/template-backup/exportTemplatePack.ts`),
-  and so did `UserProfile.tsx` (profile loading through `features/profile/loadUserProfile.ts`).
+  and so did `UserProfile.tsx`, now `PublicProfile.tsx` (profile loading through
+  `features/profile/loadPublicProfile.ts`).
   The last five stopped on 2026-09-30: `AgentAccessSection.tsx` (Run Keys through
   `features/agent-access/useRunKeys.ts`), `BillingSection.tsx`
   (`features/billing/billingSettings.ts` and `features/billing/pricingBilling.ts`),
@@ -123,7 +124,8 @@ High-value first targets:
 - `src/views/ChecklistRun.tsx`
 - `src/views/TemplateDetail.tsx`
 - `src/views/TemplateEditor.tsx`
-- `src/views/UserProfile.tsx` (done 2026-09-28: loads through `src/features/profile/loadUserProfile.ts`)
+- `src/views/PublicProfile.tsx`, `UserProfile.tsx` until 2026-10-05 (done 2026-09-28: loads through
+  `src/features/profile/loadPublicProfile.ts`)
 
 Expected result:
 

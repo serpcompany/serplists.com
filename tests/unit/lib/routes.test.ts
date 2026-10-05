@@ -203,6 +203,20 @@ describe('routes', () => {
     expect(resolvePublicTemplateOwnerSlug(baseTemplate)).toBeNull();
   });
 
+  it("resolves an Organization Template to its Organization's handle, and never falls back to its Creator", () => {
+    const createdByAlice = { ...baseTemplate, ownerProfile: { username: 'alice' }, ownerType: 'team' as const, teamId: 'org-1' };
+
+    expect(
+      resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team', publicHandle: ' Acme-Launch ', displayName: 'Acme' } }),
+    ).toBe('Acme-Launch');
+    expect(buildCanonicalPublicTemplatePath({ ...createdByAlice, slug: 'launch', owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: null } })).toBe(
+      '/profile/Acme-Launch/launch/',
+    );
+    expect(resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team' } })).toBeNull();
+    expect(resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team', teamId: 'org-1', publicHandle: null, displayName: null } })).toBeNull();
+    expect(resolvePublicTemplateOwnerSlug(createdByAlice)).toBeNull();
+  });
+
   it('builds canonical public template paths from template records', () => {
     expect(
       buildCanonicalPublicTemplatePath({
