@@ -2,6 +2,7 @@ import { getTableName, sql, type SQL } from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { z } from 'zod';
 
+import { readRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { schema } from '../db';
 import { serializeChecklistRun, type RunResponseRow } from './checklist-runs';
 import { runSourceTemplateUsableSql } from './template-access';
@@ -19,7 +20,7 @@ type DetailProvenanceColumns = ListProvenanceColumns & {
   provenance_assigned_to: string | null;
   provenance_completed_by: string | null;
   provenance_owner_name: string | null;
-  provenance_template_title: string | null;
+  provenance_template: string | null;
 };
 
 const actorSchema = z.object({ userId: z.string(), name: z.string().nullable(), username: z.string().nullable() });
@@ -28,6 +29,11 @@ const firstEventSchema = z.object({
   action: z.string(),
   metadata: z.string().nullable(),
   actor: z.unknown(),
+});
+
+const sourceTemplateSchema = z.object({
+  title: z.string().nullable(),
+  requiredTools: z.string().nullable(),
 });
 
 const creationMetadataSchema = z.object({
@@ -78,8 +84,9 @@ export function runProvenanceSelect(callerUserId: string) {
         THEN (SELECT ${qualified(teams.name)} FROM ${teams} WHERE ${qualified(teams.id)} = ${qualified(checklistRuns.team_id)})
       ELSE (SELECT ${qualified(users.name)} FROM ${users} WHERE ${qualified(users.id)} = ${qualified(checklistRuns.user_id)})
     END`,
-    provenance_template_title: sql<string | null>`(
-      SELECT ${qualified(templates.title)} FROM ${templates}
+    provenance_template: sql<string | null>`(
+      SELECT json_object('title', ${qualified(templates.title)}, 'requiredTools', ${qualified(templates.required_tools)})
+      FROM ${templates}
       WHERE ${qualified(templates.id)} = ${qualified(checklistRuns.template_id)} AND ${runSourceTemplateUsableSql(callerUserId)}
     )`,
   };
@@ -92,6 +99,13 @@ function parseJson(text: string | null | undefined): unknown {
   } catch {
     return null;
   }
+}
+
+function sourceTemplateOf(value: string | null) {
+  const parsed = sourceTemplateSchema.safeParse(parseJson(value));
+  return parsed.success
+    ? { title: parsed.data.title, requiredTools: readRequiredTools(parsed.data.requiredTools) }
+    : { title: null, requiredTools: [] };
 }
 
 function actorOf(value: unknown): RunActor | null {
@@ -138,7 +152,7 @@ export function serializeRunWithProvenance(row: RunResponseRow & DetailProvenanc
     provenance_assigned_to,
     provenance_completed_by,
     provenance_owner_name,
-    provenance_template_title,
+    provenance_template,
     ...run
   } = row;
   return {
@@ -147,7 +161,7 @@ export function serializeRunWithProvenance(row: RunResponseRow & DetailProvenanc
       owner: run.team_id
         ? { type: 'organization' as const, id: run.team_id, name: provenance_owner_name }
         : { type: 'personal' as const, id: run.user_id, name: provenance_owner_name },
-      template: { id: run.template_id, title: provenance_template_title, version: run.template_version },
+      template: { id: run.template_id, ...sourceTemplateOf(provenance_template), version: run.template_version },
       ...creationOf(provenance_first_event),
       createdBy: actorOf(provenance_created_by),
       startedBy: actorOf(provenance_started_by),

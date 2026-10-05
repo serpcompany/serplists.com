@@ -50,6 +50,9 @@ const withContent = (content: Record<string, unknown>) =>
 const withItem = (item: Record<string, unknown>) =>
   pack([{ title: 'T', sections: [{ title: 'S', items: [item] }] }]);
 
+const withTools = (...requiredTools: unknown[]) =>
+  pack([{ title: 'T', requiredTools, sections: [{ title: 'S', items: [{ title: 'I' }] }] }]);
+
 const ACCEPTED: Array<[string, unknown]> = [
   ['a text block with no value', withContent({ type: 'text' })],
   ['a text block with an empty value', withContent({ type: 'text', value: '' })],
@@ -64,6 +67,9 @@ const ACCEPTED: Array<[string, unknown]> = [
   ['unknown keys on a content block', withContent({ type: 'text', value: 'x', notes: 'run note' })],
   ['an unknown key on a section', pack([{ title: 'T', sections: [{ title: 'S', extra: 1, items: [{ title: 'I' }] }] }])],
   ['an unknown key on a template and the pack', pack([{ title: 'T', owner: 'x', sections: [{ title: 'S', items: [{ title: 'I' }] }] }], { source: 'x' })],
+  ['required and optional tools', withTools({ name: 'Timer', url: 'https://example.com', required: true }, { name: 'Deck', url: 'HTTP://example.com/a?b#c', required: false })],
+  ['a tool without its required flag', withTools({ name: 'Timer', url: 'https://example.com/timer' })],
+  ['an unknown key on a tool', withTools({ name: 'Timer', url: 'https://example.com', required: true, affiliate: 'x' })],
 ];
 
 const REJECTED: Array<[string, unknown]> = [
@@ -80,6 +86,12 @@ const REJECTED: Array<[string, unknown]> = [
   ['a section with no items', pack([{ title: 'T', sections: [{ title: 'S', items: [] }] }])],
   ['a template with no sections', pack([{ title: 'T', sections: [] }])],
   ['another schema version', { ...withItem({ title: 'I' }), schemaVersion: '1.0.0' }],
+  ['a tool with a script link', withTools({ name: 'Timer', url: 'javascript:alert(1)', required: true })],
+  ['a tool with a link that is not http or https', withTools({ name: 'Timer', url: 'ftp://example.com', required: true })],
+  ['a tool link with a space', withTools({ name: 'Timer', url: 'https://example.com/a b', required: true })],
+  ['a tool with a blank name', withTools({ name: '  ', url: 'https://example.com', required: true })],
+  ['a tool without a link', withTools({ name: 'Timer', required: true })],
+  ['a tool whose required flag is not true or false', withTools({ name: 'Timer', url: 'https://example.com', required: 'yes' })],
 ];
 
 describe('the published portable template JSON Schema accepts exactly what the importer accepts', () => {

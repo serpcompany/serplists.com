@@ -27,6 +27,7 @@ const frontmatterSchema = z.object({
   categories: z.unknown(),
   tags: z.unknown(),
   rules: z.unknown(),
+  requiredTools: z.unknown(),
 }).passthrough();
 const mediaBlockSchema = z.object({
   value: z.unknown(),
@@ -70,6 +71,7 @@ const buildFrontmatter = (template: PortableChecklistTemplate) => {
     ...(normalized.categories ? { categories: normalized.categories } : {}),
     ...(normalized.tags ? { tags: normalized.tags } : {}),
     ...(normalized.rules ? { rules: normalized.rules } : {}),
+    ...(normalized.requiredTools ? { requiredTools: normalized.requiredTools } : {}),
   };
 
   return `${FRONTMATTER_DELIMITER}\n${dumpYaml(frontmatter)}\n${FRONTMATTER_DELIMITER}`;
@@ -268,6 +270,7 @@ export const parseTemplateMarkdown = (markdown: string): PortableChecklistTempla
     ...(Array.isArray(frontmatter.categories) ? { categories: frontmatter.categories } : {}),
     ...(Array.isArray(frontmatter.tags) ? { tags: frontmatter.tags } : {}),
     ...(Array.isArray(frontmatter.rules) ? { rules: frontmatter.rules } : {}),
+    ...(Array.isArray(frontmatter.requiredTools) ? { requiredTools: frontmatter.requiredTools } : {}),
     sections,
   };
 

@@ -99,6 +99,7 @@ const normalizeImportTemplate = (
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
+    requiredTools: template.requiredTools,
     categories: normalizeCategoryList(template.categories ?? template.category),
     tags: normalizeStringArray(template.tags),
   };
@@ -128,6 +129,7 @@ const normalizePortableTemplate = (
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
+    requiredTools: template.requiredTools,
     categories: normalizeCategoryList(template.categories),
     tags: normalizeStringArray(template.tags),
   };
@@ -190,6 +192,7 @@ export const exportPortableTemplatesToJSON = (
     tags: normalizeStringArray(template.tags),
     sections: toPortableSections(template.sections),
     rules: template.rules,
+    requiredTools: template.requiredTools?.length ? template.requiredTools : undefined,
   }));
   const exported = results.flatMap((result) => (result.success ? [result.data] : []));
   const skippedTemplates = results.flatMap((result) =>

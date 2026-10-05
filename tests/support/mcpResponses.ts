@@ -29,6 +29,7 @@ export interface McpRecord extends Record<string, unknown> {
   templates?: unknown;
   run?: unknown;
   retiredItems?: unknown;
+  requiredTools?: unknown;
   operation?: unknown;
   result?: unknown;
   structuredContent?: unknown;

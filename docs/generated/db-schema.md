@@ -357,6 +357,7 @@ Indexes:
 | `updated_by_user_id` | text | yes |  | FK → users.id (on delete set null) |
 | `deleted_at` | text | yes |  |  |
 | `content_version` | integer | no | 1 |  |
+| `required_tools` | text | yes |  |  |
 
 Indexes:
 

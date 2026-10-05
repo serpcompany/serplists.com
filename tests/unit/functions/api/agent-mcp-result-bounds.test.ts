@@ -10,6 +10,7 @@ import {
   TEMPLATE_CONTENT_MAX_BYTES,
 } from "@/lib/schemas/contentLimits";
 import { TEMPLATE_DESCRIPTION_MAX, TEMPLATE_LIST_ITEM_MAX, TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_TITLE_MAX } from "@/lib/schemas/templateLimits";
+import { REQUIRED_TOOL_NAME_MAX, REQUIRED_TOOL_URL_MAX, REQUIRED_TOOLS_MAX } from "@/lib/schemas/requiredTools";
 import { mcpRunsPage, mcpTemplateResult, mcpTemplatesPage, resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText, MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse } from "../../../support/jsonText";
 import { readRunInFull } from "../../../support/runPages";
@@ -64,14 +65,29 @@ const largestTemplateHeader = () => ({
   tags: Array.from({ length: TEMPLATE_LIST_MAX_ITEMS }, (_, index) => `${index}${costliestJsonText(TEMPLATE_LIST_ITEM_MAX - 2)}`),
 });
 
-type StoredTemplateFields = { title?: string; description?: string; categories?: string[]; tags?: string[]; createdAt?: string };
+const largestRequiredTools = () =>
+  Array.from({ length: REQUIRED_TOOLS_MAX }, (_, index) => ({
+    name: `${index}${costliestJsonText(REQUIRED_TOOL_NAME_MAX - 2)}`,
+    url: `https://example.com/${index}/`.padEnd(REQUIRED_TOOL_URL_MAX, "界"),
+    required: index % 2 === 0,
+  }));
+
+type StoredTemplateFields = {
+  title?: string;
+  description?: string;
+  categories?: string[];
+  tags?: string[];
+  requiredTools?: unknown[];
+  createdAt?: string;
+};
 
 function insertTemplate(id: string, sections: unknown[], fields: StoredTemplateFields = {}) {
   d1.run(`INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, created_at, updated_at,
-      version, type, owner_type, team_id, created_by_user_id, content_version)
-    VALUES (?, 'user-1', ?, ?, ?, 0, ?, ?, ?, NULL, 1, 'checklist', 'user', NULL, 'user-1', 1)`,
+      version, type, owner_type, team_id, created_by_user_id, content_version, required_tools)
+    VALUES (?, 'user-1', ?, ?, ?, 0, ?, ?, ?, NULL, 1, 'checklist', 'user', NULL, 'user-1', 1, ?)`,
   id, fields.title ?? `SOP ${id}`, fields.description ?? null, JSON.stringify(sections),
-  JSON.stringify(fields.categories ?? []), JSON.stringify(fields.tags ?? []), fields.createdAt ?? NOW);
+  JSON.stringify(fields.categories ?? []), JSON.stringify(fields.tags ?? []), fields.createdAt ?? NOW,
+  fields.requiredTools ? JSON.stringify(fields.requiredTools) : null);
 }
 
 function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fields: { title?: string; createdAt?: string } = {}) {
@@ -152,9 +168,10 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
       ...maximumTemplateSections(),
       ...maximumTemplateSections().map((section) => ({ ...section, id: `old-${String(section.id)}` })),
     ];
-    insertTemplate("legacy", sectionsStoredBeforeTheContentLimit, largestTemplateHeader());
+    insertTemplate("legacy", sectionsStoredBeforeTheContentLimit, { ...largestTemplateHeader(), requiredTools: largestRequiredTools() });
     const { template, results } = await readTemplateInFull((args) => call("get_template", args), "legacy");
     expect(template.sections).toHaveLength(sectionsStoredBeforeTheContentLimit.length);
+    expect(template.requiredTools).toEqual(largestRequiredTools());
     return results;
   },
 

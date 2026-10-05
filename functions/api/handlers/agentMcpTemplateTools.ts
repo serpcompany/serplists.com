@@ -191,7 +191,8 @@ export const templateToolDefinitions = [
   },
   {
     name: "get_template",
-    description: "Read a personal template: its sections, tasks, subtasks, ids, and version. No result is larger "
+    description: "Read a personal template: its sections, tasks, subtasks, ids, version, and requiredTools (the "
+      + "tools a run of it needs, each with a name, a url, and required true or false). No result is larger "
       + "than 32KB, what MCP clients take from one call, so a larger template comes back as an outline instead "
       + "(sectionsOmitted, and outline: each section's id, title, taskCount, and bytes). Read a section with "
       + "sectionId, or one task with taskId. A section too large for one result comes back a page of tasks at a "
@@ -215,8 +216,9 @@ export const templateToolDefinitions = [
   },
   {
     name: "create_template",
-    description: "Create a private personal template. Returns it whole when it fits in one result (32KB); "
-      + "otherwise its fields without sections (sectionsOmitted), to read with get_template.",
+    description: "Create a private personal template, with no required tools (add them in SERP Lists). Returns it "
+      + "whole when it fits in one result (32KB); otherwise its fields without sections (sectionsOmitted), to read "
+      + "with get_template.",
     inputSchema: {
       type: "object",
       properties: {
@@ -249,7 +251,8 @@ export const templateToolDefinitions = [
       + "kept. Keep the id of every section, task, and subtask you keep so run progress follows it; new ones get "
       + "ids. Returns the template whole when it fits in one result (32KB), otherwise its fields with "
       + "sectionsOmitted and the section or task the operation changed; sectionId and taskId name it. "
-      + "In-progress private runs of the template pick up the change.",
+      + "In-progress private runs of the template pick up the change. The template's requiredTools are kept: "
+      + "they are edited in SERP Lists.",
     inputSchema: {
       type: "object",
       properties: {

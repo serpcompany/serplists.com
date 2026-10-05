@@ -76,7 +76,7 @@ describe.sequential("run provenance against local D1, from the columns and the f
     const { provenance } = await readAs("user-a", id);
     expect(provenance).toEqual({
       owner: { type: "personal", id: "user-a", name: alice.name },
-      template: { id: null, title: null, version: 1 },
+      template: { id: null, title: null, requiredTools: [], version: 1 },
       origin: "web",
       agentKeyName: null,
       authorizedBy: null,

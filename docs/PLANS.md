@@ -29,6 +29,8 @@ have not been updated in 30 days.
 - [Organization public profiles](exec-plans/active/organization-profiles.md): an Organization's
   avatar, description and public profile at `/profile/:handle`, and its Templates' URLs there
   (issue #232), in one PR.
+- [Required tools](exec-plans/active/required-tools.md): the tools a Template's Runs need, edited
+  in the Template editor and carried by packs and MCP (issue #241), in two PRs with migration `0031`.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):

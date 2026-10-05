@@ -9,6 +9,7 @@ import { templateOwnerProfile } from '../../../src/lib/schemas/templateOwnerProf
 import { log } from './logger';
 import { normalizeSectionsPayload } from './payloads';
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
+import { readRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { withStableTemplateIdentities } from './template-identities';
 import { isMissingRulesColumnError } from './template-writes';
 
@@ -29,6 +30,7 @@ export type TemplateRowColumns = Pick<
   'id' | 'items' | 'category' | 'tags' | 'seo_title' | 'seo_description' | 'type'
 > & TemplateOwnerColumns & {
   rules?: TemplateRow['rules'] | undefined;
+  required_tools?: TemplateRow['required_tools'] | undefined;
 };
 
 const nonBlank = (value: string | null | undefined): string | null => value?.trim() || null;
@@ -52,7 +54,7 @@ export function templateOwnerOf(template: TemplateOwnerColumns): TemplateOwner {
   };
 }
 
-export function getTemplateSelectColumns(includeRules: boolean) {
+export function getTemplateSelectColumns(includeRules: boolean, includeRequiredTools = false) {
   const { templates } = schema;
 
   return {
@@ -67,6 +69,7 @@ export function getTemplateSelectColumns(includeRules: boolean) {
     seo_title: templates.seo_title,
     seo_description: templates.seo_description,
     ...(includeRules ? { rules: templates.rules } : {}),
+    ...(includeRequiredTools ? { required_tools: templates.required_tools } : {}),
     owner_type: templates.owner_type,
     team_id: templates.team_id,
     created_by_user_id: templates.created_by_user_id,
@@ -98,7 +101,7 @@ export async function withRulesColumnFallback<T>(
 export async function findTemplateById(db: TemplateDb, templateId: string) {
   const { templates } = schema;
   const [template] = await withRulesColumnFallback((includeRules) =>
-    db.select(getTemplateSelectColumns(includeRules)).from(templates).where(eq(templates.id, templateId)).limit(1),
+    db.select(getTemplateSelectColumns(includeRules, true)).from(templates).where(eq(templates.id, templateId)).limit(1),
   );
   return template;
 }
@@ -125,11 +128,12 @@ export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
     }
   }
 
-  const { items, owner_team_slug, owner_team_name, owner_team_archived_at, ...columns } = template;
+  const { items, owner_team_slug, owner_team_name, owner_team_archived_at, required_tools, ...columns } = template;
   return {
     ...columns,
     sections,
     rules,
+    ...(required_tools === undefined ? {} : { requiredTools: readRequiredTools(required_tools) }),
     categories: normalizeStringArray(template.category),
     tags: normalizeStringArray(template.tags),
     seoTitle: template.seo_title ?? '',
@@ -157,6 +161,6 @@ export function selectWithTemplateOwner<Fields extends SelectedFields>(db: Templ
     .leftJoin(teams, and(eq(templates.owner_type, 'team'), eq(teams.id, templates.team_id)));
 }
 
-export function selectTemplatesWithOwner(env: Env, includeRules = true) {
-  return selectWithTemplateOwner(createDb(env), getTemplateSelectColumns(includeRules));
+export function selectTemplatesWithOwner(env: Env, includeRules = true, includeRequiredTools = false) {
+  return selectWithTemplateOwner(createDb(env), getTemplateSelectColumns(includeRules, includeRequiredTools));
 }

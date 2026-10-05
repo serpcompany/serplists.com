@@ -68,7 +68,7 @@ retried insert drops the column from the statement itself (`withoutColumns`).
 
 - `users`: auth identity and profile data.
 - `account`, `session`, `verification`: Better Auth persistence.
-- `templates`: Template metadata, JSON content, visibility, Public Profile routing, Resource Owner scope, attribution, and soft-delete state.
+- `templates`: Template metadata, JSON content, Required tools, visibility, Public Profile routing, Resource Owner scope, attribution, and soft-delete state.
 - `checklist_runs`: Run state, progress, share fields, Resource Owner scope, assignment/actor attribution, and soft-delete state.
 - `template_likes`: favorites.
 - `usage_analytics`: product event log (an `action` such as `template_created`, `checklist_started` or `checklist_completed`, with JSON `metadata`). Only the local seed writes it.
@@ -88,6 +88,13 @@ retried insert drops the column from the statement itself (`withoutColumns`).
 - `templates.category`: JSON array of category strings.
 - `templates.tags`: JSON array of tag strings.
 - `templates.rules`: template rule metadata.
+- `templates.required_tools`: the Template's Required tools, a JSON list of `{ name, url, required }`
+  (`0031`), or `NULL` for none. Writes are checked with `requiredToolsSchema` and reads parsed with
+  `readRequiredTools` (`src/lib/schemas/requiredTools.ts`), which skips an entry it cannot read
+  instead of failing the Template. Only the reads of one Template select it (by id or slug, the
+  copy, the export, the save's own read and MCP `get_template`), never the lists, which do not show
+  it ([D1 cost](d1-cost.md)). A Run shows its source Template's list through the same subquery and
+  access rule that name the source Template ([run provenance](#run-provenance)).
 - `checklist_runs.items`: sectioned run content with completion state.
 - `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
 - Audit rows record only writes that happened. Run and template writes guard their `UPDATE` (revision or version, owner scope, archive state), and a guarded `UPDATE` that loses a race matches no row without failing the batch. So each write inserts its audit row first, as `INSERT ... SELECT ... WHERE EXISTS` on the same condition (`auditedRunUpdate` in `functions/api/utils/checklist-runs.ts`; the template handlers do the same, and a template's version row and reconciled runs also require that audit row). A write that loses returns `409 edit_conflict`, or the not-found / not-archived answer a later request would get, and leaves no history.
@@ -176,10 +183,13 @@ by `functions/api/utils/run-provenance.ts`, with no migration:
 - The runs lists (`GET /api/checklists`, `/archived`) answer `{ origin, startedBy }` per Run,
   the two columns My Runs shows.
 - One Run (`GET /api/checklists/:id`) answers the whole provenance: `owner` (`personal` or
-  `organization`, with its id and name), `template` (id, the title when the caller may use
-  that Template, and the Run's version), `origin`, `agentKeyName` and `authorizedBy` (an MCP
+  `organization`, with its id and name), `template` (id, the title and `requiredTools` when the
+  caller may use that Template, else `null` and `[]`, and the Run's version), `origin`,
+  `agentKeyName` and `authorizedBy` (an MCP
   Run's Run Key name and the person whose key it is), and `createdBy`, `startedBy`,
-  `assignedTo` and `completedBy`.
+  `assignedTo` and `completedBy`. The source Template's title and Required tools come from one
+  `json_object` subquery on its primary key, guarded by `runSourceTemplateUsableSql`, so they
+  cost the row the title alone did.
 - `origin` is `web` or `mcp` when the Run's first audit event is its `checklist_run.created`
   with that `source` (the web app writes `web` since 2026-10-04, MCP has always written
   `mcp`), and `unknown` otherwise, never a guess. An actor is `{ userId, name, username }`.
@@ -361,6 +371,11 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   handle rule allows, refreshes the sitemaps like any other.
 - **Organization profiles.** `0030` added `teams.avatar_url` and `teams.description` for
   Organization public profiles ([Organizations](organizations.md)).
+- **Required tools.** `0031` added `templates.required_tools`, a nullable JSON column, for a
+  Template's Required tools (issue #241). A new column rather than a key in `items`, so a change
+  to the tools is not a checklist structure change and never stales Runs, and the lists can leave
+  it unread. It is additive: code that predates it never names it, and a save that leaves the
+  tools out keeps them ([Required tools plan](../exec-plans/active/required-tools.md)).
 
 ## Seeds
 

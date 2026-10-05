@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { readableRowsOf } from "./apiResponses";
 import { portableTemplateRuleSchema } from "./checklistSchema";
+import { requiredToolsSchema } from "./requiredTools";
 import { templateOwnerSchema } from "./templateOwner";
 
 const text = z.string().nullish();
@@ -24,6 +25,7 @@ export const apiTemplateSchema = z.object({
   seoDescription: text,
   seoUrl: text,
   rules: z.array(portableTemplateRuleSchema).nullish(),
+  requiredTools: requiredToolsSchema.optional().catch(undefined),
   sections: z.unknown(),
   items: z.unknown(),
   categories: z.array(z.string()).nullish(),

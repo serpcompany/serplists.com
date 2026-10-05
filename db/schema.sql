@@ -114,6 +114,7 @@ CREATE TABLE templates (
   created_at TEXT NOT NULL,
   updated_at TEXT,
   deleted_at TEXT,
+  required_tools TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 

@@ -56,6 +56,12 @@ export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) =
     })
     .join("");
 
+  const requiredToolsMarkup = normalized.requiredTools?.length
+    ? `<section class="section-card"><h2>Required tools</h2><ul class="card-meta">${normalized.requiredTools
+        .map((tool) => `<li><a href="${escapeHtml(tool.url)}">${escapeHtml(tool.name)}</a> <span>${tool.required ? "Required" : "Optional"}</span></li>`)
+        .join("")}</ul></section>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -232,7 +238,7 @@ export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) =
           : ""}
       </header>
       <div class="sections">
-        ${sectionMarkup}
+        ${requiredToolsMarkup}${sectionMarkup}
       </div>
     </main>
   </body>

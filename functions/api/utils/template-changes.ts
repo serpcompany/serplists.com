@@ -49,6 +49,7 @@ const COLUMN_NORMALIZERS: Record<string, (value: unknown) => unknown> = {
   seo_description: text,
   slug: text,
   rules: jsonList,
+  required_tools: jsonList,
   category: stringList,
   tags: stringList,
   is_public: (value) => value === true || value === 1,
@@ -69,6 +70,7 @@ const REQUEST_FIELDS_BY_COLUMN: Record<string, string[]> = {
   seo_title: ['seoTitle'],
   seo_description: ['seoDescription'],
   rules: ['rules'],
+  required_tools: ['requiredTools'],
   category: ['categories', 'category'],
   tags: ['tags'],
 };
@@ -87,7 +89,7 @@ export function validateChangedTemplateFields(
 }
 
 const CONTENT_FIELDS = [
-  'title', 'description', 'type', 'seoTitle', 'seoDescription', 'rules', 'sections', 'items',
+  'title', 'description', 'type', 'seoTitle', 'seoDescription', 'rules', 'requiredTools', 'sections', 'items',
   'categories', 'category', 'tags',
 ] as const;
 

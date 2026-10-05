@@ -1,4 +1,5 @@
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { RequiredTool } from "@/lib/schemas/requiredTools";
 import type { PublicTemplateOwner, TemplateOwner } from "@/lib/schemas/templateOwner";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
@@ -50,6 +51,7 @@ export type ChecklistTemplate = {
   seoDescription?: string | undefined;
   seoUrl?: string | undefined;
   rules?: TemplateRule[] | undefined;
+  requiredTools?: RequiredTool[] | undefined;
   categories?: string[];
   tags?: string[];
   version?: number | undefined;
@@ -101,7 +103,7 @@ export type RunProvenance = {
   origin: "web" | "mcp" | "unknown";
   startedBy: RunActor | null;
   owner?: { type: "personal" | "organization"; id: string; name: string | null } | undefined;
-  template?: { id: string | null; title: string | null; version: number } | undefined;
+  template?: { id: string | null; title: string | null; requiredTools?: RequiredTool[] | undefined; version: number } | undefined;
   agentKeyName?: string | null | undefined;
   authorizedBy?: RunActor | null | undefined;
   createdBy?: RunActor | null | undefined;

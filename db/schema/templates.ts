@@ -26,6 +26,7 @@ export const templates = sqliteTable("templates", {
   updated_by_user_id: text("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   deleted_at: text("deleted_at"),
   content_version: integer("content_version").notNull().default(1),
+  required_tools: text("required_tools"),
 }, (table) => [
   primaryKey({ columns: [table.id] }),
   uniqueIndex("idx_templates_slug_unique").on(table.slug),

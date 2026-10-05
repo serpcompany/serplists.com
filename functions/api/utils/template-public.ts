@@ -13,6 +13,7 @@ const PUBLIC_TEMPLATE_FIELDS = [
   'type',
   'sections',
   'rules',
+  'requiredTools',
   'categories',
   'tags',
   'seoTitle',

@@ -86,6 +86,7 @@ export const REQUIRED_D1_SCHEMA: ByTable<readonly string[]> = Object.freeze({
     "updated_at",
     "deleted_at",
     "content_version",
+    "required_tools",
   ],
   checklist_runs: [
     "id",

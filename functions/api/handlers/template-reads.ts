@@ -74,7 +74,7 @@ async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response>
 async function readActiveTemplate(env: Env, userId: string | null, matches: SQL): Promise<Response> {
   const { templates } = schema;
   const [template] = await withRulesColumnFallback((includeRules) =>
-    selectTemplatesWithOwner(env, includeRules)
+    selectTemplatesWithOwner(env, includeRules, true)
       .where(and(matches, isNull(templates.deleted_at)))
       .limit(1),
   );

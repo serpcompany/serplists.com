@@ -52,6 +52,7 @@ type NormalizedTemplate = {
   categories?: string[];
   tags?: string[];
   rules?: NormalizedRule[];
+  requiredTools?: NonNullable<PortableChecklistTemplate["requiredTools"]>;
 };
 
 const normalizeContents = (contents?: PortableContent[]) => {
@@ -135,6 +136,14 @@ export const normalizePortableTemplate = (template: PortableChecklistTemplate): 
       severity: rule.severity ?? "error",
       ...(trimOptionalString(rule.id) ? { id: trimOptionalString(rule.id) } : {}),
       ...(typeof rule.value === "undefined" ? {} : { value: rule.value }),
+    }));
+  }
+
+  if (Array.isArray(validated.requiredTools) && validated.requiredTools.length > 0) {
+    normalizedTemplate.requiredTools = validated.requiredTools.map((tool) => ({
+      name: tool.name.trim(),
+      url: tool.url,
+      required: tool.required,
     }));
   }
 

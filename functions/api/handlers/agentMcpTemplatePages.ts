@@ -3,6 +3,7 @@ import type { JsonRecord, SectionRecord } from "../../../src/lib/schemas/jsonRec
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload } from "../utils/payloads";
 import { normalizeStringArray, parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
+import { readRequiredTools } from "../../../src/lib/schemas/requiredTools";
 import { withStableTemplateIdentities } from "../utils/template-identities";
 import {
   boundedText,
@@ -28,7 +29,8 @@ type TemplateRow = typeof schema.templates.$inferSelect;
 
 type TemplateViewFields = Partial<Pick<
   TemplateRow,
-  "id" | "title" | "description" | "type" | "category" | "tags" | "version" | "content_version" | "created_at" | "updated_at" | "items"
+  | "id" | "title" | "description" | "type" | "category" | "tags" | "required_tools" | "version" | "content_version"
+  | "created_at" | "updated_at" | "items"
 >>;
 
 type TemplateHeader = ReturnType<typeof templateHeader>;
@@ -49,6 +51,7 @@ function templateHeader(row: TemplateViewFields) {
     type: row.type,
     categories: normalizeStringArray(row.category),
     tags: normalizeStringArray(row.tags),
+    requiredTools: readRequiredTools(row.required_tools),
     version: typeof row.version === "number" ? row.version : 1,
     contentVersion: row.content_version,
     createdAt: row.created_at,

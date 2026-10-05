@@ -18,6 +18,7 @@ type RepoTemplateCreatePayload = {
   seoDescription?: string;
   seoUrl?: string;
   rules?: ChecklistTemplate['rules'];
+  requiredTools?: ChecklistTemplate['requiredTools'];
   sections: ChecklistTemplate['sections'];
   isPublic: boolean;
   categories?: string[];
@@ -218,6 +219,7 @@ export const buildRepoTemplateCreatePayload = (
   seoTitle: template.seoTitle || '',
   seoDescription: template.seoDescription || '',
   rules: template.rules,
+  requiredTools: template.requiredTools,
   sections: template.sections,
   isPublic: false,
   categories: template.categories || [],
