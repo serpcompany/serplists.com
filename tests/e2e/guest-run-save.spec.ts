@@ -51,4 +51,5 @@ test('a signed-in user at the active-run limit is sent to checkout from the Temp
   expect(checkout.requests).toBe(1);
   await page.goto(GUEST_RUN_PATH);
   await expect(page.getByRole('heading', { level: 1, name: 'Lake weekend at the limit' })).toBeVisible();
+  await page.unrouteAll({ behavior: 'wait' });
 });
