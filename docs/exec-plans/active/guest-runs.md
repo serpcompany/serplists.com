@@ -7,12 +7,15 @@
 
 ## Progress
 
+The work ships in one PR together with Required tools (#241) (owner, 2026-10-05: a couple of
+self-contained PRs at most, never one stacked on another). It was built in the two steps below.
+
 - [x] PR 1 (`fl/guest-runs`): Start Run for signed-out visitors on the public template page
   (the same Start a Run dialog), the guest run page at `/profile/:user/:slug/run/`, the run kept
   in localStorage with tasks, Sub-tasks, notes and completion on the run page's own model and
   components, one active guest run per Template ("Continue Run"), Delete run, no sharing, and a
   `noindex, follow` page.
-- [x] PR 2 (`fl/guest-runs-save`, stacked on PR 1): after sign-up or log-in, offer to save the
+- [x] PR 2 (`fl/guest-runs-save`): after sign-up or log-in, offer to save the
   guest run into the account: "Log in or sign up to save it to your account." on the guest run
   page (both links return to it), "Save to account" there and in a notice on the public template
   page, a real Run started through the existing API with the progress carried over by stable
@@ -80,3 +83,5 @@
 - 2026-10-05 (PR 2): New wording: "Save to account", "Run saved to your account", "Log in or
   sign up to save it to your account." and "Your run of this Template is saved in this browser
   only."
+- 2026-10-05: The guest Run page shows the Template's Required tools as a compact card, as the
+  Run page does, from the public Template it loads (a guest Run stores only the sections).

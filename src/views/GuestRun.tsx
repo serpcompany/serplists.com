@@ -16,6 +16,7 @@ import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog'
 import { RunWorkspace } from '@/components/run-execution/RunWorkspace';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PublicTemplateRecordStates } from '@/components/template/PublicTemplateRecordStates';
+import { RequiredToolsList } from '@/components/template/RequiredToolsList';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { removeGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
@@ -114,6 +115,7 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
           }
           title={run.title}
         />
+        <RequiredToolsList compact tools={template.requiredTools} />
         <RunWorkspace
           canUpdateRun
           completedTasks={counts.tasksCompleted}

@@ -93,6 +93,15 @@ describe('the guest run page of a public Template', () => {
     expect(screen.getByRole('link', { name: 'Weekend Camping' }).getAttribute('href')).toBe(TEMPLATE_PAGE);
   });
 
+  it("shows the Template's Required tools above the run, as the Run page does", async () => {
+    templateRecord.template = { ...guestRunTemplate, requiredTools: [{ name: 'Toggl Track', url: 'https://toggl.com/track/', required: true }] };
+
+    await openTheRunPage();
+
+    expect(screen.getByRole('heading', { name: 'Required tools' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /^Toggl Track/ }).getAttribute('href')).toBe('https://toggl.com/track/');
+  });
+
   it('opens the run this browser already holds, with its progress, instead of starting another', async () => {
     const started = startGuestRun(guestRunTemplate, 'Lake trip');
     saveGuestRun({

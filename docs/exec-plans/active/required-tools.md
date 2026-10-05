@@ -9,6 +9,9 @@
 
 ## Progress
 
+The work ships in one PR together with guest runs (#253) (owner, 2026-10-05: a couple of
+self-contained PRs at most, never one stacked on another). It was built in the two steps below.
+
 - [x] PR 1 (`fl/required-tools`): migration `0031` adds `templates.required_tools`; the shared
   schema `src/lib/schemas/requiredTools.ts`; create, save, read by id or slug (public ones to
   anyone), copies (Duplicate's create, clone into Personal or an Organization), delete and
@@ -17,7 +20,7 @@
   source rule; MCP `get_template` returns them and the MCP server goes to 0.4.0. Tests on the
   migrated tables (`template-required-tools-d1.test.ts`, `template-required-tools-pack-d1.test.ts`,
   `agent-mcp-required-tools.test.ts`) and the pack schema parity cases.
-- [x] PR 2 (`fl/required-tools-ui`, stacked on PR 1): the editor's Required tools fields in
+- [x] PR 2 (`fl/required-tools-ui`): the editor's Required tools fields in
   Template Settings (`RequiredToolsEditor`, with the save rules in
   `src/lib/forms/templateEditorRequiredTools.ts`), and `RequiredToolsList` on the public Template
   page, Template detail, the Run page (a card under the provenance) and the editor preview, with

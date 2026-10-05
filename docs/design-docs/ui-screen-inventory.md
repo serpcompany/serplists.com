@@ -768,6 +768,7 @@ existing content, invent nothing):
     Progress" badge, from `xl` a progress bar with "N%"; actions (under the text on phones):
     "Save to account" (signed in, for a role that can start runs), "Complete run" when every
     task is done, "Delete run" (outline).
+  - The Template's Required tools as a compact card, as on the Run page (when it has tools).
   - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
     block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
     is no provenance, Activity or "Removed from Template".
