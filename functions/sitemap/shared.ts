@@ -416,10 +416,29 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   ];
 }
 
+export type SitemapRowPage = { limit: number; offset: number };
+
+type CountedRows<Row> = {
+  load: (page: SitemapRowPage) => Promise<Row[]>;
+  count: () => Promise<number>;
+};
+
+export async function loadRowsOfTwoLists<Row>(
+  first: CountedRows<Row>,
+  loadSecond: (page: SitemapRowPage) => Promise<Row[]>,
+  { limit, offset }: SitemapRowPage,
+): Promise<Row[]> {
+  const firstRows = await first.load({ limit, offset });
+  if (firstRows.length === limit) return firstRows;
+  const firstTotal = firstRows.length > 0 || offset === 0 ? offset + firstRows.length : await first.count();
+  const secondRows = await loadSecond({ limit: limit - firstRows.length, offset: Math.max(0, offset - firstTotal) });
+  return [...firstRows, ...secondRows];
+}
+
 type PagedSitemapOptions<Row> = {
   request: Request;
   params: { readonly page?: string | string[] | undefined };
-  loadRows: (pagination: { limit: number; offset: number }) => Promise<Row[]>;
+  loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
 };

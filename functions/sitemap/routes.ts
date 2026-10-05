@@ -1,5 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
-import { unionAll } from 'drizzle-orm/sqlite-core';
+import { count, eq, sql } from 'drizzle-orm';
 
 import { sitemapProfileRevisions, teams, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
@@ -15,6 +14,7 @@ import {
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
   isValidUsername,
+  loadRowsOfTwoLists,
   loadCategoryEntries,
   methodNotAllowed,
   mostRecentLastmod,
@@ -27,6 +27,7 @@ import {
   validTemplateSlugCondition,
   xmlResponse,
   type SitemapEntry,
+  type SitemapRowPage,
 } from './shared';
 
 export const shardPageParam = (fileName: string): string =>
@@ -49,34 +50,37 @@ type TemplateRow = {
   owner_updated_at: string | null;
 };
 
-const USERS_FIRST = 0;
-const ORGANIZATIONS_AFTER_EVERY_USER = 1;
+const selectListedUsers = (db: Db) => db
+  .select({
+    handle: users.username,
+    created_at: users.created_at,
+    updated_at: users.updated_at,
+    profile_revision: sitemapProfileRevisions.revised_at,
+  })
+  .from(users)
+  .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
+  .where(validUsernameCondition)
+  .orderBy(users.id);
 
-const selectListedProfiles = (db: Db) => unionAll(
-  db
-    .select({
-      handle: users.username,
-      created_at: users.created_at,
-      updated_at: users.updated_at,
-      profile_revision: sitemapProfileRevisions.revised_at,
-      owner_order: sql<number>`${USERS_FIRST}`.as('owner_order'),
-      owner_id: users.id,
-    })
-    .from(users)
-    .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
-    .where(validUsernameCondition),
-  db
-    .select({
-      handle: teams.slug,
-      created_at: teams.created_at,
-      updated_at: teams.updated_at,
-      profile_revision: sql<string | null>`null`.as('profile_revision'),
-      owner_order: sql<number>`${ORGANIZATIONS_AFTER_EVERY_USER}`.as('owner_order'),
-      owner_id: teams.id,
-    })
-    .from(teams)
-    .where(listedOrganizationCondition),
-).orderBy(sql`owner_order`, sql`id`);
+const selectListedOrganizations = (db: Db) => db
+  .select({
+    handle: teams.slug,
+    created_at: teams.created_at,
+    updated_at: teams.updated_at,
+    profile_revision: sql<string | null>`null`,
+  })
+  .from(teams)
+  .where(listedOrganizationCondition)
+  .orderBy(teams.id);
+
+const countListedUsers = async (db: Db): Promise<number> =>
+  (await db.select({ total: count() }).from(users).where(validUsernameCondition)).at(0)?.total ?? 0;
+
+const loadListedProfiles = (db: Db, page: SitemapRowPage): Promise<ProfileRow[]> => loadRowsOfTwoLists(
+  { load: ({ limit, offset }) => selectListedUsers(db).limit(limit).offset(offset), count: () => countListedUsers(db) },
+  ({ limit, offset }) => selectListedOrganizations(db).limit(limit).offset(offset),
+  page,
+);
 
 const selectListedTemplates = (db: Db) =>
   selectPublicTemplatesOfListedOwners(db, { handle: templateOwnerHandle, slug: templates.slug }, validTemplateSlugCondition)
@@ -115,7 +119,7 @@ export const serveSitemapIndex = (context: SitemapContext): Promise<Response> =>
 
 async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
   const db = createDb(env);
-  const profiles = entriesOf(await selectListedProfiles(db), profileEntry);
+  const profiles = entriesOf([...await selectListedUsers(db), ...await selectListedOrganizations(db)], profileEntry);
   const databaseTemplates = entriesOf(await selectListedTemplates(db), templateEntry);
   const categoryEntries = await loadCategoryEntries(env);
   const templateEntries = [...templateCatalogEntries(revisions), ...databaseTemplates];
@@ -146,7 +150,7 @@ export const serveProfilesSitemap = (context: SitemapContext, page: string): Pro
   return cachedSitemap(context, (request) => handlePagedDatabaseSitemap<ProfileRow>({
     request,
     params: { page },
-    loadRows: async ({ limit, offset }) => await selectListedProfiles(db).limit(limit).offset(offset),
+    loadRows: (page) => loadListedProfiles(db, page),
     toEntry: profileEntry,
   }), { kind: 'profiles', page });
 };

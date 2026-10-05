@@ -45,8 +45,11 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 - **Profile Owners** (`functions/sitemap/listedOwners.ts`): a User whose username passes the
   handle rule (`validUsernameCondition`), and an Organization that is not archived and whose
   handle (its slug) passes it (`listedOrganizationCondition`). The profiles shard lists the
-  Users in `users.id` order, as before, then the Organizations in `teams.id` order (one
-  `UNION ALL`), so adding Organizations moved no User entry. The Template rule above and the
+  Users in `users.id` order, as before, then the Organizations in `teams.id` order, so adding
+  Organizations moved no User entry. They are two queries, each walking its primary key, joined
+  by `loadRowsOfTwoLists` (`functions/sitemap/shared.ts`), which counts the listed Users only for
+  a shard page that starts after the last of them: a `UNION ALL` ordered by owner kind sorted
+  both halves in a temporary B-tree, which D1 bills as rows read. The Template rule above and the
   [Profiles directory](#profiles-directory) use the same two conditions, so an owner the
   directory lists is exactly an owner the sitemap lists
   (`tests/unit/functions/sitemap-organization-profiles.test.ts`). A handle is unique across

@@ -59,8 +59,10 @@ Organization profile" link).
   `created_at`, with no per-Organization revision table (that would be a new table in the
   approved trigger migration). A change to its public Templates dates their own entries and
   bumps the templates and categories kinds, never `profiles`.
-- 2026-10-05: the profiles shard lists Organizations after every User (`UNION ALL`, ordered by
-  owner kind then id), so the User entries kept their order and dates.
+- 2026-10-05: the profiles shard lists Organizations after every User, so the User entries
+  kept their order and dates. It reads them in two primary-key-ordered queries rather than one
+  `UNION ALL` ordered by owner kind, whose temporary B-tree sort pushed the profiles shard and
+  the sitemap index over their rows-read budgets.
 - 2026-10-05: the API answers 400 for an unknown collection, both cursors at once, or a cursor
   over 64 characters, and ignores other parameters; the page reads an address it cannot parse
   as the first page of People.

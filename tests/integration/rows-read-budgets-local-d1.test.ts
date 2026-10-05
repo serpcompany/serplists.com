@@ -211,8 +211,8 @@ const ROUTES: Route[] = [
   {
     name: "the People page of the profile directory",
     prepare: get("visitor", "profiles"),
-    budget: bounded(250),
-    reason: "25 Users in username order through idx_users_username, then one grouped count of their Personal Templates through idx_templates_owner",
+    budget: bounded(280),
+    reason: "25 Users in username order through idx_users_username, then one grouped count through idx_templates_owner that reads every Personal Template of those Users, private ones included (about 10 each in the seeded data)",
   },
   {
     name: "a later People page of the profile directory",

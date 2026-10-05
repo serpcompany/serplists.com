@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleProfileDirectory } from '../../../functions/api/handlers/profile-directory';
-import { servePagesSitemap, serveProfilesSitemap } from '../../../functions/sitemap/routes';
+import { servePagesSitemap, serveProfilesSitemap, serveSitemapIndex } from '../../../functions/sitemap/routes';
+import { loadRowsOfTwoLists, type SitemapRowPage } from '../../../functions/sitemap/shared';
 import { profileDirectoryPageSchema } from '@/lib/schemas/profileDirectory';
 import { apiEnvOn } from '../../support/apiEnv';
 import { ACME, ARCHIVED_ORGANIZATION, CREATOR, PERSONAL_OWNER, seedProfileOwners } from '../../support/publicProfiles';
@@ -78,6 +79,42 @@ describe('the profiles sitemap, which lists every Profile Owner with a public pr
 
     const listedByTheDirectory = [...(await directoryPaths('people')), ...(await directoryPaths('organizations'))];
     expect([...(await profileLocations())].sort()).toEqual([...listedByTheDirectory].sort());
+  });
+
+  it('reads Users and Organizations in their primary key order, never sorting them in a temporary B-tree, as D1 bills the sorted rows', async () => {
+    d1.queries.length = 0;
+    await profileLocations();
+    await serveSitemapIndex({ request: new Request('https://serplists.com/sitemap.xml'), env: apiEnvOn(d1), waitUntil: () => undefined });
+
+    const plans = d1.queries.filter(({ sql }) => /from "(users|teams)"/.test(sql)).map((recorded) => d1.queryPlan(recorded).join('; '));
+    expect(plans.length).toBeGreaterThanOrEqual(4);
+    for (const plan of plans) expect(plan).not.toContain('TEMP B-TREE');
+  });
+});
+
+describe('a sitemap page that lists one list of rows and then another', () => {
+  const people = ['ann', 'bob', 'cat'];
+  const organizations = ['org-1', 'org-2'];
+  const pageOf = (rows: string[]) => async ({ limit, offset }: SitemapRowPage) => rows.slice(offset, offset + limit);
+  const countPeople = vi.fn(async () => people.length);
+  const load = (page: SitemapRowPage) => loadRowsOfTwoLists({ load: pageOf(people), count: countPeople }, pageOf(organizations), page);
+
+  it('continues into the second list where the first ends, on the page where it ends and on every later one', async () => {
+    expect(await load({ limit: 2, offset: 0 })).toEqual(['ann', 'bob']);
+    expect(await load({ limit: 2, offset: 2 })).toEqual(['cat', 'org-1']);
+    expect(await load({ limit: 2, offset: 4 })).toEqual(['org-2']);
+    expect(await load({ limit: 2, offset: 6 })).toEqual([]);
+    expect(await load({ limit: 10, offset: 0 })).toEqual([...people, ...organizations]);
+  });
+
+  it('counts the first list only for a page that starts after it, where its rows cannot say where it ended', async () => {
+    countPeople.mockClear();
+    await load({ limit: 2, offset: 2 });
+    await load({ limit: 3, offset: 0 });
+    expect(countPeople).not.toHaveBeenCalled();
+
+    expect(await load({ limit: 1, offset: 3 })).toEqual(['org-1']);
+    expect(countPeople).toHaveBeenCalledOnce();
   });
 });
 
