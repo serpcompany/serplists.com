@@ -26,7 +26,7 @@ test("an Organization's owner saves its description and avatar on its settings p
 
   await page.getByLabel('Description').fill('  Paid search agency for local businesses  ');
   await page.getByRole('button', { name: 'Save Organization' }).click();
-  await expect(page.getByText('Organization updated')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Organization updated' })).toBeVisible({ timeout: 15_000 });
 
   const fileChooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Upload avatar' }).click();
