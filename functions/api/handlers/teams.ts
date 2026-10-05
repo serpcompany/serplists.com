@@ -36,6 +36,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
         created_at: teams.created_at,
         updated_at: teams.updated_at,
         archived_at: teams.archived_at,
+        avatar_url: teams.avatar_url,
+        description: teams.description,
         memberId: teamMembers.id,
         role: teamMembers.role,
         membershipStatus: teamMembers.status,
@@ -136,7 +138,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return updateTeamSettings({ db, request, teamId, userId, membership, role }, await readJsonOrNull(request));
+    return updateTeamSettings({ db, env, request, teamId, userId, membership, role }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "members") {

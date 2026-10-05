@@ -21,6 +21,8 @@ export type Workspace =
       teamId: string;
       memberId: string;
       slug?: string | null | undefined;
+      avatarUrl?: string | null | undefined;
+      description?: string | null | undefined;
     };
 
 export type CreateTeamInput = {

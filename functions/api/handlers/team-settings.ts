@@ -5,6 +5,9 @@ import { schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
 import { publicHandleSchema } from "../../../src/lib/schemas/publicHandle";
+import { ORGANIZATION_DESCRIPTION_MAX } from "../../../src/lib/schemas/nameLimits";
+import { resolveTrustedOrigins } from "../utils/cors";
+import { buildUserProfileWritePolicy, uploadedAvatarUrlError } from "../utils/user-profile-validation";
 import { canManageTeam, findActiveTeam, type TeamRole } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 import { invalidPayloadResponse } from "../utils/request-json";
@@ -15,8 +18,15 @@ const updateTeamBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     slug: z.string().trim().optional(),
+    description: z
+      .string()
+      .trim()
+      .max(ORGANIZATION_DESCRIPTION_MAX, `Description must be ${ORGANIZATION_DESCRIPTION_MAX} characters or fewer.`)
+      .nullable()
+      .optional(),
+    avatar_url: z.string().trim().nullable().optional(),
   })
-  .refine((value) => typeof value.name !== "undefined" || typeof value.slug !== "undefined", {
+  .refine((value) => Object.values(value).some((field) => typeof field !== "undefined"), {
     message: "No fields to update",
   });
 
@@ -30,7 +40,7 @@ function parseOptionalJson(value: string | null): unknown {
 }
 
 export async function updateTeamSettings(
-  { db, request, teamId, userId, membership, role }: TeamRouteContext & { role: TeamRole },
+  { db, env, request, teamId, userId, membership, role }: TeamRouteContext & { env: Env; role: TeamRole },
   body: unknown,
 ): Promise<Response> {
   const { auditEvents, teams } = schema;
@@ -48,6 +58,8 @@ export async function updateTeamSettings(
   const updates: {
     name?: string;
     slug?: string;
+    description?: string | null;
+    avatar_url?: string | null;
     updated_at: string;
   } = {
     updated_at: new Date().toISOString(),
@@ -69,8 +81,24 @@ export async function updateTeamSettings(
     updates.slug = parsed.data.slug;
   }
 
+  if (parsed.data.description !== undefined) {
+    const description = parsed.data.description || null;
+    if (description !== (team.description ?? null)) updates.description = description;
+  }
+
+  if (parsed.data.avatar_url !== undefined) {
+    const avatarUrl = parsed.data.avatar_url || null;
+    const avatarError = avatarUrl
+      ? uploadedAvatarUrlError(avatarUrl, buildUserProfileWritePolicy(env, resolveTrustedOrigins(request, env)))
+      : null;
+    if (avatarError) {
+      return jsonError(`avatar_url: ${avatarError}`, 400);
+    }
+    if (avatarUrl !== (team.avatar_url ?? null)) updates.avatar_url = avatarUrl;
+  }
+
   const membershipSummary = { id: membership.id, role, status: membership.status };
-  const changesNothing = updates.name === undefined && updates.slug === undefined;
+  const changesNothing = Object.keys(updates).every((field) => field === "updated_at");
   if (changesNothing) {
     return json({ success: true, team: { ...team, membership: membershipSummary } });
   }

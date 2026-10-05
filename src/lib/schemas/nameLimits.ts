@@ -2,6 +2,7 @@ import { RUN_TITLE_MAX } from "./templateLimits";
 
 export { RUN_TITLE_MAX };
 export const ORGANIZATION_NAME_MAX = 120;
+export const ORGANIZATION_DESCRIPTION_MAX = 500;
 
 export const getRunTitleError = (title: string): string | null => {
   const trimmed = title.trim();

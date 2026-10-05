@@ -355,6 +355,8 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   write, Better Auth's included ([database operations](database-operations.md#public-handle-registry)).
   `0029` recreated the four sitemap triggers on `users` so a username with `-`, which the
   handle rule allows, refreshes the sitemaps like any other.
+- **Organization profiles.** `0030` added `teams.avatar_url` and `teams.description` for
+  Organization public profiles ([Organizations](organizations.md)).
 
 ## Seeds
 

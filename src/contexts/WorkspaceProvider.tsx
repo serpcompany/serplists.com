@@ -124,6 +124,8 @@ export function WorkspaceProvider({
         name: team.name,
         role: team.role,
         slug: team.slug,
+        avatarUrl: team.avatar_url,
+        description: team.description,
         teamId: team.id,
         type: 'team' as const,
       })),

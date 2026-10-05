@@ -1857,8 +1857,10 @@ existing content, invent nothing):
     kept; the status error with "Retry"; "Billing checkout is currently unavailable."; the
     Organization billing message ("Paid Organization entitlements apply while this
     Organization is selected." or "Personal subscriptions are managed from Personal.").
-  - "<name>": "Your role: <role>", the role's description; for managers: a rename form
-    ("Organization name", "Slug", "Save Organization") and invites ("Invite email", "Role",
+  - "<name>": "Your role: <role>", the role's description; "Organization avatar" (the
+    avatar, or a people icon; for managers "Upload avatar" and "Remove avatar", saved at once:
+    "Avatar updated successfully!", "Avatar removed successfully!"); for managers: a form
+    ("Organization name", "Slug", "Description", "Save Organization") and invites ("Invite email", "Role",
     "Create link", the link with a copy button, "Pending invites" with "New link" and
     revoke); "Owners and admins manage Organization settings, invites, and activity." for
     others; "Members" (name, "You", email, role and status selects, labelled "Role" and
@@ -1879,7 +1881,8 @@ existing content, invent nothing):
 - **STRUCTURE (built):**
   - LAYOUT ZONES: page header; one column of Cards: <name> billing, <name>, Leave
     Organization.
-  - DATA FIELDS: Organization (name, slug, role, members, invites, activity); plan.
+  - DATA FIELDS: Organization (name, slug, avatar, description, role, members, invites,
+    activity); plan.
 - **NOTES:** Code: `src/views/OrganizationSettings.tsx`; the Organization's card is
   `src/components/account/TeamSettingsSection.tsx`, Leave is
   `src/components/account/LeaveOrganizationCard.tsx`, and billing is
