@@ -40,8 +40,8 @@ test("an Organization's owner saves its description and avatar on its settings p
 });
 
 test('the Organization avatar and description fit a phone', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   await createAnOrganization(page);
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByLabel('Description').scrollIntoViewIfNeeded();
   await expect(page.getByLabel('Description')).toBeVisible();
