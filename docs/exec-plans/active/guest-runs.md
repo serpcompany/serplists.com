@@ -12,9 +12,13 @@
   in localStorage with tasks, Sub-tasks, notes and completion on the run page's own model and
   components, one active guest run per Template ("Continue Run"), Delete run, no sharing, and a
   `noindex, follow` page.
-- [ ] PR 2 (`fl/guest-runs-save`, stacked on PR 1): after sign-up or log-in, offer to save the
-  guest run into the account: start a real Run through the existing API and carry the progress
-  over by stable ids, handling plan limits (the Free plan's active-run limit) gracefully.
+- [x] PR 2 (`fl/guest-runs-save`, stacked on PR 1): after sign-up or log-in, offer to save the
+  guest run into the account: "Log in or sign up to save it to your account." on the guest run
+  page (both links return to it), "Save to account" there and in a notice on the public template
+  page, a real Run started through the existing API with the progress carried over by stable
+  ids, and plan limits handled as Start Run handles them.
+- [ ] Merge PR 1, then PR 2, into `staging`; check both pages with `pnpm run ui:snap` at desktop
+  and 390px, signed out and signed in.
 - [ ] Owner's open question, not built: whether code projects and SKILL.md files need more than
   a plain link that opens the run (a machine-readable SOP on the public page).
 
@@ -57,3 +61,22 @@
   stays the indexed page.
 - 2026-10-05: New wording kept to two strings: "Continue Run" and "This run is saved in this
   browser only." Everything else on the page is the run page's existing text.
+- 2026-10-05 (PR 2): Saving reuses Start Run's path, `startTemplateRun` with the Templates
+  context's `createRun`, so the Run lands in the active ownership context with the same plan
+  gates and messages (Personal checkout at the Free plan's active-run limit, the Organization's
+  paid-plan message). It then loads the created Run by id and carries progress onto the content
+  the server copied, rather than sending the guest run's own snapshot, which would leave the
+  Run's sections older than the Template version it records. One more request, no new API.
+- 2026-10-05 (PR 2): The offer appears where a signed-in user meets the guest run again: the guest
+  run page (Log in and Register return there, through email verification too) and a notice on
+  the public template page. No global prompt in the console: the template page and the run link
+  are where the run is found.
+- 2026-10-05 (PR 2): The browser's copy is removed only once the progress is saved. If that save
+  fails after the Run was created, the guest run stays and the empty Run remains in My Runs;
+  retrying starts another Run. Accepted for now: it needs a failure between two requests that
+  just succeeded.
+- 2026-10-05 (PR 2): Notes typed but not saved on the guest run page go into the saved Run, and
+  the leave guard lets the page go once the save lands.
+- 2026-10-05 (PR 2): New wording: "Save to account", "Run saved to your account", "Log in or
+  sign up to save it to your account." and "Your run of this Template is saved in this browser
+  only."

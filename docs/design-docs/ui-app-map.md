@@ -71,6 +71,12 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   opens it again; a plain link to the run page (from a code project or a SKILL.md file) opens
   it too, and starts one when the browser has none. "Delete run" → "Delete run" dialog →
   "Delete" → Public template page.
+- **Save a guest run into an account:** Guest run → "Log in" (or "sign up" → Register, and
+  email verification) → Log in → "Sign in" → the same Guest run → "Save to account" → Run page
+  (`/dashboard/runs/<id>/`, "Run saved to your account"). Signed in elsewhere: Public template
+  page → "Your run of this Template is saved in this browser only." → "Save to account" → Run
+  page. At the active-run limit: "Save to account" → Stripe Checkout (Personal), and the guest
+  run stays.
 - **First Run in an account:** any public page → "Get started" → Register → "Create account"
   → Log in ("Verify your email first, then sign in.") → verification email link → Log in
   ("Email verified. You can sign in now.") → "Sign in" → My Templates → "Template Library" →
@@ -193,8 +199,8 @@ Toasts (sonner) report results everywhere.
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
 | `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
-| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice; "Start Run" becomes "Continue Run" while a visitor who is not signed in has a guest run in progress |
-| `/profile/<handle>/<template>/run/` | [Guest run](ui-screen-inventory.md#guest-run) | Child page of the public template page ("Start Run" signed out, "Continue Run", the breadcrumb back), and a page opened from a plain link | Shell overlays; Run complete dialog; Delete run dialog; Run tasks sheet; browser confirm | Starts a run when the browser has none; selected task; completed (frozen); task list column at `xl` |
+| `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice; "Start Run" becomes "Continue Run" while a visitor who is not signed in has a guest run in progress; signed in, a notice with "Save to account" while the browser holds a guest run of it |
+| `/profile/<handle>/<template>/run/` | [Guest run](ui-screen-inventory.md#guest-run) | Child page of the public template page ("Start Run" signed out, "Continue Run", the breadcrumb back), and a page opened from a plain link | Shell overlays; Run complete dialog; Delete run dialog; Run tasks sheet; browser confirm | Starts a run when the browser has none; selected task; completed (frozen); task list column at `xl`; "Log in or sign up to save it to your account." signed out, "Save to account" signed in |
 
 ### Auth and invites
 

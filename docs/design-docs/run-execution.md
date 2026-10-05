@@ -237,3 +237,15 @@ and the page reuses this model rather than a copy of it:
   with the default name (so a plain link opens a run), and a signed-in user is sent to the
   template page. Once the run has opened, the page never starts another, so Delete run (which
   removes the entry and leaves for the template page) cannot be followed by a fresh start.
+- Save to account (`useSaveGuestRunToAccount`, on the guest run page and the public template
+  page) goes through the API as any Run does: `startTemplateRun` with the Templates context's
+  `createRun` (the active context, its plan gates and their messages), then the created Run is
+  loaded by id (`loadRunExecutionData`), so the progress lands on the content the server copied,
+  and `carryGuestRunProgress` (`guestRunProgress.ts`) copies ticks and notes onto it by task id,
+  each Sub-task by id or, without one, by block and row (`findRunSubItem`), before one
+  `updateRun` saves it with the loaded revision. A task with Sub-tasks is done exactly when all
+  of them are, and the Run is completed only when the guest run was and every task carried over
+  done. The browser's copy is removed only after that save. A plan gate keeps it: `upgrade_required`
+  starts Personal checkout (the button stays busy through `useRedirectPending`) or shows the
+  Organization's paid-plan message, as Start Run does. If the save of the progress fails after the
+  Run was created, the guest run stays and the new Run keeps no progress.

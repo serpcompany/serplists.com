@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { GuestRunSaveOffer } from '@/components/run-execution/GuestRunSaveActions';
 import { PublicTemplateRecordStates } from '@/components/template/PublicTemplateRecordStates';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
@@ -193,6 +194,11 @@ const PublicTemplate = () => {
               canSaveTemplate={canEditTemplates}
               canStartRun={canRunTemplates}
               continueRunPath={guestRunStatus === 'in_progress' ? guestRunPath : null}
+              guestRunNotice={
+                isAuthenticated && canRunTemplates && (guestRunStatus === 'in_progress' || guestRunStatus === 'completed') ? (
+                  <GuestRunSaveOffer template={shownTemplate} />
+                ) : null
+              }
               isBillingError={billingState.isError}
               isBillingLoading={billingState.isLoading}
               isProUser={billingState.isPro}

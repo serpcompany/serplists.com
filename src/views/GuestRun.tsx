@@ -10,23 +10,33 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { GuestRunHeader } from '@/components/run-execution/GuestRunHeader';
+import { SaveToAccountButton, SignInToSaveLinks } from '@/components/run-execution/GuestRunSaveActions';
 import { CompleteRunButton } from '@/components/run-execution/CompleteRunButton';
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunWorkspace } from '@/components/run-execution/RunWorkspace';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PublicTemplateRecordStates } from '@/components/template/PublicTemplateRecordStates';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { removeGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import { useGuestRunModel } from '@/features/guest-runs/useGuestRunModel';
 import { useGuestRunStatus } from '@/features/guest-runs/useGuestRunStatus';
+import { useSaveGuestRunToAccount } from '@/features/guest-runs/useSaveGuestRunToAccount';
 import { RUN_NOTES_UNSAVED_MESSAGE } from '@/features/run-execution/noteDrafts';
 import { canFinishRun } from '@/features/run-execution/primaryTaskAction';
 import { describeRunTaskCounts } from '@/features/run-execution/runExecutionMappers';
 import { useRunPageActions } from '@/features/run-execution/useRunPageActions';
 import { useTemplateDetailRecord } from '@/features/template-detail/useTemplateDetailRecord';
+import { withReturnPath } from '@/lib/auth/returnPath';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
-import { buildCanonicalPublicTemplatePath, buildPublicTemplatesPath } from '@/lib/routes';
+import {
+  buildCanonicalPublicTemplatePath,
+  buildCanonicalPublicTemplateRunPath,
+  buildLoginPath,
+  buildPublicTemplatesPath,
+  buildRegisterPath,
+} from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const RunLoadingState = () => (
@@ -37,11 +47,15 @@ const RunLoadingState = () => (
 
 function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemplate; templatePath: string }) {
   const router = useAppRouter();
+  const { isAuthenticated, isLoading: isSessionLoading } = useAuth();
+  const { canRunTemplates, isWorkspaceLoading } = useWorkspace();
   const model = useGuestRunModel(template.id);
   const { counts, hasUnsavedNotes, loading, notFound, noteDrafts, progress, run, selectedItemId } = model;
   const { allowLeave } = useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE);
   const actions = useRunPageActions(model);
+  const saving = useSaveGuestRunToAccount(template, allowLeave);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const runPath = buildCanonicalPublicTemplateRunPath(template);
 
   useEffect(() => {
     if (!notFound || loading) {
@@ -77,11 +91,27 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
           ]}
         />
         <GuestRunHeader
+          accountAction={
+            isAuthenticated && canRunTemplates ? (
+              <SaveToAccountButton
+                isSaving={saving.isSaving || isWorkspaceLoading}
+                onSave={() => void saving.save(noteDrafts)}
+              />
+            ) : null
+          }
           description={describeRunTaskCounts(counts)}
           finishRunButton={canFinishRun(run) ? <CompleteRunButton onClick={actions.openCompleteDialog} /> : null}
           isCompleted={run.status === 'completed'}
           onDelete={() => setIsDeleteDialogOpen(true)}
           progress={progress}
+          savePrompt={
+            isAuthenticated || isSessionLoading ? null : (
+              <SignInToSaveLinks
+                loginPath={withReturnPath(buildLoginPath(), runPath)}
+                registerPath={withReturnPath(buildRegisterPath(), runPath)}
+              />
+            )
+          }
           title={run.title}
         />
         <RunWorkspace

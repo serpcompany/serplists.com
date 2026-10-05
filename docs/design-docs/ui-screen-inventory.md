@@ -651,6 +651,9 @@ existing content, invent nothing):
   - Signed in, when the Organizations failed to load: "Couldn't load your Organizations",
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
+  - Signed in, while the browser holds a [guest run](#guest-run) of this Template (and the role
+    can start runs): "Your run of this Template is saved in this browser only." and "Save to
+    account" (`GuestRunSaveOffer`).
   - The header: an icon tile by template type, the title, the description, the Template
     Owner's avatar and name (a link to its Public Profile: an Organization Template's
     Organization, never its Creator), "Updated <date>" (the Template's last
@@ -760,22 +763,28 @@ existing content, invent nothing):
   - The public shell, then a breadcrumb: Home (an icon) › "Template Library" › the Template's
     title (a link to its page) › the run's title.
   - The run page's header, without Rename, Share or a back button: the title, "X of Y tasks
-    finished", "This run is saved in this browser only.", a "Completed" or "In Progress"
-    badge, from `xl` a progress bar with "N%"; actions (under the text on phones): "Complete
-    run" when every task is done, "Delete run" (outline).
+    finished", "This run is saved in this browser only." (signed out, followed by "Log in or
+    sign up to save it to your account.", both links back to this page), a "Completed" or "In
+    Progress" badge, from `xl` a progress bar with "N%"; actions (under the text on phones):
+    "Save to account" (signed in, for a role that can start runs), "Complete run" when every
+    task is done, "Delete run" (outline).
   - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
     block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
     is no provenance, Activity or "Removed from Template".
 - **PRIMARY ACTION:** "Mark Complete".
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Complete run" and "Finish
   Run" → [Run complete dialog](#run-complete-dialog); "Delete run" → [Delete
-  confirmations](#delete-confirmations) → the public template page; the breadcrumb.
+  confirmations](#delete-confirmations) → the public template page; "Log in" and "sign up" →
+  [Log in](#log-in) or [Register](#register), then back here; "Save to account" → [Run
+  page](#run-page) ("Run saved to your account"), or Stripe Checkout at the Personal plan's
+  active-run limit; the breadcrumb.
 - **STATES:** loading the Template ("Loading template…"), then a spinner while the run opens
   or starts; the Template's load error and not-found states, as on its page; in progress;
   every task done; completed (frozen, and the visitor stays); unsaved notes ([browser
   confirm](#browser-confirm-prompts)); a run another tab deleted or replaced ("Run not found",
   then the template page); a signed-in user with no guest run in the browser goes to the
-  template page; always `noindex, follow`, with no canonical URL.
+  template page; "Save to account" disabled while it saves or checkout opens, and while the
+  context loads; always `noindex, follow`, with no canonical URL.
 - **NAVIGATION TYPE:** child page of the public template page.
 - **PATTERN CHOICE (built):** the [Run page](#run-page)'s header and two-column workspace inside
   the public shell, under the [Detail page](#detail-page) breadcrumb.

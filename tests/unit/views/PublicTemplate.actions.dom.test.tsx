@@ -1,4 +1,5 @@
 import { act } from 'react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -17,6 +18,7 @@ import {
 } from '../../support/publicTemplatePage';
 import { readGuestRun, saveGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import { deferred } from '../../support/deferred';
+import { present } from '../../support/elements';
 import { navigation } from '../../support/nextNavigation';
 
 const GUEST_RUN_PATH = '/profile/alice/reviewed-clipy-checklist/run/';
@@ -201,5 +203,23 @@ describe('PublicTemplate Start a Run dialog', () => {
     });
     expect(startRun).toHaveBeenCalledWith('Lake trip');
     expect(navigation.url()).toBe('/dashboard/runs/run-1/');
+  });
+
+  it('offers a signed-in user to save the run this browser holds into their account, and a visitor not signed in nothing of the kind', async () => {
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+
+    const notice = await screen.findByText('Your run of this Template is saved in this browser only.');
+    const noticeBox = present(notice.closest<HTMLElement>('[data-guest-run-notice]'), 'the notice');
+    expect(within(noticeBox).getByRole('button', { name: 'Save to account' })).toBeTruthy();
+
+    cleanup();
+    authState.isAuthenticated = false;
+    authState.user = null;
+    await openThePublishedRouteInTheDom(publishedClipyTemplate, {
+      inThisBrowser: () => startGuestRun(publishedClipyTemplate, 'Camping weekend'),
+    });
+    expect(screen.queryByText('Your run of this Template is saved in this browser only.')).toBeNull();
   });
 });

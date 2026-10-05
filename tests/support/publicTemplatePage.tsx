@@ -1,6 +1,7 @@
 import { navigation } from './mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
@@ -239,7 +240,11 @@ export async function openThePublishedRouteInTheDom(
 ) {
   showThePublishedTemplateAt(template, modelOverrides, CLEAN_VISIT);
   inThisBrowser();
-  await renderSettled(<PublicTemplate />);
+  await renderSettled(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PublicTemplate />
+    </QueryClientProvider>,
+  );
 }
 
 export const lastViewProps = (): ViewProps => lastOf(mockViewProps.mock.calls)[0];

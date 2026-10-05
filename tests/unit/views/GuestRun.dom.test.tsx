@@ -15,8 +15,9 @@ import { guestRunTemplate } from '../../support/guestRuns';
 import { queryClientsClearedAfterEachTest } from '../../support/queryClientsPerTest';
 import { renderSettled, theInMemoryBrowserAsTheWindow, theButtonOrMenuItemNamed } from '../../support/renderInTheDom';
 
-const { authState, templateRecord } = vi.hoisted(() => ({
+const { authState, saving, templateRecord, workspace } = vi.hoisted(() => ({
   authState: { isAuthenticated: false, isLoading: false, user: null as { id: string } | null },
+  saving: { isSaving: false, save: vi.fn() },
   templateRecord: {
     loadError: null as string | null,
     loading: false,
@@ -24,9 +25,12 @@ const { authState, templateRecord } = vi.hoisted(() => ({
     reload: () => undefined,
     template: null as ChecklistTemplate | null,
   },
+  workspace: { canRunTemplates: true, isWorkspaceLoading: false },
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => authState }));
+vi.mock('@/contexts/WorkspaceContext', () => ({ useWorkspace: () => workspace }));
+vi.mock('@/features/guest-runs/useSaveGuestRunToAccount', () => ({ useSaveGuestRunToAccount: () => saving }));
 vi.mock('@/features/template-detail/useTemplateDetailRecord', () => ({ useTemplateDetailRecord: () => templateRecord }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -39,6 +43,8 @@ const TEMPLATE_PAGE = '/profile/alice/weekend-camping/';
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(authState, { isAuthenticated: false, isLoading: false, user: null });
+  Object.assign(workspace, { canRunTemplates: true, isWorkspaceLoading: false });
+  saving.isSaving = false;
   Object.assign(templateRecord, { loadError: null, loading: false, notFound: false, template: guestRunTemplate });
   navigation.reset(RUN_PAGE, { routes: ['/profile/[username]/[templateSlug]/run'] });
 });
@@ -81,7 +87,7 @@ describe('the guest run page of a public Template', () => {
     const header = within(thePageHeader());
     expect(header.getByRole('heading', { level: 1 }).textContent).toBe(storedRun().title);
     expect(header.getByText('0 of 3 tasks finished')).toBeTruthy();
-    expect(header.getByText('This run is saved in this browser only.')).toBeTruthy();
+    expect(thePageHeader().textContent).toContain('This run is saved in this browser only.');
     expect(screen.getByRole('heading', { level: 2, name: 'Pack the tent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^(Share|Rename|Stop sharing)$/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Weekend Camping' }).getAttribute('href')).toBe(TEMPLATE_PAGE);
@@ -165,6 +171,45 @@ describe('the guest run page of a public Template', () => {
     expect(readGuestRun(guestRunTemplate.id)).toBeNull();
     expect(toast.success).toHaveBeenCalledWith('Run deleted');
     expect(navigation.url()).toBe(TEMPLATE_PAGE);
+  });
+
+  it('asks a visitor who is not signed in to log in or sign up to save it, and to come back to the run after', async () => {
+    await openTheRunPage();
+
+    const header = within(thePageHeader());
+    const returnHere = `?next=${encodeURIComponent(RUN_PAGE)}`;
+    expect(header.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(`/login/${returnHere}`);
+    expect(header.getByRole('link', { name: 'sign up' }).getAttribute('href')).toBe(`/register/${returnHere}`);
+    expect(header.queryByRole('button', { name: 'Save to account' })).toBeNull();
+  });
+
+  it('offers a signed-in user Save to account, which saves the notes still being typed too', async () => {
+    Object.assign(authState, { isAuthenticated: true, user: { id: 'user-1' } });
+    startGuestRun(guestRunTemplate, 'Lake trip');
+    await openTheRunPage();
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'Task notes' }), { target: { value: 'Typed, not saved' } });
+    });
+    await act(async () => {
+      fireEvent.click(within(thePageHeader()).getByRole('button', { name: 'Save to account' }));
+    });
+
+    expect(saving.save).toHaveBeenCalledWith({ 'task-tent': 'Typed, not saved' });
+    expect(within(thePageHeader()).queryByRole('link', { name: 'Log in' })).toBeNull();
+  });
+
+  it('offers no Save to account to a role that cannot start runs in the active Organization, and waits while a save runs', async () => {
+    Object.assign(authState, { isAuthenticated: true, user: { id: 'user-1' } });
+    startGuestRun(guestRunTemplate, 'Lake trip');
+    workspace.canRunTemplates = false;
+    await openTheRunPage();
+    expect(screen.queryByRole('button', { name: 'Save to account' })).toBeNull();
+
+    workspace.canRunTemplates = true;
+    saving.isSaving = true;
+    await openTheRunPage();
+    expect(screen.getByRole('button', { name: 'Save to account' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('says the Template was not found when it is not public under that owner', async () => {

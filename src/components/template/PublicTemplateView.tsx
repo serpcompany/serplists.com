@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Bookmark,
   Check,
@@ -43,6 +43,7 @@ interface PublicTemplateViewProps {
   canSaveTemplate: boolean;
   canStartRun: boolean;
   continueRunPath: string | null;
+  guestRunNotice?: ReactNode;
   isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
@@ -83,6 +84,7 @@ export function PublicTemplateView({
   canSaveTemplate,
   canStartRun,
   continueRunPath,
+  guestRunNotice,
   isBillingError,
   isBillingLoading,
   isProUser,
@@ -162,12 +164,17 @@ export function PublicTemplateView({
         { label: template.title },
       ]}
       notice={
-        workspaceError ? (
-          <WorkspaceErrorNotice
-            {...workspaceError}
-            id={WORKSPACE_ERROR_ID}
-            message="Start Run and Save wait until they load. Check your connection and try again, or continue in Personal."
-          />
+        workspaceError || guestRunNotice ? (
+          <div className="flex flex-col gap-3">
+            {workspaceError ? (
+              <WorkspaceErrorNotice
+                {...workspaceError}
+                id={WORKSPACE_ERROR_ID}
+                message="Start Run and Save wait until they load. Check your connection and try again, or continue in Personal."
+              />
+            ) : null}
+            {guestRunNotice}
+          </div>
         ) : undefined
       }
       icon={<TypeIcon />}
