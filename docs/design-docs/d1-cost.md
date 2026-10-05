@@ -202,7 +202,12 @@ catalog miss too, the Organization whose handle and name public responses carry 
 active. A Public Profile reads its handle and owner by primary key (`GET /api/profiles/by-handle`,
 2 rows), and an Organization's public Templates read every Template of that Organization
 through `idx_templates_team_id`, as a User's read every Personal Template of theirs through
-`idx_templates_owner` ([Organizations](organizations.md#public-profile)).
+`idx_templates_owner` ([Organizations](organizations.md#public-profile)). A page of the Profiles
+directory (`GET /api/profiles`, [SEO and sitemaps](seo-and-sitemaps.md#profiles-directory))
+reads 25 owners from its cursor on `idx_users_username` or `idx_teams_slug_unique`, so a later
+page costs what the first does, then every Template of the 24 it shows, in one grouped count
+through the same two owner indexes; it is edge-cached for 5 minutes. Since #237 the profiles
+shard and the sitemap index also read every Organization (their budgets count `teams`).
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per

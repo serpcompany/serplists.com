@@ -285,8 +285,8 @@ existing content, invent nothing):
     sheet](#public-menu-sheet).
   - The page, inside the route error boundary.
   - Footer: brand link and "Build repeatable checklists, publish them cleanly, and run them
-    like operations."; columns "Templates" ("Template Library", "Categories"), "Company"
-    ("About") and "Support" ("Contact").
+    like operations."; columns "Templates" ("Template Library", "Categories", "Profiles"),
+    "Company" ("About") and "Support" ("Contact").
 - **PRIMARY ACTION:** "Get started" → [Register](#register) (signed out).
 - **SECONDARY ACTIONS:** the header's menus and links; "Log in"; theme toggle; account menu;
   footer links.
@@ -1013,6 +1013,54 @@ existing content, invent nothing):
   loads nothing else about the Organization: no members, roles, invites, billing, Runs,
   activity or private Templates ([Organizations](organizations.md#public-profile)). Owners and
   admins set the avatar and description on the [Organization Settings](#organization-settings).
+
+### Profiles
+
+- **SCREEN NAME:** Profiles ("Profiles", `/profiles/`)
+- **PURPOSE:** Find the people and Organizations that have a Public Profile.
+- **HOW USER GETS HERE:** "Profiles" in the footer's "Templates" column; a link to a later page
+  (`?collection=organizations`, `?after=` or `?before=` a handle).
+- **WHAT'S ON THE SCREEN:**
+  - Hero: title "Profiles" and "Browse the public profiles of people and Organizations, and
+    the templates they publish."
+  - Tabs, labelled "Profile collections": "People" (the default) and "Organizations", each
+    with an icon.
+  - The tab's cards, 24 a page in handle order: the avatar (or initials), the name (or
+    "@handle" without one) as an `h2`, "@handle", and "N public templates"; each card is one
+    link to `/profile/<handle>/`.
+  - Under the cards, when there is another page: "Previous" and "Next", in a navigation
+    landmark named "People pages" or "Organizations pages".
+- **PRIMARY ACTION:** a card → [Public Profile](#public-profile) or
+  [Organization Public Profile](#organization-public-profile).
+- **SECONDARY ACTIONS:** switch tab (rewrites the address, no new history entry); "Previous" and
+  "Next" (new history entries).
+- **STATES:** loading ("Loading profiles..." before the address is read, then "Loading
+  people..." or "Loading Organizations..."); load error ("Unable to load people." or "Unable to
+  load Organizations.", "Retry"); a failed refresh over the last list ("Unable to refresh
+  people." or "Unable to refresh Organizations.", "Retry"); empty ("No people yet", "People
+  appear here once they choose a username for their public profile." or "No Organizations yet",
+  "Organizations appear here once they have a public profile."); past the last page ("No more
+  people" or "No more Organizations", "Go to the first page"). An address it cannot read
+  shows the first page of People.
+- **NAVIGATION TYPE:** root section (footer).
+- **PATTERN CHOICE (built):** [Page hero](#page-hero) over shadcn Tabs, then a card grid of
+  [Bordered list cards](#bordered-list-cards) with the avatar in place of the icon tile.
+- **REFERENCE IMAGES:** prompts-1.png, home-1.png.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero (title, description); the tab list (full width on phones);
+    the tab's card grid (1 column on phones, 2 from `sm`, 3 from `lg`); the pager, Previous on
+    the left and Next on the right, wrapping on phones.
+  - COMPONENT TYPES: `PageHero`; shadcn Tabs; `CardGrid`; `ProfileDirectoryCard` (shadcn Item
+    as a link, Avatar); `QueryListState`; shadcn Empty; outline buttons as links.
+  - DATA FIELDS: Profile Owner (handle, name, avatar, public Template count) and the page's
+    cursors.
+- **PROOF PASS:** Not run yet: `pnpm run ui:snap` of `/profiles/` and
+  `/profiles/?collection=organizations` on desktop and phone (390px), light and dark, against
+  the references above, is the PR's evidence.
+- **NOTES:** Code: `src/views/ProfilesDirectory.tsx`, `src/components/profile/ProfileDirectoryCard.tsx`
+  and `src/features/profile/useProfileDirectory.ts`; the API and its eligibility rule are in
+  [SEO and sitemaps](seo-and-sitemaps.md#profiles-directory). Every address names `/profiles/`
+  as its canonical URL.
 
 ### Features
 

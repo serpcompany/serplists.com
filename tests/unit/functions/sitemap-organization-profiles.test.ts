@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { handleProfileDirectory } from '../../../functions/api/handlers/profile-directory';
-import { serveProfilesSitemap } from '../../../functions/sitemap/routes';
+import { servePagesSitemap, serveProfilesSitemap } from '../../../functions/sitemap/routes';
 import { profileDirectoryPageSchema } from '@/lib/schemas/profileDirectory';
 import { apiEnvOn } from '../../support/apiEnv';
 import { ACME, ARCHIVED_ORGANIZATION, CREATOR, PERSONAL_OWNER, seedProfileOwners } from '../../support/publicProfiles';
@@ -78,5 +78,13 @@ describe('the profiles sitemap, which lists every Profile Owner with a public pr
 
     const listedByTheDirectory = [...(await directoryPaths('people')), ...(await directoryPaths('organizations'))];
     expect([...(await profileLocations())].sort()).toEqual([...listedByTheDirectory].sort());
+  });
+});
+
+describe('the pages sitemap', () => {
+  it('lists the Profiles directory once, at its canonical URL', async () => {
+    const xml = await (await servePagesSitemap(new Request('https://serplists.com/sitemaps/pages/1.xml'), '1')).text();
+
+    expect(xml.match(/<loc>https:\/\/serplists\.com\/profiles\/<\/loc>/g)).toHaveLength(1);
   });
 });

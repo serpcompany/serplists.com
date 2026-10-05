@@ -144,6 +144,10 @@ An active Organization with a handle (its slug) has a Public Profile at `/profil
 - The page (`src/views/PublicProfile.tsx`, `src/components/profile/PublicProfileDetails.tsx`)
   shows the avatar, name, `@handle`, description, stats and template cards; owners and admins
   set the avatar and description on the Organization's settings page.
+- The Profiles directory's Organizations tab (`/profiles/?collection=organizations`) and the
+  profiles sitemap list the same Organizations: active, with a handle that passes the
+  [public handle rule](database-operations.md#public-handle-registry)
+  ([SEO and sitemaps](seo-and-sitemaps.md#profiles-directory)).
 - Every link to an Organization's public Template uses its Organization's handle: Share, "View
   public template", the library's and the profile's cards, the owner link on the public
   template page, canonical tags and sitemap entries (`resolvePublicTemplateOwnerSlug` in

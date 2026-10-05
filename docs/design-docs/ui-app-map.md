@@ -46,8 +46,9 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 
 - **Public site:** Home, the Template Library, Categories, Features, Pricing, About, Contact.
 - **Auth:** Log in, Register, Forgot password, Reset password.
-- **Public Profiles and Public Templates:** `/profile/<handle>/` (a User's or an
-  Organization's) and `/profile/<handle>/<template>/`, and a Public Template's guest run,
+- **Public Profiles and Public Templates:** the Profiles directory, `/profiles/` (People and
+  Organizations), `/profile/<handle>/` (a User's or an Organization's) and
+  `/profile/<handle>/<template>/`, and a Public Template's guest run,
   `/profile/<handle>/<template>/run/`.
 - **Shared runs:** `/share/<token>/`, a Run opened through its share link.
 - **Organization invites:** `/team-invites/<token>/`.
@@ -198,6 +199,7 @@ Toasts (sonner) report results everywhere.
 | `/pricing/` | [Pricing](ui-screen-inventory.md#pricing) | Root section (header "Pricing") | Shell overlays | The Pro card's action follows the plan state |
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
+| `/profiles/` | [Profiles](ui-screen-inventory.md#profiles) | Root section (footer "Templates" column: "Profiles") | Shell overlays | People or Organizations tab, and the page, kept in the URL; Previous and Next; loading; load error with Retry; empty ("No people yet", "No Organizations yet"); past the last page ("No more people", "No more Organizations") with "Go to the first page" |
 | `/profile/<handle>/` | [Public Profile](ui-screen-inventory.md#public-profile) for a User's handle, [Organization Public Profile](ui-screen-inventory.md#organization-public-profile) for an active Organization's | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found (also an archived Organization); no public Templates |
 | `/profile/<handle>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page), under its Template Owner's handle only | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); Required tools list (when the Template has tools); "Save" becomes "Saved"; role-limited actions; Organization error notice; "Start Run" becomes "Continue Run" while a visitor who is not signed in has a guest run in progress; signed in, a notice with "Save to account" while the browser holds a guest run of it |
 | `/profile/<handle>/<template>/run/` | [Guest run](ui-screen-inventory.md#guest-run) | Child page of the public template page ("Start Run" signed out, "Continue Run", the breadcrumb back), and a page opened from a plain link | Shell overlays; Run complete dialog; Delete run dialog; Run tasks sheet; browser confirm | Starts a run when the browser has none; selected task; completed (frozen); task list column at `xl`; "Log in or sign up to save it to your account." signed out, "Save to account" signed in |
