@@ -30,7 +30,9 @@ until the next one lands), built in three steps:
 - [x] Owner follow-ups (2026-10-05): "Profile not found" for any missing profile; Transfer to
   Organization moves public Templates too; Organization cards say "Public template pack
   published by this Organization." when a Template has no description.
-- [ ] Apply `0030` to staging after the PR merges (owner go-ahead at that step).
+- [x] `0030` applied to staging after #282 merged (2026-10-05, owner go-ahead): Time Travel
+  bookmark `00000abd-00000000-000050fb-c8d330a360db4ca0d85f9cc284ae63b0` noted first,
+  `verify:staging` passes, and the staging deploy ran.
 - [ ] Before promoting to production: production needs `0028` and `0029` (the
   [public handles plan](public-handles.md)) and `0030`, since `/api/profiles/by-handle` reads
   `public_handles` and the Organization's avatar and description (`verify:prod:d1` fails

@@ -1,22 +1,35 @@
 import type { Metadata } from 'next';
+import { permanentRedirect } from 'next/navigation';
 
 import { metadataForSeo } from '@/lib/seo/pageMetadata';
 import { guestRunSeoFor } from '@/server/pageMeta/pageSeoLookup';
-import { loadTemplatePageSeo } from '@/server/pageMeta/templatePage';
-import { routeParam } from '@/server/routeParam';
+import { loadTemplatePageSeo, type TemplatePageLookup } from '@/server/pageMeta/templatePage';
+import { routeParam, routeQuery, type RouteSearchParams } from '@/server/routeParam';
 import GuestRun from '@/views/GuestRun';
 
-type Props = { params: Promise<{ username: string; templateSlug: string }> };
+type GuestRunParams = Promise<{ username: string; templateSlug: string }>;
 
-const loadSeo = async (params: Props['params']) => {
+const lookUp = async (params: GuestRunParams): Promise<TemplatePageLookup> => {
   const { username, templateSlug } = await params;
-  return guestRunSeoFor(await loadTemplatePageSeo(routeParam(username), routeParam(templateSlug)));
+  return loadTemplatePageSeo(routeParam(username), routeParam(templateSlug));
 };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  return metadataForSeo(loadSeo(params), { robots: 'noindex, follow' });
+const guestRunPathOf = (templatePath: string): string => `${templatePath}run/`;
+
+export async function generateMetadata({ params }: { params: GuestRunParams }): Promise<Metadata> {
+  const lookup = await lookUp(params);
+  if (lookup.kind === 'moved') permanentRedirect(guestRunPathOf(lookup.path));
+  return metadataForSeo(Promise.resolve(guestRunSeoFor(lookup)), { robots: 'noindex, follow' });
 }
 
-export default function Page() {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: GuestRunParams;
+  searchParams: Promise<RouteSearchParams>;
+}) {
+  const lookup = await lookUp(params);
+  if (lookup.kind === 'moved') permanentRedirect(`${guestRunPathOf(lookup.path)}${routeQuery(await searchParams)}`);
   return <GuestRun />;
 }

@@ -802,7 +802,9 @@ existing content, invent nothing):
 - **NOTES:** Code: `src/views/GuestRun.tsx`, with `GuestRunHeader` and `RunWorkspace` in
   `src/components/run-execution/`, the model in `src/features/guest-runs/` and the page's
   metadata in `src/app/(site)/profile/[username]/[templateSlug]/run/page.tsx`. It can't be
-  shared: every visitor of the address sees the run their own browser holds.
+  shared: every visitor of the address sees the run their own browser holds. An Organization
+  Template's guest run at its Creator's old URL redirects (308) to the Organization's `…/run/`,
+  as the Template page does.
 
 ### Categories
 

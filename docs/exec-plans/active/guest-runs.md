@@ -85,3 +85,6 @@ self-contained PRs at most, never one stacked on another). It was built in the t
   only."
 - 2026-10-05: The guest Run page shows the Template's Required tools as a compact card, as the
   Run page does, from the public Template it loads (a guest Run stores only the sections).
+- 2026-10-05: The guest Run page follows the Template page's owner-qualified lookup (#232): an
+  Organization Template's guest Run at its Creator's old URL answers a 308 to the Organization's
+  `…/run/` URL, keeping the query string, so links from before #232 still open the run.
