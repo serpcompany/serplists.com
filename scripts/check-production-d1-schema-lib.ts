@@ -244,11 +244,15 @@ export const REQUIRED_D1_SCHEMA: ByTable<readonly string[]> = Object.freeze({
     "revoked_at",
     "permissions",
   ],
+  public_handles: ["handle", "owner_type", "owner_id", "created_at"],
 });
 
 export const REQUIRED_D1_COLUMN_CONSTRAINTS: ByTable<ByTable<Readonly<RequiredColumnConstraints>>> = Object.freeze({
   personal_run_keys: {
     id: { notNull: true, primaryKey: true },
+  },
+  public_handles: {
+    handle: { notNull: true, primaryKey: true },
   },
 });
 
@@ -312,6 +316,7 @@ export const REQUIRED_D1_INDEXES: ByTable<readonly Readonly<RequiredIndex>[]> = 
     { name: "idx_personal_run_keys_user_id" },
     { name: "idx_personal_run_keys_key_hash_unique", unique: true },
   ],
+  public_handles: [{ name: "idx_public_handles_owner", unique: true }],
 });
 
 export const REQUIRED_D1_TRIGGERS: readonly Readonly<RequiredTrigger>[] = Object.freeze(

@@ -1,6 +1,7 @@
 import type { Adapter, GenericEndpointContext } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { log } from './logger';
+import { isPublicHandleUniqueViolation } from './public-handle';
 import { isUniqueViolationOn } from './unique-violation';
 
 const USERNAME_TAKEN_CODE = 'USERNAME_IS_ALREADY_TAKEN';
@@ -11,7 +12,7 @@ function usernameTakenError(): APIError {
 }
 
 export function isUsernameUniqueViolation(error: unknown): boolean {
-  return isUniqueViolationOn(error, 'users.username');
+  return isUniqueViolationOn(error, 'users.username') || isPublicHandleUniqueViolation(error);
 }
 
 export async function assertUsernameAvailableForUpdate(

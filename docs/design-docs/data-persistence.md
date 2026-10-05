@@ -80,6 +80,7 @@ retried insert drops the column from the statement itself (`withoutColumns`).
 - `team_entitlement_overrides`: legacy implementation table for Organization-level plan overrides.
 - `audit_events`: DB-backed actor/resource/action history.
 - `template_versions`: point-in-time template snapshots.
+- `public_handles`: one case-insensitive handle per username and Organization slug, kept by triggers ([database operations](database-operations.md#public-handle-registry)).
 
 ## JSON Columns
 
@@ -348,6 +349,10 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   ones queries use ([D1 cost](d1-cost.md)).
 - **Run Keys.** `0027`'s `permissions` default gives each key made before template writes
   existed what it could do then: `templates:read`, `runs:read` and `runs:write`.
+- **Public handles.** `0028` put usernames and Organization slugs in one case-insensitive
+  namespace (`public_handles`) ahead of Organization public profiles. Its backfill stops on a
+  collision, so a database is checked first, and triggers keep the registry in step with every
+  write, Better Auth's included ([database operations](database-operations.md#public-handle-registry)).
 
 ## Seeds
 

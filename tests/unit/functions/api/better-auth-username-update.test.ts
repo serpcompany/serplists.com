@@ -165,6 +165,12 @@ describe('isUsernameUniqueViolation', () => {
     expect(isUsernameUniqueViolation(uniqueUsernameErrorAsDrizzleWrapsD1s())).toBe(true);
   });
 
+  it("finds the public handle registry's constraint, which a username another User or an Organization holds in any case fails", () => {
+    const error = new Error('Failed query', { cause: new Error('D1_ERROR: UNIQUE constraint failed: public_handles.handle: SQLITE_CONSTRAINT') });
+
+    expect(isUsernameUniqueViolation(error)).toBe(true);
+  });
+
   it.each([
     ['another unique index', new Error('D1_ERROR: UNIQUE constraint failed: users.email: SQLITE_CONSTRAINT')],
     ['an unrelated error', new Error('D1_ERROR: no such table: users')],

@@ -45,18 +45,15 @@ describe('GET /api/profiles/by-username casing, on the migrated tables with thei
     expect(await response.json()).toMatchObject({ id: 'legacy' });
   });
 
-  it('prefers the exact match when a legacy mixed-case and a lowercase account both exist', async () => {
+  it('refuses a second account whose username differs from a legacy one only in case, so the legacy profile keeps its URL', async () => {
     addUser('legacy', 'JaneDoe');
-    addUser('newer', 'janedoe');
 
+    expect(() => addUser('newer', 'janedoe')).toThrow(/UNIQUE constraint failed: public_handles\.handle/);
     expect(await (await lookUp('JaneDoe')).json()).toMatchObject({ id: 'legacy' });
-    expect(await (await lookUp('janedoe')).json()).toMatchObject({ id: 'newer' });
-    expect(await (await lookUp('JANEDOE')).json()).toMatchObject({ id: 'newer' });
   });
 
   it('resolves the Settings preview of an unedited legacy username to that user', async () => {
     addUser('legacy', 'JaneDoe');
-    addUser('newer', 'janedoe');
 
     const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
     assert.exists(previewPath);

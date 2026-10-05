@@ -3,6 +3,36 @@
   "description": "SQL-only objects preserved by the Wrangler migration history and excluded from the Drizzle schema.",
   "triggers": [
     {
+      "name": "public_handles_teams_delete",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_delete AFTER DELETE ON teams BEGIN DELETE FROM public_handles WHERE owner_type = 'team' AND owner_id = OLD.id; END"
+    },
+    {
+      "name": "public_handles_teams_insert",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_insert AFTER INSERT ON teams WHEN NEW.slug IS NOT NULL AND trim(NEW.slug) <> '' BEGIN INSERT INTO public_handles (handle, owner_type, owner_id, created_at) VALUES (lower(trim(NEW.slug)), 'team', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now')); END"
+    },
+    {
+      "name": "public_handles_teams_update",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_update AFTER UPDATE OF slug ON teams WHEN OLD.slug IS NOT NEW.slug BEGIN DELETE FROM public_handles WHERE owner_type = 'team' AND owner_id = NEW.id; INSERT INTO public_handles (handle, owner_type, owner_id, created_at) SELECT lower(trim(NEW.slug)), 'team', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE NEW.slug IS NOT NULL AND trim(NEW.slug) <> ''; END"
+    },
+    {
+      "name": "public_handles_users_delete",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_delete AFTER DELETE ON users BEGIN DELETE FROM public_handles WHERE owner_type = 'user' AND owner_id = OLD.id; END"
+    },
+    {
+      "name": "public_handles_users_insert",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_insert AFTER INSERT ON users WHEN NEW.username IS NOT NULL AND trim(NEW.username) <> '' BEGIN INSERT INTO public_handles (handle, owner_type, owner_id, created_at) VALUES (lower(trim(NEW.username)), 'user', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now')); END"
+    },
+    {
+      "name": "public_handles_users_update",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_update AFTER UPDATE OF username ON users WHEN OLD.username IS NOT NEW.username BEGIN DELETE FROM public_handles WHERE owner_type = 'user' AND owner_id = NEW.id; INSERT INTO public_handles (handle, owner_type, owner_id, created_at) SELECT lower(trim(NEW.username)), 'user', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE NEW.username IS NOT NULL AND trim(NEW.username) <> ''; END"
+    },
+    {
       "name": "sitemap_owner_users_insert",
       "table": "users",
       "definition": "CREATE TRIGGER sitemap_owner_users_insert AFTER INSERT ON users BEGIN INSERT INTO sitemap_owner_revisions VALUES(NEW.id,COALESCE(NEW.updated_at,NEW.created_at)); END"

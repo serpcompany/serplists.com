@@ -6,7 +6,7 @@ D1 (SQLite) tables as defined in the Drizzle schema. Ownership, migrations, and
 environments are described in [database operations](../design-docs/database-operations.md).
 Tables named `team*` and `team_id` columns are legacy names for Organizations.
 
-Tables: [`account`](#account), [`audit_events`](#audit_events), [`checklist_runs`](#checklist_runs), [`entitlement_overrides`](#entitlement_overrides), [`personal_run_keys`](#personal_run_keys), [`session`](#session), [`sitemap_category_revisions`](#sitemap_category_revisions), [`sitemap_owner_revisions`](#sitemap_owner_revisions), [`sitemap_profile_revisions`](#sitemap_profile_revisions), [`sitemap_revisions`](#sitemap_revisions), [`sitemap_shard_revisions`](#sitemap_shard_revisions), [`stripe_customers`](#stripe_customers), [`stripe_subscriptions`](#stripe_subscriptions), [`stripe_webhook_events`](#stripe_webhook_events), [`team_entitlement_overrides`](#team_entitlement_overrides), [`team_invites`](#team_invites), [`team_members`](#team_members), [`teams`](#teams), [`template_likes`](#template_likes), [`template_versions`](#template_versions), [`templates`](#templates), [`usage_analytics`](#usage_analytics), [`users`](#users), [`verification`](#verification)
+Tables: [`account`](#account), [`audit_events`](#audit_events), [`checklist_runs`](#checklist_runs), [`entitlement_overrides`](#entitlement_overrides), [`personal_run_keys`](#personal_run_keys), [`public_handles`](#public_handles), [`session`](#session), [`sitemap_category_revisions`](#sitemap_category_revisions), [`sitemap_owner_revisions`](#sitemap_owner_revisions), [`sitemap_profile_revisions`](#sitemap_profile_revisions), [`sitemap_revisions`](#sitemap_revisions), [`sitemap_shard_revisions`](#sitemap_shard_revisions), [`stripe_customers`](#stripe_customers), [`stripe_subscriptions`](#stripe_subscriptions), [`stripe_webhook_events`](#stripe_webhook_events), [`team_entitlement_overrides`](#team_entitlement_overrides), [`team_invites`](#team_invites), [`team_members`](#team_members), [`teams`](#teams), [`template_likes`](#template_likes), [`template_versions`](#template_versions), [`templates`](#templates), [`usage_analytics`](#usage_analytics), [`users`](#users), [`verification`](#verification)
 
 ## account
 
@@ -120,6 +120,19 @@ Indexes:
 
 - `idx_personal_run_keys_key_hash_unique` unique on (key_hash)
 - `idx_personal_run_keys_user_id` on (user_id)
+
+## public_handles
+
+| Column | Type | Null | Default | Key |
+| --- | --- | --- | --- | --- |
+| `handle` | text | no |  | PK |
+| `owner_type` | text | no |  |  |
+| `owner_id` | text | no |  |  |
+| `created_at` | text | no |  |  |
+
+Indexes:
+
+- `idx_public_handles_owner` unique on (owner_type, owner_id)
 
 ## session
 
@@ -410,6 +423,12 @@ Indexes:
 
 Defined in migrations and recorded in `db/sql-only-schema.json` (Drizzle cannot represent them):
 
+- `public_handles_teams_delete` on `teams`
+- `public_handles_teams_insert` on `teams`
+- `public_handles_teams_update` on `teams`
+- `public_handles_users_delete` on `users`
+- `public_handles_users_insert` on `users`
+- `public_handles_users_update` on `users`
 - `sitemap_owner_users_insert` on `users`
 - `sitemap_templates_delete` on `templates`
 - `sitemap_templates_insert` on `templates`

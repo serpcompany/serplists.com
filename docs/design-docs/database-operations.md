@@ -37,8 +37,8 @@ binding with `--preview`; do not change them to use the database name directly.
     ([repository checks](../RELIABILITY.md#repository-checks)) refuses a snake_case export.
 - `db/migrations/` owns the ordered D1 migration history; D1 records applied
   migrations in `d1_migrations`.
-- SQL-only objects Drizzle cannot represent (currently the sitemap triggers) are
-  recorded in `db/sql-only-schema.json`.
+- SQL-only objects Drizzle cannot represent (currently the sitemap and
+  [public handle](#public-handle-registry) triggers) are recorded in `db/sql-only-schema.json`.
 - `db/seeds/` holds seed data and `db/maintenance/` one-off operations. Never put
   seed data in migrations; a data migration that must ship with deploy history
   must be idempotent, numbered, and clearly named.
@@ -270,6 +270,47 @@ Production:
 - Run `pnpm run verify:prod:d1` before promoting `staging` to `main`.
 - Confirm the Organization audit/history tables exist before deploying code that
   writes Organization or Template history.
+
+## Public handle registry
+
+`public_handles` (`0028`) gives Users and Organizations one namespace of public handles
+(issue #233): one row per username and Organization slug, keyed on `lower(trim(value))`, with
+its owner (`user` or `team`, and the id).
+
+- **Triggers keep it.** Six triggers on `users` and `teams` claim a handle when a row gets a
+  value, move it when the value changes (a change of case keeps it), and free it when the value
+  is cleared or the row is deleted. Archiving an Organization changes no slug, so an archived
+  Organization keeps its handle.
+- **A taken handle fails the write itself.** A value another owner holds, in any case, fails
+  with `UNIQUE constraint failed: public_handles.handle`, which rolls back that statement and its
+  whole batch. The API answers it as it answers the per-table unique indexes:
+  `422 USERNAME_IS_ALREADY_TAKEN` for a username, `409 team_slug_exists` for an Organization
+  slug. Organization slug checks (`isTeamSlugTaken`) read the registry, so a slug derived from
+  a name avoids usernames too.
+- **Why triggers.** Better Auth writes usernames itself, and D1 has batches, not interactive
+  transactions, so a claim made in a handler could not be atomic with that write.
+- **The rule.** New values follow `src/lib/schemas/publicHandle.ts` (3 to 30 letters, digits,
+  `_`, `.` and `-`); its `normalizePublicHandle` produces the triggers' key. Values saved
+  before the rule are registered as they are.
+
+Rollout, one database at a time:
+
+1. `pnpm run check:public-handles:staging` (read-only; `check:public-handles:local` for local
+   D1) lists collisions and values outside the rule. `0028`'s backfill stops on a collision, so
+   rename each one by hand first; nothing is renamed automatically.
+2. Back up ([below](#backup-and-restore)). Staging, whose database `--env preview` names:
+
+   ```bash
+   npx wrangler d1 export serp-checklists-staging-db --remote --env preview --output ./tmp/backups/serp-checklists-staging-db-$(date +%F).sql
+   ```
+
+3. `pnpm run db:migrate:d1:staging`, then `pnpm run check:staging:d1-schema`, which requires the
+   table, its index and the six triggers.
+
+Production waits for the owner's go-ahead on each step.
+
+Rollback: the change is additive. To remove it, ship code that no longer reads the table, then a
+new migration that drops the six triggers before `public_handles`; never edit `0028`.
 
 ## Backup and restore
 

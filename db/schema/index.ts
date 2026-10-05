@@ -13,6 +13,7 @@ export { teamEntitlementOverrides } from "./teamEntitlementOverrides";
 export { auditEvents } from "./auditEvents";
 export { templateVersions } from "./templateVersions";
 export { personalRunKeys } from "./personalRunKeys";
+export { publicHandles } from "./publicHandles";
 export {
   sitemapRevisions,
   sitemapProfileRevisions,

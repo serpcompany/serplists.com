@@ -1,7 +1,7 @@
 # Template Transfer
 
-- **Status:** active
-- **Last updated:** 2026-10-04
+- **Status:** completed
+- **Last updated:** 2026-10-05
 - **Goal:** a User moves one of their private Personal Templates into an Organization they can
   add Templates to, in place, without copying it or moving its Runs (issue #236). No migration.
 

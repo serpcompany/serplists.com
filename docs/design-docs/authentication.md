@@ -181,8 +181,8 @@ and user-facing failure states when a supporting service is unavailable.
   form, preferring an exact match, with an `IN` list that stays on
   `idx_users_username`. `/profile/JohnDoe/` then replaces the URL with the stored
   `/profile/johndoe/`. Account settings links the saved username as stored (a legacy
-  mixed-case one is found only in that casing, and its lowercase form can be another
-  User's, since `idx_users_username` compares case) and previews an unsaved edit as the
+  mixed-case one is found only in that casing; since `0028` no other User or Organization
+  can hold it in another case) and previews an unsaved edit as the
   lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
   them on every user write (`functions/api/utils/user-profile-validation.ts`), and
@@ -213,6 +213,10 @@ and user-facing failure states when a supporting service is unavailable.
   unique index, when two requests claim a name at once, is mapped to the same
   `422 USERNAME_IS_ALREADY_TAKEN` instead of a bodyless 500. Re-saving your own
   username in a different case is allowed.
+- Usernames share one case-insensitive namespace with Organization slugs
+  ([public handle registry](database-operations.md#public-handle-registry)): a username another
+  User holds in another case, or an Organization's slug, fails the write itself, and the API
+  answers the same `422 USERNAME_IS_ALREADY_TAKEN`.
 - Settings live at `/dashboard/settings/`; `/account` and `/dashboard/profile`
   redirect there.
 

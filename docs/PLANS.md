@@ -24,10 +24,10 @@ have not been updated in 30 days.
   engineering write-up recommends, no exceptions, and no code comments.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
+- [Public handles](exec-plans/active/public-handles.md): one case-insensitive handle namespace
+  for Users and Organizations (issue #233), in two PRs with a staging migration between them.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
-- [Template transfer](exec-plans/active/template-transfer.md): move a private Personal Template
-  into an Organization in place (issue #236), in two PRs.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
   the proposed migration that makes public Organization Template edits refresh cached
   sitemaps (TD-23).
@@ -39,6 +39,8 @@ have not been updated in 30 days.
 
 ## Completed
 
+- [Template transfer](exec-plans/completed/template-transfer.md): move a private Personal
+  Template into an Organization in place (issue #236), in two PRs.
 - [Run provenance](exec-plans/completed/run-provenance.md): who owns, created, started and
   completed a Run, and whether it came from the web app or an agent (issue #202), in three PRs.
 - [Organization console routes](exec-plans/completed/organization-console-routes.md): the URL
