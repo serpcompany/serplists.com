@@ -126,6 +126,7 @@ const SITEMAP_ROUTE_HANDLERS_AND_WHAT_THEY_HAND_THE_SITEMAP_CODE = [
   'functions/sitemap/routes.ts',
   'functions/sitemap/shared.ts',
   'functions/sitemap/cache.ts',
+  'functions/sitemap/listedOwners.ts',
 ] as const;
 const CATEGORY_SLUGS_AND_THE_ORIGIN_EVERY_LOC_STARTS_WITH = [
   'src/lib/categorySlug.ts',
