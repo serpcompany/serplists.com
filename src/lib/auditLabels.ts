@@ -24,6 +24,7 @@ export const TEMPLATE_HISTORY_LABELS: Record<TemplateHistoryAction, string> = {
   'template.cloned': 'Copied template',
   'template.deleted': 'Deleted template',
   'template.restored': 'Restored template',
+  'template.transferred_to_organization': 'Transferred to Organization',
   'template.versioned': 'Saved template version',
 };
 
@@ -52,6 +53,7 @@ export const ORGANIZATION_ACTIVITY_LABELS: Record<AuditAction, string> = {
   'template.deleted': 'Template deleted',
   'template.imported': 'Template imported',
   'template.restored': 'Template restored',
+  'template.transferred_to_organization': 'Template transferred in',
   'template.updated': 'Template updated',
 };
 

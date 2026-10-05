@@ -86,6 +86,10 @@ async function driveTemplateRoutes() {
   const archivable = await readJson(await as(OWNER, handleTemplates, "templates", "POST", { title: "Archived", sections: SECTIONS }), withId);
   await drive("DELETE /api/templates/:id", "template.deleted", () => as(OWNER, handleTemplates, `templates/${archivable.id}`, "DELETE"));
   await drive("POST /api/templates/:id/restore", "template.restored", () => as(OWNER, handleTemplates, `templates/${archivable.id}/restore`, "POST"));
+  const transferable = await readJson(await as(OWNER, handleTemplates, "templates", "POST", { title: "Transferred", sections: SECTIONS }), withId);
+  const loaded = await readJson(await as(OWNER, handleTemplates, `templates/${transferable.id}`, "GET"), withVersion);
+  await drive("POST /api/templates/:id/transfer", "template.transferred_to_organization", () =>
+    as(OWNER, handleTemplates, `templates/${transferable.id}/transfer`, "POST", { teamId: "team-1", expected_version: loaded.version }));
   return { runId: run.id };
 }
 

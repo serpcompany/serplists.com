@@ -17,6 +17,8 @@ vi.mock("../../functions/api/utils/session", () => ({
 import { handleChecklists } from "../../functions/api/handlers/checklists";
 import { getSessionUserId } from "../../functions/api/utils/session";
 
+type ApiHandler = (request: Request, env: Env) => Promise<Response>;
+
 export function runsOnLocalD1(name: string, seed: (db: D1Database) => Promise<unknown>) {
   let d1: LocalD1 | undefined;
 
@@ -34,10 +36,13 @@ export function runsOnLocalD1(name: string, seed: (db: D1Database) => Promise<un
     return d1.env;
   };
 
-  const requestAs = async (userId: string, path: string, init?: RequestInit): Promise<Response> => {
+  const requestWith = async (handler: ApiHandler, userId: string, path: string, init?: RequestInit): Promise<Response> => {
     vi.mocked(getSessionUserId).mockResolvedValue(userId);
-    return handleChecklists(new Request(`http://localhost/api/checklists${path}`, init), env());
+    return handler(new Request(`http://localhost${path}`, init), env());
   };
+
+  const requestAs = (userId: string, path: string, init?: RequestInit): Promise<Response> =>
+    requestWith(handleChecklists, userId, `/api/checklists${path}`, init);
 
   const listAs = async <Row extends { id: string }>(
     userId: string,
@@ -61,5 +66,5 @@ export function runsOnLocalD1(name: string, seed: (db: D1Database) => Promise<un
     return plan.results.map(({ detail }) => detail);
   };
 
-  return { db: () => env().DB, listAs, personalRunListPlan, requestAs };
+  return { db: () => env().DB, listAs, personalRunListPlan, requestAs, requestWith };
 }
