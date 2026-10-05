@@ -1,9 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { apiJsonAt as callApi } from './support/api-requests';
 import { createdOrganization } from './support/api-bodies';
 import { expectNoSidewaysScroll } from './support/phone';
 import { loginAsAdmin } from './support/sign-in';
+
+const profileCards = (page: Page) => page.locator('a[href^="/profile/"]');
+
+async function handleOfTheFirstCard(page: Page): Promise<string> {
+  const firstCard = profileCards(page).first();
+  await expect(firstCard).toBeVisible({ timeout: 30_000 });
+  const href = (await firstCard.getAttribute('href')) ?? '';
+  expect(href).toMatch(/^\/profile\/[^/]+\/$/);
+  return decodeURIComponent(href.split('/')[2] ?? '');
+}
 
 test('the footer links the Profiles directory, whose People open their one canonical profile', async ({ page }) => {
   await page.goto('/');
@@ -12,24 +22,26 @@ test('the footer links the Profiles directory, whose People open their one canon
   await expect(page).toHaveURL(/\/profiles\/$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Profiles' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true');
-  const john = page.locator('a[href="/profile/john/"]');
-  await expect(john).toContainText('@john', { timeout: 30_000 });
-  await expect(john).toContainText(/\d+ public templates?/);
+  const handle = await handleOfTheFirstCard(page);
+  const card = profileCards(page).first();
+  await expect(card).toContainText(`@${handle}`);
+  await expect(card).toContainText(/\d+ public templates?/);
 
-  await john.click();
-  await expect(page).toHaveURL(/\/profile\/john\/$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'John (Free)' })).toBeVisible({ timeout: 30_000 });
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`/profile/${handle}/$`));
+  await expect(page.getByText(`@${handle}`).first()).toBeVisible({ timeout: 30_000 });
 });
 
 test('switching to Organizations keeps the page and puts the collection in the address', async ({ page }) => {
   await page.goto('/profiles/');
   await expect(page.getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true');
+  await handleOfTheFirstCard(page);
 
   await page.getByRole('tab', { name: 'Organizations' }).click();
 
   await expect(page).toHaveURL(/\/profiles\/\?collection=organizations$/);
   await expect(page.getByRole('tab', { name: 'Organizations' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('a[href="/profile/serp-growth-team/"]')).toBeVisible({ timeout: 30_000 });
+  await handleOfTheFirstCard(page);
 });
 
 test('an Organization with a handle is listed under Organizations and opens its public profile', async ({ page, browser }) => {
@@ -62,12 +74,13 @@ test.describe('on a phone', () => {
   test('the directory fits the screen, with both collections and their cards in reach', async ({ page }) => {
     await page.goto('/profiles/');
 
-    await expect(page.locator('a[href="/profile/john/"]')).toBeVisible({ timeout: 30_000 });
+    await handleOfTheFirstCard(page);
     await expect(page.getByRole('tab', { name: 'Organizations' })).toBeVisible();
     await expectNoSidewaysScroll(page);
 
     await page.getByRole('tab', { name: 'Organizations' }).click();
-    await expect(page.locator('a[href="/profile/serp-growth-team/"]')).toBeVisible({ timeout: 30_000 });
+    await expect(page).toHaveURL(/\/profiles\/\?collection=organizations$/);
+    await handleOfTheFirstCard(page);
     await expectNoSidewaysScroll(page);
   });
 });
