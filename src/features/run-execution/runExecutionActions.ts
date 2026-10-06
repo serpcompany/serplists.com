@@ -1,5 +1,5 @@
 import { getRunTitleError } from '@/lib/schemas/nameLimits';
-import type { ChecklistRun } from '@/types/checklist';
+import type { ChecklistRun, FormAnswer } from '@/types/checklist';
 
 import {
   areAllRunItemsCompleted,
@@ -11,6 +11,13 @@ import {
   setSubItemsCompletion,
 } from './runExecutionMappers';
 import { applyNoteDrafts, draftedNotesChanged, hasNoteDraftFor, type NoteDrafts } from './noteDrafts';
+import {
+  findRunFormAnswer,
+  findTaskFormField,
+  isTaskFormBlocking,
+  refuseBlockedTask,
+  sameFormAnswer,
+} from './runFormAnswers';
 import {
   runOpenedByItsOwner,
   runStillOpen,
@@ -47,6 +54,12 @@ type SaveRunItemNotesParams = RunExecutionMutationParams & {
 
 type SaveRunTitleParams = RunExecutionMutationParams & {
   title: string;
+};
+
+type SaveRunFormAnswerParams = RunExecutionMutationParams & {
+  answer: FormAnswer | undefined;
+  fieldId: string;
+  itemId: string;
 };
 
 type CompleteRunExecutionParams = RunExecutionMutationParams & {
@@ -96,6 +109,8 @@ export const toggleRunItem = async (
       }
 
       const { isCompleted } = params;
+      const formRefusal = isCompleted ? refuseBlockedTask(item) : null;
+      if (formRefusal) return formRefusal;
       if (itemHasCompletion(item, isCompleted)) {
         const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, run, params.itemId);
         return saveToggledRun(notesChanged ? nextRun : run, notesChanged, params.shareToken, dependencies);
@@ -144,7 +159,7 @@ export const toggleRunSubItem = async (
         return saveToggledRun(run, false, params.shareToken, dependencies);
       }
       subItem.isCompleted = params.isCompleted;
-      item.isCompleted = areItemSubItemsCompleted(item);
+      item.isCompleted = areItemSubItemsCompleted(item) && !isTaskFormBlocking(item);
 
       return saveToggledRun(nextRun, true, params.shareToken, dependencies);
     }
@@ -181,6 +196,29 @@ export const saveRunItemNotes = async (
   }
 
   return { kind: 'not_found' };
+};
+
+export const saveRunFormAnswer = async (
+  params: SaveRunFormAnswerParams,
+  dependencies: RunExecutionDependencies,
+): Promise<RunExecutionActionResult> => {
+  if (params.shareToken) return { kind: 'shared_disabled' };
+  const target = runStillOpen(params.run);
+  if ('refusal' in target) return target.refusal;
+  const { run } = target;
+
+  const nextRun = withClonedRun(run);
+  const item = getSelectedRunItem(nextRun, params.itemId)?.item;
+  const field = item ? findTaskFormField(item, params.fieldId) : undefined;
+  if (!field) return { kind: 'not_found' };
+  if (sameFormAnswer(field.answer, params.answer)) return { kind: 'ok', run };
+
+  field.answer = params.answer;
+  try {
+    return { kind: 'ok', run: await persistRun({ run: nextRun }, dependencies) };
+  } catch (error) {
+    return toErrorResult(error, 'Unable to save your answer.');
+  }
 };
 
 export const saveRunExecutionTitle = async (
@@ -255,6 +293,16 @@ export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
   noteDrafts: () => NoteDrafts;
   shareToken?: string | undefined;
 }) => ({
+  answer: (itemId: string, fieldId: string, answer: FormAnswer | undefined): QueuedRunSave => ({
+    bind: (current) => {
+      const before = findRunFormAnswer(current, itemId, fieldId);
+      return {
+        canRetryOn: (fresh) => sameFormAnswer(findRunFormAnswer(fresh, itemId, fieldId), before),
+        save: (run) => saveRunFormAnswer({ answer, fieldId, itemId, run, shareToken }, dependencies),
+      };
+    },
+    key: `answer:${itemId}:${fieldId}:${JSON.stringify(answer ?? null)}`,
+  }),
   complete: {
     bind: (current: ChecklistRun): RunSave => ({
       canRetryOn: (fresh) => !draftedNotesChanged(noteDrafts(), current, fresh),

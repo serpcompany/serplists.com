@@ -3,10 +3,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MarkdownBlock } from './MarkdownBlock';
 import { TaskImage } from './TaskImage';
 import { VideoEmbed } from './VideoEmbed';
+import { FormFieldInputs } from './FormFieldInputs';
 import { FormFieldList } from './FormFieldList';
 import { ClipboardList, File, Code, ListCheck } from 'lucide-react';
-import { ChecklistFormField, ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { ChecklistFormField, ChecklistItemContent, ChecklistSubItem, FormAnswer } from '@/types/checklist';
 import { readFormFields } from '@/lib/schemas/formFields';
+import { findFormFieldProblem } from '@/lib/schemas/formValidation';
 import { isContentRecord, isSubTaskRecord, type ContentRecord, type SubTaskRecord } from '@/lib/schemas/jsonRecords';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
@@ -51,15 +53,24 @@ const toRenderableContent = (content: unknown, contentIndex: number): Renderable
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
+  formCheck?: number;
+  onFormAnswerChange?: ((contentIndex: number, fieldId: string, answer: FormAnswer | undefined) => void) | undefined;
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
   subtaskHeadingAs?: 'h3' | 'h4';
+  uploadLoginPath?: string | undefined;
 }
+
+const hasFormProblem = (content: RenderableContent): boolean =>
+  content.type === 'form' && content.fields.some((field) => findFormFieldProblem(field) !== null);
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
   disabled = false,
+  formCheck = 0,
+  onFormAnswerChange,
   onSubItemToggle,
   subtaskHeadingAs: SubtaskHeading = 'h4',
+  uploadLoginPath,
 }) => {
   if (!contents || contents.length === 0) {
     return (
@@ -70,10 +81,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     );
   }
 
+  const renderable = contents.map(toRenderableContent);
+  const firstFormWithProblem = renderable.findIndex(hasFormProblem);
+
   return (
     <div className="space-y-6">
-      {contents.map((rawContent, contentIndex: number) => {
-        const content = toRenderableContent(rawContent, contentIndex);
+      {renderable.map((content, contentIndex: number) => {
         return (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
@@ -165,7 +178,17 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 <SubtaskHeading className="font-medium">Form</SubtaskHeading>
               </div>
               <div className="sm:pl-7">
-                <FormFieldList fields={content.fields} />
+                {onFormAnswerChange && !disabled ? (
+                  <FormFieldInputs
+                    check={formCheck}
+                    fields={content.fields}
+                    focusOnCheck={contentIndex === firstFormWithProblem}
+                    onAnswerChange={(fieldId, answer) => onFormAnswerChange(contentIndex, fieldId, answer)}
+                    uploadLoginPath={uploadLoginPath}
+                  />
+                ) : (
+                  <FormFieldList fields={content.fields} />
+                )}
               </div>
             </div>
           )}

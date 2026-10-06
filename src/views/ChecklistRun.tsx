@@ -66,6 +66,7 @@ const ChecklistRunPage = () => {
     progress,
     restoreNoteDrafts,
     run,
+    saveFormAnswer,
     saveItemNotes,
     setNoteDraft,
     saveTitle,
@@ -88,7 +89,7 @@ const ChecklistRunPage = () => {
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
   const keepNoteDrafts = useKeptRunNoteDrafts({ privateRun: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
   const { allowLeave } = useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE, keepNoteDrafts);
-  const actions = useRunPageActions({ completeRun, saveItemNotes, toggleItem, toggleSubItem }, (visit) => {
+  const actions = useRunPageActions({ completeRun, saveFormAnswer, saveItemNotes, toggleItem, toggleSubItem }, (visit) => {
     if (!isSharedRun && visit.isCurrent()) {
       router.push(buildConsoleRunsPath(runContext));
     }
@@ -249,8 +250,10 @@ const ChecklistRunPage = () => {
           <RunWorkspace
             canUpdateRun={canUpdateRun}
             completedTasks={counts.tasksCompleted}
+            formAttempt={actions.formAttempt}
             noteDrafts={noteDrafts}
             onFinishRun={actions.openCompleteDialog}
+            onFormAnswerChange={actions.saveFormAnswer}
             onNoteDraftChange={setNoteDraft}
             onSaveNotes={actions.saveNotes}
             onSelectTask={setSelectedItemId}
