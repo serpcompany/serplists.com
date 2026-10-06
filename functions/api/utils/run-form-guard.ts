@@ -64,7 +64,7 @@ function withSubmittedAnswers(stored: TaskRecord, submitted: TaskRecord): TaskRe
 const answersOf = (task: TaskRecord): string =>
   JSON.stringify(getTaskFormFields(task).map((field) => [field.id, field.answer ?? null]));
 
-export function findFormBlockedSaves(storedSections: unknown[], nextSections: unknown[]): FormBlockedField[] {
+function findFormBlockedSaves(storedSections: unknown[], nextSections: unknown[]): FormBlockedField[] {
   const storedTasks = firstTaskById(storedSections);
   return tasksIn(nextSections).flatMap((task) => {
     if (!isDone(task)) return [];
