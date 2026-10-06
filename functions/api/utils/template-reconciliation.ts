@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { toProgressPercent } from '../../../src/lib/progress';
 import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
+import { withoutFormAnswers } from '../../../src/lib/schemas/formFields';
 import {
   isContentRecord,
   isRecord,
@@ -9,6 +10,7 @@ import {
   isTaskRecord,
   taskRecordsIn,
   type ChecklistNodeRecord,
+  type FormFieldRecord,
   type JsonRecord,
   type SectionRecord,
   type SubTaskRecord,
@@ -17,11 +19,19 @@ import {
 import {
   assignMissingStableTemplateIdentities,
   getArray,
+  getFormFields,
   getId,
   getSubItems,
+  mapFormBlocks,
   mapSubTasksBlocks,
   normalizeLegacySectionShape,
 } from './template-identities';
+import {
+  reconcileFormFields,
+  reopenWhenFormBlocks,
+  retiredFormAnswersOf,
+  type RetiredFormAnswerEntry,
+} from './template-form-reconciliation';
 
 export { assignMissingStableTemplateIdentities, validateStableTemplateIdentities } from './template-identities';
 
@@ -34,7 +44,8 @@ export type RetiredRunEntry =
       itemId: string;
       itemTitle?: string;
       subItem: SubTaskRecord;
-    };
+    }
+  | RetiredFormAnswerEntry;
 
 const wasCompleted = (runValue: TaskRecord | SubTaskRecord | undefined): boolean =>
   typeof runValue?.isCompleted === 'boolean' ? runValue.isCompleted : runValue?.completed === true;
@@ -59,14 +70,23 @@ const storedRetiredWork = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('section'), section: storedRecord }),
   z.object({ kind: z.literal('item'), item: storedRecord }),
   z.object({ kind: z.literal('subItem'), subItem: storedRecord }),
+  z.object({ kind: z.literal('formAnswer'), field: storedRecord }),
 ]);
 
 function retiredWorkOf(entry: unknown): { kind: RetiredRunEntry['kind']; record: ChecklistNodeRecord } | null {
   const parsed = storedRetiredWork.safeParse(entry);
   if (!parsed.success) return null;
   const work = parsed.data;
-  const record = work.kind === 'section' ? work.section : work.kind === 'item' ? work.item : work.subItem;
-  return { kind: work.kind, record };
+  switch (work.kind) {
+    case 'section':
+      return { kind: work.kind, record: work.section };
+    case 'item':
+      return { kind: work.kind, record: work.item };
+    case 'subItem':
+      return { kind: work.kind, record: work.subItem };
+    case 'formAnswer':
+      return { kind: work.kind, record: work.field };
+  }
 }
 
 function createEarlierRetiredLookup(previousRetired: unknown[]) {
@@ -99,11 +119,11 @@ function resetTaskState(item: unknown): unknown {
   const next = freshRunState(item);
   if (Array.isArray(item.subItems)) next.subItems = resetSubItems(item.subItems);
   if (Array.isArray(item.contents)) {
-    next.contents = item.contents.map((content: unknown) => (
+    next.contents = mapFormBlocks(item.contents.map((content: unknown) => (
       isContentRecord(content) && Array.isArray(content.subItems)
         ? { ...content, subItems: resetSubItems(content.subItems) }
         : content
-    ));
+    )), withoutFormAnswers);
   }
   return next;
 }
@@ -127,19 +147,19 @@ function indexById<Work extends ChecklistNodeRecord>(records: Work[]): Map<strin
   return index;
 }
 
-function createRunMatcher(kind: 'item' | 'subItem', previous: TaskRecord[], earlierRetired: EarlierRetired) {
+function createRunMatcher(kind: 'item' | 'subItem' | 'formAnswer', previous: ChecklistNodeRecord[], earlierRetired: EarlierRetired) {
   const claimed = new Set<JsonRecord>();
   const anywhere = indexById(previous);
-  const claimFirst = (copies: TaskRecord[] | undefined) => {
+  const claimFirst = (copies: ChecklistNodeRecord[] | undefined) => {
     const copy = copies?.find((record) => !claimed.has(record));
     if (copy) claimed.add(copy);
     return copy;
   };
   return {
     claimed,
-    underParent: (id: string | null, previousUnderParentById: Map<string, TaskRecord[]>) =>
+    underParent: (id: string | null, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
       (id ? claimFirst(previousUnderParentById.get(id)) : undefined),
-    elsewhere: (id: string | null): TaskRecord | undefined => {
+    elsewhere: (id: string | null): ChecklistNodeRecord | undefined => {
       if (!id) return undefined;
       const copies = anywhere.get(id);
       if (!copies) return earlierRetired.take(kind, id);
@@ -154,15 +174,18 @@ function withoutClaimed(records: unknown, claimed: Set<JsonRecord>): unknown[] {
   return getArray(records).filter((record) => !(isRecord(record) && claimed.has(record)));
 }
 
-function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>): TaskRecord {
-  if (!getSubItems(item).some((subItem) => claimed.has(subItem))) return item;
-  return { ...item, contents: mapSubTasksBlocks(getArray(item.contents), (list) => withoutClaimed(list, claimed)) };
+function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claimedFields: Set<JsonRecord>): TaskRecord {
+  const movedSubItems = getSubItems(item).some((subItem) => claimed.has(subItem));
+  const movedFields = getFormFields(item).some((field) => claimedFields.has(field));
+  if (!movedSubItems && !movedFields) return item;
+  const contents = mapSubTasksBlocks(getArray(item.contents), (list) => withoutClaimed(list, claimed));
+  return { ...item, contents: mapFormBlocks(contents, (list) => withoutClaimed(list, claimedFields)) };
 }
 
-function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher): SectionRecord | null {
+function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
   const previousItems = getArray(section.items);
   const kept = withoutClaimed(previousItems, items.claimed)
-    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed) : item));
+    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed, fields.claimed) : item));
   if (previousItems.length > 0 && kept.length === 0) return null;
   return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
     ? section
@@ -173,19 +196,22 @@ function reconcileItem(
   templateItem: TaskRecord,
   previousItem: TaskRecord | undefined,
   subItemMatches: Map<JsonRecord, TaskRecord | undefined>,
+  fieldMatches: Map<JsonRecord, FormFieldRecord | undefined>,
 ): TaskRecord {
   const next = preserveRunState(templateItem, previousItem);
   const reconcileSubItems = (list: unknown[]) =>
     list.filter(isSubTaskRecord).map((subItem) => preserveRunState(subItem, subItemMatches.get(subItem)));
 
-  if (Array.isArray(templateItem.contents)) next.contents = mapSubTasksBlocks(templateItem.contents, reconcileSubItems);
+  if (Array.isArray(templateItem.contents)) {
+    next.contents = reconcileFormFields(mapSubTasksBlocks(templateItem.contents, reconcileSubItems), fieldMatches);
+  }
 
   const reconciledSubItems = getSubItems(next);
   if (reconciledSubItems.length > 0) {
     next.isCompleted = reconciledSubItems.every((subItem) => subItem.isCompleted === true);
   }
 
-  return next;
+  return reopenWhenFormBlocks(next);
 }
 
 export function reconcileRunSections(
@@ -210,6 +236,7 @@ export function reconcileRunSections(
   const previousItems = normalizedPreviousSections.flatMap((section) => taskRecordsIn(section.items));
   const items = createRunMatcher('item', previousItems, earlierRetired);
   const subItems = createRunMatcher('subItem', previousItems.flatMap(getSubItems), earlierRetired);
+  const fields = createRunMatcher('formAnswer', previousItems.flatMap(getFormFields), earlierRetired);
 
   const matchedSections = normalizedTemplateSections.map((templateSection) => {
     const id = getId(templateSection) ?? '';
@@ -240,6 +267,17 @@ export function reconcileRunSections(
       if (!subItemMatches.get(subItem)) subItemMatches.set(subItem, subItems.elsewhere(getId(subItem)));
     }
   }
+  const fieldMatches = new Map<JsonRecord, FormFieldRecord | undefined>();
+  for (const { templateItem } of templateItems) {
+    const previousItem = itemMatches.get(templateItem);
+    const parent = indexById(previousItem ? getFormFields(previousItem) : []);
+    for (const field of getFormFields(templateItem)) fieldMatches.set(field, fields.underParent(getId(field), parent));
+  }
+  for (const { templateItem } of templateItems) {
+    for (const field of getFormFields(templateItem)) {
+      if (!fieldMatches.get(field)) fieldMatches.set(field, fields.elsewhere(getId(field)));
+    }
+  }
 
   const retired: RetiredRunEntry[] = [];
   const sections = matchedSections.map(({ templateSection, id: sectionId, previousItems: sectionPreviousItems }) => {
@@ -255,7 +293,8 @@ export function reconcileRunSections(
           subItem,
         });
       }
-      return reconcileItem(templateItem, previousItem, subItemMatches);
+      retired.push(...retiredFormAnswersOf(sectionId, templateItem, previousItem, fields.claimed, fieldMatches));
+      return reconcileItem(templateItem, previousItem, subItemMatches, fieldMatches);
     });
 
     for (const previousItem of sectionPreviousItems) {
@@ -264,7 +303,7 @@ export function reconcileRunSections(
         kind: 'item',
         sectionId,
         ...(typeof templateSection.title === 'string' ? { sectionTitle: templateSection.title } : {}),
-        item: withoutMovedSubItems(previousItem, subItems.claimed),
+        item: withoutMovedSubItems(previousItem, subItems.claimed, fields.claimed),
       });
     }
 
@@ -275,7 +314,7 @@ export function reconcileRunSections(
   for (const previousSection of normalizedPreviousSections) {
     const sectionId = getId(previousSection);
     if (!sectionId || retainedSectionIds.has(sectionId)) continue;
-    const section = withoutMovedWork(previousSection, items, subItems);
+    const section = withoutMovedWork(previousSection, items, subItems, fields);
     if (section) retired.push({ kind: 'section', section });
   }
 
@@ -284,14 +323,26 @@ export function reconcileRunSections(
 
 export type RetiredRunSummary = { kind: RetiredRunEntry['kind']; id: string; title: string };
 
+const retiredEntryTitle = (entry: RetiredRunEntry): unknown => {
+  switch (entry.kind) {
+    case 'section':
+      return entry.section.title;
+    case 'item':
+      return entry.item.title;
+    case 'subItem':
+      return entry.subItem.title;
+    case 'formAnswer':
+      return entry.field.label;
+  }
+};
+
+const retiredEntryRecord = (entry: RetiredRunEntry): ChecklistNodeRecord =>
+  entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.kind === 'subItem' ? entry.subItem : entry.field;
+
 export function summarizeRetiredEntries(entries: RetiredRunEntry[]): RetiredRunSummary[] {
   return entries.map((entry) => {
-    const record = entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.subItem;
-    return {
-      kind: entry.kind,
-      id: getId(record) ?? '',
-      title: typeof record.title === 'string' ? record.title : '',
-    };
+    const title = retiredEntryTitle(entry);
+    return { kind: entry.kind, id: getId(retiredEntryRecord(entry)) ?? '', title: typeof title === 'string' ? title : '' };
   });
 }
 

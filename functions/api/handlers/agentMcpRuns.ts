@@ -50,6 +50,7 @@ export interface RetiredEntryRecord extends JsonRecord {
   section?: unknown;
   item?: unknown;
   subItem?: unknown;
+  field?: unknown;
   sectionId?: unknown;
   itemId?: unknown;
 }
@@ -217,7 +218,9 @@ export function updateRunAuditDiff(
 }
 
 function retiredRecord(entry: RetiredEntryRecord): ChecklistNodeRecord | null {
-  const record = entry.kind === "section" ? entry.section : entry.kind === "item" ? entry.item : entry.subItem;
+  const record = entry.kind === "section" ? entry.section
+    : entry.kind === "item" ? entry.item
+      : entry.kind === "formAnswer" ? entry.field : entry.subItem;
   return isChecklistNodeRecord(record) ? record : null;
 }
 
@@ -228,7 +231,7 @@ function retiredSectionId(entry: RetiredEntryRecord): unknown {
 function retiredEntriesForTask(entries: RetiredEntryRecord[], taskId: string): RetiredEntryRecord[] {
   return entries.flatMap((entry) => {
     if (entry.kind === "item") return retiredRecord(entry)?.id === taskId ? [entry] : [];
-    if (entry.kind === "subItem") return entry.itemId === taskId ? [entry] : [];
+    if (entry.kind === "subItem" || entry.kind === "formAnswer") return entry.itemId === taskId ? [entry] : [];
     const section = entry.kind === "section" && isSectionRecord(entry.section) ? entry.section : null;
     const task = section ? taskRecordsIn(section.items).find((item) => item.id === taskId) : undefined;
     return section && task ? [{ ...entry, section: { ...section, items: [task] } }] : [];
