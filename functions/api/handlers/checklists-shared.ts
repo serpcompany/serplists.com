@@ -17,6 +17,7 @@ import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-li
 import { canViewRun } from '../utils/run-access';
 import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
+import { completedRunTaskChangeResponse } from '../utils/completed-run-freeze';
 
 export async function handleSharedChecklist(
   request: Request,
@@ -88,6 +89,8 @@ export async function handleSharedChecklist(
       return jsonError(merged.error, 400);
     }
     nextSections = merged.sections;
+    const frozen = completedRunTaskChangeResponse(existingSharedRun, status, storedSections, nextSections);
+    if (frozen) return frozen;
     const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
     if (tooLarge) return tooLarge;
     updates.items = JSON.stringify(nextSections);

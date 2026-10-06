@@ -227,4 +227,7 @@ updates the run only when that audit row exists. If one lands without the other,
 `mcp_tool_invariant` and refuses with `internal_invariant`. `set_run_status` rewrites no
 content and matches the web app's status save: progress stays, reopening keeps the
 completion stamps, and completing a run that is already completed does not stamp it again.
+A completed run is frozen as on the run page: `set_task_completed` and `set_subtask_completed`
+fail with `run_completed` and write nothing, `set_task_notes` still works, and
+`set_run_status` `in_progress` reopens it.
 What MCP run events record is in [data persistence](data-persistence.md#json-columns).

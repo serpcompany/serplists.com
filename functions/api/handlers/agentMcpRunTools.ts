@@ -29,6 +29,7 @@ import {
   applyRunOperation,
   assertRunCanBeCompleted,
   assertRunContentFits,
+  assertRunTasksCanChange,
   parseStoredSections,
   summarizeRun,
   summarizeRunForAudit,
@@ -163,6 +164,7 @@ export async function updateRun(
       currentRevision,
     });
   }
+  assertRunTasksCanChange(existing, args);
 
   const sections = parseStoredSections(existing.items);
   if (args.operation === "set_run_status" && args.status === "completed" && existing.status !== "completed") {

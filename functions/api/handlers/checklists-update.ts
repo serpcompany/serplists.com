@@ -10,6 +10,7 @@ import { findRunToUpdate, getRunSubject, writeAuditedRunUpdate, type RunUpdates 
 import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
+import { completedRunTaskChangeResponse } from '../utils/completed-run-freeze';
 
 export async function updateChecklistRun(
   request: Request,
@@ -62,7 +63,10 @@ export async function updateChecklistRun(
     });
   }
   if (nextSections) {
-    const tooLarge = contentTooLargeResponse('run', nextSections, parseJsonArray(existingRun.items) ?? []);
+    const storedSections = parseJsonArray(existingRun.items) ?? [];
+    const frozen = completedRunTaskChangeResponse(existingRun, status, storedSections, nextSections);
+    if (frozen) return frozen;
+    const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
     if (tooLarge) return tooLarge;
   }
   const reopen = await checkReopenCapacity(env, existingRun, status, userId);

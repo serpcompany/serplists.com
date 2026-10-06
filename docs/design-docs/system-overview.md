@@ -103,7 +103,9 @@ body and workerd ignores.
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
 `expected_version` when updating a template; `POST /api/checklists/:id/revalidate`
-reconciles and reopens a completed private run. A template update that changes
+reconciles and reopens a completed private run. A run update that ticks or unticks a task or
+Sub-task of a completed run gets `409 run_completed` unless it also sets `status` back to
+`in_progress`, which reopens the run. A template update that changes
 content (anything but visibility) without `expected_version` gets `409 edit_conflict`,
 and `PUT /api/templates/:id` returns the new `version` and `content_version`, and the
 `slug` the template has after the save (the requested one, suffixed if it was taken,
