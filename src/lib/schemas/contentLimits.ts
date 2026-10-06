@@ -1,9 +1,12 @@
 import {
   contentRecordsIn,
+  formFieldRecordsIn,
+  formOptionRecordsIn,
   sectionRecordsIn,
   subTaskRecordsIn,
   taskRecordsIn,
   type ContentRecord,
+  type FormFieldRecord,
   type JsonRecord,
   type SectionRecord,
   type SubTaskRecord,
@@ -35,6 +38,15 @@ const withSubTaskDefaults = (subTask: SubTaskRecord): JsonRecord => ({
   isCompleted: false,
 });
 
+const withFormFieldDefaults = (field: FormFieldRecord): JsonRecord => ({
+  ...field,
+  id: idOrGenerated(field.id),
+  required: field.required === true,
+  ...(Array.isArray(field.options)
+    ? { options: formOptionRecordsIn(field.options).map((option) => ({ ...option, id: idOrGenerated(option.id) })) }
+    : {}),
+});
+
 function withContentDefaults(content: ContentRecord, usedContentIds: Set<unknown>): JsonRecord {
   const editorGivesNewId = isBlank(content.id) || usedContentIds.has(content.id);
   const id = editorGivesNewId ? LONGEST_GENERATED_ID : content.id;
@@ -45,6 +57,9 @@ function withContentDefaults(content: ContentRecord, usedContentIds: Set<unknown
     value: typeof content.value === "string" ? content.value : "",
     ...(Array.isArray(content.subItems) || content.type === "subItems"
       ? { subItems: subTaskRecordsIn(content.subItems).map(withSubTaskDefaults) }
+      : {}),
+    ...(Array.isArray(content.fields) || content.type === "form"
+      ? { fields: formFieldRecordsIn(content.fields).map(withFormFieldDefaults) }
       : {}),
   };
 }

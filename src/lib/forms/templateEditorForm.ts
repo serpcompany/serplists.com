@@ -3,15 +3,25 @@ import { z } from "zod";
 import type { ChecklistTemplate } from "@/types/checklist";
 import { hasCurrentFileInfo, mediaSourceTypeFor } from "@/lib/utils/mediaSource";
 import {
+  formFieldRecordsIn,
+  formOptionRecordsIn,
   isContentRecord,
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
   type ContentRecord,
+  type FormFieldRecord,
   type SectionRecord,
   type SubTaskRecord,
   type TaskRecord,
 } from "@/lib/schemas/jsonRecords";
+import {
+  FORM_FIELD_KINDS,
+  isFormChoiceKind,
+  isFormFieldKind,
+  type FormFieldKind,
+} from "@/lib/schemas/formFields";
+import { CHECKLIST_CONTENT_TYPES } from "@/lib/schemas/storedSections";
 import {
   buildTemplateEditorDetailsFormValues,
   normalizeTemplateEditorDetailsForSave,
@@ -30,12 +40,29 @@ const templateEditorSubItemSchema = z.object({
   title: z.string(),
 });
 
+const templateEditorFormOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+
+const templateEditorFormFieldSchema = z.object({
+  description: z.string().optional(),
+  id: z.string(),
+  kind: z.enum(FORM_FIELD_KINDS),
+  label: z.string(),
+  max: z.number().optional(),
+  min: z.number().optional(),
+  options: z.array(templateEditorFormOptionSchema).optional(),
+  required: z.boolean(),
+});
+
 const templateEditorContentSchema = z.object({
+  fields: z.array(templateEditorFormFieldSchema).optional(),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
   id: z.string(),
   subItems: z.array(templateEditorSubItemSchema).optional(),
-  type: z.enum(["embed", "file", "image", "subItems", "text", "video"]),
+  type: z.enum(CHECKLIST_CONTENT_TYPES),
   uploadType: z.enum(["upload", "url"]).optional(),
   value: z.string(),
 });
@@ -64,6 +91,8 @@ export type TemplateEditorSection = z.infer<typeof templateEditorSectionSchema>;
 export type TemplateEditorItem = z.infer<typeof templateEditorItemSchema>;
 export type TemplateEditorContent = z.infer<typeof templateEditorContentSchema>;
 export type TemplateEditorSubItem = z.infer<typeof templateEditorSubItemSchema>;
+export type TemplateEditorFormField = z.infer<typeof templateEditorFormFieldSchema>;
+export type TemplateEditorFormOption = z.infer<typeof templateEditorFormOptionSchema>;
 export type TemplateEditorContentType = TemplateEditorContent["type"];
 
 export type TemplateEditorContentPath =
@@ -102,9 +131,35 @@ export function createTemplateEditorSubItem(): TemplateEditorSubItem {
   };
 }
 
+export function createTemplateEditorFormOption(): TemplateEditorFormOption {
+  return {
+    id: createTemplateEditorId("option"),
+    label: "",
+  };
+}
+
+export function createTemplateEditorFormField(kind: FormFieldKind = "text"): TemplateEditorFormField {
+  return {
+    id: createTemplateEditorId("field"),
+    kind,
+    label: "",
+    ...(isFormChoiceKind(kind) ? { options: [createTemplateEditorFormOption()] } : {}),
+    required: false,
+  };
+}
+
 export function createTemplateEditorContent(
   type: TemplateEditorContentType,
 ): TemplateEditorContent {
+  if (type === "form") {
+    return {
+      fields: [createTemplateEditorFormField()],
+      id: createTemplateEditorId("content"),
+      type,
+      value: "",
+    };
+  }
+
   if (type === "subItems") {
     return {
       id: createTemplateEditorId("content"),
@@ -174,17 +229,47 @@ function normalizeTemplateEditorSubItem(raw: unknown): TemplateEditorSubItem {
   };
 }
 
+type UsedEditorIds = { contents: Set<string>; fields: Set<string> };
+
+const toUniqueEditorId = (value: unknown, prefix: string, used: Set<string>): string => {
+  let id = toEditorId(value, prefix);
+  if (used.has(id)) {
+    id = createTemplateEditorId(prefix);
+  }
+  used.add(id);
+  return id;
+};
+
+const toEditorNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+function normalizeTemplateEditorFormField(field: FormFieldRecord, usedFieldIds: Set<string>): TemplateEditorFormField {
+  const kind = isFormFieldKind(field.kind) ? field.kind : "text";
+  const usedOptionIds = new Set<string>();
+  return {
+    description: typeof field.description === "string" ? field.description : undefined,
+    id: toUniqueEditorId(field.id, "field", usedFieldIds),
+    kind,
+    label: toEditorText(field.label),
+    max: kind === "number" ? toEditorNumber(field.max) : undefined,
+    min: kind === "number" ? toEditorNumber(field.min) : undefined,
+    options: isFormChoiceKind(kind)
+      ? formOptionRecordsIn(field.options).map((option) => ({
+        id: toUniqueEditorId(option.id, "option", usedOptionIds),
+        label: toEditorText(option.label),
+      }))
+      : undefined,
+    required: field.required === true,
+  };
+}
+
 function normalizeTemplateEditorContent(
   raw: unknown,
-  usedContentIds: Set<string>,
+  usedIds: UsedEditorIds,
 ): TemplateEditorContent {
   const content: ContentRecord = isContentRecord(raw) ? raw : { value: raw };
   const type = toEditorContentType(content.type);
-  let id = toEditorId(content.id, "content");
-  if (usedContentIds.has(id)) {
-    id = createTemplateEditorId("content");
-  }
-  usedContentIds.add(id);
+  const id = toUniqueEditorId(content.id, "content", usedIds.contents);
 
   const fileSize = content.fileSize;
   const value = toEditorText(content.value);
@@ -193,6 +278,9 @@ function normalizeTemplateEditorContent(
   const staleFileInfo =
     MEDIA_CONTENT_TYPES.has(type) && !hasCurrentFileInfo({ value, uploadType: storedUploadType });
   return {
+    fields: type === "form"
+      ? formFieldRecordsIn(content.fields).map((field) => normalizeTemplateEditorFormField(field, usedIds.fields))
+      : undefined,
     fileName: typeof content.fileName === "string" && !staleFileInfo ? content.fileName : undefined,
     fileSize:
       typeof fileSize === "number" && Number.isFinite(fileSize) && fileSize >= 0 && !staleFileInfo
@@ -214,14 +302,14 @@ function normalizeTemplateEditorContent(
 
 function normalizeTemplateEditorItem(
   raw: unknown,
-  usedContentIds: Set<string>,
+  usedIds: UsedEditorIds,
 ): TemplateEditorItem {
   const item: TaskRecord = isTaskRecord(raw) ? raw : { title: raw };
   const contents = Array.isArray(item.contents) ? item.contents : [];
   return {
     contents: contents
       .filter((content) => content !== null && content !== undefined)
-      .map((content) => normalizeTemplateEditorContent(content, usedContentIds)),
+      .map((content) => normalizeTemplateEditorContent(content, usedIds)),
     description: toEditorText(item.description),
     id: toEditorId(item.id, "item"),
     isCompleted: typeof item.isCompleted === "boolean" ? item.isCompleted : undefined,
@@ -231,21 +319,21 @@ function normalizeTemplateEditorItem(
 
 function normalizeTemplateEditorSection(
   raw: unknown,
-  usedContentIds: Set<string>,
+  usedIds: UsedEditorIds,
 ): TemplateEditorSection {
   const section: SectionRecord = isSectionRecord(raw) ? raw : {};
   const items = Array.isArray(section.items) ? section.items : [];
   return {
     id: toEditorId(section.id, "section"),
-    items: items.map((item) => normalizeTemplateEditorItem(item, usedContentIds)),
+    items: items.map((item) => normalizeTemplateEditorItem(item, usedIds)),
     title: toEditorText(section.title),
   };
 }
 
 function buildTemplateEditorSections(sections?: unknown): TemplateEditorSection[] {
   if (Array.isArray(sections) && sections.length > 0) {
-    const usedContentIds = new Set<string>();
-    return sections.map((section) => normalizeTemplateEditorSection(section, usedContentIds));
+    const usedIds: UsedEditorIds = { contents: new Set<string>(), fields: new Set<string>() };
+    return sections.map((section) => normalizeTemplateEditorSection(section, usedIds));
   }
 
   return [createTemplateEditorSection()];

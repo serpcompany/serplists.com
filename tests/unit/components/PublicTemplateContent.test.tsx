@@ -146,6 +146,7 @@ describe('PublicTemplateContent file blocks', () => {
       file: { id: 'c', type: 'file', uploadType: 'upload', value: 'https://cdn.example.com/a.pdf', fileName: 'a.pdf' },
       embed: { id: 'c', type: 'embed', value: 'https://example.com/embed' },
       subItems: { id: 'c', type: 'subItems', value: '', subItems: [{ id: 's', title: 'Sub-step one' }] },
+      form: { id: 'c', type: 'form', value: '', fields: [{ id: 'f', label: 'Client name', kind: 'text', required: true }] },
     };
 
     for (const type of checklistItemContentSchema.shape.type.options) {

@@ -2,6 +2,7 @@ import { log } from './logger';
 import { jsonError } from './response';
 import { invalidPayloadResponse } from './request-json';
 import {
+  isImportablePortableSchemaVersion,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackLooseEnvelopeSchema,
   type PortableChecklistTemplate,
@@ -72,7 +73,7 @@ export function parsePortableTemplatePackImport(body: unknown):
   if (!envelope.success) {
     return { response: invalidPayloadResponse(envelope.error, 'Invalid portable template pack payload') };
   }
-  if (envelope.data.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
+  if (!isImportablePortableSchemaVersion(envelope.data.schemaVersion)) {
     return {
       response: jsonError(`Unsupported portable template schema version: ${envelope.data.schemaVersion}`, 400, {
         code: 'unsupported_portable_schema_version',

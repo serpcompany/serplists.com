@@ -10,6 +10,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
 import { cn } from '@/lib/utils';
+import { FORM_FIELD_KIND_LABELS } from '@/lib/schemas/formFields';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { formatCount } from '@/lib/utils/pluralize';
@@ -140,6 +141,17 @@ export function PublicTemplateContent({
               </div>
             ))}
           </div>
+        ) : null;
+
+      case 'form':
+        return content.fields?.length ? (
+          <ul className="mt-4 space-y-1 border-l-2 pl-4 text-sm">
+            {content.fields.map((field) => (
+              <li key={field.id}>
+                {field.label} ({FORM_FIELD_KIND_LABELS[field.kind]}{field.required ? ', Required' : ''})
+              </li>
+            ))}
+          </ul>
         ) : null;
 
       default: {

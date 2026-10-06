@@ -4,16 +4,21 @@ import {
   contentRecordsIn,
   isContentRecord,
   isSectionRecord,
+  formFieldRecordsIn,
   subTaskRecordsIn,
   taskRecordsIn,
   type ContentRecord,
+  type FormFieldRecord,
   type JsonRecord,
   type SectionRecord,
   type SubTaskRecord,
   type TaskRecord,
 } from "./jsonRecords";
+import { sanitizeStoredFormFields, storedFormFieldSchema } from "./formFields";
 
-export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems"] as const;
+export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems", "form"] as const;
+
+export type ChecklistContentType = (typeof CHECKLIST_CONTENT_TYPES)[number];
 
 const text = z.string().nullish();
 const flag = z.boolean().nullish();
@@ -25,6 +30,7 @@ const contentSchema = z.object({
   fileName: text,
   fileSize: z.number().nullish(),
   subItems: z.array(subItemSchema).nullish(),
+  fields: z.array(storedFormFieldSchema).nullish(),
 }).passthrough();
 const itemSchema = z.object({
   title: text,
@@ -82,6 +88,13 @@ export function getTaskSubTasks(task: TaskRecord): SubTaskRecord[] {
   return contentRecordsIn(task.contents).filter(isSubTasksBlock).flatMap((content) => subTaskRecordsIn(content.subItems));
 }
 
+export const isFormBlock = (content: unknown): content is ContentRecord =>
+  isContentRecord(content) && content.type === "form";
+
+export function getTaskFormFields(task: TaskRecord): FormFieldRecord[] {
+  return contentRecordsIn(task.contents).filter(isFormBlock).flatMap((content) => formFieldRecordsIn(content.fields));
+}
+
 function sanitizeStoredContents(value: unknown): ContentRecord[] {
   return contentRecordsIn(value)
     .filter(isKnownContent)
@@ -93,6 +106,8 @@ function sanitizeStoredContents(value: unknown): ContentRecord[] {
       next.value = typeof content.value === "string" ? content.value : "";
       if (content.type === "subItems") next.subItems = sanitizeStoredSubItems(content.subItems);
       else delete next.subItems;
+      if (content.type === "form") next.fields = sanitizeStoredFormFields(content.fields);
+      else delete next.fields;
       return next;
     });
 }

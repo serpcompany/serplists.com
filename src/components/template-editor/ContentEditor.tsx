@@ -149,6 +149,7 @@ export function ContentEditor({
     file: "File",
     embed: "Embed",
     subItems: "Sub-tasks",
+    form: "Form",
   };
 
   return (

@@ -175,6 +175,9 @@ export const toolDefinitions = [
       + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes, "
       + `which replace the task's notes and can be at most ${TASK_NOTES_LIMITS}, so they fit in one result `
       + "(get_run returns longer notes written in SERP Lists in parts); "
+      + "set_task_completed with completed true fails with form_incomplete while the task's form has a required "
+      + "field without an answer or an answer that is not valid (details.fields names each taskId and fieldId), and "
+      + "ticking a task's last subtask completes the task only when its form is complete; "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
       + "(it fails with run_incomplete, naming open taskIds, otherwise). A completed run's tasks and subtasks are "
       + "frozen: set_task_completed and set_subtask_completed fail with run_completed until set_run_status "

@@ -41,6 +41,18 @@ const validSections = [
       { id: 'i2', title: 'Blocks', description: null, contents: [
         { type: 'subItems', value: '', subItems: [{ title: 'No id' }] },
         { type: 'file', value: 'https://x.test/f.pdf', fileName: 'f.pdf', fileSize: 12, uploadType: 'upload' },
+        { type: 'form', value: '', fields: [
+          { id: 'f1', label: 'Name', kind: 'text', required: true, description: 'Legal name', answer: 'Acme' },
+          { id: 'f2', label: 'Notes', kind: 'longText', answer: null },
+          { id: 'f3', label: 'Site', kind: 'url', answer: 'https://acme.test' },
+          { id: 'f4', label: 'Email', kind: 'email' },
+          { id: 'f5', label: 'Seats', kind: 'number', min: 1, max: 9.5, answer: 3 },
+          { id: 'f6', label: 'Start', kind: 'date', answer: '2026-10-06' },
+          { id: 'f7', label: 'Plan', kind: 'select', options: [{ id: 'o1', label: 'Pro' }], answer: 'o1' },
+          { id: 'f8', label: 'Tags', kind: 'multiSelect', options: [{ id: 'o1', label: 'A' }], answer: ['o1'] },
+          { id: 'f9', label: 'Agree', kind: 'checkbox', required: false, answer: true },
+          { id: 'f10', label: 'Brief', kind: 'file', answer: { url: '/api/uploads/file?key=a', fileName: 'a.pdf', fileSize: 3 } },
+        ] },
       ] },
     ],
   },
@@ -78,6 +90,23 @@ describe('find-malformed-checklist-content.sql, the read-only maintenance query 
     expect(findings(db)).toEqual([
       { source: 'checklist_runs', id: 'run-broken', path: '$', problem: 'invalid JSON' },
       { source: 'templates', id: 'template-bad', path: '$[0].items[0].contents[0].subItems', problem: 'expected an array, found text' },
+    ]);
+  });
+
+  it('names the form field and what is wrong with it', () => {
+    const db = migratedDatabase();
+    insertRun(db, 'run-form', JSON.stringify([{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'T', contents: [
+      { type: 'form', value: '', fields: [
+        { id: 'f1', label: 'Color', kind: 'color' },
+        { id: 'f2', label: 'Seats', kind: 'number', answer: 'five' },
+        { id: 'f3', label: 'Tags', kind: 'multiSelect', options: [{ id: 'a', label: 'A' }], answer: ['a', 2] },
+      ] },
+    ] }] }]));
+
+    expect(findings(db)).toEqual([
+      { source: 'checklist_runs', id: 'run-form', path: '$[0].items[0].contents[0].fields[0]', problem: 'unknown or missing form field kind' },
+      { source: 'checklist_runs', id: 'run-form', path: '$[0].items[0].contents[0].fields[1]', problem: 'answer does not fit the form field kind' },
+      { source: 'checklist_runs', id: 'run-form', path: '$[0].items[0].contents[0].fields[2].answer[1]', problem: 'expected text, found integer' },
     ]);
   });
 });

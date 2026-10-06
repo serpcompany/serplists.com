@@ -8,7 +8,7 @@ export const REQUIRED_TOOL_URL_MAX = 2048;
 export const PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX = 50;
 
 const NOT_BLANK = /\S/;
-const HTTP_URL = /^[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"/?#]+[^\s<>"]*$/;
+export const HTTP_URL = /^[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"/?#]+[^\s<>"]*$/;
 
 const toolName = z.string().regex(NOT_BLANK, "Give each tool a name");
 const toolUrl = z.string().regex(HTTP_URL, "Tool URLs must start with http:// or https://");

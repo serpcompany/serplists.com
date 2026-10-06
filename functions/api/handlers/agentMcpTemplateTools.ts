@@ -4,6 +4,7 @@ import {
   portableChecklistItemSchema,
   portableChecklistSectionSchema,
 } from "../../../src/lib/schemas/checklistSchema";
+import { CHECKLIST_CONTENT_TYPES } from "../../../src/lib/schemas/storedSections";
 
 const idArg = z.string().trim().min(1);
 
@@ -122,7 +123,7 @@ const templateTaskProperties = {
       type: "object",
       properties: {
         id: { type: "string" },
-        type: { type: "string", enum: ["text", "image", "video", "file", "embed", "subItems"] },
+        type: { type: "string", enum: CHECKLIST_CONTENT_TYPES },
         value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
         subItems: {
           type: "array",

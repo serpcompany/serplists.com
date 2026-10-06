@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
-import { 
-  validateBackup, 
+import {
+  isImportablePortableSchemaVersion,
+  validateBackup,
   validatePortableTemplatePackEnvelope,
   validateTemplateImportArray,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
@@ -263,7 +264,7 @@ export const parseTemplatesFromData = (
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else if (data && typeof data === "object" && "kind" in data && data.kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
-      if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
+      if (!isImportablePortableSchemaVersion(portablePackEnvelope.schemaVersion)) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
       const portablePack = parsePortablePackTemplates(portablePackEnvelope.templates, now);

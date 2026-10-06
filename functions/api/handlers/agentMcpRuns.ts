@@ -24,6 +24,8 @@ import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload } from "../utils/payloads";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { findRunCompletionRefusal } from "../utils/run-completion";
+import { FORM_INCOMPLETE_MESSAGE, formIncompleteDetails, taskFormBlockers } from "../utils/run-form-guard";
+import { FORM_INCOMPLETE_CODE } from "../../../src/lib/schemas/formValidation";
 import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
 type RunRow = typeof schema.checklistRuns.$inferSelect;
@@ -153,6 +155,8 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
 
   const subtasks = getTaskSubTasks(task);
   if (operation.operation === "set_task_completed") {
+    const blocked = operation.completed ? taskFormBlockers(task) : [];
+    if (blocked.length > 0) throw new ToolError(FORM_INCOMPLETE_MESSAGE, FORM_INCOMPLETE_CODE, formIncompleteDetails(blocked));
     task.isCompleted = operation.completed;
     for (const subtask of subtasks) subtask.isCompleted = operation.completed;
     return;
@@ -161,7 +165,9 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
   const subtask = subtasks.find((candidate) => readTextId(candidate.id) === operation.subtaskId);
   if (!subtask) throw new ToolError("Subtask not found", "subtask_not_found");
   subtask.isCompleted = operation.completed;
-  task.isCompleted = subtasks.length > 0 && subtasks.every((candidate) => candidate.isCompleted === true);
+  task.isCompleted = subtasks.length > 0
+    && subtasks.every((candidate) => candidate.isCompleted === true)
+    && taskFormBlockers(task).length === 0;
 }
 
 const AUDITED_RUN_FIELDS = [

@@ -1,7 +1,11 @@
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { ChecklistFormField } from "@/lib/schemas/formFields";
+import type { ChecklistContentType } from "@/lib/schemas/storedSections";
 import type { RequiredTool } from "@/lib/schemas/requiredTools";
 import type { PublicTemplateOwner, TemplateOwner } from "@/lib/schemas/templateOwner";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
+
+export type { ChecklistFormField, FormAnswer, FormFieldKind } from "@/lib/schemas/formFields";
 
 export type ChecklistSubItem = {
   id?: string | undefined;
@@ -11,12 +15,13 @@ export type ChecklistSubItem = {
 
 export type ChecklistItemContent = {
   id?: string;
-  type: "text" | "image" | "video" | "file" | "embed" | "subItems";
+  type: ChecklistContentType;
   value: string;
   uploadType?: "url" | "upload" | undefined;
   fileName?: string | undefined;
   fileSize?: number | undefined;
   subItems?: ChecklistSubItem[] | undefined;
+  fields?: ChecklistFormField[] | undefined;
 };
 
 export type ChecklistItem = {

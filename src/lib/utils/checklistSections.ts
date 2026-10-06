@@ -11,8 +11,9 @@ import {
   type SubTaskRecord,
   type TaskRecord,
 } from "@/lib/schemas/jsonRecords";
+import { readFormFields } from "@/lib/schemas/formFields";
 import { CHECKLIST_CONTENT_TYPES, isSectionedList, sanitizeStoredItem } from "@/lib/schemas/storedSections";
-import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
+import type { ChecklistFormField, ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
 
 export function sectionFallbackTitle(sectionIndex: number): string {
   return `Section ${sectionIndex + 1}`;
@@ -71,6 +72,7 @@ const shownContentSchema = z.object({
   type: z.enum(CHECKLIST_CONTENT_TYPES),
   value: z.string(),
   subItems: z.array(shownSubItemSchema).optional(),
+  fields: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const textIdField = (id: unknown): { id?: string } => {
@@ -81,12 +83,21 @@ const textIdField = (id: unknown): { id?: string } => {
 const shownSubItem = ({ id, ...shown }: z.infer<typeof shownSubItemSchema>): ChecklistSubItem =>
   typeof id === "string" ? { ...shown, id } : shown;
 
-const shownContents = (contents: unknown[]): ChecklistItemContent[] =>
-  contents.flatMap((content) => {
+const shownFields = (fields: unknown[], fieldIdPrefix: string): { fields: ChecklistFormField[] } => ({
+  fields: readFormFields(fields, (index) => `${fieldIdPrefix}-field-${index + 1}`),
+});
+
+const shownContents = (contents: unknown[], itemId: string): ChecklistItemContent[] =>
+  contents.flatMap((content, contentIndex) => {
     const parsed = shownContentSchema.safeParse(content);
     if (!parsed.success) return [];
-    const { id, subItems, ...shown } = parsed.data;
-    return [{ ...shown, ...textIdField(id), ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}) }];
+    const { id, subItems, fields, ...shown } = parsed.data;
+    return [{
+      ...shown,
+      ...textIdField(id),
+      ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}),
+      ...(shown.type === "form" ? shownFields(fields ?? [], `${itemId}-form-${contentIndex + 1}`) : {}),
+    }];
   });
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {
@@ -108,12 +119,13 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
             ? { ...titled, contents: titled.contents.filter(isContentRecord).map(normalizeContent) }
             : titled,
         );
-        const contents = Array.isArray(it.contents) ? shownContents(it.contents) : undefined;
+        const id = typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`;
+        const contents = Array.isArray(it.contents) ? shownContents(it.contents, id) : undefined;
 
         const { completed, ...rest }: JsonRecord = it;
         return [{
           ...rest,
-          id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,
+          id,
           title: typeof it.title === "string" ? it.title : "",
           isCompleted: completionOf(it),
           contents,
@@ -165,6 +177,9 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       ...item,
       isCompleted: false,
       contents: item.contents?.map((content) => {
+        if (content.type === "form") {
+          return { ...content, fields: (content.fields ?? []).map(({ answer: _cleared, ...field }) => field) };
+        }
         if (content.type !== "subItems") return content;
         if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {

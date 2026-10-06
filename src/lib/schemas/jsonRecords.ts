@@ -23,6 +23,24 @@ export interface ContentRecord extends JsonRecord {
   fileName?: unknown;
   fileSize?: unknown;
   subItems?: unknown;
+  fields?: unknown;
+}
+
+export interface FormFieldRecord extends JsonRecord {
+  id?: unknown;
+  label?: unknown;
+  kind?: unknown;
+  required?: unknown;
+  description?: unknown;
+  options?: unknown;
+  min?: unknown;
+  max?: unknown;
+  answer?: unknown;
+}
+
+export interface FormOptionRecord extends JsonRecord {
+  id?: unknown;
+  label?: unknown;
 }
 
 export interface TaskRecord extends ChecklistNodeRecord {
@@ -51,3 +69,5 @@ export const sectionRecordsIn = (value: unknown): SectionRecord[] => recordsIn(v
 export const taskRecordsIn = (value: unknown): TaskRecord[] => recordsIn(value);
 export const contentRecordsIn = (value: unknown): ContentRecord[] => recordsIn(value);
 export const subTaskRecordsIn = (value: unknown): SubTaskRecord[] => recordsIn(value);
+export const formFieldRecordsIn = (value: unknown): FormFieldRecord[] => recordsIn(value);
+export const formOptionRecordsIn = (value: unknown): FormOptionRecord[] => recordsIn(value);
