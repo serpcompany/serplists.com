@@ -10,6 +10,11 @@ const subTasks = (...flags: Array<Record<string, unknown>>) => [{
   value: '',
   subItems: flags.map((state, index) => ({ id: `sub-${index + 1}`, title: `Sub ${index + 1}`, ...state })),
 }];
+const form = (answer?: string) => ({
+  type: 'form',
+  value: '',
+  fields: [{ id: 'field-1', label: 'Client', kind: 'text', required: true, ...(answer === undefined ? {} : { answer }) }],
+});
 const section = (...items: Array<Record<string, unknown>>) => ({ id: 'section-1', title: 'Release', items });
 const task = (id: string, state: Record<string, unknown>) => ({ id, title: id, ...state });
 
@@ -24,6 +29,8 @@ const cases: Array<[string, unknown[], boolean]> = [
   ['a legacy open Sub-task', [section(task('a', { completed: true, contents: subTasks({ completed: false }) }))], false],
   ['an open sub-item on a text block, which the run page never shows', [section(task('a', { isCompleted: true, contents: [{ type: 'text', value: 'Steps', subItems: [{ id: 'x', title: 'X', isCompleted: false }] }] }))], true],
   ['an open sub-item on the task itself, which the run page never shows', [section(task('a', { isCompleted: true, subItems: [{ id: 'x', title: 'X', isCompleted: false }] }))], true],
+  ['a done task whose form has an empty required field, since a form gates ticking its task and not the run', [section(task('a', { isCompleted: true, contents: [form()] }))], true],
+  ['an open task whose form is filled in', [section(task('a', { isCompleted: false, contents: [form('Acme')] }))], false],
   ['open work in a later section', [section(task('a', { isCompleted: true })), { id: 'section-2', title: 'QA', items: [task('b', { isCompleted: false })] }], false],
   ['no tasks', [section()], false],
   ['no sections', [], false],
