@@ -11,6 +11,7 @@ import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-li
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 import { completedRunTaskChangeResponse } from '../utils/completed-run-freeze';
+import { formIncompleteResponse } from '../utils/run-form-guard';
 
 export async function updateChecklistRun(
   request: Request,
@@ -66,6 +67,8 @@ export async function updateChecklistRun(
     const storedSections = parseJsonArray(existingRun.items) ?? [];
     const frozen = completedRunTaskChangeResponse(existingRun, status, storedSections, nextSections);
     if (frozen) return frozen;
+    const formIncomplete = formIncompleteResponse(storedSections, nextSections);
+    if (formIncomplete) return formIncomplete;
     const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
     if (tooLarge) return tooLarge;
   }
