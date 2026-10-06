@@ -70,6 +70,7 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
       '0023_add_sitemap_revision_state.sql',
       '0029_sitemap_usernames_allow_hyphen.sql',
       '0032_sitemap_organization_revisions.sql',
+      '0033_sitemap_user_triggers_search_owner_index.sql',
     ]) {
       db.exec(readFileSync(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'));
     }

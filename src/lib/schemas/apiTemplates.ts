@@ -47,6 +47,9 @@ export const templateTransferredSchema = z.object({ success: z.literal(true), id
 
 export const exportedTemplatePackSchema = z.object({ templates: z.array(z.unknown()) }).passthrough();
 
+export const publicRequiredToolsSchema = z.array(z.object({ id: z.string(), requiredTools: requiredToolsSchema }));
+
 export type ApiTemplate = z.infer<typeof apiTemplateSchema>;
 export type SavedTemplate = z.infer<typeof savedTemplateSchema>;
 export type ExportedTemplatePack = z.infer<typeof exportedTemplatePackSchema>;
+export type PublicRequiredTools = z.infer<typeof publicRequiredToolsSchema>;

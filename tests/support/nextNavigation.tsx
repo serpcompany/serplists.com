@@ -49,6 +49,7 @@ export const navigation = {
     };
   },
   settle: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+  holdNavigationsUntilTheNextPageLoads: (): (() => void) => browser.holdNavigations(),
 };
 
 const useSnapshot = () => useSyncExternalStore(browser.subscribe, browser.getSnapshot, browser.getSnapshot);

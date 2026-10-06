@@ -1182,7 +1182,12 @@ Common failures:
     Back the page answers with a traversal of its own needs two. `<RoutedPages>` renders the
     page whose pattern matches, remounted for another pattern or other params and kept for the
     same URL or another query, as the App Router does; `renderPageAt()` returns a URL's
-    server HTML, with no effects.
+    server HTML, with no effects. A navigation lands at once unless the test calls
+    `navigation.holdNavigationsUntilTheNextPageLoads()`: from then on each `Link` click and
+    router navigation is logged when it starts but changes the URL only when the returned
+    function runs, in the order they started, as Next.js keeps the current page shown while
+    the next one loads (`DashboardHome.dom.test.tsx` races a click with the page's own
+    redirect this way).
   - `nextRouting.ts` loads `next.config.ts`'s redirects and headers as `next build` does for
     a build's `SITE_ENV` (`loadBuiltRoutes()`; `withSiteEnv()` from `siteEnv.ts` sets the
     variable, or leaves it unset for `undefined`) and answers a URL the two ways the app is

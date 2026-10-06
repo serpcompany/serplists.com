@@ -40,7 +40,6 @@ export type WorkspaceContextValue = {
   consoleContext: ConsoleContext;
   createTeam: (input: CreateTeamInput) => Promise<void>;
   getPermissions: (teamId?: string) => ResourcePermissions;
-  isRoleUnavailable: (teamId?: string) => boolean;
   isTeamWorkspace: boolean;
   isWorkspaceLoading: boolean;
   patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;

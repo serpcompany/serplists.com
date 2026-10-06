@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import { api } from '@/lib/api';
-import { exportedTemplatePackSchema, type ExportedTemplatePack } from '@/lib/schemas/apiTemplates';
+import {
+  exportedTemplatePackSchema,
+  type ExportedTemplatePack,
+  type PublicRequiredTools,
+} from '@/lib/schemas/apiTemplates';
+import { PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX, type RequiredTool } from '@/lib/schemas/requiredTools';
 import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from '@/lib/templates/portableExport';
 import { getExportSummary, type PortableExportSummary } from '@/lib/templates/templateImportSummary';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -15,11 +20,13 @@ const readExportedSlugs = (templates: unknown[]): string[] =>
 
 type ExportBackup = (params: { teamId?: string | undefined }) => Promise<unknown>;
 type LoadPublicCatalog = () => Promise<ChecklistTemplate[]>;
+type LoadPublicRequiredTools = (templateIds: readonly string[]) => Promise<PublicRequiredTools>;
 
 type ExportTemplatePackDependencies = {
   download: (pack: ExportedTemplatePack) => void;
   exportBackup?: ExportBackup;
   loadPublicCatalog?: LoadPublicCatalog;
+  loadPublicRequiredTools?: LoadPublicRequiredTools;
 };
 
 export type ExportTemplatePackOptions = {
@@ -32,6 +39,24 @@ export type ExportTemplatePackOptions = {
 export type ExportTemplatePackResult = PortableExportSummary;
 
 const defaultExportBackup: ExportBackup = (params) => api.exportTemplateBackup(params);
+const defaultLoadPublicRequiredTools: LoadPublicRequiredTools = (templateIds) => api.getPublicRequiredTools(templateIds);
+
+const withTheirRequiredTools = async (
+  templates: ChecklistTemplate[],
+  loadPublicRequiredTools: LoadPublicRequiredTools,
+): Promise<ChecklistTemplate[]> => {
+  const toolsByTemplateId = new Map<string, RequiredTool[]>();
+  for (let start = 0; start < templates.length; start += PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX) {
+    const templateIds = templates.slice(start, start + PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX).map((template) => template.id);
+    for (const { id, requiredTools } of await loadPublicRequiredTools(templateIds)) {
+      toolsByTemplateId.set(id, requiredTools);
+    }
+  }
+  return templates.map((template) => {
+    const requiredTools = toolsByTemplateId.get(template.id);
+    return requiredTools ? { ...template, requiredTools } : template;
+  });
+};
 
 export const EXPORT_PACK_UNREADABLE_MESSAGE = 'The export could not be read. Try again.';
 
@@ -56,13 +81,17 @@ export const exportTemplatePack = async (
 
   let pack: ExportedTemplatePack = parsedPack.data;
   if (options.includePublic && dependencies.loadPublicCatalog) {
-    const publicTemplates = selectPublicTemplatesForExport(await dependencies.loadPublicCatalog(), {
+    const chosenTemplates = selectPublicTemplatesForExport(await dependencies.loadPublicCatalog(), {
       userId: options.userId,
       teamId: options.teamId,
       ownedTemplateIds: options.ownedTemplateIds,
       exportedSlugs: readExportedSlugs(parsedPack.data.templates),
     });
-    if (publicTemplates.length > 0) {
+    if (chosenTemplates.length > 0) {
+      const publicTemplates = await withTheirRequiredTools(
+        chosenTemplates,
+        dependencies.loadPublicRequiredTools ?? defaultLoadPublicRequiredTools,
+      );
       try {
         pack = addPublicTemplatesToPack(ownedPack, publicTemplates);
       } catch {

@@ -4,7 +4,6 @@ import type { OrganizationRole } from '@/lib/organizationPermissions';
 
 export const workspaceRoles = {
   roles: {} as Record<string, OrganizationRole>,
-  teamsUnavailable: false,
 };
 
 vi.mock('@/contexts/WorkspaceContext', async () => {
@@ -14,9 +13,6 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
     useWorkspace: () => ({
       consoleContext: PERSONAL_CONSOLE,
       getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
-      isRoleUnavailable: (teamId?: string) =>
-        teamId ? workspaceRoles.teamsUnavailable && !(teamId in workspaceRoles.roles) : false,
-      retryWorkspace: vi.fn(),
     }),
   };
 });

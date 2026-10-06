@@ -387,6 +387,12 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   with public Templates changes its slug or archive. Its backfill dated the categories only
   public Organization Templates used. It changes triggers and revision rows only, no table
   ([SEO and sitemaps](seo-and-sitemaps.md#caching), TD-23).
+- **Sitemap user triggers on the owner index.** `0033` recreated `sitemap_users_update_owner`
+  and `sitemap_users_delete` from `0029` with their lookups of the User's public Personal
+  Templates written `+t.is_public=1`, so SQLite searches `idx_templates_owner` instead of
+  reading every public Template through `idx_templates_public_created_at` on a username or
+  name change or an account deletion. They refresh the same sitemaps as before; it changes
+  triggers only ([D1 cost](d1-cost.md), TD-86).
 
 ## Seeds
 

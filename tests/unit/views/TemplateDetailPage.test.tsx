@@ -17,37 +17,6 @@ import { lastOf } from '../../support/elements';
 
 beforeEach(resetTemplateDetailPageMocks);
 
-describe('TemplateDetail after the teams request failed', () => {
-  const privateOrganizationTemplate = () => ({
-    ...buildV0DemoPrivateTemplate(),
-    isPublic: false,
-    teamId: 'team-1',
-    userId: 'someone-else',
-  });
-
-  it('says the Organizations could not load, with Retry, on a private Organization template its Organization shows', () => {
-    workspaceState.teamsUnavailable = true;
-    workspaceState.activeTeamId = 'team-1';
-    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: privateOrganizationTemplate() });
-
-    const html = renderTemplateDetail();
-
-    expect(html).toContain('Couldn&#x27;t load your Organizations');
-    expect(html).toMatch(/>Retry</);
-    expect(html).not.toMatch(/Start Run<\/button>/);
-  });
-
-  it('shows no error on a Personal template', () => {
-    workspaceState.teamsUnavailable = true;
-    mockUseTemplateDetailModel.mockReturnValue(baseModel());
-
-    const html = renderTemplateDetail();
-
-    expect(html).not.toContain('Couldn&#x27;t load your Organizations');
-    expect(html).toMatch(/Start Run<\/button>/);
-  });
-});
-
 describe('TemplateDetail opened by slug', () => {
   const renderAt = (location: string) => {
     navigation.reset(location, { routes: ['/dashboard/templates/[id]'] });

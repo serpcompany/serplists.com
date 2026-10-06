@@ -13,7 +13,6 @@ type RunWorkspaceProps = {
   children?: ReactNode;
   completedTasks: number;
   noteDrafts: NoteDrafts;
-  notice?: ReactNode;
   onFinishRun: () => void;
   onNoteDraftChange: (itemId: string, notes: string) => void;
   onSaveNotes: (itemId: string, notes: string) => Promise<boolean>;
@@ -42,7 +41,6 @@ export function RunWorkspace({
   children,
   completedTasks,
   noteDrafts,
-  notice,
   onFinishRun,
   onNoteDraftChange,
   onSaveNotes,
@@ -64,7 +62,6 @@ export function RunWorkspace({
 
   return (
     <DashboardPageBody className="overflow-clip">
-      {notice}
       <MobileRunProgress
         completedTasks={completedTasks}
         currentSectionId={currentSectionId}

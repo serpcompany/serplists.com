@@ -3,6 +3,8 @@ import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs
 import path from "node:path";
 import { z } from "zod";
 
+import { PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX } from "../src/lib/schemas/requiredTools";
+
 type Actor = "anon" | "admin" | "john";
 
 export type Scenario = {
@@ -21,6 +23,10 @@ export const publicTemplateOwner = "synth_6";
 export const organizationHandle = "serp-growth-team";
 export const adminRun = "synthetic-run-40";
 export const shareToken = "synthetic-share-50";
+const exportedCommunityTemplates = Array.from(
+  { length: PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX },
+  (_, index) => `synthetic-template-${index + 1}`,
+).join(",");
 
 export const UPDATE_TEMPLATE = "UPDATE_TEMPLATE";
 export const UPDATE_RUN = "UPDATE_RUN";
@@ -69,6 +75,7 @@ export function scenarios(): Scenario[] {
     get("dashboard templates (Organization)", "admin", "/api/templates?teamId=team-seed-growth"),
     get("archived templates", "admin", "/api/templates/archived"),
     get("template export (owned only; public ones come from the cached catalog)", "admin", "/api/templates/backup?includePublic=1"),
+    get("public templates' Required tools for an export (one full request)", "admin", `/api/templates/public/required-tools?ids=${exportedCommunityTemplates}`),
     get("dashboard runs (Personal)", "admin", "/api/checklists"),
     get("dashboard runs (Organization)", "admin", "/api/checklists?teamId=team-seed-growth"),
     get("archived runs", "admin", "/api/checklists/archived"),
