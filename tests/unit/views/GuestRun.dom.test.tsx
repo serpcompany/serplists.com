@@ -11,9 +11,9 @@ import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import GuestRun from '@/views/GuestRun';
 
 import { contentAt, present, subTaskAt, taskAt } from '../../support/elements';
-import { guestRunTemplate } from '../../support/guestRuns';
+import { guestRunTemplate, guestRunTemplateWithAForm } from '../../support/guestRuns';
 import { queryClientsClearedAfterEachTest } from '../../support/queryClientsPerTest';
-import { renderSettled, theInMemoryBrowserAsTheWindow, theButtonOrMenuItemNamed } from '../../support/renderInTheDom';
+import { renderSettled, theInMemoryBrowserAsTheWindow, theButtonOrMenuItemNamed, typeInto } from '../../support/renderInTheDom';
 
 const { authState, saving, templateRecord, workspace } = vi.hoisted(() => ({
   authState: { isAuthenticated: false, isLoading: false, user: null as { id: string } | null },
@@ -228,5 +228,53 @@ describe('the guest run page of a public Template', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Template not found' })).toBeTruthy();
     expect(readGuestRun(guestRunTemplate.id)).toBeNull();
+  });
+});
+
+describe('a guest run of a Template with a form', () => {
+  beforeEach(() => {
+    templateRecord.template = guestRunTemplateWithAForm;
+  });
+
+  const markComplete = () => act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Complete' }));
+  });
+  const storedAnswer = () => contentAt(taskAt(storedRun(), 0, 0), 0).fields?.[0]?.answer;
+
+  it('refuses to complete the task until its required field is answered, says which field, and moves focus to it', async () => {
+    await openTheRunPage();
+
+    await markComplete();
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Finish this task's form first. Client name: Fill in this field.");
+    });
+    const name = screen.getByRole('textbox', { name: 'Client name' });
+    expect(screen.getByText('Fill in this field.')).toBeTruthy();
+    expect(document.activeElement).toBe(name);
+    expect(taskAt(storedRun(), 0, 0).isCompleted).toBe(false);
+
+    await typeInto(name, 'Acme');
+    await act(async () => {
+      fireEvent.blur(name);
+    });
+    await waitFor(() => {
+      expect(storedAnswer()).toBe('Acme');
+    });
+    expect(screen.queryByText('Fill in this field.')).toBeNull();
+
+    await markComplete();
+    await waitFor(() => {
+      expect(taskAt(storedRun(), 0, 0).isCompleted).toBe(true);
+    });
+    expect(storedAnswer()).toBe('Acme');
+  });
+
+  it('asks the visitor to log in to upload a file, and comes back to this run after', async () => {
+    await openTheRunPage();
+
+    expect(screen.getByRole('link', { name: 'Signed contract Log in to upload' }).getAttribute('href')).toBe(
+      `/login/?next=${encodeURIComponent(RUN_PAGE)}`,
+    );
   });
 });

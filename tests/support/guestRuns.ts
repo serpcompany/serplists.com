@@ -49,3 +49,27 @@ export const otherGuestRunTemplate: ChecklistTemplate = {
   slug: 'moving-day',
   title: 'Moving Day',
 };
+
+export const guestRunTemplateWithAForm: ChecklistTemplate = {
+  ...guestRunTemplate,
+  sections: [{
+    id: 'section-intake',
+    title: 'Intake',
+    items: [
+      {
+        id: 'task-details',
+        title: 'Collect details',
+        contents: [{
+          id: 'form-details',
+          type: 'form',
+          value: '',
+          fields: [
+            { id: 'field-name', label: 'Client name', kind: 'text', required: true },
+            { id: 'field-contract', label: 'Signed contract', kind: 'file', required: false },
+          ],
+        }],
+      },
+      { id: 'task-welcome', title: 'Send the welcome email' },
+    ],
+  }],
+};
