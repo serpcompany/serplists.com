@@ -272,3 +272,7 @@ leaves the site broken until the next one lands):
   the page (`isRunItemFinished`) and in the API (`findOpenRunTasks`), as the owner chose: a form
   gates ticking its task, not the Run. The screens briefly counted such a task as unfinished;
   `run-completion-rule.test.ts` caught the disagreement when the two halves met.
+- 2026-10-06: A required Dropdown or Multiple choice field with no options never blocks its
+  task (`findFormFieldProblem`). The editor drops it on save and the pack schema refuses it,
+  but the stored schema is lenient like every stored shape, so a raw Template save could keep
+  one and leave its task unable to be ticked in every run.

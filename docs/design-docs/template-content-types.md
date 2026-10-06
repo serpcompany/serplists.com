@@ -87,6 +87,9 @@ kinds and limits live in `src/lib/schemas/formFields.ts`.
   missing answer, blank text, `[]` and `false` are empty; a non-empty answer must fit its
   kind (an http(s) URL, an email address, a finite number within `min`/`max`, a real
   `YYYY-MM-DD` date, existing option ids, an uploaded file's URL, text within its length).
+  A required Dropdown or Multiple choice field with no options never blocks: no one could
+  answer it. The editor drops such a field on save and imports refuse it, but a raw
+  `PUT /api/templates/<id>` can still store one, and its task must not be blocked for good.
   `formFieldProblemMessage` gives the person the field's message, and `formatFormAnswer`
   shows an answer as text.
 - **Where it is enforced:** the run save, the shared-link save and MCP refuse a task saved

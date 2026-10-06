@@ -96,6 +96,11 @@ describe('findFormFieldProblem, the one rule for whether a form field blocks its
     expect(findFormFieldProblem(renamed)).toBeNull();
   });
 
+  it.each(['select', 'multiSelect'] as const)('never blocks its task on a required %s field with no options, which no one could answer', (kind) => {
+    expect(findFormFieldProblem(field(kind, { required: true, options: [] }))).toBeNull();
+    expect(findFormFieldProblem(field(kind, { required: true, options: undefined }))).toBeNull();
+  });
+
   it('ignores a field whose kind it does not know', () => {
     expect(findFormFieldProblem({ id: 'f', kind: 'color', required: true })).toBeNull();
   });

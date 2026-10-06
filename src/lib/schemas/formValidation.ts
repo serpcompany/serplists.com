@@ -95,10 +95,13 @@ function isValidAnswer(kind: FormFieldKind, field: FormFieldRecord): boolean {
   }
 }
 
+const hasNoChoices = (field: FormFieldRecord): boolean =>
+  isFormChoiceKind(field.kind) && formOptionRecordsIn(field.options).length === 0;
+
 export function findFormFieldProblem(field: FormFieldRecord): FormFieldProblemReason | null {
   const { kind } = field;
   if (!isFormFieldKind(kind)) return null;
-  if (isFormAnswerEmpty(field.answer)) return field.required === true ? "required" : null;
+  if (isFormAnswerEmpty(field.answer)) return field.required === true && !hasNoChoices(field) ? "required" : null;
   return isValidAnswer(kind, field) ? null : "invalid";
 }
 
