@@ -24,20 +24,6 @@ have not been updated in 30 days.
   engineering write-up recommends, no exceptions, and no code comments.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
-- [Guest runs](exec-plans/active/guest-runs.md): signed-out visitors run public Templates in the
-  browser, then save the run into an account after signing up or logging in (issue #253), in one
-  PR with Required tools.
-- [Public handles](exec-plans/active/public-handles.md): one case-insensitive handle namespace
-  for Users and Organizations (issue #233), in two PRs with a staging migration between them.
-- [Organization public profiles](exec-plans/active/organization-profiles.md): an Organization's
-  avatar, description and public profile at `/profile/:handle`, and its Templates' URLs there
-  (issue #232), in one PR.
-- [Profiles directory](exec-plans/active/profiles-directory.md): the public `/profiles/`
-  directory of People and Organizations, Organizations in the profiles sitemap, and migration
-  `0032` (issue #237).
-- [Required tools](exec-plans/active/required-tools.md): the tools a Template's Runs need, edited
-  in the Template editor and carried by packs and MCP (issue #241), in one PR with guest runs and
-  migration `0031`.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
@@ -48,6 +34,20 @@ have not been updated in 30 days.
 
 ## Completed
 
+- [Guest runs](exec-plans/completed/guest-runs.md): signed-out visitors run public Templates in the
+  browser, then save the run into an account after signing up or logging in (issue #253), in one
+  PR with Required tools.
+- [Public handles](exec-plans/completed/public-handles.md): one case-insensitive handle namespace
+  for Users and Organizations (issue #233), in two PRs with a staging migration between them.
+- [Organization public profiles](exec-plans/completed/organization-profiles.md): an Organization's
+  avatar, description and public profile at `/profile/:handle`, and its Templates' URLs there
+  (issue #232), in one PR.
+- [Profiles directory](exec-plans/completed/profiles-directory.md): the public `/profiles/`
+  directory of People and Organizations, Organizations in the profiles sitemap, and migration
+  `0032` (issue #237).
+- [Required tools](exec-plans/completed/required-tools.md): the tools a Template's Runs need, edited
+  in the Template editor and carried by packs and MCP (issue #241), in one PR with guest runs and
+  migration `0031`.
 - [Sitemap revisions for Organization Templates](exec-plans/completed/sitemap-organization-templates.md):
   migration `0032` makes public Organization Template and Organization changes refresh cached
   sitemaps (TD-23).

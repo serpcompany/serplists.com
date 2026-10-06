@@ -1,7 +1,7 @@
 # Organization public profiles
 
-- **Status:** active
-- **Last updated:** 2026-10-05
+- **Status:** completed
+- **Last updated:** 2026-10-06
 - **Goal:** An Organization with a handle has a public profile at `/profile/:handle` (name, handle,
   avatar, description and its public Templates), its public Templates live at
   `/profile/:handle/:slug`, and every link to them moves there (issue #232).
@@ -33,10 +33,11 @@ until the next one lands), built in three steps:
 - [x] `0030` applied to staging after #282 merged (2026-10-05, owner go-ahead): Time Travel
   bookmark `00000abd-00000000-000050fb-c8d330a360db4ca0d85f9cc284ae63b0` noted first,
   `verify:staging` passes, and the staging deploy ran.
-- [ ] Before promoting to production: production needs `0028` and `0029` (the
-  [public handles plan](public-handles.md)) and `0030`, since `/api/profiles/by-handle` reads
-  `public_handles` and the Organization's avatar and description (`verify:prod:d1` fails
-  until then). Each migration waits for the owner's go-ahead.
+- [x] Merged into `staging` as #282 (2026-10-05).
+- Production moved to the launch steps in the [Next.js migration plan](../active/nextjs-migration.md#left-for-launch): production needs `0028` and `0029`
+  (the [public handles plan](public-handles.md)) and `0030` before this code ships there, since
+  `/api/profiles/by-handle` reads `public_handles` and the Organization's avatar and
+  description (`verify:prod:d1` fails until then).
 
 ## Decision log
 

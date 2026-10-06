@@ -375,7 +375,7 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   Template's Required tools (issue #241). A new column rather than a key in `items`, so a change
   to the tools is not a checklist structure change and never stales Runs, and the lists can leave
   it unread. It is additive: code that predates it never names it, and a save that leaves the
-  tools out keeps them ([Required tools plan](../exec-plans/active/required-tools.md)).
+  tools out keeps them ([Required tools plan](../exec-plans/completed/required-tools.md)).
 - **Sitemap revisions for Organizations.** `0032` recreated the three sitemap triggers on
   `templates` so a public Organization Template's writes refresh the cached templates and
   categories sitemaps, as a Personal one's do (never a User's profile), and added three on
