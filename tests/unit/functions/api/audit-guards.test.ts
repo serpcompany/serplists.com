@@ -6,6 +6,7 @@ import type { StoredRow } from '../../../support/d1Doubles';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { sqlExpression } from '../../../support/drizzleSql';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -206,7 +207,7 @@ describe('audit rows are written only when the guarded write lands', () => {
   it('Run Key template edit: a template published meanwhile is not edited or audited', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([template()]);
 
-    const response = await updateTemplateForUser(
+    const result = await updateTemplateForUser(
       new Request('http://localhost/api/mcp', { method: 'POST' }),
       mockEnv,
       'user-123',
@@ -215,8 +216,7 @@ describe('audit rows are written only when the guarded write lands', () => {
       { privatePersonalOnly: true, auditMetadata: { source: 'mcp', personalRunKeyId: 'key-1' } },
     );
 
-    expect(response.status).toBe(409);
-    expect((await readJson(response, apiErrorBody)).code).toBe('edit_conflict');
+    expect(result).toEqual({ refused: objectContaining({ status: 409, code: 'edit_conflict' }) });
     expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
   });
 

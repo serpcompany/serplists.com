@@ -29,7 +29,6 @@ type RunPageHeaderProps = {
   onStartRename: () => void;
   onStopSharing: () => Promise<RunExecutionActionResult>;
   progress: number;
-  roleUnavailable: boolean;
   title: string;
   titleChanged: boolean;
 };
@@ -51,7 +50,6 @@ export function RunPageHeader({
   onStartRename,
   onStopSharing,
   progress,
-  roleUnavailable,
   title,
   titleChanged,
 }: RunPageHeaderProps) {
@@ -84,7 +82,7 @@ export function RunPageHeader({
       description={description}
       meta={
         <RunStatusMeta isCompleted={isCompleted} progress={progress}>
-          {canUpdateRun || roleUnavailable ? null : <Badge variant="secondary">View only</Badge>}
+          {canUpdateRun ? null : <Badge variant="secondary">View only</Badge>}
         </RunStatusMeta>
       }
       actions={

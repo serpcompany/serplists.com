@@ -181,7 +181,9 @@ and agents (MCP) call them directly and do not follow redirects.
   context lives in browser storage the server cannot read: it waits until the Organizations
   list confirms or rules out the remembered Organization, then replaces itself with that
   context's Templates, or Personal's when it is ruled out (a failed list shows the
-  Organizations error with Retry and Continue in Personal). Sign-in without a return path and
+  Organizations error with Retry and Continue in Personal). A navigation the user starts while
+  the list loads (Runs clicked right after signing in) ends its page visit (`usePageVisit`), so
+  the late redirect never replaces it. Sign-in without a return path and
   the legacy `/console` go there. Links use `buildConsoleHomePath(context)`, which returns a
   context's home itself. `/dashboard/organization/:organizationId/` answers 307 with that
   Organization's Templates (`ORGANIZATION_HOME_REDIRECT`).

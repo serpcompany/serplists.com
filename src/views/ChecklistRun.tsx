@@ -23,7 +23,6 @@ import { RunProvenancePanel } from '@/components/run-execution/RunProvenancePane
 import { RunWorkspace } from '@/components/run-execution/RunWorkspace';
 import { RequiredToolsList } from '@/components/template/RequiredToolsList';
 import { SharedRunView } from '@/components/run-execution/SharedRunView';
-import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun } from '@/features/run-execution/primaryTaskAction';
@@ -50,7 +49,7 @@ const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const router = useAppRouter();
   const { updateRun } = useTemplates();
-  const { consoleContext, getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
+  const { consoleContext, getPermissions } = useWorkspace();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
 
@@ -195,7 +194,6 @@ const ChecklistRunPage = () => {
   }
 
   const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
-  const roleUnavailable = !isSharedRun && isRoleUnavailable(displayRun.teamId);
   const isRunCompleted = displayRun.status === 'completed';
 
   const sectionProgress = displayRun.sections.map((section, index) => {
@@ -243,7 +241,6 @@ const ChecklistRunPage = () => {
             onStartRename={handleTitleEdit}
             onStopSharing={shareLinkState.stopSharing}
             progress={displayProgress}
-            roleUnavailable={roleUnavailable}
             title={displayRun.title}
             titleChanged={isRunTitleChange(editTitle, displayRun.title)}
           />
@@ -253,11 +250,6 @@ const ChecklistRunPage = () => {
             canUpdateRun={canUpdateRun}
             completedTasks={counts.tasksCompleted}
             noteDrafts={noteDrafts}
-            notice={
-              roleUnavailable ? (
-                <WorkspaceErrorNotice id="run-workspace-error" message="This run's actions wait until they load. Check your connection and try again." onRetry={retryWorkspace} />
-              ) : null
-            }
             onFinishRun={actions.openCompleteDialog}
             onNoteDraftChange={setNoteDraft}
             onSaveNotes={actions.saveNotes}

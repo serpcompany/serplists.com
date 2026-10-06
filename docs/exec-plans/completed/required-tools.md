@@ -99,3 +99,7 @@ new migration that drops it; never edit `0031`.
   and under the provenance on the Run page as a card like Activity, since a Run needs its tools
   before its first task. Each row shows the link's host, so the destination of a user-supplied
   link is visible before it is opened, and says to screen readers that it opens a new tab.
+- 2026-10-05 (TD-83): An export with "Include public community templates" builds those templates
+  from the catalog, which carries no tools, so the page reads the chosen templates' tools by id
+  (`GET /api/templates/public/required-tools`, at most 50 per request) rather than adding the
+  tools to the catalog, which every library page loads without showing tools.

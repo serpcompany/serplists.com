@@ -259,13 +259,18 @@ export function createBrowser() {
   });
 
   const log: NavigationRecord[] = [];
+  let heldNavigations: Array<() => void> | null = null;
 
   const navigate = (href: string, { replace, via }: { replace: boolean; via: NavigationRecord['via'] }) => {
     const target = resolve(href);
     log.push({ kind: replace ? 'replace' : 'push', href: toAppPath(target), via });
-    const replacesTheUrlAlreadyOpen = replace || target === current().href;
-    if (replacesTheUrlAlreadyOpen) replaceEntry(target, HISTORY_STATE_NEXT_JS_WRITES);
-    else pushEntry(target, HISTORY_STATE_NEXT_JS_WRITES);
+    const land = () => {
+      const replacesTheUrlAlreadyOpen = replace || target === current().href;
+      if (replacesTheUrlAlreadyOpen) replaceEntry(target, HISTORY_STATE_NEXT_JS_WRITES);
+      else pushEntry(target, HISTORY_STATE_NEXT_JS_WRITES);
+    };
+    if (heldNavigations) heldNavigations.push(land);
+    else land();
   };
 
   const createRouter = () => ({
@@ -305,6 +310,7 @@ export function createBrowser() {
       routes = options.routes ?? [];
       fixedParams = options.routes ? null : (options.params ?? {});
       log.length = 0;
+      heldNavigations = null;
       documentLoads.length = 0;
       searchParamsCache.clear();
       router = createRouter();
@@ -316,6 +322,14 @@ export function createBrowser() {
       subscribers.forEach((listener) => listener());
     },
     navigate,
+    holdNavigations() {
+      const held: Array<() => void> = [];
+      heldNavigations = held;
+      return () => {
+        if (heldNavigations === held) heldNavigations = null;
+        held.splice(0).forEach((land) => land());
+      };
+    },
     subscribe(listener: () => void) {
       subscribers.add(listener);
       return () => {

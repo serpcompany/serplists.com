@@ -49,14 +49,6 @@ export async function checkActiveRunCapacity(
   return { limit, hit: current >= limit ? { limit, current } : null };
 }
 
-export async function findActiveRunLimitHit(
-  env: Env,
-  owner: RunOwnerContext,
-  actingUserId: string | null = null,
-): Promise<ActiveRunLimitHit | null> {
-  return (await checkActiveRunCapacity(env, owner, actingUserId)).hit;
-}
-
 export function runInsertStatements(
   db: Db,
   run: typeof schema.checklistRuns.$inferInsert & { id: string },
@@ -86,14 +78,34 @@ export function isReopening(currentStatus: unknown, nextStatus: unknown): boolea
   return nextStatus === 'in_progress' && currentStatus !== 'in_progress';
 }
 
-export async function reopenLimitResponse(
+export type ReopenCapacity = ActiveRunCapacity & { owner: RunOwnerContext };
+
+export async function checkReopenCapacity(
   env: Env,
   run: Pick<typeof schema.checklistRuns.$inferSelect, 'status' | 'team_id' | 'user_id'>,
   nextStatus: unknown,
   actingUserId: string | null,
-): Promise<Response | null> {
+): Promise<ReopenCapacity | null> {
   if (!isReopening(run.status, nextStatus)) return null;
   const owner = { userId: run.user_id, teamId: run.team_id ?? null };
-  const hit = await findActiveRunLimitHit(env, owner, actingUserId);
-  return hit ? activeRunLimitResponse(owner, hit, 'reopen') : null;
+  return { owner, ...(await checkActiveRunCapacity(env, owner, actingUserId)) };
+}
+
+export function reopenCapacitySql(reopen: ReopenCapacity | null): SQL | undefined {
+  return reopen && reopen.limit !== null ? activeRunCapacityAvailableSql(reopen.owner, reopen.limit) : undefined;
+}
+
+export async function findReopenLimitHitAfterMiss(env: Env, reopen: ReopenCapacity | null): Promise<ActiveRunLimitHit | null> {
+  if (!reopen || reopen.limit === null) return null;
+  const current = await countActiveRuns(env, reopen.owner);
+  return current >= reopen.limit ? { limit: reopen.limit, current } : null;
+}
+
+export function reopenLimitResponse(reopen: ReopenCapacity | null): Response | null {
+  return reopen?.hit ? activeRunLimitResponse(reopen.owner, reopen.hit, 'reopen') : null;
+}
+
+export async function reopenMissLimitResponse(env: Env, reopen: ReopenCapacity | null): Promise<Response | null> {
+  const hit = await findReopenLimitHitAfterMiss(env, reopen);
+  return hit && reopen ? activeRunLimitResponse(reopen.owner, hit, 'reopen') : null;
 }

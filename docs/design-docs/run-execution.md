@@ -174,7 +174,11 @@ its history.
 - Completion sends the status `completed`, progress 100, the completion time and every draft. A
   completed Run is frozen (`COMPLETED_RUN_FROZEN_MESSAGE`): unticking would leave a Run labelled
   Completed with open tasks, and ticking again would never offer completion again. Notes stay
-  editable.
+  editable. The API refuses the same saves with `409 run_completed` and the same message
+  (`functions/api/utils/completed-run-freeze.ts`): it compares each task's and Sub-task's
+  completion with the stored Run, matched the way this page maps them (an id, or the position the
+  page numbers an entry without one), so the page's own saves of an old Run's shapes, such as a
+  note on a task stored as text, never count as a change.
 - After completing, a signed-in user goes to My Runs only while still on the page
   (`usePageVisit`). The leave guard lets them go, since completion saved every draft; a note typed
   while completion was saving still asks. A guest on a share link stays, and the page shows the

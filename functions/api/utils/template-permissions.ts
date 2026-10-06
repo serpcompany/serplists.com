@@ -1,7 +1,7 @@
 import type { schema } from '../db';
 import type { Env } from '../types';
 import type { AuditSubject } from './audit';
-import { jsonError } from './response';
+import { refusalResponse, writeRefusal, type WriteRefusal } from './write-refusal';
 import { ownerGrants, type OwnershipColumns } from './owner-access';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from './team-access';
 import { toPublicTemplate } from './template-public';
@@ -49,9 +49,14 @@ export function canEditTemplate(env: Env, template: TemplateOwnerFields, userId:
   return ownerGrants(env, ownershipOf(template), userId, canEditTeamTemplates);
 }
 
-export async function assertTeamTemplateCreateAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
+export async function teamTemplateCreateRefusal(env: Env, teamId: string, userId: string): Promise<WriteRefusal | null> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
-  if (!membership) return jsonError('Organization not found', 404);
-  if (!canEditTeamTemplates(normalizeTeamRole(membership.role))) return jsonError('Forbidden', 403);
+  if (!membership) return writeRefusal('Organization not found', 404);
+  if (!canEditTeamTemplates(normalizeTeamRole(membership.role))) return writeRefusal('Forbidden', 403);
   return null;
+}
+
+export async function assertTeamTemplateCreateAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
+  const refusal = await teamTemplateCreateRefusal(env, teamId, userId);
+  return refusal && refusalResponse(refusal);
 }

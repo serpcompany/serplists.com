@@ -7,10 +7,9 @@ import { invalidPayloadResponse } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections, summarizeRetiredEntries } from '../utils/template-reconciliation';
-import { auditedRunUpdate, findRunToUpdate, getRunSubject } from '../utils/checklist-runs';
-import { batchWriteMissed } from '../utils/guarded-writes';
+import { findRunToUpdate, getRunSubject, writeAuditedRunUpdate } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
-import { reopenLimitResponse } from '../utils/active-run-limit';
+import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-limit';
 import { contentTooLargeResponse } from '../utils/content-limits';
 
 export async function revalidateChecklistRun(
@@ -64,7 +63,8 @@ export async function revalidateChecklistRun(
   if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
     return jsonError('Source template not found', 404, { code: 'source_template_unavailable' });
   }
-  const reopenRefusal = await reopenLimitResponse(env, existingRun, 'in_progress', userId);
+  const reopen = await checkReopenCapacity(env, existingRun, 'in_progress', userId);
+  const reopenRefusal = reopenLimitResponse(reopen);
   if (reopenRefusal) return reopenRefusal;
 
   const previousSections = parseJsonArray(existingRun.items) ?? [];
@@ -101,16 +101,15 @@ export async function revalidateChecklistRun(
     request,
     createdAt: now,
   });
-  const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
-    eq(checklistRuns.revision, currentRevision),
-    isNull(checklistRuns.deleted_at),
-  ), updates, auditEvent));
-
-  if (batchWriteMissed(batchResults[1])) {
-    return jsonError('Checklist run changed while it was being revalidated. Refresh and try again.', 409, {
-      code: 'edit_conflict',
-    });
-  }
+  const missed = await writeAuditedRunUpdate(env, db, {
+    runId: checklistId,
+    guard: and(eq(checklistRuns.revision, currentRevision), isNull(checklistRuns.deleted_at)),
+    reopen,
+    updates,
+    auditEvent,
+    conflictMessage: 'Checklist run changed while it was being revalidated. Refresh and try again.',
+  });
+  if (missed) return missed;
 
   return json({
     success: true,

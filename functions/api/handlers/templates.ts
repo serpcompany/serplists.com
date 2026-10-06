@@ -3,6 +3,7 @@ import { createDb } from '../db';
 import { jsonError } from '../utils/response';
 import { readJsonBody } from '../utils/request-json';
 import { getSessionUserId } from '../utils/session';
+import { writeResultResponse } from '../utils/write-refusal';
 import { archiveTemplate, restoreTemplate } from './template-archive';
 import { handleTemplateBackup } from './template-backup';
 import { cloneTemplate } from './template-clone';
@@ -51,7 +52,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const read = await readJsonBody(request);
     if ('response' in read) return read.response;
-    return createTemplateForUser(request, env, userId, read.body);
+    return writeResultResponse(await createTemplateForUser(request, env, userId, read.body));
   }
 
   if (request.method === 'PUT' || request.method === 'DELETE') {
@@ -70,7 +71,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const read = await readJsonBody(request);
     if ('response' in read) return read.response;
-    return updateTemplateForUser(request, env, userId, templateId, read.body);
+    return writeResultResponse(await updateTemplateForUser(request, env, userId, templateId, read.body));
   }
 
   return new Response('Method Not Allowed', { status: 405 });

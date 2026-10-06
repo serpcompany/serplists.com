@@ -302,11 +302,6 @@ export function WorkspaceProvider({
       getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role),
     [teams],
   );
-  const isRoleUnavailable = useCallback(
-    (teamId?: string) =>
-      Boolean(teamId) && teamsUnavailable && !teams.some((team) => team.id === teamId),
-    [teams, teamsUnavailable],
-  );
 
   const shownContextId = routeContextId ?? activeWorkspace.id;
 
@@ -324,7 +319,6 @@ export function WorkspaceProvider({
       consoleContext: toConsoleContext(shownContextId),
       createTeam,
       getPermissions,
-      isRoleUnavailable,
       isTeamWorkspace,
       isWorkspaceLoading,
       patchTeam,
@@ -340,7 +334,7 @@ export function WorkspaceProvider({
       workspaceStatus,
     };
   }, [
-    activeWorkspace, createTeam, getPermissions, isRoleUnavailable, isWorkspaceLoading, patchTeam, refreshTeams,
+    activeWorkspace, createTeam, getPermissions, isWorkspaceLoading, patchTeam, refreshTeams,
     rememberTeam, retryWorkspace, routeOrganizationStatus, selectWorkspace, shownContextId, teams, teamsUnavailable,
     workspaces, workspaceStatus,
   ]);

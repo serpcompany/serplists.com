@@ -1,10 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
 import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { describeErrorForLog, log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
+import type { WriteResult } from "../utils/write-refusal";
 import { applyTemplateOperation } from "./agentMcpTemplateEdits";
 import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
@@ -52,25 +52,13 @@ function mcpAuditMetadata(identity: PersonalRunKeyIdentity, operation?: string):
   };
 }
 
-const templateWriteBodySchema = z.object({
-  id: z.unknown(),
-  version: z.unknown(),
-  error: z.unknown(),
-  code: z.unknown(),
-  details: z.unknown(),
-}).passthrough();
-
-type TemplateWriteBody = z.infer<typeof templateWriteBodySchema>;
-
-async function readTemplateWrite(response: Response): Promise<TemplateWriteBody> {
-  const parsed = templateWriteBodySchema.safeParse(await response.json().catch(() => null));
-  if (response.ok && parsed.success) return parsed.data;
-  if (response.status >= 500 || !parsed.success) throw new Error("Template write failed");
-  const body = parsed.data;
+function savedTemplate<Saved>(result: WriteResult<Saved>): Saved {
+  if ("saved" in result) return result.saved;
+  const { message, status, code, details } = result.refused;
   throw new ToolError(
-    typeof body.error === "string" ? body.error : "Unable to save the template",
-    typeof body.code === "string" ? body.code : templateWriteErrorCodes[response.status] ?? "template_write_failed",
-    isRecord(body.details) ? body.details : undefined,
+    message,
+    code ?? templateWriteErrorCodes[status] ?? "template_write_failed",
+    isRecord(details) ? details : undefined,
   );
 }
 
@@ -120,14 +108,13 @@ export async function createTemplate(
 ): Promise<JsonRecord> {
   const args = parseToolArguments(createTemplateArgs, rawArguments);
 
-  const created = await readTemplateWrite(await createTemplateForUser(
+  const created = savedTemplate(await createTemplateForUser(
     request,
     env,
     identity.userId,
     { ...args, is_public: false },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  if (typeof created.id !== "string") throw new Error("Template write returned no id");
   return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
 }
 
@@ -155,7 +142,7 @@ async function updateTemplatePart(
   assertTemplateEditableAt(stored, args.expectedVersion);
   const edit = applyTemplateOperation(templateSections(stored.items), args);
 
-  const updated = await readTemplateWrite(await updateTemplateForUser(
+  const updated = savedTemplate(await updateTemplateForUser(
     request,
     env,
     identity.userId,
@@ -163,10 +150,10 @@ async function updateTemplatePart(
     { sections: edit.sections, expected_version: args.expectedVersion },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
   ));
-  return loadWrittenTemplate(request, env, identity, {
-    id: args.templateId,
-    ...(typeof updated.version === "number" ? { version: updated.version } : {}),
-  }, { sectionId: edit.sectionId, taskId: edit.taskId });
+  return loadWrittenTemplate(request, env, identity, { id: args.templateId, version: updated.version }, {
+    sectionId: edit.sectionId,
+    taskId: edit.taskId,
+  });
 }
 
 export async function updateTemplate(
@@ -180,7 +167,7 @@ export async function updateTemplate(
   }
   const { templateId, expectedVersion, ...changes } = parseToolArguments(updateTemplateArgs, rawArguments);
 
-  const updated = await readTemplateWrite(await updateTemplateForUser(
+  const updated = savedTemplate(await updateTemplateForUser(
     request,
     env,
     identity.userId,
@@ -188,8 +175,5 @@ export async function updateTemplate(
     { ...changes, expected_version: expectedVersion },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  return loadWrittenTemplate(request, env, identity, {
-    id: templateId,
-    ...(typeof updated.version === "number" ? { version: updated.version } : {}),
-  });
+  return loadWrittenTemplate(request, env, identity, { id: templateId, version: updated.version });
 }

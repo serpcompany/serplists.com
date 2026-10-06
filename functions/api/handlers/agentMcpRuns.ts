@@ -131,6 +131,15 @@ function findTask(sections: SectionRecord[], taskId: string): TaskRecord | null 
   return null;
 }
 
+export function assertRunTasksCanChange(run: Pick<RunRow, "status">, operation: UpdateRunArgs): void {
+  if (run.status !== "completed") return;
+  if (operation.operation !== "set_task_completed" && operation.operation !== "set_subtask_completed") return;
+  throw new ToolError(
+    "Run is completed, so its tasks and subtasks can no longer be changed; set_run_status in_progress reopens it",
+    "run_completed",
+  );
+}
+
 export function applyRunOperation(sections: SectionRecord[], operation: UpdateRunArgs): void {
   if (operation.operation === "set_run_status") return;
 

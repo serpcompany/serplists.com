@@ -309,7 +309,9 @@ it leaves out legacy entries (a `null` content block or Sub-task, a content bloc
 unknown type, a blank text Sub-task), so the merge skips those too and a Sub-task after
 them pairs with its own guest entry (`functions/api/utils/shared-run-merge.ts`). The share
 page sends back stored values it does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
-than failing whole. When sharing fails, distinguish an
+than failing whole. On a completed run, a guest save whose merge would change a task's or Sub-task's
+completion fails with `409 run_completed` unless it also sets the status back to `in_progress`, a
+reopen that counts toward the owner context's active-run limit. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
 
@@ -385,6 +387,12 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   with public Templates changes its slug or archive. Its backfill dated the categories only
   public Organization Templates used. It changes triggers and revision rows only, no table
   ([SEO and sitemaps](seo-and-sitemaps.md#caching), TD-23).
+- **Sitemap user triggers on the owner index.** `0033` recreated `sitemap_users_update_owner`
+  and `sitemap_users_delete` from `0029` with their lookups of the User's public Personal
+  Templates written `+t.is_public=1`, so SQLite searches `idx_templates_owner` instead of
+  reading every public Template through `idx_templates_public_created_at` on a username or
+  name change or an account deletion. They refresh the same sitemaps as before; it changes
+  triggers only ([D1 cost](d1-cost.md), TD-86).
 
 ## Seeds
 
