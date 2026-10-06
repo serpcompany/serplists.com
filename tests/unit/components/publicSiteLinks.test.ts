@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { publicFooterGroups, publicHeaderItems } from '@/components/layout/publicSiteLinks';
+import { publicFooterGroups, publicHeaderItems, publicSocialLinks } from '@/components/layout/publicSiteLinks';
+import type { SocialNetwork } from '@/components/layout/socialNetworkIcons';
 import { everyPublicSiteLink } from '../../support/publicSiteLinks';
 
 const DOMAINS_CONFIRMED_AS_OURS = ['serp.co', 'serplists.com'];
+
+const SOCIAL_NETWORK_HOSTS: Record<SocialNetwork, string> = {
+  facebook: 'www.facebook.com',
+  github: 'github.com',
+  instagram: 'www.instagram.com',
+  linkedin: 'www.linkedin.com',
+  medium: 'medium.com',
+  reddit: 'www.reddit.com',
+  x: 'x.com',
+  youtube: 'www.youtube.com',
+};
 
 const isApprovedHost = (hostname: string) =>
   DOMAINS_CONFIRMED_AS_OURS.some(
@@ -68,5 +80,15 @@ describe('public site links in the header and every public footer', () => {
       ['Company', ['About /about/']],
       ['Support', ['Contact /contact/']],
     ]);
+  });
+
+  it("links each of SERP Lists' social profiles once, over https on its own network's host", () => {
+    for (const link of publicSocialLinks) {
+      const url = new URL(link.href);
+      expect(url.protocol, link.label).toBe('https:');
+      expect(url.hostname, link.label).toBe(SOCIAL_NETWORK_HOSTS[link.network]);
+      expect(url.pathname.toLowerCase(), link.label).toContain('serplists');
+    }
+    expect(new Set(publicSocialLinks.map((link) => link.network)).size).toBe(publicSocialLinks.length);
   });
 });
