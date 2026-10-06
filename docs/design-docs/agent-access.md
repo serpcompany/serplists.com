@@ -205,8 +205,11 @@ active Personal templates or runs, although the query already filters on them.
 
 Template writes go through the web editor's code (`createTemplateForUser`,
 `updateTemplateForUser`) with `privatePersonalOnly` set and audit metadata naming the key, so
-they get its validation, limits, version check, history and run sync. Those functions answer
-with HTTP responses, which the MCP maps back to tool errors (TD-26).
+they get its validation, limits, version check, history and run sync. Those functions return a
+typed result (`WriteResult` in `functions/api/utils/write-refusal.ts`): what they saved, or a
+refusal with its message, HTTP status, code and details. The template routes turn a refusal into
+their JSON error, and the MCP into a tool error with the same message, its code (or one named
+after the status, such as `forbidden`) and details.
 
 An `update_template` operation changes one section or task of the version the agent read.
 It first refuses a public template and a stale `expectedVersion`, then applies the operation
@@ -218,10 +221,16 @@ repeat an id the template already holds elsewhere.
 
 `start_run` counts active runs first only to give a friendly `limit_reached`; the guarded
 insert enforces the limit ([system overview](system-overview.md#authorization-and-entitlements)).
+`update_run` reopening a completed run with `set_run_status` does the same: its guarded audit
+insert repeats the count, so concurrent reopens cannot pass the Free limit, and a miss while
+the limit is reached fails with `limit_reached`, not `edit_conflict`.
 
 `update_run` inserts its audit row only while the run still has the expected revision, and
 updates the run only when that audit row exists. If one lands without the other, it logs
 `mcp_tool_invariant` and refuses with `internal_invariant`. `set_run_status` rewrites no
 content and matches the web app's status save: progress stays, reopening keeps the
 completion stamps, and completing a run that is already completed does not stamp it again.
+A completed run is frozen as on the run page: `set_task_completed` and `set_subtask_completed`
+fail with `run_completed` and write nothing, `set_task_notes` still works, and
+`set_run_status` `in_progress` reopens it.
 What MCP run events record is in [data persistence](data-persistence.md#json-columns).

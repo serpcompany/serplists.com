@@ -10,7 +10,6 @@ import {
 } from '../utils/payloads';
 import { normalizeStringArray, parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
-import { json, jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { buildAuditEventValues, buildTemplateVersionValues } from '../utils/audit';
 import {
@@ -19,7 +18,7 @@ import {
   type TemplateUpdateValues,
 } from '../utils/template-writes';
 import { batchWriteMissed } from '../utils/guarded-writes';
-import { contentFits, contentTooLargeResponse } from '../utils/content-limits';
+import { contentFits, contentTooLargeRefusal } from '../utils/content-limits';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
@@ -39,11 +38,25 @@ import { isUniqueViolationOn } from '../utils/unique-violation';
 import { isOwnPersonalTemplateRow } from '../utils/template-public';
 import { findTemplateById } from '../utils/template-rows';
 import { canEditTemplate, canViewTemplate, getTemplateSubject } from '../utils/template-permissions';
+import { refuse, type WriteResult } from '../utils/write-refusal';
 import { junkTemplateTitles, type TemplateWriteOptions } from './template-create';
 
-function slugInUseResponse(slug: string): Response {
-  return jsonError('Another template uses this URL slug. Choose a different slug.', 409, { code: 'slug_taken', details: { slug } });
+export type UpdatedTemplate = {
+  success: true;
+  id: string;
+  slug: string | undefined;
+  version: number;
+  content_version: number;
+  structureChanged: boolean;
+  reconciledRuns: number;
+};
+
+function slugInUse(slug: string) {
+  return refuse('Another template uses this URL slug. Choose a different slug.', 409, { code: 'slug_taken', details: { slug } });
 }
+
+const editConflictWhileSaving = () =>
+  refuse('Template changed while it was being saved. Refresh before saving again.', 409, { code: 'edit_conflict' });
 
 export async function updateTemplateForUser(
   request: Request,
@@ -52,14 +65,14 @@ export async function updateTemplateForUser(
   templateId: string,
   body: unknown,
   options: TemplateWriteOptions = {},
-): Promise<Response> {
+): Promise<WriteResult<UpdatedTemplate>> {
   const db = createDb(env);
   const { templates, checklistRuns } = schema;
 
   const parsed = templateUpdatePayloadSchema.safeParse(body);
   if (!parsed.success) {
     const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
-    return jsonError(message, 400, { details });
+    return refuse(message, 400, { details });
   }
 
   const { title, description, type, seoTitle, seoDescription, rules, requiredTools, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
@@ -93,7 +106,7 @@ export async function updateTemplateForUser(
   if (Object.prototype.hasOwnProperty.call(body, 'sections') || Object.prototype.hasOwnProperty.call(body, 'items')) {
     const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
-      return jsonError(normalizedSections.error, 400);
+      return refuse(normalizedSections.error, 400);
     }
     incomingSections = normalizedSections.sections;
   }
@@ -110,42 +123,42 @@ export async function updateTemplateForUser(
   }
 
   if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlug?.trim()) {
-    return jsonError('No fields to update', 400);
+    return refuse('No fields to update', 400);
   }
 
   const existingTemplate = await findTemplateById(db, templateId);
 
   if (!existingTemplate || !(await canViewTemplate(env, existingTemplate, userId))) {
-    return jsonError('Template not found or unauthorized', 404);
+    return refuse('Template not found or unauthorized', 404);
   }
   if (options.privatePersonalOnly && !isOwnPersonalTemplateRow(existingTemplate, userId)) {
-    return jsonError('Template not found or unauthorized', 404);
+    return refuse('Template not found or unauthorized', 404);
   }
   if (options.privatePersonalOnly && Boolean(existingTemplate.is_public)) {
-    return jsonError('Public templates can only be edited in SERP Lists', 403, { code: 'template_is_public' });
+    return refuse('Public templates can only be edited in SERP Lists', 403, { code: 'template_is_public' });
   }
   if (!(await canEditTemplate(env, existingTemplate, userId))) {
-    return jsonError('Forbidden', 403);
+    return refuse('Forbidden', 403);
   }
   if (incomingSections) {
     const previousSections = parseJsonArray(existingTemplate.items) ?? [];
     const stableSections = assignMissingStableTemplateIdentities(incomingSections, previousSections);
     const identityError = validateStableTemplateIdentities(stableSections);
     if (identityError) {
-      return jsonError(identityError, 400);
+      return refuse(identityError, 400);
     }
     if (templateStructureChanged(previousSections, stableSections)) {
-      const tooLarge = contentTooLargeResponse('template', stableSections, previousSections);
-      if (tooLarge) return tooLarge;
+      const tooLarge = contentTooLargeRefusal('template', stableSections, previousSections);
+      if (tooLarge) return { refused: tooLarge };
       syncedItems = JSON.stringify(stableSections);
       updates.items = syncedItems;
     }
   }
   const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
-  if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
+  if (slugRequest.kind === 'invalid') return refuse(slugRequest.message, 400);
   const versionRequired = requestsContentChange(body, slugRequest.kind === 'changed');
   if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
-    return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
+    return refuse('Template changed since it was loaded. Refresh before saving again.', 409, {
       code: 'edit_conflict',
       details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
     });
@@ -153,7 +166,7 @@ export async function updateTemplateForUser(
 
   const asksForNothing = slugRequest.kind === 'unchanged' && Object.keys(updates).length === 0 && !incomingSections;
   if (asksForNothing) {
-    return jsonError('No fields to update', 400);
+    return refuse('No fields to update', 400);
   }
   if (slugRequest.kind === 'changed') {
     const requestedSlugValue = slugRequest.slug;
@@ -165,29 +178,31 @@ export async function updateTemplateForUser(
 
     const slugTaken = Boolean(conflict) || isReservedTemplateSlug(requestedSlugValue);
     const slug = slugTaken ? await findFreeSuffixedSlug(db, requestedSlugValue, templateId) : requestedSlugValue;
-    if (!slug) return slugInUseResponse(requestedSlugValue);
+    if (!slug) return slugInUse(requestedSlugValue);
     updates.slug = slug;
   }
 
   const changes = omitUnchangedTemplateColumns(existingTemplate, updates);
   const invalidField = validateChangedTemplateFields(changes, parsed.data);
   if (invalidField) {
-    return jsonError(invalidField.message, 400, { details: invalidField.details });
+    return refuse(invalidField.message, 400, { details: invalidField.details });
   }
   const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
   const currentContentVersion = typeof existingTemplate.content_version === 'number'
     ? existingTemplate.content_version
     : currentVersion;
   if (Object.keys(changes).length === 0) {
-    return json({
-      success: true,
-      id: templateId,
-      slug: existingTemplate.slug ?? undefined,
-      version: currentVersion,
-      content_version: currentContentVersion,
-      structureChanged: false,
-      reconciledRuns: 0,
-    });
+    return {
+      saved: {
+        success: true,
+        id: templateId,
+        slug: existingTemplate.slug ?? undefined,
+        version: currentVersion,
+        content_version: currentContentVersion,
+        structureChanged: false,
+        reconciledRuns: 0,
+      },
+    };
   }
   const nextVersion = currentVersion + 1;
   const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
@@ -326,31 +341,25 @@ export async function updateTemplateForUser(
       versionValues,
       reconciledRunUpdates,
     );
-    if (!updated) {
-      return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
-        code: 'edit_conflict',
-      });
-    }
+    if (!updated) return editConflictWhileSaving();
     reconciledRuns = runResults.filter((result) => !batchWriteMissed(result)).length;
   } catch (error) {
-    if (isUniqueViolationOn(error, 'template_versions.version')) {
-      return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
-        code: 'edit_conflict',
-      });
-    }
+    if (isUniqueViolationOn(error, 'template_versions.version')) return editConflictWhileSaving();
     if (isTemplateSlugUniqueViolation(error) && typeof changes.slug === 'string') {
-      return slugInUseResponse(changes.slug);
+      return slugInUse(changes.slug);
     }
     throw error;
   }
 
-  return json({
-    success: true,
-    id: templateId,
-    slug: typeof changes.slug === 'string' ? changes.slug : existingTemplate.slug ?? undefined,
-    version: nextVersion,
-    content_version: nextContentVersion,
-    structureChanged: syncedItems !== null,
-    reconciledRuns,
-  });
+  return {
+    saved: {
+      success: true,
+      id: templateId,
+      slug: typeof changes.slug === 'string' ? changes.slug : existingTemplate.slug ?? undefined,
+      version: nextVersion,
+      content_version: nextContentVersion,
+      structureChanged: syncedItems !== null,
+      reconciledRuns,
+    },
+  };
 }

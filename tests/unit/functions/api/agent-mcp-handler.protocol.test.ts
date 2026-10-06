@@ -92,7 +92,7 @@ describe("personal run MCP handler", () => {
       clientInfo: { name: "test-client", version: "1.0.0" },
     }), env);
     const body = await readJson(response, mcpResultResponse);
-    expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.4.0" });
+    expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.5.0" });
 
     const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
     expect(spec).toContain("\n## MCP Changes For Agents\n");

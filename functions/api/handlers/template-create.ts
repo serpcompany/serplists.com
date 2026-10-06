@@ -8,7 +8,6 @@ import {
 } from '../utils/payloads';
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
-import { jsonError } from '../utils/response';
 import { log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -18,10 +17,10 @@ import {
 } from '../utils/audit';
 import {
   countTemplates,
-  templateLimitResponse,
+  templateLimitRefusal,
   type TemplateInsertValues,
 } from '../utils/template-writes';
-import { contentTooLargeResponse } from '../utils/content-limits';
+import { contentTooLargeRefusal } from '../utils/content-limits';
 import {
   assignMissingStableTemplateIdentities,
   validateStableTemplateIdentities,
@@ -29,10 +28,12 @@ import {
 import {
   generateUniqueSlug,
   insertTemplateWithUniqueSlug,
-  newTemplateResponse,
+  newTemplateResult,
+  type NewTemplate,
   type NewTemplateRows,
 } from '../utils/template-insert';
-import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
+import { teamTemplateCreateRefusal } from '../utils/template-permissions';
+import { refuse, type WriteResult } from '../utils/write-refusal';
 
 export const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
@@ -47,19 +48,19 @@ export async function createTemplateForUser(
   userId: string,
   body: unknown,
   options: TemplateWriteOptions = {},
-): Promise<Response> {
+): Promise<WriteResult<NewTemplate>> {
   const db = createDb(env);
 
   const parsed = templatePayloadSchema.safeParse(body);
   if (!parsed.success) {
     const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
-    return jsonError(message, 400, { details });
+    return refuse(message, 400, { details });
   }
 
   const requestedTeamId = options.privatePersonalOnly ? null : getRequestedTeamId(parsed.data, new URL(request.url));
   if (requestedTeamId) {
-    const accessError = await assertTeamTemplateCreateAccess(env, requestedTeamId, userId);
-    if (accessError) return accessError;
+    const accessRefusal = await teamTemplateCreateRefusal(env, requestedTeamId, userId);
+    if (accessRefusal) return { refused: accessRefusal };
   }
 
   const entitlements = requestedTeamId
@@ -70,22 +71,24 @@ export async function createTemplateForUser(
     : undefined;
   if (createCapacity) {
     const currentCount = await countTemplates(env, createCapacity.owner);
-    if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
+    if (currentCount >= createCapacity.limit) {
+      return { refused: templateLimitRefusal(createCapacity.owner, 'create', createCapacity.limit, currentCount) };
+    }
   }
 
   const { title, description, type, seoTitle, seoDescription, rules, requiredTools, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
   const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
   if (normalizedSections.error) {
-    return jsonError(normalizedSections.error, 400);
+    return refuse(normalizedSections.error, 400);
   }
   normalizedSections.sections = assignMissingStableTemplateIdentities(normalizedSections.sections);
   const identityError = validateStableTemplateIdentities(normalizedSections.sections);
   if (identityError) {
-    return jsonError(identityError, 400);
+    return refuse(identityError, 400);
   }
-  const tooLarge = contentTooLargeResponse('template', normalizedSections.sections);
-  if (tooLarge) return tooLarge;
+  const tooLarge = contentTooLargeRefusal('template', normalizedSections.sections);
+  if (tooLarge) return { refused: tooLarge };
 
   const templateId = crypto.randomUUID();
   const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
@@ -146,5 +149,5 @@ export async function createTemplateForUser(
     title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows, capacity: createCapacity,
   });
 
-  return newTemplateResponse(env, templateId, inserted, createCapacity, 'create');
+  return newTemplateResult(env, templateId, inserted, createCapacity, 'create');
 }

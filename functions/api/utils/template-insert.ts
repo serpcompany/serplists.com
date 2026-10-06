@@ -1,7 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
-import { json, jsonError } from './response';
 import { isReservedTemplateSlug } from './reserved-template-slugs';
 import { generateSlug, truncateSlug, withSlugSuffix } from './slug';
 import { isUniqueViolationOn } from './unique-violation';
@@ -9,12 +8,13 @@ import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 import {
   countTemplates,
   insertTemplateWithHistoryFallback,
-  templateLimitResponse,
+  templateLimitRefusal,
   type AuditEventValues,
   type TemplateCapacity,
   type TemplateInsertValues,
   type TemplateVersionValues,
 } from './template-writes';
+import { refuse, writeResultResponse, type WriteResult } from './write-refusal';
 
 type Db = ReturnType<typeof createDb>;
 
@@ -60,10 +60,6 @@ export async function findFreeSuffixedSlug(db: Db, slug: string, templateId: str
   return null;
 }
 
-function templateSlugTakenResponse(): Response {
-  return jsonError('Could not reserve a URL for this template. Try again.', 409, { code: 'slug_taken' });
-}
-
 export type NewTemplateRows = {
   template: TemplateInsertValues;
   version: TemplateVersionValues;
@@ -95,16 +91,22 @@ export async function insertTemplateWithUniqueSlug(
   return { failed: 'slug_taken' };
 }
 
-export async function newTemplateResponse(
+export type NewTemplate = { id: string; slug: string };
+
+export async function newTemplateResult(
   env: Env,
   templateId: string,
   result: NewTemplateInsertResult,
   capacity: TemplateCapacity | undefined,
   action: 'create' | 'save',
-): Promise<Response> {
-  if ('slug' in result) return json({ id: templateId, slug: result.slug });
+): Promise<WriteResult<NewTemplate>> {
+  if ('slug' in result) return { saved: { id: templateId, slug: result.slug } };
   if (result.failed === 'limit_reached' && capacity) {
-    return templateLimitResponse(capacity.owner, action, capacity.limit, await countTemplates(env, capacity.owner));
+    return { refused: templateLimitRefusal(capacity.owner, action, capacity.limit, await countTemplates(env, capacity.owner)) };
   }
-  return templateSlugTakenResponse();
+  return refuse('Could not reserve a URL for this template. Try again.', 409, { code: 'slug_taken' });
+}
+
+export async function newTemplateResponse(...args: Parameters<typeof newTemplateResult>): Promise<Response> {
+  return writeResultResponse(await newTemplateResult(...args));
 }

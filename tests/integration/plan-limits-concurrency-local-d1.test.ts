@@ -37,11 +37,16 @@ type Handler = (request: Request, env: Env) => Promise<Response>;
 
 async function seed() {
   const db = d1.env.DB;
-  const users = ["runs", "org-owner", "org-member", "restore", "mcp", "tpl", "tpl-restore", "author"];
+  const users = ["runs", "org-owner", "org-member", "restore", "reopen", "mcp", "tpl", "tpl-restore", "author"];
   const run = db.prepare(`
     INSERT INTO checklist_runs (id, user_id, team_id, title, items, status, started_at, created_at, progress,
       template_version, revision, retired_items, deleted_at)
     VALUES (?, ?, ?, 'Run', ?, 'in_progress', ?, ?, 0, 1, 1, '[]', ?)
+  `);
+  const completedRun = db.prepare(`
+    INSERT INTO checklist_runs (id, user_id, team_id, title, items, status, started_at, completed_at, created_at, progress,
+      template_version, revision, retired_items)
+    VALUES (?, ?, NULL, 'Run', ?, 'completed', ?, ?, ?, 100, 1, 1, '[]')
   `);
   const template = db.prepare(`
     INSERT INTO templates (id, user_id, title, items, is_public, created_at, version, type, owner_type, team_id,
@@ -49,7 +54,7 @@ async function seed() {
     VALUES (?, ?, ?, ?, ?, ?, 1, 'checklist', 'user', NULL, ?, 1, ?, ?)
   `);
   const activeRunsOneBelowEachContextsLimitOf3 = [
-    ...["runs", "restore", "mcp"].flatMap((userId) => [1, 2].map((n) => run.bind(`${userId}-active-${n}`, userId, null, sections, now, now, null))),
+    ...["runs", "restore", "reopen", "mcp"].flatMap((userId) => [1, 2].map((n) => run.bind(`${userId}-active-${n}`, userId, null, sections, now, now, null))),
     run.bind("org-active-1", "org-owner", "org-free", sections, now, now, null),
     run.bind("org-active-2", "org-member", "org-free", sections, now, now, null),
   ];
@@ -61,6 +66,7 @@ async function seed() {
     db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m2', 'org-free', 'org-member', 'runner', 'active', ?)").bind(now),
     ...activeRunsOneBelowEachContextsLimitOf3,
     ...Array.from({ length: 5 }, (_, n) => run.bind(`restore-archived-${n}`, "restore", null, sections, now, now, now)),
+    ...Array.from({ length: PARALLEL }, (_, n) => completedRun.bind(`reopen-completed-${n}`, "reopen", sections, now, now, now)),
     template.bind("mcp-template", "mcp", "MCP SOP", sections, 0, now, "mcp", "mcp-sop", null),
     template.bind("public-source", "author", "Public SOP", sections, 1, now, "author", "public-sop", null),
     ...Array.from({ length: 5 }, (_, n) =>
@@ -88,6 +94,9 @@ async function burst(userIds: string[], handler: Handler, makeRequest: (index: n
 
 const post = (path: string, body: unknown = {}) =>
   new Request(`http://localhost/api/${path}`, { method: "POST", body: JSON.stringify(body) });
+
+const put = (path: string, body: unknown) =>
+  new Request(`http://localhost/api/${path}`, { method: "PUT", body: JSON.stringify(body) });
 
 async function scalar(sql: string, ...bindings: unknown[]): Promise<number> {
   const row = await d1.env.DB.prepare(sql).bind(...bindings).first<{ value: number }>();
@@ -129,6 +138,13 @@ describe.sequential("Free plan limits under concurrent requests (local D1), chec
     expect(statuses.filter((status) => status === 403).length).toBeGreaterThanOrEqual(4);
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'restore' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE subject_id = 'restore' AND action = 'checklist_run.restored'")).toBe(1);
+  });
+
+  it("reopens only one completed run when completed runs are reopened together", async () => {
+    expectOneWinner(await burst(["reopen"], handleChecklists, (index) =>
+      put(`checklists/reopen-completed-${index}`, { status: "in_progress", expected_revision: 1 })));
+    expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'reopen' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
+    expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE subject_id = 'reopen' AND action = 'checklist_run.updated'")).toBe(1);
   });
 
   it("starts only one run through MCP", async () => {

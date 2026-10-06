@@ -103,7 +103,9 @@ body and workerd ignores.
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
 `expected_version` when updating a template; `POST /api/checklists/:id/revalidate`
-reconciles and reopens a completed private run. A template update that changes
+reconciles and reopens a completed private run. A run update that ticks or unticks a task or
+Sub-task of a completed run gets `409 run_completed` unless it also sets `status` back to
+`in_progress`, which reopens the run. A template update that changes
 content (anything but visibility) without `expected_version` gets `409 edit_conflict`,
 and `PUT /api/templates/:id` returns the new `version` and `content_version`, and the
 `slug` the template has after the save (the requested one, suffixed if it was taken,
@@ -164,8 +166,8 @@ JSON fields:
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
 - The Template limit is enforced the same way: create, clone and restore count first for a clear error, then repeat the count inside the insert (`templateCapacityAvailableSql` in `functions/api/utils/template-writes.ts`).
-- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
-- Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status`. Reopens check it only before the write (TD-17).
+- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the write itself with the guarded statements in `functions/api/utils/active-run-limit.ts`: web run create and MCP `start_run` insert only while the count is under the limit, and restore and every reopen repeat the count in their `UPDATE` (`activeRunCapacityAvailableSql`; MCP `update_run` in the guarded audit insert its update depends on). A pre-check count only gives an early, friendly error, and a write that misses while the context is at its limit answers `403 limit_reached` (the MCP tool error `limit_reached`) rather than `edit_conflict`.
+- Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status` (`checkReopenCapacity`).
 
 ## Audit And History
 

@@ -176,7 +176,10 @@ export const toolDefinitions = [
       + `which replace the task's notes and can be at most ${TASK_NOTES_LIMITS}, so they fit in one result `
       + "(get_run returns longer notes written in SERP Lists in parts); "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
-      + "(it fails with run_incomplete, naming open taskIds, otherwise). Leave out fields the operation does not use. "
+      + "(it fails with run_incomplete, naming open taskIds, otherwise). A completed run's tasks and subtasks are "
+      + "frozen: set_task_completed and set_subtask_completed fail with run_completed until set_run_status "
+      + "in_progress reopens it (on the Free plan a reopen counts toward the active-run limit and can fail with "
+      + "limit_reached); notes stay editable. Leave out fields the operation does not use. "
       + "Returns the run's fields with its new revision and, after a task operation, the changed task (sectionId "
       + "and taskId name it) when it fits in one result (32KB); taskOmitted otherwise, so read it with get_run and "
       + "taskId.",

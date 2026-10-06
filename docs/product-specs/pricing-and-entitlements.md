@@ -48,10 +48,10 @@ its limit (for example after a downgrade) can still finish its runs
 visitor's browser, belongs to no context and counts against nothing; saving it into an
 account starts a run, which counts like any other ([features](features.md#runs-and-sharing)).
 
-Limits hold under concurrent requests. Starting, restoring, and copying runs and
-Templates check the count once for a clear error, then again inside the write itself
-(`INSERT ... SELECT ... WHERE count < limit`, or the same condition on a restore's
-`UPDATE`), so parallel requests cannot all pass the same count
+Limits hold under concurrent requests. Starting, restoring, reopening, and copying runs
+and Templates check the count once for a clear error, then again inside the write itself
+(`INSERT ... SELECT ... WHERE count < limit`, or the same condition on a restore's or a
+reopen's `UPDATE`), so parallel requests cannot all pass the same count
 (`functions/api/utils/guarded-insert.ts`, `functions/api/utils/template-writes.ts`).
 
 ## Organization Matrix
