@@ -140,7 +140,8 @@ export const toolDefinitions = [
   {
     name: "get_run",
     description: "Read a personal run: its sections, tasks, subtasks, completion, notes, progress, status, and "
-      + "revision, and retiredItems (work a template change removed, read-only). No result is larger than 32KB, "
+      + "revision, and retiredItems (work a template change removed, read-only). A form block lists its fields, "
+      + "each with its id, label, kind, required flag, and the run's answer when it has one. No result is larger than 32KB, "
       + "what MCP clients take from one call, so a larger run comes back as an outline instead (sectionsOmitted, "
       + "and outline: each section's id, title, taskCount, and bytes; run.retiredCount and run.retiredBytes say "
       + "how much retired work it holds). Read a section with sectionId, or one task with taskId. A section too "

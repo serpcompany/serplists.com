@@ -18,7 +18,7 @@ import {
   type SectionRecord,
   type TaskRecord,
 } from "../../../src/lib/schemas/jsonRecords";
-import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import { getTaskSubTasks, isFormBlock, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import type { RunUpdates } from "../utils/checklist-runs";
 import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload } from "../utils/payloads";
@@ -66,13 +66,21 @@ export function parseRetiredItems(run: Partial<Pick<RunRow, "retired_items">>): 
   return (parseJsonArray(run.retired_items) ?? []).filter(isRetiredEntryRecord);
 }
 
-const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: TaskRecord | ContentRecord): JsonRecord => rest;
+const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: TaskRecord): JsonRecord => rest;
+
+function agentContentView(content: ContentRecord): JsonRecord {
+  const { subItems, fields, ...rest } = content;
+  return {
+    ...rest,
+    ...(isSubTasksBlock(content) && subItems !== undefined ? { subItems } : {}),
+    ...(isFormBlock(content) && fields !== undefined ? { fields } : {}),
+  };
+}
 
 export function agentTaskView(task: TaskRecord): TaskRecord {
   const view: TaskRecord = withoutSubItems(task);
   if (Array.isArray(task.contents)) {
-    view.contents = task.contents.map((content: unknown) =>
-      isContentRecord(content) && !isSubTasksBlock(content) ? withoutSubItems(content) : content);
+    view.contents = task.contents.map((content: unknown) => (isContentRecord(content) ? agentContentView(content) : content));
   }
   return view;
 }

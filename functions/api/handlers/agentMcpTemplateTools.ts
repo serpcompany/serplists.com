@@ -5,6 +5,13 @@ import {
   portableChecklistSectionSchema,
 } from "../../../src/lib/schemas/checklistSchema";
 import { CHECKLIST_CONTENT_TYPES } from "../../../src/lib/schemas/storedSections";
+import {
+  FORM_FIELD_KINDS,
+  MAX_FORM_DESCRIPTION_LENGTH,
+  MAX_FORM_FIELD_OPTIONS,
+  MAX_FORM_FIELDS,
+  MAX_FORM_LABEL_LENGTH,
+} from "../../../src/lib/schemas/formFields";
 
 const idArg = z.string().trim().min(1);
 
@@ -113,6 +120,37 @@ export const templateOperationArgs = z.discriminatedUnion("operation", [
 
 export type TemplateOperationArgs = z.infer<typeof templateOperationArgs>;
 
+const formLabelJsonSchema = { type: "string", minLength: 1, maxLength: MAX_FORM_LABEL_LENGTH } as const;
+
+const formFieldsJsonSchema = {
+  type: "array",
+  minItems: 1,
+  maxItems: MAX_FORM_FIELDS,
+  description: "form only: the fields each run fills in. A task whose form has a required field without an answer, "
+    + "or an answer that is not valid, can't be marked done. Keep the id of every field you keep so run answers "
+    + "follow it; omit ids for new ones.",
+  items: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      label: formLabelJsonSchema,
+      kind: { type: "string", enum: FORM_FIELD_KINDS },
+      required: { type: "boolean" },
+      description: { type: "string", maxLength: MAX_FORM_DESCRIPTION_LENGTH, description: "Help text shown under the label." },
+      options: {
+        type: "array",
+        minItems: 1,
+        maxItems: MAX_FORM_FIELD_OPTIONS,
+        description: "select and multiSelect only, and required for them. Answers point at option ids.",
+        items: { type: "object", properties: { id: { type: "string" }, label: formLabelJsonSchema }, required: ["label"] },
+      },
+      min: { type: "number", description: "number only: the smallest answer allowed." },
+      max: { type: "number", description: "number only: the largest answer allowed." },
+    },
+    required: ["label", "kind"],
+  },
+} as const;
+
 const templateTaskProperties = {
   id: { type: "string" },
   title: { type: "string", minLength: 1 },
@@ -124,7 +162,7 @@ const templateTaskProperties = {
       properties: {
         id: { type: "string" },
         type: { type: "string", enum: CHECKLIST_CONTENT_TYPES },
-        value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
+        value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed; empty for subItems and form." },
         subItems: {
           type: "array",
           items: {
@@ -133,6 +171,7 @@ const templateTaskProperties = {
             required: ["title"],
           },
         },
+        fields: formFieldsJsonSchema,
       },
       required: ["type"],
     },
