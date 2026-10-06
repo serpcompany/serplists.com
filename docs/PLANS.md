@@ -28,6 +28,8 @@ have not been updated in 30 days.
   Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
+- [Forms](exec-plans/active/forms.md): a Form block in a task whose fields every Run fills in,
+  with required answers gating the task, in two PRs (issue #288).
 - [Upload quota and ownership](exec-plans/active/upload-quota-and-ownership.md): record uploads
   in D1 for a per-account quota, Organization-owned deletes and orphan cleanup, with the
   proposed migrations.
