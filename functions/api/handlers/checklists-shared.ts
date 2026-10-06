@@ -18,6 +18,7 @@ import { canViewRun } from '../utils/run-access';
 import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 import { completedRunTaskChangeResponse } from '../utils/completed-run-freeze';
+import { formIncompleteResponse } from '../utils/run-form-guard';
 
 export async function handleSharedChecklist(
   request: Request,
@@ -91,6 +92,8 @@ export async function handleSharedChecklist(
     nextSections = merged.sections;
     const frozen = completedRunTaskChangeResponse(existingSharedRun, status, storedSections, nextSections);
     if (frozen) return frozen;
+    const formIncomplete = formIncompleteResponse(storedSections, nextSections);
+    if (formIncomplete) return formIncomplete;
     const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
     if (tooLarge) return tooLarge;
     updates.items = JSON.stringify(nextSections);

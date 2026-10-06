@@ -33,6 +33,7 @@ const STORED_ITEMS = JSON.stringify(sectionsWith());
 let database: SqliteD1;
 
 const put = (body: unknown, runId = "open") => checklistsRefusal(database, apiRequest(`checklists/${runId}`, "PUT", body));
+const putShared = (body: unknown) => checklistsRefusal(database, apiRequest("checklists/shared/token-open", "PUT", body));
 const stored = (column: string, runId = "open") =>
   storedValue(database, `SELECT ${column} AS value FROM checklist_runs WHERE id = ?`, runId);
 const storedBrief = () => taskIn(storedSectionsIn(stored("items")), 0, 0);
@@ -96,6 +97,38 @@ describe("PUT /api/checklists/:id refuses to save a task as done while its form 
 
     await expect(put({ sections, expected_revision: 1 })).resolves.toBeNull();
     expect(getTaskFormFields(storedBrief()).map((field) => field.answer)).toEqual([undefined, "draft"]);
+  });
+});
+
+describe("PUT /api/checklists/shared/:token keeps answers read-only and holds the same rule", () => {
+  const tickTheBrief = (fields: JsonRecord[] = []) => ({
+    sections: [{ id: "s1", items: [{ id: "brief", isCompleted: true, contents: [{ type: "form", fields }] }] }],
+    expected_revision: 1,
+  });
+
+  it("refuses ticking a task whose stored form blocks it, even with answers sent along, and writes nothing", async () => {
+    await expect(putShared(tickTheBrief([nameField({ answer: "Sent by a visitor" })])))
+      .resolves.toEqual(refusal([{ taskId: "brief", fieldId: "field_name", reason: "required" }]));
+    expect(stored("items")).toBe(STORED_ITEMS);
+  });
+
+  it("ignores answers a visitor sends with any other change", async () => {
+    await expect(putShared({
+      sections: [{ id: "s1", items: [{ id: "brief", notes: "Called the client", contents: [{ type: "form", fields: [nameField({ answer: "Visitor" })] }] }] }],
+      expected_revision: 1,
+    })).resolves.toBeNull();
+
+    expect(storedBrief().notes).toBe("Called the client");
+    expect(getTaskFormFields(storedBrief()).map((field) => field.answer)).toEqual([undefined, undefined]);
+  });
+
+  it("ticks a task whose stored form is filled in", async () => {
+    const answered = JSON.stringify(sectionsWith({ fields: [nameField({ answer: "Acme" }), emailField()] }));
+    database.run("UPDATE checklist_runs SET items = ? WHERE id = 'open'", answered);
+
+    await expect(putShared(tickTheBrief())).resolves.toBeNull();
+    expect(storedBrief().isCompleted).toBe(true);
+    expect(getTaskFormFields(storedBrief()).map((field) => field.answer)).toEqual(["Acme", undefined]);
   });
 });
 
