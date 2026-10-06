@@ -76,8 +76,10 @@ older than the catalog never writes a template twice. A template both the server
 and the browser skipped is listed once in `manifest.skippedTemplates`. When the
 template list fails to load, the export page shows the load error with Retry
 instead of zero counts, and export still works. Catalog rows carry no Required tools (the
-lists do not read them), so a community template added this way is exported without its
-tools; the context's own templates always carry theirs (TD-83).
+lists do not read them), so the page then reads the chosen public templates' tools by id
+(`GET /api/templates/public/required-tools?ids=...`, at most 50 templates per request, one
+request after another) and exports each with its tools, as the context's own templates are.
+If that read fails, the export fails and nothing is downloaded.
 
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`

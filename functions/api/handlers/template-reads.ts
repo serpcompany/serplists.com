@@ -1,7 +1,8 @@
 import { Env } from '../types';
 import { decodeSlugPath } from '../utils/slug';
-import { and, desc, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { schema } from '../db';
+import { PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX, readRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import {
@@ -67,6 +68,36 @@ async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response>
 
   const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, owner, includeRules));
   return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row))));
+}
+
+export function selectPublicRequiredTools(db: TemplateDb, templateIds: string[]) {
+  const { templates } = schema;
+  return db
+    .select({ id: templates.id, required_tools: templates.required_tools })
+    .from(templates)
+    .where(and(
+      inArray(templates.id, templateIds),
+      sql`+${templates.is_public} = 1`,
+      isNull(templates.deleted_at),
+      isNotNull(templates.required_tools),
+    ));
+}
+
+async function listPublicRequiredTools(db: TemplateDb, url: URL): Promise<Response> {
+  const templateIds = [...new Set((url.searchParams.get('ids') ?? '').split(',').map((id) => id.trim()).filter(Boolean))];
+  if (templateIds.length === 0) return jsonError('ids required', 400);
+  if (templateIds.length > PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX) {
+    return jsonError(`Ask for the tools of ${PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX} templates or fewer`, 400, {
+      code: 'too_many_templates',
+      details: { limit: PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX },
+    });
+  }
+
+  const rows = await selectPublicRequiredTools(db, templateIds);
+  return json(rows.flatMap(({ id, required_tools }) => {
+    const requiredTools = readRequiredTools(required_tools);
+    return requiredTools.length > 0 ? [{ id, requiredTools }] : [];
+  }));
 }
 
 async function readActiveTemplate(env: Env, userId: string | null, matches: SQL): Promise<Response> {
@@ -209,6 +240,10 @@ export async function handleTemplateReads(
 ): Promise<Response> {
   const { templates } = schema;
   const [first, second] = templatesSubpath;
+
+  if (first === 'public' && second === 'required-tools') {
+    return listPublicRequiredTools(db, url);
+  }
 
   if (first === 'public') {
     return listPublicProfileTemplates(env, url);

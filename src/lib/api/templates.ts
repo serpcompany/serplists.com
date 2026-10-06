@@ -15,6 +15,7 @@ import {
   apiTemplateListSchema,
   apiTemplateSchema,
   exportedTemplatePackSchema,
+  publicRequiredToolsSchema,
   savedTemplateSchema,
   templateTransferredSchema,
   type SavedTemplate,
@@ -141,6 +142,11 @@ export const templatesApi = {
     search.set('format', params?.format ?? 'portable');
     const query = search.toString();
     return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, exportedTemplatePackSchema);
+  },
+
+  async getPublicRequiredTools(templateIds: readonly string[]) {
+    const search = new URLSearchParams({ ids: templateIds.join(',') });
+    return apiRequest(`/templates/public/required-tools?${search.toString()}`, publicRequiredToolsSchema);
   },
 
   async importTemplateBackup(payload: {

@@ -5,6 +5,7 @@ import { parseJsonArray } from "./jsonArrays";
 export const REQUIRED_TOOLS_MAX = 20;
 export const REQUIRED_TOOL_NAME_MAX = 80;
 export const REQUIRED_TOOL_URL_MAX = 2048;
+export const PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX = 50;
 
 const NOT_BLANK = /\S/;
 const HTTP_URL = /^[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"/?#]+[^\s<>"]*$/;

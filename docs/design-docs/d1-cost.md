@@ -240,7 +240,11 @@ templates through the owner indexes. With "Include public community templates" o
 used to OR every public template into that query, uncached, on each click (the whole
 catalog, like a catalog cache miss). The page now adds public templates from the
 edge-cached catalog it already loaded (`src/lib/templates/portableExport.ts`), and the
-API ignores `includePublic=1` from older tabs.
+API ignores `includePublic=1` from older tabs. The catalog leaves Required tools out, so the
+page reads the chosen templates' tools by id, at most 50 per request
+(`GET /api/templates/public/required-tools`, `selectPublicRequiredTools` in
+`functions/api/handlers/template-reads.ts`): primary-key lookups with `+is_public`, one row
+read per template asked for, whose plan `template-public-required-tools-d1.test.ts` checks.
 
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,
