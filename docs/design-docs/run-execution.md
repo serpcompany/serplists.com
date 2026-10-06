@@ -196,14 +196,16 @@ A task's Form block holds fields the Template defines; the run keeps each answer
   the task panel then shows every field's message, and the first form with a problem moves
   focus to its first one and scrolls it to the middle of the window. A count on mount (the
   task opened again later) moves nothing.
-- `isRunItemFinished` counts a task whose form blocks it as unfinished, so the Run opens there,
-  "Next unfinished task" leads there, and the Run cannot be finished around it. Fields don't
-  count toward progress.
+- A form gates ticking its task, not completing the Run: `isRunItemFinished` and the API's
+  `findOpenRunTasks` both count a ticked task as finished whatever its form holds
+  (`tests/unit/functions/api/run-completion-rule.test.ts`). Every save path refuses to tick a
+  blocked task, and reconciling a Run reopens a done task whose form a Template change now
+  blocks, so a ticked task with a blocking form is rare. Fields don't count toward progress.
 
 ## Completing a Run
 
-- A task is finished when it is ticked, so is every Sub-task in all of its Sub-tasks blocks,
-  and its form does not block it (`isRunItemFinished`), the rule the API applies. A ticked task with an open Sub-task (older Runs,
+- A task is finished when it is ticked and so is every Sub-task in all of its Sub-tasks blocks
+  (`isRunItemFinished`), the rule the API applies. A ticked task with an open Sub-task (older Runs,
   API writes) is where the Run opens and where moving on leads.
 - A tick that leaves every task finished answers `shouldPromptComplete`, which opens the completion
   dialog. The server never completes a Run on its own, so `canFinishRun` keeps the page's Complete

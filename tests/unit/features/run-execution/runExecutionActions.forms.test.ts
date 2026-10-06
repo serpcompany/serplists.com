@@ -165,14 +165,14 @@ describe('a task whose form blocks it', () => {
     expect(answered.kind === 'ok' && answered.run ? taskAt(answered.run, 0, 0).isCompleted : null).toBe(true);
   });
 
-  it('counts as unfinished even when stored as ticked, so the run cannot be finished around it', () => {
+  it('counts a task stored as ticked as finished whatever its form holds, since a form gates ticking its task and not the run', () => {
     const ticked = formTask({
       isCompleted: true,
       contents: [{ id: 'form-1', type: 'form', value: '', fields: FIELDS }],
     });
 
-    expect(isRunItemFinished(ticked)).toBe(false);
-    expect(isRunItemFinished({ ...ticked, contents: [{ id: 'form-1', type: 'form', value: '', fields: [{ id: 'field-site', label: 'Website', kind: 'url', required: false }] }] })).toBe(true);
+    expect(isRunItemFinished(ticked)).toBe(true);
+    expect(isRunItemFinished({ ...ticked, isCompleted: false })).toBe(false);
   });
 
   it("keeps the server's form refusal, with its code, and the answers already saved", async () => {

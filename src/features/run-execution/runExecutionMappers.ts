@@ -13,7 +13,6 @@ import type {
 } from '@/types/checklist';
 import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
 import type { ApiRun } from '@/lib/schemas/apiRuns';
-import { findFormFieldProblems } from '@/lib/schemas/formValidation';
 import { parseJsonArray } from '@/lib/schemas/jsonArrays';
 import { formatCount } from '@/lib/utils/pluralize';
 
@@ -165,8 +164,7 @@ export const getSelectedRunItem = (
 
 export const isRunItemFinished = (item: ChecklistItem): boolean =>
   item.isCompleted === true &&
-  getItemSubItems(item).every((subItem) => subItem.isCompleted === true) &&
-  findFormFieldProblems(item).length === 0;
+  getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
 
 export const areAllRunItemsCompleted = (run: ChecklistRun): boolean =>
   run.sections.every((section) => section.items.every(isRunItemFinished));

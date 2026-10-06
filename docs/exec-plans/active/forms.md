@@ -206,7 +206,7 @@ leaves the site broken until the next one lands):
   - [x] Run page: inputs by kind with help text and messages; answers save through the save
     queue (`saveRunFormAnswer`, typed answers on blur); Mark Complete and the task checkbox
     refuse a blocked task with the first field's message and move focus to it; a Sub-task
-    never ticks a blocked task; a blocked task counts as unfinished; `409 form_incomplete` is
+    never ticks a blocked task; `409 form_incomplete` is
     shown the same way; File fields upload when signed in; answers on a completed Run are
     read-only.
   - [x] Guest run: the same inputs and guard, "Log in to upload" for File fields, and Save to
@@ -268,3 +268,7 @@ leaves the site broken until the next one lands):
 - 2026-10-06: Save drops a Dropdown or Multiple choice field left with no option, as it drops
   a Sub-tasks block left with no Sub-task: no one could answer it, and a required one would
   block its task for good.
+- 2026-10-06: A ticked task counts as finished for completing the Run whatever its form holds, on
+  the page (`isRunItemFinished`) and in the API (`findOpenRunTasks`), as the owner chose: a form
+  gates ticking its task, not the Run. The screens briefly counted such a task as unfinished;
+  `run-completion-rule.test.ts` caught the disagreement when the two halves met.
