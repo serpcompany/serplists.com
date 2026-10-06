@@ -3,7 +3,8 @@ import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { batchWriteMissed } from './guarded-writes';
 import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
-import { limitReachedResponse } from './limit-reached';
+import { limitReachedRefusal } from './limit-reached';
+import { refusalResponse, type WriteRefusal } from './write-refusal';
 
 type Db = ReturnType<typeof createDb>;
 export type TemplateInsertValues = typeof schema.templates.$inferInsert;
@@ -44,13 +45,17 @@ export function templateCapacityAvailableSql({ owner, limit }: TemplateCapacity)
   return sql`(select count(*) from ${schema.templates} where ${templatesInContext(owner)}) < ${limit}`;
 }
 
-export function templateLimitResponse(
+export function templateLimitRefusal(
   owner: TemplateOwnerContext,
   action: 'create' | 'restore' | 'save',
   limit: number,
   current: number,
-): Response {
-  return limitReachedResponse({ resource: 'templates', teamId: owner.teamId, action, limit, current });
+): WriteRefusal {
+  return limitReachedRefusal({ resource: 'templates', teamId: owner.teamId, action, limit, current });
+}
+
+export function templateLimitResponse(...args: Parameters<typeof templateLimitRefusal>): Response {
+  return refusalResponse(templateLimitRefusal(...args));
 }
 
 export async function insertTemplateWithHistoryFallback(

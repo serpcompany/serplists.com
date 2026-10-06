@@ -205,8 +205,11 @@ active Personal templates or runs, although the query already filters on them.
 
 Template writes go through the web editor's code (`createTemplateForUser`,
 `updateTemplateForUser`) with `privatePersonalOnly` set and audit metadata naming the key, so
-they get its validation, limits, version check, history and run sync. Those functions answer
-with HTTP responses, which the MCP maps back to tool errors (TD-26).
+they get its validation, limits, version check, history and run sync. Those functions return a
+typed result (`WriteResult` in `functions/api/utils/write-refusal.ts`): what they saved, or a
+refusal with its message, HTTP status, code and details. The template routes turn a refusal into
+their JSON error, and the MCP into a tool error with the same message, its code (or one named
+after the status, such as `forbidden`) and details.
 
 An `update_template` operation changes one section or task of the version the agent read.
 It first refuses a public template and a stale `expectedVersion`, then applies the operation
