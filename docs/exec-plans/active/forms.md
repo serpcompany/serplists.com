@@ -174,6 +174,27 @@ leaves the site broken until the next one lands):
 
 - [ ] **PR 1, the Form block:** everything in Design above except the answers export and the
   MCP fill operation. MCP `get_run` shows fields and answers, and its guards apply.
+  - [x] Editor: Add Block → "Form"; `FormFieldsEditor` with a label, a type select, a Required
+    switch, help text, options for Dropdown and Multiple choice, a minimum and maximum for
+    Number; add, remove (never the last field) and move up or down; works at 390px. Save
+    drops blank fields, blank options, a choice field with no option and an empty form
+    (`applyTemplateSaveDefaults`).
+  - [x] Read-only: the public Template page, Template detail and the editor preview list each
+    field (label, type, "Required", help text, options) with `FormFieldList`.
+  - [x] Run page: inputs by kind with help text and messages; answers save through the save
+    queue (`saveRunFormAnswer`, typed answers on blur); Mark Complete and the task checkbox
+    refuse a blocked task with the first field's message and move focus to it; a Sub-task
+    never ticks a blocked task; a blocked task counts as unfinished; `409 form_incomplete` is
+    shown the same way; File fields upload when signed in; answers on a completed Run are
+    read-only.
+  - [x] Guest run: the same inputs and guard, "Log in to upload" for File fields, and Save to
+    account carries answers by field id without carrying a blocked task as done.
+  - [x] Shared run: answers read-only; a blocked task cannot be ticked ("This task can be
+    ticked once its form is answered.").
+  - [x] Docs (screen inventory, app map, features, FRONTEND, run execution, content types) and
+    `tests/e2e/template-forms.spec.ts`.
+  - [ ] Server: the owner and shared `PUT` guards, reconciliation of answers, retired answers
+    and the parity tests.
 - [ ] **PR 2, answers outside the run page:**
   - a CSV and JSON export of a run's answers;
   - an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
@@ -192,3 +213,11 @@ leaves the site broken until the next one lands):
 - 2026-10-06: Fields don't count toward progress. A required field gates its task, and the
   task is what progress counts. Counting each field would make a ten-field form dominate a
   run's percentage.
+- 2026-10-06: Typed answers save when the field loses focus, not per keystroke and not through
+  a draft store like notes: one save per answer keeps the save queue and the revision check
+  simple, and a field is left before Mark Complete or another task is clicked. The page checks
+  the form inside the queued tick, on the latest Run, so an answer whose save is still on its
+  way is never reported missing.
+- 2026-10-06: Save drops a Dropdown or Multiple choice field left with no option, as it drops
+  a Sub-tasks block left with no Sub-task: no one could answer it, and a required one would
+  block its task for good.

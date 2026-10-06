@@ -1,7 +1,17 @@
 # Template Content Types
 
 Checklist items hold typed content blocks (text, image, video, file, embed,
-sub-items). This doc shows how to add a content type and how editor tabs work.
+sub-items, form). This doc shows how to add a content type and how editor tabs work.
+
+## Form blocks
+
+A Form block holds `fields` the Template defines and a run answers. Its stored shape, the one
+rule for when a form blocks its task (`findFormFieldProblems`) and the plan are in the
+[forms plan](../exec-plans/active/forms.md). The editor edits the fields in `FormFieldsEditor`
+(`src/components/template-editor/content-types/`). Read-only pages list them with
+`FormFieldList` (`src/components/shared/`), and the run page fills them in with
+`FormFieldInputs` and `FormFieldInput` there, through `ContentRenderer`'s
+`onFormAnswerChange`; how answers save is in [run execution](run-execution.md#form-answers).
 
 ## Video blocks
 

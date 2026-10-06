@@ -464,8 +464,12 @@ How the editor's models load, save, keep drafts and decide who may edit:
 - `src/lib/forms/templateEditorDetailsForm.ts` owns the top-level details contract;
   `src/lib/forms/templateEditorForm.ts` owns the combined editor contract, editor
   types with guaranteed ids, and nested field factories.
-- Use React Hook Form field arrays for sections, items, content blocks, and
-  sub-items instead of a second nested state tree.
+- Use React Hook Form field arrays for sections, items, content blocks, sub-items, and
+  a Form's fields and options (`FormFieldsEditor`, `FormFieldEditor` and
+  `FormFieldOptionsEditor` in `src/components/template-editor/content-types/`) instead of
+  a second nested state tree. Changing a field's type sets its options (one empty option
+  for a new Dropdown or Multiple choice, kept between those two, removed otherwise) and
+  clears a minimum and maximum it no longer uses.
 - The editor page creates its form only after the template has loaded
   (`TemplateEditorForm` in `src/views/TemplateEditor.tsx`), so nothing mounts against
   the blank defaults. UI state about sections, such as which ones the outline has
@@ -535,7 +539,12 @@ How the editor's models load, save, keep drafts and decide who may edit:
   outline shows, from `sectionFallbackTitle`), an untitled task "Task N", and an
   empty section gets a "New task" whose id comes from the section id. Blank
   sub-tasks are dropped (the others keep their ids), and so is a Sub-tasks block
-  left with none, since runs count every sub-task checkbox toward progress. The
+  left with none, since runs count every sub-task checkbox toward progress. A Form
+  block drops its fields without a label, trims labels, options and help text (blank
+  help text is left out), drops blank options and a Dropdown or Multiple choice field
+  left with no option (no one could answer it), keeps options only on those two types
+  and a minimum and maximum only on Number, and is dropped when no field is left; field
+  and option ids are kept. The
   editor shows them after the save, and the defaults are deterministic, so saving
   again sends the same task ids and active runs keep the task (and its completion).
   A create leaves the page when it finishes, so the editor is locked (a disabled

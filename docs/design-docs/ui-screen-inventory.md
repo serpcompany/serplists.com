@@ -677,7 +677,10 @@ existing content, invent nothing):
     "Required" or "Optional" badge.
   - "What's included": one collapsible card per section (number, title, "N tasks",
     chevron). Open, it lists numbered tasks with their title, description and content
-    blocks, read-only.
+    blocks, read-only. A Form block is headed "Form" and lists each field in a bordered row:
+    its label, its type as a badge ("Short text", "Long text", "URL", "Email", "Number",
+    "Date", "Dropdown", "Multiple choice", "Checkbox", "File"), a "Required" badge, its help
+    text and its options, with no inputs.
   - Tags ("#tag").
   - "Ready to use this template?": text that says what the viewer's role allows; "Copy to
     Library" (outline) and "Start Run" (primary).
@@ -781,6 +784,9 @@ existing content, invent nothing):
   - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
     block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
     is no provenance, Activity or "Removed from Template".
+  - A Form block's inputs are the Run page's, with the same guard on "Mark Complete". A File
+    field shows "Log in to upload" instead of "Upload file" (a link to Log in that comes back
+    to this run); signed in, it uploads.
 - **PRIMARY ACTION:** "Mark Complete".
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Complete run" and "Finish
   Run" → [Run complete dialog](#run-complete-dialog); "Delete run" → [Delete
@@ -1446,8 +1452,12 @@ existing content, invent nothing):
     every task is done while the Run is in progress.
   - One card per section: title and "Complete" or "X/Y"; per task: a checkbox, the title
     (struck through when done), the description, content blocks (Sub-tasks have their own
-    checkboxes), "Task notes" (placeholder "Add links, outcomes, or context for this
-    run...", "Save notes", "Saved to this run").
+    checkboxes; a Form block lists its fields read-only, as the public template page does,
+    with each answer as "Answer: <answer>", a file's as a link), "Task notes" (placeholder
+    "Add links, outcomes, or context for this run...", "Save notes", "Saved to this run").
+  - A task whose form blocks it (a required field empty, or an answer that is not valid) has a
+    disabled checkbox and the line "This task can be ticked once its form is answered."; a
+    link holder cannot change answers.
   - Closing banner: "Want to run your own checklist?", "Browse public templates and start a
     fresh run from a template that matches your workflow.", "Browse the Template Library".
 - **PRIMARY ACTION:** tick a task.
@@ -1563,7 +1573,7 @@ existing content, invent nothing):
     above "Template Structure".
   - "Template Structure": the public template page's section cards, always open: numbered
     sections (title, "N tasks") with their numbered tasks (title, description, content
-    blocks).
+    blocks; a Form block lists its fields read-only, as on the public template page).
   - "Details": "Created", "Last updated", "Visibility" (a switch labeled "Public" or
     "Private").
   - "Categories & Tags": the categories or "No categories assigned"; the tags or "No tags
@@ -1662,6 +1672,16 @@ existing content, invent nothing):
     - "Task Details": "Task Title", "Description (Optional)", "Content Blocks" with "Add
       Block" and block cards (drag handle, or "Move <type> block up" and "down" on a touch
       screen; the type; "Remove <type> block"), or "No content blocks yet".
+    - A Form block's card: "Form fields", then a bordered card per field: "Field N", "Move
+      field N up" and "down" (on every screen), "Remove field N" (disabled while it is the only
+      field); "Label", "Type" (a select of the ten field types), "Help text"; for Dropdown and
+      Multiple choice "Options" (one input per option, placeholder "Option N", "Remove field N
+      option N", disabled for the last one, "Add option", disabled at 50 with "A field can have
+      up to 50 options."); for Number "Minimum" and "Maximum"; a "Required" switch. Under the
+      cards "Add field", disabled at 50 with "A form can have up to 50 fields." A new Form
+      starts with one Short text field that is not required. Save drops fields without a
+      label, blank options, a Dropdown or Multiple choice field left with no option, and a
+      Form left with no field.
     - Prompts: "Select a task from the outline to edit its instructions and attached
       content." and "Add a section from the outline to start building this template."
 - **PRIMARY ACTION:** "Save". A create returns to [My Templates](#my-templates); an edit stays
@@ -1693,7 +1713,8 @@ existing content, invent nothing):
     Empty; Sheet; Dialog.
   - DATA FIELDS: Template (title, description, type, categories, tags, Required tools (name,
     URL, required), public, search title, URL slug, search description); sections (title,
-    tasks); tasks (title, description, content blocks); save state; kept drafts.
+    tasks); tasks (title, description, content blocks; a Form's fields: label, type,
+    required, help text, options, minimum, maximum); save state; kept drafts.
 - **PROOF PASS:** Pass (step 2a): `editor-new`, `editor-task` (a Template open on a task),
   `editor-add-block-menu`, `editor-preview-dialog`, `editor-loading` and `editor-read-only`,
   each on desktop and phone, light and dark, and `editor-outline-sheet-mobile-light` and
@@ -1797,6 +1818,18 @@ existing content, invent nothing):
   - Task panel (a bordered card): "<section> / Task N of M"; a task checkbox; the task's
     title and description; content blocks, or "No additional content for this task"; "Task
     notes" ("Save notes", "Saved to this run").
+  - A Form block ("Form"): one input per field, under its label, a "Required" badge and its
+    help text: a text field (Short text, URL with "https://" as placeholder, Email, Number,
+    Date), a text area (Long text), a select ("Choose an option") for Dropdown, a checkbox
+    per option for Multiple choice, one checkbox for Checkbox, and for File "Upload file"
+    ("Uploading..."), then the file's name as a link with "Remove <file name>". Typed answers
+    save when the field loses focus, the others when they change. A field's message (such as
+    "Fill in this field.", "Enter a URL that starts with http:// or https://." or "Enter a
+    number from 1 to 10.") shows once the field was left, or for every field after "Mark
+    Complete" or the task checkbox was refused: then the toast "Finish this task's form
+    first. <label>: <message>" names the first field, and focus moves to it. On a completed
+    Run, and for a view-only role, the form is read-only, with each answer as "Answer:
+    <answer>".
   - A footer pinned to the bottom of the window: "Previous", the primary action ("Mark
     Complete", "Next Task", "Next unfinished task", "Finish Run", "Run completed" or "View
     only"), "Next" (on phones Previous and Next show only their arrows; their names stay).
@@ -1835,7 +1868,7 @@ existing content, invent nothing):
     history rows; task list (nav with current-task marker); Sheet.
   - DATA FIELDS: Run (title, status, progress, task counts, shared, sections, tasks, notes,
     retired work, history; the source Template's Required tools); selected task (section,
-    position, title, description, content, done); permissions.
+    position, title, description, content, form answers, done); permissions.
 - **PROOF PASS:** Pass (step 2a): `run-page` and `run-page-changelog` (the window, at the
   top and scrolled to the Activity), `run-page-loading`, `run-share-dialog`, each on desktop
   and phone, light and dark, and `run-tasks-sheet-mobile-light` and `-dark`, against
@@ -2454,7 +2487,8 @@ replaced.
 - **WHAT'S ON THE SCREEN:** "Template preview", "This preview reflects the current draft.
   Saving is not required."; the draft's title (or "Untitled Template") and description; its
   "Required tools" (the tools that have a name, trimmed, as the public template page lists
-  them, under an `h3`); its sections with every task open.
+  them, under an `h3`); its sections with every task open (a Form block lists its fields
+  read-only, as the public template page does).
 - **PRIMARY ACTION:** close.
 - **SECONDARY ACTIONS:** none.
 - **STATES:** follows the draft as typed.
@@ -2479,7 +2513,7 @@ replaced.
 - **PURPOSE:** Add a content block to a task.
 - **HOW USER GETS HERE:** "Add Block" in the Content Blocks header, or in the "No content
   blocks yet" box.
-- **WHAT'S ON THE SCREEN:** "Text", "Image", "Video", "File", "Embed", "Sub-tasks".
+- **WHAT'S ON THE SCREEN:** "Text", "Image", "Video", "File", "Embed", "Sub-tasks", "Form".
 - **PRIMARY ACTION:** pick a block type.
 - **SECONDARY ACTIONS:** Escape or a click outside to close.
 - **STATES:** open or closed.
