@@ -194,6 +194,20 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(values.diff_json).not.toContain('private note');
   });
 
+  it('records changed form answers by task id, never their text, and does not count them as an edit', async () => {
+    const form = (answer: string) => [{ id: 's', items: [{ id: 'brief', title: 'Brief', contents: [
+      { id: 'c1', type: 'form', value: '', fields: [{ id: 'f1', label: 'Name', kind: 'text', required: true, answer }] },
+    ] }] }];
+
+    const values = await buildAuditEventValues(input({
+      before: { items: JSON.stringify(form('private answer before')) },
+      diff: { items: JSON.stringify(form('private answer after')) },
+    }));
+
+    expect(jsonRecordIn(values.diff_json ?? '{}')['items']).toEqual({ sections: 1, items: 1, answersChanged: ['brief'] });
+    expect(values.diff_json).not.toContain('private answer');
+  });
+
   it('summarizes retired entries and redacts share tokens in the diff', async () => {
     const values = await buildAuditEventValues(input({
       diff: { retired_items: JSON.stringify([{ kind: 'item' }, { kind: 'item' }]), share_token: 'secret-share-token', is_public: true },

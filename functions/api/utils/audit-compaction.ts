@@ -6,6 +6,7 @@ import {
   isTaskRecord,
   type JsonRecord,
 } from '../../../src/lib/schemas/jsonRecords';
+import { getTaskFormFields } from '../../../src/lib/schemas/storedSections';
 import { sha256Hex } from './crypto';
 import { normalizeSectionsPayload } from './payloads';
 import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
@@ -20,7 +21,7 @@ const MAX_AUDIT_COLUMN_BYTES = 64 * 1024;
 export const MAX_AUDIT_USER_AGENT_LENGTH = 512;
 const MAX_LISTED_IDS = 50;
 const REDACTED = '[redacted]';
-const RUN_STATE_FIELDS = new Set(['isCompleted', 'completed', 'notes']);
+const RUN_STATE_FIELDS = new Set(['isCompleted', 'completed', 'notes', 'answer']);
 
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
@@ -38,6 +39,7 @@ type TaskState = {
   key: string;
   completed: boolean;
   notes: unknown;
+  answers: string;
   subItems: Map<string, boolean>;
   shapeWithoutRunState: string;
 };
@@ -65,6 +67,7 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
         key,
         completed: item.isCompleted === true || item.completed === true,
         notes: item.notes,
+        answers: JSON.stringify(getTaskFormFields(item).map((field) => [field.id, field.answer ?? null])),
         subItems,
         shapeWithoutRunState: JSON.stringify(item, (name: string, entry: unknown) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
       });
@@ -73,7 +76,7 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
   return { sections: sections.length, tasks };
 }
 
-const TASK_CHANGE_KINDS = ['completed', 'reopened', 'notesChanged', 'edited', 'added', 'removed'] as const;
+const TASK_CHANGE_KINDS = ['completed', 'reopened', 'notesChanged', 'answersChanged', 'edited', 'added', 'removed'] as const;
 
 type TaskChangeKind = (typeof TASK_CHANGE_KINDS)[number];
 
@@ -87,7 +90,7 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): TaskChang
   if (!previous) return summary;
 
   const lists: Record<TaskChangeKind, string[]> = {
-    completed: [], reopened: [], notesChanged: [], edited: [], added: [], removed: [],
+    completed: [], reopened: [], notesChanged: [], answersChanged: [], edited: [], added: [], removed: [],
   };
   for (const task of next.tasks.values()) {
     const before = previous.tasks.get(task.key);
@@ -101,6 +104,7 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): TaskChang
       if (was !== undefined && was !== completed) (completed ? lists.completed : lists.reopened).push(`${task.key}/${subKey}`);
     }
     if ((task.notes ?? '') !== (before.notes ?? '')) lists.notesChanged.push(task.key);
+    if (task.answers !== before.answers) lists.answersChanged.push(task.key);
     if (task.shapeWithoutRunState !== before.shapeWithoutRunState) lists.edited.push(task.key);
   }
   for (const key of previous.tasks.keys()) {

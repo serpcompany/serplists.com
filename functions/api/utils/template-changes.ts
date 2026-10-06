@@ -5,7 +5,7 @@ import type { TemplateUpdateValues } from './template-writes';
 
 type Row = Record<string, unknown>;
 
-const RUN_STATE_KEYS = new Set(['isCompleted', 'completed', 'notes']);
+const RUN_STATE_KEYS = new Set(['isCompleted', 'completed', 'notes', 'answer']);
 
 const isEmptyValue = (value: unknown): boolean =>
   value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
