@@ -174,11 +174,34 @@ leaves the site broken until the next one lands):
 
 - [ ] **PR 1, the Form block:** everything in Design above except the answers export and the
   MCP fill operation. MCP `get_run` shows fields and answers, and its guards apply.
+  - [x] Foundation: the types, kinds and limits (`src/lib/schemas/formFields.ts`), the stored,
+    legacy, portable and editor schemas, the sanitizers, `findFormFieldProblems` and its
+    messages (`src/lib/schemas/formValidation.ts`), the editor's form and field factories,
+    the run page's `normalizeSections` and `resetSectionsCompletion`, pack version `2.1.0`
+    and the regenerated JSON Schema, and `contentTypeLists.test.ts`, which keeps every copy
+    of the block type list in step.
+  - [x] Field ids: assigned, matched and unique across the Template like Sub-task ids, on
+    every save and read and in MCP template operations; options without an id get one.
+  - [x] Template changes: answers carried by field id, removed and kind-changed answers
+    retired as `formAnswer` and shown under "Removed from Template", done tasks a form now
+    blocks reopened, answers cleared when a run starts.
+  - [x] `PUT /api/checklists/:id` and the shared link refuse a blocked task with
+    `409 form_incomplete`; the link keeps answers read-only; a completed run's answers are
+    frozen.
+  - [x] Answers are run state for the structure comparison and the run audit, which lists the
+    tasks whose answers changed (`answersChanged`).
+  - [x] MCP: `set_task_completed` refused and `set_subtask_completed` not auto-completing
+    while a form blocks its task, `get_run` showing fields with answers, and the template
+    tools' JSON Schema for form blocks.
+  - [x] Packs: export without answers, import (new field ids, cleared answers), Markdown
+    `serplists:form` blocks, the bundled pack lint, preview and README, the docs examples
+    and the sample template; the maintenance SQL knows forms.
+  - [ ] Screens: the editor, the public Template page and preview, the run page and guest
+    runs, the shared run page and file uploads.
 - [ ] **PR 2, answers outside the run page:**
   - a CSV and JSON export of a run's answers;
   - an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
-    runs, its text kept out of the audit diff);
-  - the MCP template tools' JSON Schema for form blocks.
+    runs, its text kept out of the audit diff).
 
 ## Decision log
 
@@ -192,3 +215,31 @@ leaves the site broken until the next one lands):
 - 2026-10-06: Fields don't count toward progress. A required field gates its task, and the
   task is what progress counts. Counting each field would make a ten-field form dominate a
   run's percentage.
+- 2026-10-06: The MCP template tools' JSON Schema for form blocks moved from PR 2 into PR 1.
+  Their arguments already parse with the portable schema, which accepts form blocks, so
+  agents could send forms the tool description never mentioned, and the block type list in
+  that JSON Schema must agree with the others (`contentTypeLists.test.ts`).
+- 2026-10-06: Text that is only whitespace is an empty answer, so spaces never satisfy a
+  required field.
+- 2026-10-06: A file answer is valid only with an upload URL: an http(s) or app-relative URL
+  whose path ends in `/api/uploads/file` and carries a `key`, what the uploader returns.
+- 2026-10-06: The run saves check only the tasks saved as done whose completion or answers
+  changed, or which the stored run does not hold. A task already done with the answers it was
+  done with is not checked again, so a run whose stored state predates a rule still saves
+  its other changes.
+- 2026-10-06: A refusal lists the blocking fields as `details: { fieldCount, fields }`, each
+  `{ taskId, fieldId, reason }`, the first 50 of them, on every route.
+- 2026-10-06: A retired form answer keeps its whole field, definition and answer, so options
+  show by label; an empty answer is not retired. A removed task's retired copy shows its
+  answers too.
+- 2026-10-06: An option without an id gets `option-<n>` by position, the same on the server
+  and the run page, so answers point at the same ids before and after the next save.
+- 2026-10-06: The canonical portable form (Markdown, the bundled sources) keeps no field or
+  option ids, as it keeps none for sections, tasks and Sub-tasks, and import gives them new
+  ones. Duplicate field ids are therefore refused on save (`validateStableTemplateIdentities`)
+  rather than by the bundled pack lint. The lint's empty form, blank label and missing
+  options rules repeat rules the portable schema already enforces, which `templates:check`
+  reports first as a parse error naming the problem, as `empty-subitems` repeats the
+  Sub-tasks rule.
+- 2026-10-06: The run audit lists the tasks whose answers changed as `answersChanged`, beside
+  `notesChanged`, never the answer text, and an answer change is not an `edited` task.

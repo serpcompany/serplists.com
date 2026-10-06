@@ -12,10 +12,10 @@ are generated from it and must pass `pnpm run templates:check`.
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
 - `checklist_runs.items` stores the current sections JSON with completion state.
-- Every write of that JSON from a request (template create, save, and import; run create and save) is checked against `src/lib/schemas/storedSections.ts` (a shared-run save takes the task structure from the stored run and only completion and notes from the request): `items`, `contents`, and `subItems` are arrays of objects, `title`, `description`, `notes`, and `value` are text, and a content block's `type` is one of `text`, `image`, `video`, `file`, `embed`, `subItems`. Ids, run state, and unknown keys pass through, and `null` counts as absent. A failure is a `400` (an `invalid_sections` failure on import) whose message names the path, for example `sections[0].items[2].contents[1].subItems: Expected array, received string`. Content stored before the check is made safe (a malformed Sub-task list becomes empty, a non-text value becomes empty text, a block with an unknown type is dropped, and so are sub-items on any block but a Sub-tasks block) when it is copied into a run or shown in the app, and `db/maintenance/find-malformed-checklist-content.sql` lists it for review.
-- Section, item, and sub-item `id` values are stable identities. Renaming or reordering must retain them.
+- Every write of that JSON from a request (template create, save, and import; run create and save) is checked against `src/lib/schemas/storedSections.ts` (a shared-run save takes the task structure from the stored run and only completion and notes from the request): `items`, `contents`, and `subItems` are arrays of objects, `title`, `description`, `notes`, and `value` are text, and a content block's `type` is one of `text`, `image`, `video`, `file`, `embed`, `subItems`, `form`. A form's `fields` is an array of objects with a known `kind`, `label` and `description` are text, `required` is true or false, `options` is an array of objects with a text `label`, `min` and `max` are numbers, and an `answer` has its kind's shape. Ids, run state, and unknown keys pass through, and `null` counts as absent. A failure is a `400` (an `invalid_sections` failure on import) whose message names the path, for example `sections[0].items[2].contents[1].subItems: Expected array, received string`. Content stored before the check is made safe (a malformed Sub-task list becomes empty, a non-text value becomes empty text, a block with an unknown type is dropped, and so are sub-items on any block but a Sub-tasks block, a form field of an unknown kind, keys a field's kind does not use, an answer of the wrong shape, and `fields` on any block but a form) when it is copied into a run or shown in the app, and `db/maintenance/find-malformed-checklist-content.sql` lists it for review.
+- Section, item, sub-item, and form field `id` values are stable identities. Renaming or reordering must retain them. Form answers are keyed by field id, and a form option's `id` is what a choice answer stores.
 - `templates.content_version` advances only for checklist-structure changes. `checklist_runs.template_version` records the content version last applied; `revision` protects run writes from stale clients; `retired_items` preserves removed run state outside readiness calculations.
-- Clients resend the full sections on every save, so `PUT /api/templates/:id` compares them with the stored structure (`functions/api/utils/template-changes.ts`): run state (`isCompleted`, `completed`, `notes`), key order, empty values, and a content block's own `id` are ignored, while text, section, task, and Sub-task ids, additions, removals, and reordering count. Content blocks are often stored without ids (seed and starter Templates, imports, and copies of those) and the editor gives each one a new id when it loads, so comparing those ids would turn the first save of such a Template into a structure change. Only a real structure change bumps `content_version` and reconciles runs. `templates.version` and a `template_versions` row advance whenever a stored field actually changes, visibility included (so an editor loaded before a Share gets `409 edit_conflict` rather than reverting it), and a save with no changes writes nothing. The response reports `version`, `content_version`, `structureChanged`, and `reconciledRuns`.
+- Clients resend the full sections on every save, so `PUT /api/templates/:id` compares them with the stored structure (`functions/api/utils/template-changes.ts`): run state (`isCompleted`, `completed`, `notes`, a form field's `answer`), key order, empty values, and a content block's own `id` are ignored, while text, section, task, and Sub-task ids, additions, removals, and reordering count. Content blocks are often stored without ids (seed and starter Templates, imports, and copies of those) and the editor gives each one a new id when it loads, so comparing those ids would turn the first save of such a Template into a structure change. Only a real structure change bumps `content_version` and reconciles runs. `templates.version` and a `template_versions` row advance whenever a stored field actually changes, visibility included (so an editor loaded before a Share gets `409 edit_conflict` rather than reverting it), and a save with no changes writes nothing. The response reports `version`, `content_version`, `structureChanged`, and `reconciledRuns`.
 - Migration `0024` first normalizes legacy flat item arrays into the canonical `Checklist` section, then backfills deterministic path identities into template/run JSON and marks linked legacy runs stale (`template_version = 0`) because historical divergence cannot be inferred safely.
 - The migration missed ids that are not text (numbers, booleans) or are only whitespace, and a save treats those as missing too. Template reads (`functions/api/utils/template-identities.ts`) give such a section, task, or sub-item the `legacy-section-N` / `legacy-item-S-I` / `legacy-subitem-S-I-K` id a save of the Template stores, and entries that are not objects stay where they are. The editor therefore resends the stored ids on every save, so a later save in the same session never renumbers the Template and retires run work. A copy of such a public Template and a run started from it (web or MCP `start_run`) get the same ids, and MCP `get_template` returns them, so an agent's `update_template` keeps them too. An `update_template` operation gives a section, task, or Sub-task it adds without an id one in the web editor's format (`section_<uuid>`, `item_<uuid>`, `subitem_<uuid>`), never a positional `legacy-*` id, which could repeat one the Template already holds.
 - `templates.category` and `templates.tags` store JSON arrays as text.
@@ -29,7 +29,7 @@ Portable export is the preferred JSON format for sharing, AI generation, repo st
 ```ts
 export const portableTemplatePackSchema = z.object({
   kind: z.literal("serplists-template-pack"),
-  schemaVersion: z.literal("2.0.0"),
+  schemaVersion: z.enum(["2.0.0", "2.1.0"]),
   exportedAt: z.string(),
   exportedBy: z.string().optional(),
   templates: z.array(portableChecklistTemplateSchema),
@@ -51,6 +51,7 @@ fixes what the editor can save but the strict schema rejects:
 - a blank section title becomes `Section N` and a blank task title `Task N` (N is the position, as the editor outline shows it)
 - blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
 - `subItems` on a text, image, video, file or embed block are dropped: only a `subItems` block's rows are Sub-tasks, the ones the app shows
+- in a `form` block, answers, fields with a blank label or an unknown kind, blank options, choice fields left without options and forms left without fields are dropped, and so are `fields` on any other block
 - sections without tasks are dropped, and an unknown `type` becomes `checklist`
 - on content blocks and sub-tasks, a numeric `id` becomes a string and any other non-string `id` is dropped; on content blocks, a `fileName` that is not a string, a `fileSize` that is not a finite number, and an `uploadType` other than `url` or `upload` (including `null`, which a lenient JSON import can store) are dropped, and so are blank sub-tasks on any block
 
@@ -92,13 +93,18 @@ Portable template fields are intentionally cleaner than app row exports:
 - sections/items/content IDs may be present, but import should not depend on them
 - no run state: exports keep only the portable keys of sections (`id`, `title`,
   `items`), items (`id`, `title`, `description`, `contents`), content blocks (`id`,
-  `type`, `value`, `uploadType`, `fileName`, `fileSize`, `subItems`) and sub-items
-  (`id`, `title`), so `isCompleted`, `completed` and `notes` are left out
+  `type`, `value`, `uploadType`, `fileName`, `fileSize`, `subItems`, and `fields` on a
+  `form` block), sub-items (`id`, `title`), form fields (`id`, `label`, `kind`, `required`,
+  `description`, `options`, `min`, `max`) and options (`id`, `label`), so `isCompleted`,
+  `completed`, `notes` and form answers are left out
   (`src/lib/schemas/portableSections.ts`, used by both the app and the API export)
 
 Content blocks are a union on `type`: `image`, `video`, `file` and `embed` need a
-`value` that is not blank, `subItems` needs at least one sub-item, and `text` may be
-empty. Import ignores keys it does not know rather than rejecting them, since SERP Lists'
+`value` that is not blank, `subItems` needs at least one sub-item, `form` needs between 1
+and 50 fields, and `text` may be empty. A form field is a union on `kind`: each has a
+label that is not blank (200 characters at most) and may have `required` and `description`
+(1,000 characters at most); `select` and `multiSelect` need 1 to 50 options, each with a
+label that is not blank; `number` may have `min` and `max`. Import ignores keys it does not know rather than rejecting them, since SERP Lists'
 own older exports carry keys such as `isCompleted`. The generated JSON Schema states the
 same rules and allows additional properties, so a pack valid against it imports, and a pack
 it rejects fails import too (`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts`
@@ -130,7 +136,9 @@ Three versions serve different contracts:
   structure changes, which runs follow.
 - Backup exports use root format version `1.0.0` and retain each template's
   `version`.
-- Portable packs use `schemaVersion`; the current portable version is `2.0.0`.
+- Portable packs use `schemaVersion`; the current portable version is `2.1.0`, which added
+  the `form` block. Import accepts `2.0.0` and `2.1.0` (a `2.0.0` pack is valid `2.1.0`
+  content), and export writes `2.1.0`.
 
 When evolving a format, accept and migrate supported older versions during
 import, keep portable exports on the latest version, and add a D1 migration if
@@ -355,7 +363,13 @@ Rules:
   - ```` ```serplists:file ````
   - ```` ```serplists:embed ````
   - ```` ```serplists:subItems ````
+  - ```` ```serplists:form ````
 - `subItems` blocks must contain a YAML array
+- `form` blocks must contain a YAML array of fields, each an object with `label` and `kind`
+  and, as its kind allows, `required`, `description`, `options` (a list of labels, or of
+  objects with a `label`), `min` and `max`. Export writes `required: true` only for a
+  required field and options as their labels; the canonical form keeps no ids, so import
+  gives fields and options new ones
 - `text` and `embed` values may themselves contain headings and code fences. A
   block's fence is longer than any run of backticks that starts a line of its value
   (four backticks around a value with a 3-backtick code fence), and a block closes
@@ -463,17 +477,18 @@ export const checklistItemSchema = z.object({
 ```ts
 export const checklistItemContentSchema = z.object({
   id: z.string(),
-  type: z.enum(["text", "image", "video", "file", "embed", "subItems"]),
+  type: z.enum(["text", "image", "video", "file", "embed", "subItems", "form"]),
   value: z.string(),
   uploadType: z.enum(["url", "upload"]).optional(),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
   subItems: z.array(checklistSubItemSchema).optional(),
+  fields: z.array(checklistFormFieldSchema).optional(),
 });
 ```
 
 - `value`: the URL of an image, video or file, the code or URL of an embed, the Markdown of
-  a text block, and empty for a `subItems` block.
+  a text block, and empty for a `subItems` or `form` block.
 - `uploadType`: on an image, video or file block, whether `value` is an uploaded file
   (`upload`) or a link (`url`).
 - `fileName` and `fileSize`: the original name and the size in bytes of the file `value`
@@ -489,3 +504,12 @@ Supported types:
   iframe code, and show any other value (script tags, plain text) as text
   (`src/lib/utils/embedLink.ts`).
 - `subItems` (nested checklist)
+- `form` (fields every run fills in: short text, long text, URL, email, number, date,
+  dropdown, multiple choice, checkbox and file). A Template holds only the field
+  definitions; answers live on a run's copy and never leave it in a pack. A task whose form
+  has a required field without an answer, or an answer that is not valid, can't be marked
+  done ([form blocks](../design-docs/template-content-types.md#form-blocks)). `pnpm templates:check`
+  also reports an empty form (`empty-form`), a blank field label (`blank-form-field-label`)
+  and a dropdown or multiple choice field without options (`form-field-without-options`),
+  and `preview.html` and `README.md` list each field with its kind, whether it is
+  required, its help text and its options.

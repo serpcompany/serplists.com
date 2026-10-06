@@ -184,6 +184,35 @@ its history.
   while completion was saving still asks. A guest on a share link stays, and the page shows the
   Run completed.
 
+## Forms
+
+A task's form ([form blocks](template-content-types.md#form-blocks)) gates that task and
+nothing else. `findFormFieldProblems` (`src/lib/schemas/formValidation.ts`) is the one rule, and
+every route that ticks a task applies it:
+
+- **`PUT /api/checklists/<id>`** checks each task saved as done whose completion or answers
+  changed, with the stored Run's field definitions and the submitted answers matched by field id
+  (`functions/api/utils/run-form-guard.ts`). The client's copy of the definitions is never trusted,
+  so a payload that drops the form or its `required` flag still fails. A task already done with the
+  answers it was done with is not checked again. The refusal is `409 form_incomplete` with
+  `FORM_INCOMPLETE_MESSAGE` and `details: { fieldCount, fields: [{ taskId, fieldId, reason }] }`,
+  the first 50 fields, and nothing is written.
+- **The shared link** keeps answers read-only: `mergeSharedRunState` copies only completion and
+  notes, so answers a visitor sends are ignored, and ticking a task whose stored form blocks it is
+  refused the same way.
+- **MCP** `set_task_completed` with `completed: true` fails with the tool error `form_incomplete`
+  and the same `details`, and `set_subtask_completed` completes its task only when the form is
+  complete ([agent access](agent-access.md)).
+- **A completed Run's answers are frozen** like its ticks (`completed-run-freeze.ts`): a save that
+  changes one fails with `409 run_completed` unless it reopens the Run. Notes stay editable.
+- **Template changes** carry answers by field id while the kind is unchanged. A field whose kind
+  changed starts empty. The answers of removed and kind-changed fields join the retired work as
+  `formAnswer` entries, which "Removed from Template" shows as "label: answer" under their task's
+  name, and an answer comes back if its field does. A done task whose form now blocks it, after a
+  new required field say, reopens, as a task does when a Sub-task is added.
+- Fields never count toward progress, and a form never blocks Finish Run: `findOpenRunTasks` and
+  the page's `canFinishRun` look only at tasks and Sub-tasks (`run-completion-rule.test.ts`).
+
 ## Moving between tasks
 
 - When a tick's save lands, `getSelectionAfterToggle` moves on from the completed task to the next

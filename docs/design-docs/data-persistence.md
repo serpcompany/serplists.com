@@ -95,8 +95,12 @@ retried insert drops the column from the statement itself (`withoutColumns`).
   copy, the export, the save's own read and MCP `get_template`), never the lists, which do not show
   it ([D1 cost](d1-cost.md)). A Run shows its source Template's list through the same subquery and
   access rule that name the source Template ([run provenance](#run-provenance)).
-- `checklist_runs.items`: sectioned run content with completion state.
-- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
+- `checklist_runs.items`: sectioned run content with completion state, notes and form answers
+  (an `answer` on each field of a form block; [form blocks](template-content-types.md#form-blocks)).
+  No migration added forms: they ride in `templates.items` and `checklist_runs.items`, and
+  `db/maintenance/find-malformed-checklist-content.sql` knows their `fields`, `options`, `label`,
+  `kind`, `required`, `min`, `max` and `answer` keys.
+- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes or form answers changed (never the notes or answer text, and an answer change is not an edit); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
 - Audit rows record only writes that happened. Run and template writes guard their `UPDATE` (revision or version, owner scope, archive state), and a guarded `UPDATE` that loses a race matches no row without failing the batch. So each write inserts its audit row first, as `INSERT ... SELECT ... WHERE EXISTS` on the same condition (`auditedRunUpdate` in `functions/api/utils/checklist-runs.ts`; the template handlers do the same, and a template's version row and reconciled runs also require that audit row). A write that loses returns `409 edit_conflict`, or the not-found / not-archived answer a later request would get, and leaves no history.
 - Every action in `AUDIT_ACTIONS` (`src/lib/schemas/auditActions.ts`), the list the history views
   label, is one a route writes: `tests/unit/functions/api/audit-actions-written.test.ts` drives every
@@ -205,8 +209,8 @@ are in [client data](client-data.md#cache-keys).
 
 ## Stable ids and run reconciliation
 
-Sections, tasks and Sub-tasks keep their ids across saves, and a run's state follows
-them. The rules people see are in [features](../product-specs/features.md), and the
+Sections, tasks, Sub-tasks and form fields keep their ids across saves, and a run's state
+follows them. The rules people see are in [features](../product-specs/features.md), and the
 storage contract and what counts as a structure change are in the
 [portable template spec](../product-specs/portable-templates.md#storage-strategy-d1). The
 API applies them like this:
@@ -216,7 +220,9 @@ API applies them like this:
   matched to the content it replaces, so run state follows it: the same id first, then
   the only previous sibling with the same title (when the title is unique and that sibling
   had no stored id), then the previous sibling at the same position (when it had none),
-  and otherwise its own id or a positional `legacy-*` id.
+  and otherwise its own id or a positional `legacy-*` id. Form fields are matched the same
+  way, without the title step, and a form option without an id gets `option-<n>` by
+  position.
 - **Ids on read.** Readers get stored content with the ids a save of it would store
   (`withStableTemplateIdentities`), so an editor that sends it back keeps every id, and a
   run started from it matches its Template. Unlike the identity pass, entries that are not
@@ -236,9 +242,12 @@ API applies them like this:
   an id the run no longer holds anywhere, so a stale retired copy never replaces live
   state.
 - **Retiring.** Previous work nothing in the Template matched joins `retired_items` after
-  the earlier entries. A retired task leaves out the Sub-tasks that moved to another task,
-  and a removed section leaves out the work that moved elsewhere and is not retired at all
-  when every task it had moved.
+  the earlier entries. A retired task leaves out the Sub-tasks and form fields that moved to
+  another task, and a removed section leaves out the work that moved elsewhere and is not
+  retired at all when every task it had moved. A form answer retires on its own, as
+  `{ kind: 'formAnswer', sectionId, itemId, itemTitle, field }` with the field's definition
+  and answer, when its field is removed or changes kind; an empty answer is not retired
+  ([run execution](run-execution.md#forms)).
 - **Legacy state.** Runs saved before `isCompleted` existed store `completed`, which
   reconciliation and the completion rule read the way the client does; a new run drops it
   (`resetRunCompletionState`).
@@ -309,7 +318,8 @@ it leaves out legacy entries (a `null` content block or Sub-task, a content bloc
 unknown type, a blank text Sub-task), so the merge skips those too and a Sub-task after
 them pairs with its own guest entry (`functions/api/utils/shared-run-merge.ts`). The share
 page sends back stored values it does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
-than failing whole. On a completed run, a guest save whose merge would change a task's or Sub-task's
+than failing whole. Form answers are read-only on the link: the merge never copies them, and a
+tick of a task whose stored form blocks it fails with `409 form_incomplete`. On a completed run, a guest save whose merge would change a task's or Sub-task's
 completion fails with `409 run_completed` unless it also sets the status back to `in_progress`, a
 reopen that counts toward the owner context's active-run limit. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before

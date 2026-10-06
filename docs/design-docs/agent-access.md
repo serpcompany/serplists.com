@@ -214,10 +214,13 @@ after the status, such as `forbidden`) and details.
 An `update_template` operation changes one section or task of the version the agent read.
 It first refuses a public template and a stale `expectedVersion`, then applies the operation
 to that version's sections and saves the whole checklist as the editor does, against the same
-version, so a change made in between fails with `edit_conflict`. New sections, tasks and
-Sub-tasks get ids in the web editor's format, a prefix and a UUID
+version, so a change made in between fails with `edit_conflict`. New sections, tasks,
+Sub-tasks, form fields and form options get ids in the web editor's format, a prefix and a UUID
 (`src/lib/forms/templateEditorForm.ts`): a save would number them by position, which can
-repeat an id the template already holds elsewhere.
+repeat an id the template already holds elsewhere. The template tools' JSON Schema lists a
+`form` block's `fields` (label, kind, required, help text, options for `select` and
+`multiSelect`, `min` and `max` for `number`), and their arguments parse with the portable
+schema, which drops any `answer` an agent sends: answers belong to runs.
 
 `start_run` counts active runs first only to give a friendly `limit_reached`; the guarded
 insert enforces the limit ([system overview](system-overview.md#authorization-and-entitlements)).
@@ -233,4 +236,11 @@ completion stamps, and completing a run that is already completed does not stamp
 A completed run is frozen as on the run page: `set_task_completed` and `set_subtask_completed`
 fail with `run_completed` and write nothing, `set_task_notes` still works, and
 `set_run_status` `in_progress` reopens it.
+A task's form gates it as on the run page ([run execution](run-execution.md#forms)):
+`set_task_completed` with `completed: true` fails with `form_incomplete` and writes nothing
+while a required field has no answer or an answer is not valid, its `details` naming each
+`{ taskId, fieldId, reason }`, and `set_subtask_completed` completes the task only when its
+form is complete. `get_run` shows a form block's fields with each answer and leaves `fields` off
+every other block, as it leaves `subItems` off blocks the run page does not show them on. No
+operation sets an answer yet.
 What MCP run events record is in [data persistence](data-persistence.md#json-columns).

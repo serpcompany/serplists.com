@@ -109,7 +109,9 @@
 - **Share links** (`/share/:token`) need no login, so the token is the only
   credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
   applies only completion, task notes, and status onto the stored run
-  (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
+  (`functions/api/utils/shared-run-merge.ts`); every other field is ignored, form
+  answers included, so a link holder can read a run's answers but never change them,
+  and a tick of a task whose stored form blocks it fails with `409 form_incomplete`.
   Because the token grants write access, run reads (lists, detail, archived,
   the share page) never return it or its timestamps
   (`serializeChecklistRun`), or a read-only Organization viewer could edit shared

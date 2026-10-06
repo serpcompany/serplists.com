@@ -1,7 +1,7 @@
 # Template Content Types
 
 Checklist items hold typed content blocks (text, image, video, file, embed,
-sub-items). This doc shows how to add a content type and how editor tabs work.
+sub-items, form). This doc shows how to add a content type and how editor tabs work.
 
 ## Video blocks
 
@@ -62,6 +62,43 @@ text, so markup, scripts and relative addresses never become a link or run. The 
 ...") or says viewers will see the value as text, and never offers script embeds. It renders
 one `<textarea>` whatever the value: React remounts a control whose element type changes,
 which would drop focus and the caret as someone types past `https://`.
+
+## Form blocks
+
+A form block (`type: 'form'`) holds fields that the Template defines and every run fills
+in. The plan and its decisions are in [forms](../exec-plans/active/forms.md); the shapes,
+kinds and limits live in `src/lib/schemas/formFields.ts`.
+
+- **Stored shape:** `{ id, type: 'form', value: '', fields }`. Each field has an `id`
+  (`field_<uuid>` from the editor), a `label`, a `kind` (`text`, `longText`, `url`,
+  `email`, `number`, `date`, `select`, `multiSelect`, `checkbox`, `file`), `required`,
+  optional `description` (help text), `options` (`{ id, label }`, choice kinds only) and
+  `min`/`max` (numbers only). A run's copy adds `answer`, whose shape follows the kind: a
+  string, a number, option ids, `true`, or `{ url, fileName, fileSize }` for a file.
+  `storedFormFieldSchema` refuses an answer of the wrong shape on save (`findStoredSectionsIssue`),
+  and `sanitizeStoredFormFields` drops one on read.
+- **Ids:** answers are keyed by field id, because block ids are not stable. Field ids get
+  the Sub-task treatment in `functions/api/utils/template-identities.ts`: assigned when
+  missing (`legacy-field-<section>-<task>-<n>`), matched to the stored field at the same
+  place, and unique across the Template. Options without an id get `option-<n>` by
+  position, the same on the server and in `readFormFields`.
+- **One rule:** `findFormFieldProblems(task)` in `src/lib/schemas/formValidation.ts` lists
+  every field that blocks its task, with `{ fieldId, reason: 'required' | 'invalid' }`. A
+  missing answer, blank text, `[]` and `false` are empty; a non-empty answer must fit its
+  kind (an http(s) URL, an email address, a finite number within `min`/`max`, a real
+  `YYYY-MM-DD` date, existing option ids, an uploaded file's URL, text within its length).
+  `formFieldProblemMessage` gives the person the field's message, and `formatFormAnswer`
+  shows an answer as text.
+- **Where it is enforced:** the run save, the shared-link save and MCP refuse a task saved
+  as done while its form blocks it, with `409 form_incomplete` (an MCP tool error with the
+  same code) and `details: { fieldCount, fields: [{ taskId, fieldId, reason }] }`
+  ([run execution](run-execution.md#forms)). Fields never count toward progress, and a form
+  gates only its task, never Finish Run.
+- **Answers are run state**, like `isCompleted` and `notes`: starting a run, importing and
+  copying clear them, portable export leaves them out, and they change neither a Template's
+  structure (`RUN_STATE_KEYS`) nor count as an edit in a run's audit (`RUN_STATE_FIELDS`).
+- **Packs:** JSON and YAML carry `fields` on a `form` block; Markdown carries them as a
+  fenced `serplists:form` YAML list ([portable templates](../product-specs/portable-templates.md)).
 
 ## Text blocks and descriptions
 
@@ -149,48 +186,56 @@ accept that they show a literal backslash-n.
 Example: a "link" type.
 
 ### Files involved
-- `src/types/checklist.ts`
-- `src/lib/schemas/checklistSchema.ts`
-- `src/lib/forms/templateEditorForm.ts`
-- `src/components/template-editor/content-types/`
-- `src/components/template-editor/ContentAddPanel.tsx`
-- `src/components/template-editor/ContentEditor.tsx`
-- `src/components/shared/ContentRenderer.tsx`
-- `src/components/template/PublicTemplateContent.tsx`
+
+A block that does not know a type drops it silently, so a new type touches every file
+below. `tests/unit/lib/schemas/contentTypeLists.test.ts` fails when a copy of the type list
+disagrees with `CHECKLIST_CONTENT_TYPES`, and the `never` checks fail the build where a
+`switch` misses a type.
+
+- The type list: `CHECKLIST_CONTENT_TYPES` in `src/lib/schemas/storedSections.ts`. The
+  `ChecklistItemContent` type (`src/types/checklist.ts`), the legacy schema in
+  `src/lib/schemas/checklistSchema.ts`, the editor schema in
+  `src/lib/forms/templateEditorForm.ts`, the portable import normalizer
+  (`src/lib/schemas/portableTemplateNormalize.ts`) and the MCP template tools' JSON Schema
+  (`functions/api/handlers/agentMcpTemplateTools.ts`) read it.
+- Stored content: `contentSchema`, `sanitizeStoredContents` and their helpers in
+  `src/lib/schemas/storedSections.ts`, the read-only `db/maintenance/find-malformed-checklist-content.sql`
+  (and `tests/unit/db/find-malformed-checklist-content.test.ts`), the run page's
+  `normalizeSections` and `resetSectionsCompletion` (`src/lib/utils/checklistSections.ts`)
+  and `contentSaveBytes` (`src/lib/schemas/contentLimits.ts`).
+- The portable format: the portable content union in `src/lib/schemas/checklistSchema.ts`
+  (then `pnpm run schema:portable:generate`), the export whitelist in
+  `src/lib/schemas/portableSections.ts`, `src/lib/templates/portableTemplateNormalization.ts`,
+  Markdown in `src/lib/templates/templateMarkdown.ts`, imports in
+  `src/lib/utils/importSectionEntries.ts` and `src/lib/utils/templateImportPrep.ts`, and the
+  bundled pack tooling in `scripts/lib/templateLint.ts`, `scripts/lib/templatePreviewHtml.ts`
+  and `scripts/lib/templateReadme.ts`.
+- Run state, when the block holds any: `template-identities.ts`, `template-reconciliation.ts`,
+  `template-changes.ts`, `audit-compaction.ts`, `completed-run-freeze.ts` and
+  `shared-run-merge.ts` in `functions/api/utils/`, and the MCP views in
+  `functions/api/handlers/agentMcpRuns.ts`.
+- Screens: `src/components/template-editor/content-types/`,
+  `src/components/template-editor/ContentAddPanel.tsx`,
+  `src/components/template-editor/ContentEditor.tsx`,
+  `src/components/shared/ContentRenderer.tsx` and
+  `src/components/template/PublicTemplateContent.tsx`.
 
 ### Steps
 
-#### 1. Extend the TypeScript types
-Add the new type to `ChecklistItemContent` and define any extra fields.
+#### 1. Add the type to the one list
+Add `"link"` to `CHECKLIST_CONTENT_TYPES` and any extra key to `ChecklistItemContent`.
 
 ```ts
-// src/types/checklist.ts
-export type ChecklistItemContent = {
-  type: "text" | "image" | "video" | "file" | "embed" | "subItems" | "link";
-  value: string;
-  linkTitle?: string;
-};
+// src/lib/schemas/storedSections.ts
+export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems", "form", "link"] as const;
 ```
 
-#### 2. Update the Zod schema
-Keep the Zod schema in sync with the type definition.
-
-```ts
-// src/lib/schemas/checklistSchema.ts
-export const checklistItemContentSchema = z.object({
-  id: z.string(),
-  type: z.enum(["text", "image", "video", "file", "embed", "subItems", "link"]),
-  value: z.string(),
-  linkTitle: z.string().optional(),
-  uploadType: z.enum(["url", "upload"]).optional(),
-  fileName: z.string().optional(),
-  fileSize: z.number().optional(),
-  subItems: z.array(checklistSubItemSchema).optional(),
-});
-```
-
-Also add the type to `templateEditorContentSchema` in
-`src/lib/forms/templateEditorForm.ts`; the editor's form types are inferred from it.
+#### 2. Update the Zod schemas
+Add its keys to the stored `contentSchema` (typed, `nullish`), the legacy
+`checklistItemContentSchema`, `templateEditorContentSchema` (the editor's form types are
+inferred from it) and a branch of the portable content union, which must express every
+rule in its shape: the published JSON Schema is generated from it, and
+`portableTemplateJsonSchemaParity.test.ts` checks both accept the same packs.
 
 #### 3. Create an editor component
 Add a new component under `src/components/template-editor/content-types/`.
