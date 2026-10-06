@@ -36,6 +36,16 @@ const mediaBlockSchema = z.object({
   fileSize: z.unknown(),
 }).passthrough();
 const titledEntrySchema = z.object({ title: z.string() });
+const labeledEntrySchema = z.object({ label: z.string() });
+const formFieldBlockSchema = z.object({
+  label: z.unknown(),
+  kind: z.unknown(),
+  required: z.unknown(),
+  description: z.unknown(),
+  options: z.unknown(),
+  min: z.unknown(),
+  max: z.unknown(),
+}).passthrough();
 
 const FRONTMATTER_DELIMITER = "---";
 const TEMPLATE_TITLE_PREFIX = "# ";
@@ -80,27 +90,46 @@ const buildFrontmatter = (template: PortableChecklistTemplate) => {
 const renderYamlContentBlock = (blockType: string, value: unknown) =>
   renderTemplateMarkdownBlock(blockType, dumpYaml(value));
 
-const renderContentBlocks = (contents?: PortableChecklistTemplate["sections"][number]["items"][number]["contents"]) => {
-  if (!Array.isArray(contents) || contents.length === 0) return [];
+type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
+type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];
 
-  return contents.map((content) => {
-    if (content.type === "text" || content.type === "embed") {
+const formFieldYaml = (field: PortableFormField) => ({
+  label: field.label,
+  kind: field.kind,
+  ...(field.required ? { required: true } : {}),
+  ...(field.description ? { description: field.description } : {}),
+  ...(field.kind === "select" || field.kind === "multiSelect" ? { options: field.options.map((option) => option.label) } : {}),
+  ...(field.kind === "number" && typeof field.min === "number" ? { min: field.min } : {}),
+  ...(field.kind === "number" && typeof field.max === "number" ? { max: field.max } : {}),
+});
+
+const renderContentBlock = (content: PortableContent): string => {
+  switch (content.type) {
+    case "text":
+    case "embed":
       return renderTemplateMarkdownBlock(content.type, (content.value ?? "").trim());
+    case "subItems":
+      return renderYamlContentBlock("subItems", (content.subItems ?? []).map((subItem) => subItem.title));
+    case "form":
+      return renderYamlContentBlock("form", content.fields.map(formFieldYaml));
+    case "image":
+    case "video":
+    case "file":
+      return renderYamlContentBlock(content.type, {
+        value: (content.value ?? "").trim(),
+        ...(content.uploadType ? { uploadType: content.uploadType } : {}),
+        ...(trimOptionalString(content.fileName) ? { fileName: trimOptionalString(content.fileName) } : {}),
+        ...(typeof content.fileSize === "number" ? { fileSize: content.fileSize } : {}),
+      });
+    default: {
+      const unhandled: never = content;
+      return unhandled;
     }
-
-    if (content.type === "subItems") {
-      const payload = (content.subItems ?? []).map((subItem) => subItem.title);
-      return renderYamlContentBlock("subItems", payload);
-    }
-
-    return renderYamlContentBlock(content.type, {
-      value: (content.value ?? "").trim(),
-      ...(content.uploadType ? { uploadType: content.uploadType } : {}),
-      ...(trimOptionalString(content.fileName) ? { fileName: trimOptionalString(content.fileName) } : {}),
-      ...(typeof content.fileSize === "number" ? { fileSize: content.fileSize } : {}),
-    });
-  });
+  }
 };
+
+const renderContentBlocks = (contents?: PortableContent[]) =>
+  Array.isArray(contents) ? contents.map(renderContentBlock) : [];
 
 export const renderTemplateMarkdown = (template: PortableChecklistTemplate) => {
   const normalized = normalizePortableTemplate(template);
@@ -180,6 +209,31 @@ const parseSubItemsBlock = (rawBlock: string) => {
   });
 };
 
+const parseFormOption = (entry: unknown) => {
+  if (typeof entry === "string") return { label: entry.trim() };
+  const labeled = labeledEntrySchema.safeParse(entry);
+  if (labeled.success) return { label: labeled.data.label.trim() };
+  throw new Error("Form options must be strings or objects with a label");
+};
+
+const parseFormBlock = (rawBlock: string) => {
+  const parsed = yaml.load(rawBlock.trim());
+  if (!Array.isArray(parsed)) {
+    throw new Error("Form block must be a YAML array of fields");
+  }
+
+  return parsed.map((entry: unknown) => {
+    const field = formFieldBlockSchema.safeParse(entry);
+    if (!field.success) throw new Error("Form block entries must be objects with a label and a kind");
+    const { options, ...rest } = field.data;
+    return {
+      ...rest,
+      required: rest.required === true,
+      ...(Array.isArray(options) ? { options: options.map(parseFormOption) } : {}),
+    };
+  });
+};
+
 export const parseTemplateMarkdown = (markdown: string): PortableChecklistTemplate => {
   const { frontmatter, body } = extractFrontmatter(markdown);
   const normalizedBody = normalizeLineEndings(body).trim();
@@ -229,6 +283,10 @@ export const parseTemplateMarkdown = (markdown: string): PortableChecklistTempla
               value: "",
               subItems: parseSubItemsBlock(block.body),
             };
+          }
+
+          if (block.type === "form") {
+            return { type: "form" as const, value: "", fields: parseFormBlock(block.body) };
           }
 
           if (block.type === "image" || block.type === "video" || block.type === "file") {

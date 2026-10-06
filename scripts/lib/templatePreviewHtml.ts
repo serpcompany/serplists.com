@@ -1,6 +1,12 @@
 import type { PortableChecklistTemplate } from "../../src/lib/schemas/checklistSchema";
 import { normalizePortableTemplate } from "../../src/lib/templates/portableTemplateNormalization";
-import { formatBytes, inferEmbedProvider } from "./templateAssetLabels";
+import {
+  describeFormField,
+  formatBytes,
+  formFieldOptionLabels,
+  inferEmbedProvider,
+  type PortableFormField,
+} from "./templateAssetLabels";
 import { getEmbedLinkUrl } from "../../src/lib/utils/embedLink";
 
 const escapeHtml = (value: string) =>
@@ -11,7 +17,16 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number]) => {
+const renderFormField = (field: PortableFormField) => {
+  const options = formFieldOptionLabels(field);
+  const optionsMarkup = options.length
+    ? `<ul class="form-options">${options.map((option) => `<li>${escapeHtml(option)}</li>`).join("")}</ul>`
+    : "";
+  const help = field.description ? `<p>${escapeHtml(field.description)}</p>` : "";
+  return `<li><div class="form-label">${escapeHtml(field.label)} <span class="card-meta">${escapeHtml(describeFormField(field))}</span></div>${help}${optionsMarkup}</li>`;
+};
+
+const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number]): string => {
   if (content.type === "text") {
     return `<div class="content-block text-block"><div class="card-label">Text</div><div class="text-markdown"><pre>${escapeHtml(content.value.trim())}</pre></div></div>`;
   }
@@ -21,6 +36,10 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
       .map((subItem) => `<li><span class="checkbox" aria-hidden="true"></span><span>${escapeHtml(subItem.title)}</span></li>`)
       .join("");
     return `<div class="content-block card"><div class="card-label">Checklist</div><ul class="subitem-list">${items}</ul></div>`;
+  }
+
+  if (content.type === "form") {
+    return `<div class="content-block card form-card"><div class="card-label">Form</div><ul class="form-fields">${content.fields.map(renderFormField).join("")}</ul></div>`;
   }
 
   if (content.type === "image") {
@@ -35,11 +54,16 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
     return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
   }
 
-  const embedLink = getEmbedLinkUrl(content.value);
-  const embedBody = embedLink
-    ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
-    : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(content.value)}</pre>`;
-  return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url">${embedBody}</div></div>`;
+  if (content.type === "embed") {
+    const embedLink = getEmbedLinkUrl(content.value);
+    const embedBody = embedLink
+      ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
+      : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(content.value)}</pre>`;
+    return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url">${embedBody}</div></div>`;
+  }
+
+  const unhandled: never = content;
+  return unhandled;
 };
 
 export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) => {
@@ -194,6 +218,15 @@ export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) =
         font: 500 14px/1.5 Arial, sans-serif;
       }
       .card-meta, .embed-url { margin-top: 12px; color: var(--muted); }
+      .form-fields, .form-options {
+        margin: 0;
+        display: grid;
+        gap: 10px;
+        font: 500 14px/1.5 Arial, sans-serif;
+      }
+      .form-fields { list-style: none; padding: 0; }
+      .form-fields p { margin: 4px 0 0; color: var(--muted); }
+      .form-label { font-weight: 600; }
       .subitem-list {
         list-style: none;
         padding: 0;

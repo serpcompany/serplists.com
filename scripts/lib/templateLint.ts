@@ -17,6 +17,7 @@ import {
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
 import { normalizeEol } from "./line-endings";
+import { findTemplateFormIssues } from "./templateFormLint";
 
 export type TemplateLintIssue = {
   filePath: string;
@@ -139,7 +140,7 @@ const validateTemplateRules = (template: PortableChecklistTemplate, filePath: st
     });
   });
 
-  return issues;
+  return [...issues, ...findTemplateFormIssues(template).map((issue) => ({ filePath, ...issue }))];
 };
 
 const unsupportedFileType = (filePath: string): TemplateLintIssue[] => [{

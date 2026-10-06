@@ -27,7 +27,30 @@ export const buildSampleTemplate = (): ChecklistTemplate => ({
       id: "item-budget",
       title: "Create moving budget",
       description: "Plan all expenses including movers, supplies, and unexpected costs",
-      contents: []
+      contents: [{
+        id: "content-budget-form",
+        type: "form",
+        value: "",
+        fields: [{
+          id: "field-moving-company",
+          label: "Moving company",
+          kind: "select",
+          required: true,
+          options: [{ id: "option-full-service", label: "Full-service movers" }, { id: "option-truck", label: "Rental truck" }]
+        }, {
+          id: "field-budget",
+          label: "Total budget",
+          kind: "number",
+          required: true,
+          description: "Include movers, supplies, and a buffer for surprises.",
+          min: 0
+        }, {
+          id: "field-moving-date",
+          label: "Moving date",
+          kind: "date",
+          required: false
+        }]
+      }]
     }, {
       id: "item-timeline",
       title: "Create moving timeline",

@@ -1,9 +1,23 @@
 import type { PortableChecklistTemplate } from "../../src/lib/schemas/checklistSchema";
 import { normalizePortableTemplate } from "../../src/lib/templates/portableTemplateNormalization";
-import { formatBytes, inferEmbedProvider } from "./templateAssetLabels";
+import {
+  describeFormField,
+  formatBytes,
+  formFieldOptionLabels,
+  inferEmbedProvider,
+  type PortableFormField,
+} from "./templateAssetLabels";
 import { escapeTemplateMarkdownDescription } from "../../src/lib/templates/templateMarkdownBody";
 
-const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number]) => {
+const renderReadmeFormField = (field: PortableFormField) => {
+  const options = formFieldOptionLabels(field);
+  return [
+    `- ${field.label} (${describeFormField(field)})${field.description ? `: ${field.description}` : ""}`,
+    ...(options.length ? [`  - Options: ${options.join(", ")}`] : []),
+  ].join("\n");
+};
+
+const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number]): string => {
   if (content.type === "text") {
     return content.value.trim();
   }
@@ -14,6 +28,10 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
       "Sub-items:",
       ...subItems.map((subItem) => `- [ ] ${subItem.title}`),
     ].join("\n");
+  }
+
+  if (content.type === "form") {
+    return ["**Form**", content.fields.map(renderReadmeFormField).join("\n")].join("\n\n");
   }
 
   if (content.type === "image") {
@@ -38,7 +56,12 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
     return lines.join("\n\n");
   }
 
-  return `**${inferEmbedProvider(content.value)}**\n\n${content.value}`;
+  if (content.type === "embed") {
+    return `**${inferEmbedProvider(content.value)}**\n\n${content.value}`;
+  }
+
+  const unhandled: never = content;
+  return unhandled;
 };
 
 export const renderTemplateReadme = (template: PortableChecklistTemplate) => {

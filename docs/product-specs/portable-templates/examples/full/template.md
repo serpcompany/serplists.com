@@ -85,3 +85,30 @@ fileSize: 245760
 ```serplists:embed
 https://status.example.com
 ```
+
+### Record the launch sign-off
+
+Every run records who approved the launch and how it went.
+
+```serplists:form
+- label: Approved by
+  kind: text
+  required: true
+- label: Approver email
+  kind: email
+  required: true
+- label: Release channel
+  kind: select
+  required: true
+  options:
+    - Stable
+    - Beta
+- label: Error rate after one hour (%)
+  kind: number
+  description: Read it from the status dashboard.
+  min: 0
+  max: 100
+- label: Rollback plan reviewed
+  kind: checkbox
+  required: true
+```
