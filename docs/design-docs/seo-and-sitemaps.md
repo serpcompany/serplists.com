@@ -14,9 +14,9 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 | URL | Lists |
 | --- | --- |
 | `/sitemap.xml` | Every shard below, each with its last change |
-| `/sitemaps/pages/<n>.xml` | The static pages, from the bundled catalog |
+| `/sitemaps/pages/<n>.xml` | The static pages (the Profiles directory, `/profiles/`, among them), from the bundled catalog |
 | `/sitemaps/categories/<n>.xml` | `/categories/` and every category in use |
-| `/sitemaps/profiles/<n>.xml` | Every profile with a valid username |
+| `/sitemaps/profiles/<n>.xml` | Every User profile with a valid username, then every active Organization's profile with a valid handle |
 | `/sitemaps/templates/<n>.xml` | `/templates/`, the bundled starters and every public Template |
 | `/sitemaps/static.xml`, `/categories/sitemap.xml` | The sitemaps from before the shards: a permanent redirect (`308`) to page `?page=` (1 by default) of the pages or categories shard on `https://serplists.com` |
 
@@ -42,6 +42,20 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   Organization's handle while the Organization is active (the teams join on
   `templates.team_id` for Organization rows only, `templateOwnerHandle`), never under its
   Creator's username.
+- **Profile Owners** (`functions/sitemap/listedOwners.ts`): a User whose username passes the
+  handle rule (`validUsernameCondition`), and an Organization that is not archived and whose
+  handle (its slug) passes it (`listedOrganizationCondition`). The profiles shard lists the
+  Users in `users.id` order, as before, then the Organizations in `teams.id` order, so adding
+  Organizations moved no User entry. They are two queries, each walking its primary key, joined
+  by `loadRowsOfTwoLists` (`functions/sitemap/shared.ts`), which counts the listed Users only for
+  a shard page that starts after the last of them: a `UNION ALL` ordered by owner kind sorted
+  both halves in a temporary B-tree, which D1 bills as rows read. The Template rule above and the
+  [Profiles directory](#profiles-directory) use the same two conditions, so an owner the
+  directory lists is exactly an owner the sitemap lists
+  (`tests/unit/functions/sitemap-organization-profiles.test.ts`). A handle is unique across
+  both (the [public handle registry](database-operations.md#public-handle-registry)), so no URL
+  is listed twice, and an Organization drops out once it is archived or its handle is cleared
+  or stops passing the rule.
 - **Public URLs only.** A profile or Template is listed only when the handle is valid (the
   [public handle rule](database-operations.md#public-handle-registry): 3 to 30 letters, digits,
   `_`, `.` or `-`; the user triggers match it since `0029`), and a Template only when its slug is (lowercase
@@ -61,8 +75,11 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 ## Last modified dates
 
 - A Template entry is dated by its `updated_at` (else `created_at`) or its owner's
-  `sitemap_owner_revisions` row, whichever is newer, and a profile by the user's
-  `updated_at` (else `created_at`) or its `sitemap_profile_revisions` row. Bundled
+  `sitemap_owner_revisions` row, whichever is newer, and a User's profile by the user's
+  `updated_at` (else `created_at`) or its `sitemap_profile_revisions` row. An Organization's
+  profile is dated by its `updated_at` (else `created_at`), which every change on its settings
+  page (name, slug, avatar, description) sets; a change to its public Templates dates their
+  own entries, not the profile's. Bundled
   starters and static pages carry the dates the bundled catalog records from git
   ([RELIABILITY.md](../RELIABILITY.md#deploy-pipeline)).
 - `/templates/` takes the newest of its own date, the bundled inventory's date and the
@@ -119,24 +136,60 @@ first built.
 
 Each shard depends only on its own kind, so a sign-up or an avatar change (which bump only
 `profiles`) leaves the templates and categories shards cached; the index lists every family
-and records their hashes, so it depends on all three. The triggers from migration 0023 must
-bump a kind whenever that family's inputs change, or the shard stays stale for up to the
-1-day `s-maxage`; `tests/unit/functions/sitemap-migrations.test.ts` pins which kinds each
-trigger bumps.
+and records their hashes, so it depends on all three. The triggers from migrations 0023,
+0029 and 0032 must bump a kind whenever that family's inputs change, or the shard stays stale
+for up to the 1-day `s-maxage`; `tests/unit/functions/sitemap-migrations.test.ts` and
+`tests/unit/functions/sitemap-organization-revisions.test.ts` pin which kinds each trigger
+bumps.
 
 | Kind | Inputs, and the triggers that bump it |
 | --- | --- |
-| `templates` | Public Template rows (every Template trigger bumps every kind), their owners' usernames and `sitemap_owner_revisions` (the owner-update and user-delete triggers bump it when the user has public Templates and a valid username) |
-| `categories` | Public categorized Template rows, their owners' `sitemap_owner_revisions`, and `sitemap_category_revisions` (the Template, owner-update and user-delete triggers bump it whenever they change these) |
-| `profiles` | Users with a valid username and `sitemap_profile_revisions` (the user and Template triggers bump it). The triggers ignore `users.updated_at`, so a lastmod that depends on it can lag by up to the `s-maxage` |
+| `templates` | Public Template rows, Personal and Organization (every Template trigger bumps it), their Users' usernames and `sitemap_owner_revisions` (the owner-update and user-delete triggers bump it when the user has public Templates and a valid username), and their Organizations' handles and archive (the `teams` update trigger bumps it when an Organization with public Templates changes its slug or archive) |
+| `categories` | Public categorized Template rows, their owners' `sitemap_owner_revisions`, their Organizations' handles and archive, and `sitemap_category_revisions` (the Template, owner-update, user-delete and `teams` update triggers bump it whenever they change these, and date the categories they touch) |
+| `profiles` | Users with a valid username and `sitemap_profile_revisions` (the user triggers and the Personal Template triggers bump it), and active Organizations with a valid handle and their `created_at` and `updated_at` (the `teams` triggers bump it when a listed Organization is created, deleted or archived, or changes its slug or dates). An Organization Template's change never bumps it. The user triggers ignore `users.updated_at`, so a lastmod that depends on it can lag by up to the `s-maxage` |
 
-The 0023 triggers fire only for Personal Template rows, and no trigger watches `teams`, so
-an edit, publish, unpublish or delete of a public Organization Template, and a change of its
-Organization's slug or an archive, reaches a cached shard only when it expires (up to the
-1-day `s-maxage`): until then a cached templates shard can list an Organization Template
-under its Organization's old handle, which no longer opens it. The
-[Organization Template sitemap plan](../exec-plans/active/sitemap-organization-templates.md)
-proposes the migration that fixes it (TD-23).
+Migration 0032 made the Template triggers fire for Organization rows too (owner fields that
+agree, as above) and added the `teams` triggers, closing TD-23: an edit, publish, unpublish or
+delete of a public Organization Template, and an Organization's new slug or archive, miss the
+cached shards at once. Their lookups read one Organization's Templates through
+`idx_templates_team_id` (`+owner_type` and `+is_public` keep the planner off
+`idx_templates_public_created_at`, which would read every public Template). 0032 also dated
+the categories only public Organization Templates used, keeping the later date where a
+Personal Template had dated one, and bumped every kind once.
+
+## Profiles directory
+
+`/profiles/` (`src/views/ProfilesDirectory.tsx`) lists the Profile Owners the profiles sitemap
+lists, in two tabs: People and Organizations. It is a static page whose canonical URL is
+`/profiles/` whatever its query (`?collection=organizations`, `?after=` or `?before=` a
+handle), since the profiles themselves are in the profiles sitemap; the pages sitemap lists
+`/profiles/`. The tabs read the address with `useSearchParams`, so the route wraps the view in
+`<Suspense>` with a fallback that renders the same title and description.
+
+`GET /api/profiles` (`functions/api/handlers/profile-directory.ts`, queries in
+`functions/api/utils/profile-directory.ts`) answers one page:
+
+- **Inputs**, parsed with `src/lib/schemas/profileDirectory.ts`: `collection` (`people`, the
+  default, or `organizations`), and at most one of `after` and `before`, a handle of at most
+  64 characters. Anything else is a `400`; unknown parameters are ignored.
+- **Pages**: 24 owners (`PROFILE_DIRECTORY_PAGE_SIZE`) in stored handle order, read with a
+  cursor on the handle index, never `OFFSET` ([D1 cost](d1-cost.md#rules-for-d1-queries),
+  rule 1): People on `idx_users_username`, Organizations on `idx_teams_slug_unique`, with the
+  eligibility conditions from `functions/sitemap/listedOwners.ts` in the same `WHERE`. A page
+  reads 25 rows to know whether another follows; `before` reads the index backwards and the
+  page is reversed. `next_cursor` and `previous_cursor` are the last and first handles shown,
+  or `null` at either end.
+- **Counts**: one grouped query per page counts the public, non-deleted Templates of the
+  page's owners through `idx_templates_owner` or `idx_templates_team_id`, with the condition
+  the Public Profile lists them by (`publicTemplatesOfProfileOwners` in
+  `functions/api/utils/public-profile-owner.ts`), never a query per card. It reads every
+  Template of those owners, as their profiles do.
+- **Answer**: each owner's `handle`, `name`, `avatar_url` and `public_template_count`, and
+  nothing else: no id, email, membership, role, billing or private Template.
+- **Cache**: the answer is the same for every visitor, so `withEdgeCache` keeps it for
+  5 minutes under a key built from the parsed inputs
+  (`/api/profiles?...&fields=handle-name-avatar-public-template-count`). A new profile can
+  take that long to appear, and the page keeps a page it loaded for 5 minutes too.
 
 ## Lookups for page metadata
 

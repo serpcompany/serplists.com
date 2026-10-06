@@ -158,6 +158,10 @@
   `/api/profiles/by-id` lookup resolves only Users who have a username, and
   `/api/profiles/by-handle` answers an Organization with its handle, name, avatar and
   description only, never an archived one ([Organizations](design-docs/organizations.md#public-profile)).
+  The Profiles directory (`GET /api/profiles`) builds each card from four fields, handle,
+  name, avatar and public Template count, and applies its eligibility in SQL, so no id,
+  email, membership, role, billing or private Template reaches it
+  ([SEO and sitemaps](design-docs/seo-and-sitemaps.md#profiles-directory)).
 
 ## Secrets and environment
 

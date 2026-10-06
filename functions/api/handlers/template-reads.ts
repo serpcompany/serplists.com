@@ -1,6 +1,6 @@
 import { Env } from '../types';
 import { decodeSlugPath } from '../utils/slug';
-import { and, desc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm';
 import { schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
@@ -11,7 +11,11 @@ import {
   serializeHistoryEvent,
   serializeTemplateVersionHistory,
 } from '../utils/history-queries';
-import { findPublicProfileOwner, type PublicProfileOwner } from '../utils/public-profile-owner';
+import {
+  findPublicProfileOwner,
+  publicTemplatesOfProfileOwners,
+  type PublicProfileOwner,
+} from '../utils/public-profile-owner';
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 import {
@@ -43,15 +47,9 @@ async function canListOrganizationTemplates(env: Env, teamId: string, userId: st
 }
 
 export function selectPublicProfileTemplates(env: Env, owner: ProfileTemplatesOwner, includeRules: boolean) {
-  const { templates } = schema;
-  const isPublicWithoutItsIndex = sql`+${templates.is_public} = 1`;
-  const ownedByTheProfileOwner =
-    owner.type === 'user'
-      ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, owner.id), isNull(templates.team_id))
-      : and(sql`+${templates.owner_type} = 'team'`, eq(templates.team_id, owner.id));
   return selectTemplatesWithOwner(env, includeRules)
-    .where(and(ownedByTheProfileOwner, isPublicWithoutItsIndex, isNull(templates.deleted_at)))
-    .orderBy(desc(templates.created_at));
+    .where(publicTemplatesOfProfileOwners(owner.type, [owner.id]))
+    .orderBy(desc(schema.templates.created_at));
 }
 
 async function findProfileTemplatesOwner(env: Env, url: URL): Promise<ProfileTemplatesOwner | Response> {

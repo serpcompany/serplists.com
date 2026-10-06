@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDb } from '../../../functions/api/db';
+import { validOrganizationHandleCondition, validUsernameCondition } from '../../../functions/sitemap/listedOwners';
 import {
   isValidTemplateSlug,
   isValidUsername,
   loadCategoryEntries,
-  validOrganizationHandleCondition,
   validTemplateSlugCondition,
-  validUsernameCondition,
 } from '../../../functions/sitemap/shared';
 import { teams, templates, users } from '../../../db/schema/index';
 import { SqliteD1 } from '../../support/sqlite-d1';

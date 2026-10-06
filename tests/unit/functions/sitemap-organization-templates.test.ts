@@ -1,24 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { serveTemplatesSitemap } from '../../../functions/sitemap/routes';
-import { apiEnv } from '../../support/apiEnv';
 import { ACME, ARCHIVED_ORGANIZATION, seedProfileOwners, storeProfileTemplate } from '../../support/publicProfiles';
+import { sitemapLocations } from '../../support/sitemapLocations';
 import { SqliteD1 } from '../../support/sqlite-d1';
 
 let d1: SqliteD1;
 
 async function templateLocations(): Promise<string[]> {
-  const response = await serveTemplatesSitemap(
-    {
-      request: new Request('https://serplists.com/sitemaps/templates/1.xml'),
-      env: apiEnv({ DB: d1.binding }),
-      waitUntil: () => undefined,
-    },
-    '1',
-  );
-  const xml = await response.text();
-  return Array.from(xml.matchAll(/<loc>https:\/\/serplists\.com(\/profile\/[^<]*)<\/loc>/g), (match) => match[1] ?? '')
-    .filter((path) => !path.startsWith('/profile/serp/'));
+  return (await sitemapLocations(d1, serveTemplatesSitemap, '/sitemaps/templates/1.xml'))
+    .filter((path) => path.startsWith('/profile/') && !path.startsWith('/profile/serp/'));
 }
 
 beforeEach(() => {

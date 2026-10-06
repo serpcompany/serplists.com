@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
-import type { SelectedFields, SQLiteColumn } from 'drizzle-orm/sqlite-core';
+import type { SelectedFields } from 'drizzle-orm/sqlite-core';
 import {
   sitemapCategoryRevisions,
   sitemapOwnerRevisions,
@@ -15,6 +15,7 @@ import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 import { categorySlug } from '../../src/lib/categorySlug';
 import { buildCanonicalUrl } from '../../src/lib/seo/siteOrigin';
+import { listedOrganizationCondition, validUsernameCondition } from './listedOwners';
 
 export const SITEMAP_PAGE_SIZE = 25_000;
 const SITEMAP_MAX_PAGE = 50_000;
@@ -62,14 +63,6 @@ export function sitemapImplementationLastmod(): string | null {
   return validLastmod(inventoryMetadata?.implementationLastmod);
 }
 
-const validHandleCondition = (column: SQLiteColumn) => sql<boolean>`
-  length(trim(${column})) between 3 and 30
-  and trim(${column}) not glob ${'*[^A-Za-z0-9_.-]*'}`;
-
-export const validUsernameCondition = validHandleCondition(users.username);
-
-export const validOrganizationHandleCondition = validHandleCondition(teams.slug);
-
 const isPersonalTemplate = and(eq(templates.owner_type, 'user'), isNull(templates.team_id));
 
 const isOrganizationTemplate = and(eq(templates.owner_type, 'team'), isNotNull(templates.team_id), ne(templates.team_id, ''));
@@ -78,7 +71,7 @@ const publicTemplateCondition = and(eq(templates.is_public, true), isNull(templa
 
 const listedTemplateOwnerCondition = or(
   and(isPersonalTemplate, validUsernameCondition),
-  and(isOrganizationTemplate, isNull(teams.archived_at), validOrganizationHandleCondition),
+  and(isOrganizationTemplate, listedOrganizationCondition),
 );
 
 export const templateOwnerHandle = sql<string | null>`coalesce(${teams.slug}, ${users.username})`;
@@ -423,10 +416,29 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   ];
 }
 
+export type SitemapRowPage = { limit: number; offset: number };
+
+type CountedRows<Row> = {
+  load: (page: SitemapRowPage) => Promise<Row[]>;
+  count: () => Promise<number>;
+};
+
+export async function loadRowsOfTwoLists<Row>(
+  first: CountedRows<Row>,
+  loadSecond: (page: SitemapRowPage) => Promise<Row[]>,
+  { limit, offset }: SitemapRowPage,
+): Promise<Row[]> {
+  const firstRows = await first.load({ limit, offset });
+  if (firstRows.length === limit) return firstRows;
+  const firstTotal = firstRows.length > 0 || offset === 0 ? offset + firstRows.length : await first.count();
+  const secondRows = await loadSecond({ limit: limit - firstRows.length, offset: Math.max(0, offset - firstTotal) });
+  return [...firstRows, ...secondRows];
+}
+
 type PagedSitemapOptions<Row> = {
   request: Request;
   params: { readonly page?: string | string[] | undefined };
-  loadRows: (pagination: { limit: number; offset: number }) => Promise<Row[]>;
+  loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
 };

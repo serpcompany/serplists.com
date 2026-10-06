@@ -1,7 +1,7 @@
 # Sitemap Revisions for Organization Templates
 
-- **Status:** active
-- **Last updated:** 2026-09-28
+- **Status:** completed
+- **Last updated:** 2026-10-05
 - **Goal:** an edit to a public Organization Template, or to its Creator, refreshes the
   cached sitemaps the same way a Personal Template edit does. Closes TD-23 in the
   [tech debt tracker](../tech-debt-tracker.md).
@@ -16,16 +16,18 @@
   `templates` and `categories` when an Organization with public Templates changes its slug or
   is archived, and its Creator branches for Organization rows (`sitemap_users_update_owner`,
   `sitemap_users_delete`) are no longer needed. Rework it before asking for approval.
-- [ ] Human approval (escalate): the migration below writes to the triggers and
-  revision tables on staging and production D1.
-- [ ] Land the migration with the next free number in `db/migrations/`, and the
-  companion changes listed below.
+- [x] Human approval: the owner approved the sitemap trigger migration on #237
+  (2026-10-04), applied locally only; it reaches staging after the PR merges, and production
+  with the owner's go-ahead.
+- [x] Landed as `db/migrations/0032_sitemap_organization_revisions.sql` with #237 (the
+  [Profiles directory](../active/profiles-directory.md)), reworked as the decision log says;
+  the proposal below is kept as it was approved for review. TD-23 is closed.
 
-## What stays stale until then
+## What was stale before 0032
 
-The revision triggers from migration 0023 fire only for Personal rows, and each
+The revision triggers from migration 0023 fired only for Personal rows, and each
 sitemap is cached under its `sitemap_revisions` kinds (`functions/sitemap/cache.ts`)
-for up to a day. Until the migration lands:
+for up to a day. Until 0032:
 
 - An edit, publish, unpublish or delete of a public Organization Template reaches the
   templates, categories and index sitemaps only when the cached copy expires.
@@ -149,3 +151,17 @@ UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHER
   Organization edit should not move a Creator's profile lastmod.
 - 2026-09-28: Shipped the query change without the migration (migrations need human
   approval). The cost is the staleness above, bounded by the one-day cache.
+- 2026-10-05 (#237): the shipped migration (`0032`) recreates only the three `templates`
+  triggers: Organization rows (owner fields that agree) bump `templates`, `categories` and
+  their category rows, never `profiles` or a User's profile row, since an Organization
+  Template is listed under its Organization's handle and its Creator's profile does not list
+  it. The `users` triggers stay as `0029` left them: a Creator's rename no longer moves an
+  Organization Template's URL.
+- 2026-10-05 (#237): three `teams` triggers replace the Creator branches. Insert and delete
+  bump `profiles` for an active Organization with a valid handle (the profiles sitemap lists
+  Organizations since #237); update bumps `profiles` when a listed Organization changes its
+  slug, archive or dates, and `templates` and `categories` (with its Templates' category rows)
+  when one with public Templates changes its slug or archive. Their lookups use `+owner_type`
+  and `+is_public`, so they read one Organization's Templates through
+  `idx_templates_team_id`; without the `+`, SQLite chose `idx_templates_public_created_at`
+  and would read every public Template.

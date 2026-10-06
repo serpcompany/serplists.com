@@ -433,6 +433,9 @@ Defined in migrations and recorded in `db/sql-only-schema.json` (Drizzle cannot 
 - `public_handles_users_insert` on `users`
 - `public_handles_users_update` on `users`
 - `sitemap_owner_users_insert` on `users`
+- `sitemap_teams_delete` on `teams`
+- `sitemap_teams_insert` on `teams`
+- `sitemap_teams_update` on `teams`
 - `sitemap_templates_delete` on `templates`
 - `sitemap_templates_insert` on `templates`
 - `sitemap_templates_update` on `templates`

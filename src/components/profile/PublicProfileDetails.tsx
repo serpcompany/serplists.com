@@ -18,24 +18,13 @@ import {
   type FoundPublicProfile,
   type ProfileSurfaceRecord,
 } from '@/features/profile/loadPublicProfile';
+import { profileInitials } from '@/features/profile/profileInitials';
 import { calculateStats, describePublicProfile, type UserStats } from '@/features/profile/profileSummary';
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 
 import { ProfileTemplateCards } from './ProfileTemplateCards';
 
 const formatStatValue = (value: number) => value.toLocaleString('en-US');
-
-const getInitials = (title: string): string => {
-  const initials = title
-    .replace(/^@/, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-
-  return initials || 'SL';
-};
 
 const getProfileWebsiteHref = (website: string) =>
   website.startsWith('http://') || website.startsWith('https://')
@@ -131,7 +120,7 @@ export function PublicProfileDetails({ found }: { found: FoundPublicProfile }) {
       media={
         <Avatar className="size-14">
           <AvatarImage alt="" src={avatarUrl || undefined} />
-          <AvatarFallback className="text-lg">{getInitials(title)}</AvatarFallback>
+          <AvatarFallback className="text-lg">{profileInitials(title)}</AvatarFallback>
         </Avatar>
       }
       meta={found.kind === 'user' ? userProfileMeta(found.profile) : undefined}

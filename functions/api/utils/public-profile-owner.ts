@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { normalizePublicHandle } from '../../../src/lib/schemas/publicHandle';
@@ -60,4 +60,14 @@ export async function findPublicProfileOwner(env: Env, handle: string): Promise<
   }
 
   return null;
+}
+
+export function publicTemplatesOfProfileOwners(ownerType: PublicProfileOwner['type'], ownerIds: string[]): SQL | undefined {
+  const { templates } = schema;
+  const isPublicWithoutItsIndex = sql`+${templates.is_public} = 1`;
+  const ownedByTheProfileOwners =
+    ownerType === 'user'
+      ? and(eq(templates.owner_type, 'user'), inArray(templates.user_id, ownerIds), isNull(templates.team_id))
+      : and(sql`+${templates.owner_type} = 'team'`, inArray(templates.team_id, ownerIds));
+  return and(ownedByTheProfileOwners, isPublicWithoutItsIndex, isNull(templates.deleted_at));
 }

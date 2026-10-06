@@ -16,6 +16,7 @@ import {
   handleProfileByUsername,
   handleProfileById
 } from './handlers/auth';
+import { handleProfileDirectory } from './handlers/profile-directory';
 import { handleTemplates } from './handlers/templates';
 import { handleChecklists } from './handlers/checklists';
 import { handleUploads } from './handlers/uploads';
@@ -205,6 +206,8 @@ async function respondToRequest(context: { request: Request; env: Env }, request
     } else if (path.startsWith('auth')) {
       const auth = createBetterAuth(env, request);
       response = await auth.handler(request);
+    } else if (path === 'profiles') {
+      response = await handleProfileDirectory(request, env);
     } else if (path === 'profiles/by-handle') {
       response = await handleProfileByHandle(request, env);
     } else if (path === 'profiles/by-username') {

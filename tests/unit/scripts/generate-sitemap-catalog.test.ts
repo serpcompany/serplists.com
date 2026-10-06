@@ -23,6 +23,7 @@ const filesTheGeneratorReadsGitDatesFrom = [
   'src/views/Contact.tsx',
   'src/views/ChecklistLibrary.tsx',
   'src/views/Categories.tsx',
+  'src/views/ProfilesDirectory.tsx',
   'src/data/publicCategories.ts',
   ...SITEMAP_IMPLEMENTATION_SOURCES,
 ];

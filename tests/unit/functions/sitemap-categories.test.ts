@@ -59,17 +59,20 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
         id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, email TEXT,
         email_verified INTEGER, created_at TEXT NOT NULL, updated_at TEXT, auth_updated_at INTEGER
       );
-      CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT, archived_at TEXT);
+      CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT, archived_at TEXT, created_at TEXT NOT NULL, updated_at TEXT);
       CREATE TABLE templates (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL, owner_type TEXT NOT NULL,
         team_id TEXT, is_public INTEGER, deleted_at TEXT, created_at TEXT NOT NULL,
         updated_at TEXT, category TEXT, slug TEXT
       );
     `);
-    db.exec(readFileSync(
-      new URL('../../../db/migrations/0023_add_sitemap_revision_state.sql', import.meta.url),
-      'utf8',
-    ));
+    for (const migration of [
+      '0023_add_sitemap_revision_state.sql',
+      '0029_sitemap_usernames_allow_hyphen.sql',
+      '0032_sitemap_organization_revisions.sql',
+    ]) {
+      db.exec(readFileSync(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'));
+    }
     db.exec(`
       INSERT INTO users VALUES ('u1', 'alice', 'Alice', NULL, 'alice@example.com', 0,
         '2020-01-01 00:00:00', '2020-01-01 00:00:00', NULL);

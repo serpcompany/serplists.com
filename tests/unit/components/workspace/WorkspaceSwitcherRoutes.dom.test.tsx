@@ -42,6 +42,7 @@ async function openTheSwitcherAt(url: string, remembered = 'personal') {
 }
 
 const theSwitcher = () => screen.getByRole('button', { name: 'Switch context' });
+const organizationProfileLink = () => screen.queryByRole('menuitem', { name: 'View Organization profile' });
 
 const choose = (name: RegExp) =>
   act(async () => {
@@ -55,10 +56,30 @@ describe('the context switcher on Personal URLs', () => {
     expect(theSwitcher().textContent).toContain('Personal');
     expect(theSwitcher().textContent).not.toContain('Acme');
     expect(screen.getByRole('menuitem', { name: 'Settings' }).getAttribute('href')).toBe('/dashboard/settings/');
+    expect(organizationProfileLink()).toBeNull();
   });
 });
 
 describe('the context switcher on Organization URLs', () => {
+  it("links the active Organization's public profile at its handle, as soon as that Organization is chosen", async () => {
+    getTeams.mockResolvedValue([{ ...acme, slug: 'Acme-Launch' }]);
+    await openTheSwitcherAt('/dashboard/templates/');
+    expect(organizationProfileLink()).toBeNull();
+
+    await choose(/Acme/);
+    await letQueryUpdatesReachObservers();
+    await openTheMenu('Switch context');
+
+    expect(organizationProfileLink()?.getAttribute('href')).toBe('/profile/Acme-Launch/');
+  });
+
+  it('offers no profile link for an Organization without a handle, which has no public profile', async () => {
+    await openTheSwitcherAt('/dashboard/organization/team-1/templates/');
+
+    expect(theSwitcher().textContent).toContain('Acme');
+    expect(organizationProfileLink()).toBeNull();
+  });
+
   it("names the Organization the URL names and links Settings to that Organization's settings", async () => {
     await openTheSwitcherAt('/dashboard/organization/team-1/runs/run-1/');
 

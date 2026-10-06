@@ -4,6 +4,7 @@ import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 import { categorySlug } from '@/lib/categorySlug';
 import { canonicalPath } from '@/lib/http/urlStandard';
 import { parseConsoleRoute } from '@/lib/consoleRoutes';
+import { profileDirectorySearchParams, type ProfileDirectoryQuery } from '@/lib/schemas/profileDirectory';
 
 export { resolvePublicTemplateOwnerSlug };
 
@@ -95,6 +96,19 @@ export const resolveLegacyTemplatesCategoryRedirectPath = (
 
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}/`;
+
+export const buildOrganizationProfilePath = (context: {
+  type: 'personal' | 'team';
+  slug?: string | null | undefined;
+}): string | null => {
+  const handle = context.type === 'team' ? context.slug?.trim() : undefined;
+  return handle ? buildPublicProfilePath(handle) : null;
+};
+
+export const buildProfilesDirectoryPath = (query?: ProfileDirectoryQuery): string => {
+  const search = query ? profileDirectorySearchParams(query).toString() : '';
+  return `/profiles/${search ? `?${search}` : ''}`;
+};
 
 export const buildProfilePreviewPath = (
   formUsername: string,
@@ -207,6 +221,7 @@ export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
   if (
     path === buildPublicTemplatesPath() ||
     path === comparablePath(LEGACY_PUBLIC_LIBRARY_PATH) ||
+    path === buildProfilesDirectoryPath() ||
     path.startsWith('/profile/')
   ) {
     return 'core';
