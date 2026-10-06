@@ -20,7 +20,7 @@
   (2026-10-04), applied locally only; it reaches staging after the PR merges, and production
   with the owner's go-ahead.
 - [x] Landed as `db/migrations/0032_sitemap_organization_revisions.sql` with #237 (the
-  [Profiles directory](../active/profiles-directory.md)), reworked as the decision log says;
+  [Profiles directory](profiles-directory.md)), reworked as the decision log says;
   the proposal below is kept as it was approved for review. TD-23 is closed.
 
 ## What was stale before 0032

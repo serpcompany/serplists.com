@@ -1,7 +1,7 @@
 # Guest runs
 
-- **Status:** active
-- **Last updated:** 2026-10-05
+- **Status:** completed
+- **Last updated:** 2026-10-06
 - **Goal:** A visitor who is not signed in can run a public Template in the browser, and after
   signing up or logging in can save that run into their account (issue #253).
 
@@ -20,12 +20,19 @@ self-contained PRs at most, never one stacked on another). It was built in the t
   page (both links return to it), "Save to account" there and in a notice on the public template
   page, a real Run started through the existing API with the progress carried over by stable
   ids, and plan limits handled as Start Run handles them.
-- [ ] Merge PR 1, then PR 2, into `staging`; check both pages with `pnpm run ui:snap` at desktop
-  and 390px, signed out and signed in.
-- [ ] Owner's open question, not built: whether code projects and SKILL.md files need more than
-  a plain link that opens the run (a machine-readable SOP on the public page).
+- [x] Merged into `staging` with Required tools as #283 (2026-10-05).
+- [x] `pnpm run ui:snap` of the guest run page (2026-10-06): signed out at desktop and 390px,
+  with "This run is saved in this browser only. Log in or sign up to save it to your account.";
+  signed in with no guest run in the browser, the address opens the public template page, as
+  the [screen inventory](../../design-docs/ui-screen-inventory.md#guest-run) says. The signed-in
+  "Save to account" state needs a guest run made before signing in, which
+  `tests/e2e/guest-run-save.spec.ts` covers.
 
 ## Decision log
+
+- 2026-10-06: plan closed with one owner question left open and not built: whether code
+  projects and SKILL.md files need more than a plain link that opens the run (a
+  machine-readable SOP on the public page). It needs an issue of its own if the owner wants it.
 
 - 2026-10-04 (owner, on #253): signed-out visitors get Start Run on the public Template page,
   and the run happens in the browser at `/profile/:user/:slug/run/`. Progress lives only in

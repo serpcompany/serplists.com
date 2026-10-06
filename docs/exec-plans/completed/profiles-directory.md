@@ -1,15 +1,15 @@
 # Profiles directory
 
-- **Status:** active
-- **Last updated:** 2026-10-05
+- **Status:** completed
+- **Last updated:** 2026-10-06
 - **Goal:** A public, indexable `/profiles/` directory lists every Profile Owner with a Public
   Profile, People and Organizations, a bounded page at a time, and the profiles sitemap lists
   the same Organizations and refreshes when they change (issue #237).
 
 ## Progress
 
-Built on `fl/profiles-directory`, to ship in one PR with #207 (the context switcher's "View
-Organization profile" link).
+Built on `fl/profiles-directory` and shipped in one PR with #207 (the context switcher's "View
+Organization profile" link): #284, merged into `staging` on 2026-10-06.
 
 - [x] Migration `0032`: the sitemap triggers fire for public Organization Templates and on
   `teams`, so cached sitemaps refresh when an Organization's Templates, slug or archive
@@ -23,16 +23,17 @@ Organization profile" link).
   5 minutes.
 - [x] `/profiles/`: People and Organizations tabs, cards linking to `/profile/:handle/`, and
   the footer's "Profiles" link ([features](../../product-specs/features.md#auth-and-account)).
-- [ ] The lead's serial checks: `pnpm run verify`, `test:local-d1` (the rows-read budgets of
-  the directory and the profiles shard, set from estimates: replace them with the measured
-  rows), `d1:profile`, `test:smoke` and `test:e2e:full` (`tests/e2e/profiles-directory.spec.ts`
-  and the additions to the heading, site standards and sitemap specs), `ui:snap` of
-  `/profiles/` on desktop and phone as the PR's evidence, and `sitemap:generate` once the
-  merge commit dates the sources.
-- [ ] Apply `0032` to staging after the PR merges (`pnpm run verify:staging`,
-  `pnpm run db:migrate:d1:staging`, `pnpm run check:staging:d1-schema`, which then requires
-  the three `teams` triggers and the new `templates` trigger text). Production waits for the
-  owner's go-ahead, after `0028` to `0031`.
+- [x] The lead's serial checks (2026-10-06): `pnpm run verify`; `test:local-d1` with the
+  directory's budgets set from the measured rows (the first People page reads 280 rows at the
+  small seed scale: its count reads every Personal Template of the Users it lists); `d1:profile`
+  (People 477 rows, a later People page 313, Organizations 1,052, edge-cached for 5 minutes);
+  `test:e2e:full`, 319 passed; `ui:snap` of `/profiles/` on desktop and phone; and
+  `sitemap:generate`.
+- [x] `0032` applied to staging after #284 merged (2026-10-06, owner go-ahead): Time Travel
+  bookmark `00000ac2-00000000-000050fc-19910f0d3d5b40cd1665997eb52471a5` noted first,
+  `verify:staging` passes, and the staging deploy serves the directory, the profiles API and
+  Organizations in the profiles sitemap.
+- Production moved to the launch steps in the [Next.js migration plan](../active/nextjs-migration.md#left-for-launch), after `0028` to `0031`.
 
 ## Decision log
 

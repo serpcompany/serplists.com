@@ -1,7 +1,7 @@
 # Required Tools
 
-- **Status:** active
-- **Last updated:** 2026-10-05
+- **Status:** completed
+- **Last updated:** 2026-10-06
 - **Goal:** a Template lists the tools a Run of it needs ("Required tools": a name, a link, and
   required or optional), edited in the Template editor and shown on the public Template page,
   Template detail and the Run page, carried by portable packs, exports, imports and MCP
@@ -25,9 +25,11 @@ self-contained PRs at most, never one stacked on another). It was built in the t
   `src/lib/forms/templateEditorRequiredTools.ts`), and `RequiredToolsList` on the public Template
   page, Template detail, the Run page (a card under the provenance) and the editor preview, with
   DOM tests and a browser spec (`tests/e2e/required-tools.spec.ts`, not yet run).
-- [ ] After PR 1 merges into `staging`: the lead applies `0031` to staging
-  (`pnpm run verify:staging`, `pnpm run db:migrate:d1:staging`, `pnpm run check:staging:d1-schema`).
-  The staging deploy refuses to ship while it is pending. Production waits for the owner.
+- [x] Merged into `staging` with guest runs as #283 (2026-10-05). `0031` applied to staging
+  afterwards (owner go-ahead): Time Travel bookmark
+  `00000ac0-00000000-000050fb-77a3815c06fccaa522ab8e33d9aa9694` noted first, `verify:staging`
+  passes, and the staging deploy ran.
+- Production moved to the launch steps in the [Next.js migration plan](../active/nextjs-migration.md#left-for-launch).
 
 ## Rollout and rollback
 
