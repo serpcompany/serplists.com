@@ -3,8 +3,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MarkdownBlock } from './MarkdownBlock';
 import { TaskImage } from './TaskImage';
 import { VideoEmbed } from './VideoEmbed';
-import { File, Code, ListCheck } from 'lucide-react';
-import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { FormFieldList } from './FormFieldList';
+import { ClipboardList, File, Code, ListCheck } from 'lucide-react';
+import { ChecklistFormField, ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { readFormFields } from '@/lib/schemas/formFields';
 import { isContentRecord, isSubTaskRecord, type ContentRecord, type SubTaskRecord } from '@/lib/schemas/jsonRecords';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
@@ -17,6 +19,7 @@ type RenderableContent = {
   uploadType: unknown;
   fileName: string | undefined;
   subItems: ChecklistSubItem[] | undefined;
+  fields: ChecklistFormField[];
 };
 
 const fileLabel = (content: RenderableContent): string | undefined =>
@@ -31,7 +34,7 @@ const toRenderableSubItem = (subItem: unknown): ChecklistSubItem => {
   };
 };
 
-const toRenderableContent = (content: unknown): RenderableContent => {
+const toRenderableContent = (content: unknown, contentIndex: number): RenderableContent => {
   const record: ContentRecord = isContentRecord(content) ? content : {};
   return {
     type: record.type,
@@ -39,6 +42,9 @@ const toRenderableContent = (content: unknown): RenderableContent => {
     uploadType: record.uploadType,
     fileName: typeof record.fileName === 'string' ? record.fileName : undefined,
     subItems: Array.isArray(record.subItems) ? record.subItems.map(toRenderableSubItem) : undefined,
+    fields: record.type === 'form'
+      ? readFormFields(record.fields, (fieldIndex) => `form-${contentIndex + 1}-field-${fieldIndex + 1}`)
+      : [],
   };
 };
 
@@ -67,7 +73,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   return (
     <div className="space-y-6">
       {contents.map((rawContent, contentIndex: number) => {
-        const content = toRenderableContent(rawContent);
+        const content = toRenderableContent(rawContent, contentIndex);
         return (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
@@ -148,6 +154,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                     <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{getSubItemDisplayTitle(subItem, subItemIndex)}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {content.type === "form" && content.fields.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-muted-foreground" />
+                <SubtaskHeading className="font-medium">Form</SubtaskHeading>
+              </div>
+              <div className="sm:pl-7">
+                <FormFieldList fields={content.fields} />
               </div>
             </div>
           )}
