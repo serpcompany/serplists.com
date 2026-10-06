@@ -97,7 +97,9 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    one, write the term as ``sql`+${column} = 1` ``: unary `+` stops SQLite using an index
    for that term. The public profile query does this, and
    `tests/unit/functions/api/history-query-plan.test.ts` fails if its plan goes back to the
-   `is_public` index. Never wrap an indexed column in a function: `lower(email) = ?`
+   `is_public` index; so do the sitemap triggers' Template lookups (`+t.is_public=1`, migrations
+   `0032` and `0033`), which `tests/unit/functions/sitemap-user-trigger-plans.test.ts` checks
+   for the `users` triggers. Never wrap an indexed column in a function: `lower(email) = ?`
    cannot use the email index and reads the whole table. Normalize on write and compare
    with plain equality (invite emails are lowercased by the create-invite Zod schema, so
    incoming invites match `email = ?`). The pending-invite reads that revoke a member's

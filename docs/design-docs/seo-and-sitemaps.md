@@ -137,9 +137,10 @@ first built.
 Each shard depends only on its own kind, so a sign-up or an avatar change (which bump only
 `profiles`) leaves the templates and categories shards cached; the index lists every family
 and records their hashes, so it depends on all three. The triggers from migrations 0023,
-0029 and 0032 must bump a kind whenever that family's inputs change, or the shard stays stale
-for up to the 1-day `s-maxage`; `tests/unit/functions/sitemap-migrations.test.ts` and
-`tests/unit/functions/sitemap-organization-revisions.test.ts` pin which kinds each trigger
+0029, 0032 and 0033 must bump a kind whenever that family's inputs change, or the shard stays
+stale for up to the 1-day `s-maxage`; `tests/unit/functions/sitemap-migrations.test.ts`,
+`tests/unit/functions/sitemap-organization-revisions.test.ts` and
+`tests/unit/functions/sitemap-user-trigger-plans.test.ts` pin which kinds each trigger
 bumps.
 
 | Kind | Inputs, and the triggers that bump it |
@@ -156,6 +157,12 @@ cached shards at once. Their lookups read one Organization's Templates through
 `idx_templates_public_created_at`, which would read every public Template). 0032 also dated
 the categories only public Organization Templates used, keeping the later date where a
 Personal Template had dated one, and bumped every kind once.
+
+Migration 0033 did the same for the owner-update and user-delete triggers on `users` (TD-86):
+their lookups of the User's public Personal Templates are written `+t.is_public=1`, so they
+search `idx_templates_owner` for that User's Templates instead of reading every public
+Template, and refresh the same kinds as before. `sitemap-user-trigger-plans.test.ts` fails if
+either lookup goes back to `idx_templates_public_created_at`.
 
 ## Profiles directory
 

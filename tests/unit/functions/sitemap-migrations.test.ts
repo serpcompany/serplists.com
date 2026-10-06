@@ -96,7 +96,7 @@ describe('sitemap revision migrations', () => {
 
   it.each<[string, string[]]>([
     ['0023', []],
-    ['0023 and the migrations that rewrote its triggers since', ['0029_sitemap_usernames_allow_hyphen.sql', '0032_sitemap_organization_revisions.sql']],
+    ['0023 and the migrations that rewrote its triggers since', ['0029_sitemap_usernames_allow_hyphen.sql', '0032_sitemap_organization_revisions.sql', '0033_sitemap_user_triggers_search_owner_index.sql']],
   ])('bumps only the revision kinds whose sitemaps a write changes, after %s', (_, laterMigrations) => {
     const db = new DatabaseSync(':memory:');
     db.exec(`
