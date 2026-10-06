@@ -34,6 +34,16 @@ function ContentHarness(): React.JSX.Element {
                     { id: 'sub-2', title: 'Charger' },
                   ],
                 },
+                {
+                  id: 'content-3',
+                  type: 'form',
+                  value: '',
+                  fields: [
+                    { id: 'field-1', label: 'Badge number', kind: 'text', required: true },
+                    { id: 'field-2', label: 'Size', kind: 'select', required: false, options: [{ id: 'option-1', label: 'Large' }] },
+                    { id: 'field-3', label: 'Seats', kind: 'number', required: false, min: 1 },
+                  ],
+                },
               ],
             },
           ],
@@ -71,6 +81,20 @@ describe('ContentEditor accessible names', () => {
     expect(getByAccessibleName(html, 'Sub-task 2')?.attrs['value']).toBe('Charger');
     expect(getByAccessibleName(html, 'Remove sub-task 1')?.tag).toBe('button');
     expect(getByAccessibleName(html, 'Remove sub-task 2')?.tag).toBe('button');
+  });
+
+  it('names each form field control after its field, so no two share a name', () => {
+    const html = renderToStaticMarkup(<ContentHarness />);
+
+    expect(getByAccessibleName(html, 'Remove Form block')?.tag).toBe('button');
+    expect(getByAccessibleName(html, 'Field 1 Label')?.attrs['value']).toBe('Badge number');
+    expect(getByAccessibleName(html, 'Field 2 Label')?.attrs['value']).toBe('Size');
+    expect(getByAccessibleName(html, 'Field 1 Required')?.attrs['aria-checked']).toBe('true');
+    expect(getByAccessibleName(html, 'Field 2 option 1')?.attrs['value']).toBe('Large');
+    expect(getByAccessibleName(html, 'Remove field 2 option 1')?.tag).toBe('button');
+    expect(getByAccessibleName(html, 'Field 3 Minimum')?.attrs['value']).toBe('1');
+    expect(getByAccessibleName(html, 'Move field 3 up')?.tag).toBe('button');
+    expect(getByAccessibleName(html, 'Remove field 3')?.tag).toBe('button');
   });
 });
 

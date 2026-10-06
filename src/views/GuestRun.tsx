@@ -57,6 +57,7 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
   const saving = useSaveGuestRunToAccount(template, allowLeave);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const runPath = buildCanonicalPublicTemplateRunPath(template);
+  const loginPath = withReturnPath(buildLoginPath(), runPath);
 
   useEffect(() => {
     if (!notFound || loading) {
@@ -108,7 +109,7 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
           savePrompt={
             isAuthenticated || isSessionLoading ? null : (
               <SignInToSaveLinks
-                loginPath={withReturnPath(buildLoginPath(), runPath)}
+                loginPath={loginPath}
                 registerPath={withReturnPath(buildRegisterPath(), runPath)}
               />
             )
@@ -119,8 +120,10 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
         <RunWorkspace
           canUpdateRun
           completedTasks={counts.tasksCompleted}
+          formAttempt={actions.formAttempt}
           noteDrafts={noteDrafts}
           onFinishRun={actions.openCompleteDialog}
+          onFormAnswerChange={actions.saveFormAnswer}
           onNoteDraftChange={model.setNoteDraft}
           onSaveNotes={actions.saveNotes}
           onSelectTask={model.setSelectedItemId}
@@ -130,6 +133,7 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
           run={run}
           selectedItemId={selectedItemId}
           totalTasks={counts.tasksTotal}
+          uploadLoginPath={isAuthenticated ? undefined : loginPath}
         />
       </DashboardContentShell>
 

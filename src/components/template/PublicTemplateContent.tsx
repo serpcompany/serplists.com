@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   File,
   Link2,
   ListTodo,
@@ -9,8 +10,8 @@ import {
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
+import { FormFieldList } from '@/components/shared/FormFieldList';
 import { cn } from '@/lib/utils';
-import { FORM_FIELD_KIND_LABELS } from '@/lib/schemas/formFields';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { formatCount } from '@/lib/utils/pluralize';
@@ -145,13 +146,13 @@ export function PublicTemplateContent({
 
       case 'form':
         return content.fields?.length ? (
-          <ul className="mt-4 space-y-1 border-l-2 pl-4 text-sm">
-            {content.fields.map((field) => (
-              <li key={field.id}>
-                {field.label} ({FORM_FIELD_KIND_LABELS[field.kind]}{field.required ? ', Required' : ''})
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4 space-y-2 border-l-2 pl-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <ClipboardList className="size-4" />
+              Form
+            </div>
+            <FormFieldList fields={content.fields} />
+          </div>
         ) : null;
 
       default: {

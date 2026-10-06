@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import { cn } from '@/lib/utils';
-import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
+import type { ChecklistItem, ChecklistSection, FormAnswer } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 import {
@@ -20,7 +20,9 @@ interface TaskExecutionPanelProps {
   task: ChecklistItem;
   taskIndex: number;
   totalTasks: number;
+  formCheck?: number;
   onFinishRun: () => void;
+  onFormAnswerChange?: ((fieldId: string, answer: FormAnswer | undefined) => void) | undefined;
   onNavigateNext: () => void;
   onNavigatePrev: () => void;
   onSelectTask: (itemId: string) => void;
@@ -34,6 +36,7 @@ interface TaskExecutionPanelProps {
   primaryAction: PrimaryTaskAction;
   readOnly?: boolean;
   runCompleted?: boolean;
+  uploadLoginPath?: string | undefined;
 }
 
 export function TaskExecutionPanel({
@@ -42,7 +45,9 @@ export function TaskExecutionPanel({
   task,
   taskIndex,
   totalTasks,
+  formCheck = 0,
   onFinishRun,
+  onFormAnswerChange,
   onNavigateNext,
   onNavigatePrev,
   onSelectTask,
@@ -56,6 +61,7 @@ export function TaskExecutionPanel({
   primaryAction,
   readOnly = false,
   runCompleted = false,
+  uploadLoginPath,
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
   const canTick = !readOnly && !runCompleted;
@@ -111,8 +117,15 @@ export function TaskExecutionPanel({
             key={`contents-${task.id}`}
             contents={task.contents}
             disabled={!canTick}
+            formCheck={formCheck}
+            onFormAnswerChange={
+              canTick && onFormAnswerChange
+                ? (_contentIndex, fieldId, answer) => onFormAnswerChange(fieldId, answer)
+                : undefined
+            }
             onSubItemToggle={onToggleSubItem}
             subtaskHeadingAs="h3"
+            uploadLoginPath={uploadLoginPath}
           />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">

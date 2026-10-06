@@ -99,6 +99,11 @@ kinds and limits live in `src/lib/schemas/formFields.ts`.
   structure (`RUN_STATE_KEYS`) nor count as an edit in a run's audit (`RUN_STATE_FIELDS`).
 - **Packs:** JSON and YAML carry `fields` on a `form` block; Markdown carries them as a
   fenced `serplists:form` YAML list ([portable templates](../product-specs/portable-templates.md)).
+- **Screens:** the editor edits the fields in `FormFieldsEditor`
+  (`src/components/template-editor/content-types/`). Read-only pages list them with
+  `FormFieldList` (`src/components/shared/`), and the run page fills them in with
+  `FormFieldInputs` and `FormFieldInput` there, through `ContentRenderer`'s
+  `onFormAnswerChange`; how answers save is in [run execution](run-execution.md#form-answers).
 
 ## Text blocks and descriptions
 

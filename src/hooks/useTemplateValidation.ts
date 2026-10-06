@@ -1,4 +1,5 @@
-import type { ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import type { ChecklistFormField, ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { isFormChoiceKind } from "@/lib/schemas/formFields";
 import { DEFAULT_TEMPLATE_TITLE } from "@/lib/schemas/templateFields";
 import { sectionFallbackTitle } from "@/lib/utils/checklistSections";
 
@@ -19,8 +20,35 @@ const placeholderItemId = (sectionId: string, usedItemIds: Set<string>): string 
 
 const trimmedTitle = (title: unknown): string => (typeof title === "string" ? title.trim() : "");
 
-const withoutBlankSubItems = (contents: ChecklistItemContent[]): ChecklistItemContent[] =>
+const savedFormField = (field: ChecklistFormField): ChecklistFormField[] => {
+  const label = trimmedTitle(field.label);
+  const options = (field.options ?? []).flatMap((option) => {
+    const optionLabel = trimmedTitle(option.label);
+    return optionLabel ? [{ ...option, label: optionLabel }] : [];
+  });
+  if (!label || (isFormChoiceKind(field.kind) && options.length === 0)) {
+    return [];
+  }
+
+  const { answer, description, max, min, options: editedOptions, ...rest } = field;
+  const helpText = trimmedTitle(description);
+  return [{
+    ...rest,
+    label,
+    ...(helpText ? { description: helpText } : {}),
+    ...(isFormChoiceKind(field.kind) ? { options } : {}),
+    ...(field.kind === "number" && min !== undefined ? { min } : {}),
+    ...(field.kind === "number" && max !== undefined ? { max } : {}),
+  }];
+};
+
+const withoutBlankEntries = (contents: ChecklistItemContent[]): ChecklistItemContent[] =>
   contents.flatMap((content) => {
+    if (content.type === "form") {
+      const fields = (content.fields ?? []).flatMap(savedFormField);
+      return fields.length > 0 ? [{ ...content, fields }] : [];
+    }
+
     if (content.type !== "subItems") {
       return [content];
     }
@@ -35,7 +63,7 @@ const withoutBlankSubItems = (contents: ChecklistItemContent[]): ChecklistItemCo
 const withItemDefaults = (item: ChecklistItem, itemIndex: number): ChecklistItem => ({
   ...item,
   title: trimmedTitle(item.title) || `Task ${itemIndex + 1}`,
-  ...(item.contents ? { contents: withoutBlankSubItems(item.contents) } : {}),
+  ...(item.contents ? { contents: withoutBlankEntries(item.contents) } : {}),
 });
 
 export const applyTemplateSaveDefaults = (

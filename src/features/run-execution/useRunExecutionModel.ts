@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
 import { markRunShared, refreshRunHistory } from '@/lib/queryCache';
-import type { ChecklistRun } from '@/types/checklist';
+import type { ChecklistRun, FormAnswer } from '@/types/checklist';
 
 import {
   countRunExecutionItems,
@@ -199,6 +199,8 @@ export const useRunExecutionModel = (
     run,
     saveTitle: (title: string) => enqueueSave(saves().title(title)),
     saveItemNotes: (itemId: string, notes: string) => enqueueSave(saves().notes(itemId, notes)),
+    saveFormAnswer: (itemId: string, fieldId: string, answer: FormAnswer | undefined) =>
+      enqueueSave(saves().answer(itemId, fieldId, answer)),
     selectedData,
     selectedItemId,
     setSelectedItemId,

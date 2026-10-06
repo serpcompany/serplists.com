@@ -3,33 +3,42 @@ import {
   areItemSubItemsCompleted,
   findRunSubItem,
 } from '@/features/run-execution/runExecutionMappers';
-import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
+import { findTaskFormField, isTaskFormBlocking } from '@/features/run-execution/runFormAnswers';
+import type { ChecklistFormField, ChecklistItem, ChecklistItemContent, ChecklistRun } from '@/types/checklist';
 
 const hasSubItems = (item: ChecklistItem): boolean =>
   item.contents?.some((content) => content.type === 'subItems' && (content.subItems?.length ?? 0) > 0) ?? false;
 
+const carryAnswer = (field: ChecklistFormField, guestTask: ChecklistItem): ChecklistFormField => {
+  const guestField = findTaskFormField(guestTask, field.id);
+  return guestField?.kind === field.kind && guestField.answer !== undefined ? { ...field, answer: guestField.answer } : field;
+};
+
+const carryContent = (content: ChecklistItemContent, contentIndex: number, guestTask: ChecklistItem): ChecklistItemContent => {
+  if (content.type === 'form') {
+    return { ...content, fields: content.fields?.map((field) => carryAnswer(field, guestTask)) };
+  }
+  if (content.type !== 'subItems') return content;
+  return {
+    ...content,
+    subItems: content.subItems?.map((subItem, subItemIndex) => ({
+      ...subItem,
+      isCompleted:
+        findRunSubItem(guestTask, { contentIndex, subItemId: subItem.id, subItemIndex })?.isCompleted === true,
+    })),
+  };
+};
+
 const carryTaskProgress = (task: ChecklistItem, guestTask: ChecklistItem | undefined): ChecklistItem => {
   if (!guestTask) return task;
 
-  const contents = task.contents?.map((content, contentIndex) =>
-    content.type === 'subItems'
-      ? {
-          ...content,
-          subItems: content.subItems?.map((subItem, subItemIndex) => ({
-            ...subItem,
-            isCompleted:
-              findRunSubItem(guestTask, { contentIndex, subItemId: subItem.id, subItemIndex })?.isCompleted === true,
-          })),
-        }
-      : content,
-  );
   const carried: ChecklistItem = {
     ...task,
-    contents,
-    isCompleted: guestTask.isCompleted === true,
+    contents: task.contents?.map((content, contentIndex) => carryContent(content, contentIndex, guestTask)),
     ...(guestTask.notes ? { notes: guestTask.notes } : {}),
   };
-  return hasSubItems(carried) ? { ...carried, isCompleted: areItemSubItemsCompleted(carried) } : carried;
+  const done = hasSubItems(carried) ? areItemSubItemsCompleted(carried) : guestTask.isCompleted === true;
+  return { ...carried, isCompleted: done && !isTaskFormBlocking(carried) };
 };
 
 export const carryGuestRunProgress = (target: ChecklistRun, guest: ChecklistRun): ChecklistRun => {
