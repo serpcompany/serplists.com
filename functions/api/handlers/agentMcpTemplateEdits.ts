@@ -1,5 +1,12 @@
-import { isSubTaskRecord, type SectionRecord, type TaskRecord } from "../../../src/lib/schemas/jsonRecords";
-import { isSubTasksBlock } from "../../../src/lib/schemas/storedSections";
+import {
+  isFormFieldRecord,
+  isRecord,
+  isSubTaskRecord,
+  type FormFieldRecord,
+  type SectionRecord,
+  type TaskRecord,
+} from "../../../src/lib/schemas/jsonRecords";
+import { isFormBlock, isSubTasksBlock } from "../../../src/lib/schemas/storedSections";
 import { getId } from "../utils/template-identities";
 import { findSection, findTask, sectionAt, tasksOf } from "./agentMcpPages";
 import type { TemplateOperationArgs } from "./agentMcpTemplateTools";
@@ -9,18 +16,34 @@ export type TemplateEdit = { sections: SectionRecord[]; sectionId?: string; task
 
 const newEditorId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 
-function withTaskIds(task: TaskRecord): TaskRecord & { id: string } {
-  const withSubTaskIds = (content: unknown) => (isSubTasksBlock(content) && Array.isArray(content.subItems)
-    ? {
+const withOptionIds = (options: unknown[]) => options.map((option: unknown) =>
+  (isRecord(option) && !getId(option) ? { ...option, id: newEditorId("option") } : option));
+
+const withFieldId = (field: FormFieldRecord) => ({
+  ...field,
+  id: getId(field) ?? newEditorId("field"),
+  ...(Array.isArray(field.options) ? { options: withOptionIds(field.options) } : {}),
+});
+
+function withContentIds(content: unknown): unknown {
+  if (isFormBlock(content) && Array.isArray(content.fields)) {
+    return { ...content, fields: content.fields.map((field: unknown) => (isFormFieldRecord(field) ? withFieldId(field) : field)) };
+  }
+  if (isSubTasksBlock(content) && Array.isArray(content.subItems)) {
+    return {
       ...content,
       subItems: content.subItems.map((subItem: unknown) =>
         (isSubTaskRecord(subItem) && !getId(subItem) ? { ...subItem, id: newEditorId("subitem") } : subItem)),
-    }
-    : content);
+    };
+  }
+  return content;
+}
+
+function withTaskIds(task: TaskRecord): TaskRecord & { id: string } {
   return {
     ...task,
     id: getId(task) ?? newEditorId("item"),
-    ...(Array.isArray(task.contents) ? { contents: task.contents.map(withSubTaskIds) } : {}),
+    ...(Array.isArray(task.contents) ? { contents: task.contents.map(withContentIds) } : {}),
   };
 }
 

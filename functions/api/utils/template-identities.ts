@@ -1,16 +1,25 @@
 import {
+  formOptionRecordsIn,
   isChecklistNodeRecord,
+  isFormFieldRecord,
   isRecord,
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
   taskRecordsIn,
   type ChecklistNodeRecord,
+  type FormFieldRecord,
   type SectionRecord,
-  type SubTaskRecord,
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
-import { getTaskSubTasks, isSectionedList, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
+import { withFormOptionIds } from '../../../src/lib/schemas/formFields';
+import {
+  getTaskFormFields,
+  getTaskSubTasks,
+  isFormBlock,
+  isSectionedList,
+  isSubTasksBlock,
+} from '../../../src/lib/schemas/storedSections';
 import { normalizeSectionsPayload } from './payloads';
 import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 
@@ -36,6 +45,7 @@ export function normalizeLegacySectionShape(values: unknown[]): SectionRecord[] 
 }
 
 export const getSubItems = getTaskSubTasks;
+export const getFormFields = getTaskFormFields;
 
 export const mapSubTasksBlocks = (contents: unknown[], mapSubItems: (subItems: unknown[]) => unknown[]): unknown[] =>
   contents.map((content) => (
@@ -44,10 +54,24 @@ export const mapSubTasksBlocks = (contents: unknown[], mapSubItems: (subItems: u
       : content
   ));
 
+export const mapFormBlocks = (contents: unknown[], mapFields: (fields: unknown[]) => unknown[]): unknown[] =>
+  contents.map((content) => (
+    isFormBlock(content) && Array.isArray(content.fields)
+      ? { ...content, fields: mapFields(content.fields) }
+      : content
+  ));
+
+const withOptionIds = (field: FormFieldRecord): FormFieldRecord =>
+  Array.isArray(field.options) ? { ...field, options: withFormOptionIds(formOptionRecordsIn(field.options)) } : field;
+
+const optionsNeedIds = (field: FormFieldRecord): boolean =>
+  Array.isArray(field.options) && JSON.stringify(withOptionIds(field).options) !== JSON.stringify(field.options);
+
 export function validateStableTemplateIdentities(sections: unknown[]): string | null {
   const sectionIds = new Set<string>();
   const itemIds = new Set<string>();
   const subItemIds = new Set<string>();
+  const fieldIds = new Set<string>();
 
   for (const section of sections) {
     const sectionId = getId(section);
@@ -66,6 +90,13 @@ export function validateStableTemplateIdentities(sections: unknown[]): string | 
         if (!subItemId) return `Every sub-item in item ${itemId} requires a stable id`;
         if (subItemIds.has(subItemId)) return `Duplicate sub-item id: ${subItemId}`;
         subItemIds.add(subItemId);
+      }
+
+      for (const field of isTaskRecord(item) ? getFormFields(item) : []) {
+        const fieldId = getId(field);
+        if (!fieldId) return `Every form field in item ${itemId} requires a stable id`;
+        if (fieldIds.has(fieldId)) return `Duplicate form field id: ${fieldId}`;
+        fieldIds.add(fieldId);
       }
     }
   }
@@ -138,9 +169,9 @@ function matchSiblingIdentities<Sibling extends ChecklistNodeRecord>(
 const previousAt = <Sibling>(previous: Sibling[], previousIndex: number | null): Sibling | undefined =>
   previousIndex === null ? undefined : previous[previousIndex];
 
-function matchedIdAt(matches: SiblingMatch<SubTaskRecord>[], index: number): string {
+function matchedIdAt(matches: SiblingMatch<ChecklistNodeRecord>[], index: number, kind: 'sub-item' | 'form field'): string {
   const match = matches[index];
-  if (!match) throw new Error(`No id was matched for sub-item ${index + 1}`);
+  if (!match) throw new Error(`No id was matched for ${kind} ${index + 1}`);
   return match.id;
 }
 
@@ -186,13 +217,26 @@ function assignIdentities(sections: SectionRecord[], previousSections: SectionRe
         let subItemSequence = 0;
         const assignSubItems = (subItems: unknown[]) => subItems.filter(isSubTaskRecord).map((subItem) => ({
           ...subItem,
-          id: matchedIdAt(subItemMatches, subItemSequence++),
+          id: matchedIdAt(subItemMatches, subItemSequence++, 'sub-item'),
+        }));
+        const fieldMatches = matchSiblingIdentities(
+          getFormFields(item),
+          previousItemRaw ? getFormFields(previousItemRaw) : [],
+          previousItemNormalized ? getFormFields(previousItemNormalized) : [],
+          (index) => `legacy-field-${sectionIndex + 1}-${itemIndex + 1}-${index + 1}`,
+        );
+        let fieldSequence = 0;
+        const assignFields = (fields: unknown[]) => fields.filter(isFormFieldRecord).map((field) => withOptionIds({
+          ...field,
+          id: matchedIdAt(fieldMatches, fieldSequence++, 'form field'),
         }));
 
         return {
           ...item,
           id: itemId,
-          ...(Array.isArray(item.contents) ? { contents: mapSubTasksBlocks(item.contents, assignSubItems) } : {}),
+          ...(Array.isArray(item.contents)
+            ? { contents: mapFormBlocks(mapSubTasksBlocks(item.contents, assignSubItems), assignFields) }
+            : {}),
         };
       }),
     };
@@ -211,17 +255,28 @@ export function assignMissingStableTemplateIdentities(
 
 const hasMissingIdentity = (sections: unknown[]): boolean => sections.filter(isSectionRecord).some((section) =>
   !getId(section) || taskRecordsIn(section.items).some((item) =>
-    !getId(item) || getSubItems(item).some((subItem) => !getId(subItem))));
+    !getId(item)
+    || getSubItems(item).some((subItem) => !getId(subItem))
+    || getFormFields(item).some((field) => !getId(field) || optionsNeedIds(field))));
 
 function withItemIds(item: TaskRecord, stableItem: TaskRecord): TaskRecord {
   const subItemIds = getSubItems(stableItem).map((subItem) => subItem.id);
   let subItemIndex = 0;
   const withIds = (subItems: unknown[]) => subItems.map((subItem) =>
     isRecord(subItem) ? { ...subItem, id: subItemIds[subItemIndex++] } : subItem);
+  const stableFields = getFormFields(stableItem);
+  let fieldIndex = 0;
+  const withFieldIds = (fields: unknown[]) => fields.map((field) => {
+    if (!isFormFieldRecord(field)) return field;
+    const stable = stableFields[fieldIndex++];
+    return stable ? { ...field, id: stable.id, ...(Array.isArray(field.options) ? { options: stable.options } : {}) } : field;
+  });
   return {
     ...item,
     id: stableItem.id,
-    ...(Array.isArray(item.contents) ? { contents: mapSubTasksBlocks(item.contents, withIds) } : {}),
+    ...(Array.isArray(item.contents)
+      ? { contents: mapFormBlocks(mapSubTasksBlocks(item.contents, withIds), withFieldIds) }
+      : {}),
   };
 }
 

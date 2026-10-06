@@ -64,6 +64,7 @@ export const isSectionRecord = (value: unknown): value is SectionRecord => isRec
 export const isTaskRecord = (value: unknown): value is TaskRecord => isRecord(value);
 export const isContentRecord = (value: unknown): value is ContentRecord => isRecord(value);
 export const isSubTaskRecord = (value: unknown): value is SubTaskRecord => isRecord(value);
+export const isFormFieldRecord = (value: unknown): value is FormFieldRecord => isRecord(value);
 
 export const sectionRecordsIn = (value: unknown): SectionRecord[] => recordsIn(value);
 export const taskRecordsIn = (value: unknown): TaskRecord[] => recordsIn(value);
