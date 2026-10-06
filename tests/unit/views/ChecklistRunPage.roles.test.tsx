@@ -31,6 +31,7 @@ describe('ChecklistRunPage Organization roles', () => {
     workspaceRoles.roles = {};
     const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
 
+    expect(html).toContain('View only');
     expect(html).not.toContain('Mark Complete');
   });
 
@@ -51,47 +52,5 @@ describe('ChecklistRunPage Organization roles', () => {
 
     expect(html).toContain('Save notes');
     expect(html).not.toContain('View only');
-  });
-
-  const renderOrganizationRunWhileTheTeamsRequestFailed = async () => {
-    workspaceRoles.roles = {};
-    workspaceRoles.teamsUnavailable = true;
-    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
-    workspaceRoles.teamsUnavailable = false;
-    return html;
-  };
-
-  it('says the Organizations could not load, with Retry, instead of a silent View only, since the role is unknown rather than viewer', async () => {
-    const html = await renderOrganizationRunWhileTheTeamsRequestFailed();
-
-    expect(html).toContain('Couldn&#x27;t load your Organizations');
-    expect(html).toMatch(/>Retry</);
-    expect(html).not.toContain('Continue in Personal');
-    expect(html).not.toContain('View only');
-  });
-
-  it('offers no action that could fail until the role is known', async () => {
-    const html = await renderOrganizationRunWhileTheTeamsRequestFailed();
-
-    expect(html).not.toContain('Mark Complete');
-    expect(html).not.toContain('Rename');
-  });
-
-  it('keeps View only, with no error, when the loaded list does not include the Organization', async () => {
-    workspaceRoles.roles = {};
-    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
-
-    expect(html).toContain('View only');
-    expect(html).not.toContain('Couldn&#x27;t load your Organizations');
-  });
-
-  it('shows no error on a Personal run when the teams request failed', async () => {
-    workspaceRoles.roles = {};
-    workspaceRoles.teamsUnavailable = true;
-    const html = await renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1' });
-    workspaceRoles.teamsUnavailable = false;
-
-    expect(html).not.toContain('Couldn&#x27;t load your Organizations');
-    expect(html).toContain('Mark Complete');
   });
 });

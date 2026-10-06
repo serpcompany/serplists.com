@@ -141,22 +141,13 @@ describe('WorkspaceProvider after the teams request failed, which must not read 
     expect(workspace.teamsUnavailable).toBe(true);
   });
 
-  it("calls an Organization's role unavailable, not gone, when the list failed", () => {
-    const queryClient = createTestQueryClient();
-    seedQueryError(queryClient, teamsKey);
-    const workspace = workspaceFromOneRender(queryClient);
-
-    expect(workspace.isRoleUnavailable('acme')).toBe(true);
-    expect(workspace.isRoleUnavailable(undefined)).toBe(false);
-  });
-
   it('keeps the last loaded list after a failed refresh, where a missing Organization means no role', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, teamsKey, [joinedTeam]);
     const workspace = workspaceFromOneRender(queryClient);
 
     expect(workspace.teamsUnavailable).toBe(false);
-    expect(workspace.isRoleUnavailable('team-1')).toBe(false);
-    expect(workspace.isRoleUnavailable('acme')).toBe(false);
+    expect(workspace.getPermissions('team-1').canEditTemplates).toBe(true);
+    expect(workspace.getPermissions('acme').canRun).toBe(false);
   });
 });

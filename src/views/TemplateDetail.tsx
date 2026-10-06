@@ -34,7 +34,6 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
-import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { buildCopiedTemplatePath, followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
@@ -81,8 +80,7 @@ const TemplateDetail = () => {
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const {
-    activeTeamId, canEditTemplates, consoleContext, getPermissions, isRoleUnavailable, isTeamWorkspace, retryWorkspace,
-    teams, workspaceStatus,
+    activeTeamId, canEditTemplates, consoleContext, getPermissions, isTeamWorkspace, teams, workspaceStatus,
   } = useWorkspace();
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -146,8 +144,6 @@ const TemplateDetail = () => {
     template: displayTemplate ?? { isPublic: false, userId: '' },
     userId: user?.id,
   });
-  const startRunRoleUnavailable = Boolean(displayTemplate && !displayTemplate.isPublic) &&
-    isRoleUnavailable(displayTemplate?.teamId);
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
   const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
   const historyEntries = buildTemplateHistoryTimeline(history?.data, historyLimitFor(Boolean(history?.showingAll)));
@@ -376,11 +372,6 @@ const TemplateDetail = () => {
           { href: buildConsoleTemplatesPath(templateContext), label: 'My Templates' },
           { label: displayTemplate.title },
         ]}
-        notice={
-          startRunRoleUnavailable ? (
-            <WorkspaceErrorNotice id="template-workspace-error" message="Start Run waits until they load. Check your connection and try again." onRetry={retryWorkspace} />
-          ) : undefined
-        }
         icon={<TypeIcon />}
         title={displayTemplate.title}
         description={

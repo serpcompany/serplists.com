@@ -1550,9 +1550,6 @@ existing content, invent nothing):
     "View runs" (signed in), "Start Run", and "Template actions" (roles that can edit). Beside
     it (under it on phones),
     the stats panel: "Total Tasks" and "Sections".
-  - An Organization error notice when the role is unknown ("Start Run waits until they load.
-    Check your connection and try again.", "Retry"); no longer shown, since a private
-    Organization Template opens only at its Organization's URL (TD-82).
   - "Required tools" (only when the Template has tools): the public template page's list,
     above "Template Structure".
   - "Template Structure": the public template page's section cards, always open: numbered
@@ -1786,9 +1783,6 @@ existing content, invent nothing):
     tool (its name as a link that opens the tool's site in a new tab, the site's host, and a
     "Required" or "Optional" badge), two columns from `sm`. They are the source Template's
     current tools, not a copy the Run keeps. The shared run page does not show them.
-  - An Organization error notice when the role is unknown ("This run's actions wait until they
-    load. Check your connection and try again.", "Retry"); no longer shown, since a Run opens
-    only at its own context's URL (TD-82).
   - Below `xl`: a progress block ("N% complete", "X of Y tasks finished", "Task N of M",
     "Tasks" → [Run tasks sheet](#run-tasks-sheet), a progress bar).
   - Task panel (a bordered card): "<section> / Task N of M"; a task checkbox; the task's

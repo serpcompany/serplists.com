@@ -25,7 +25,6 @@ const headerProps = (overrides: Partial<HeaderProps> = {}): HeaderProps => ({
   onStartRename: vi.fn(),
   onStopSharing: vi.fn(async () => ({ kind: 'ok' as const })),
   progress: 66,
-  roleUnavailable: false,
   title: 'Launch',
   titleChanged: true,
   ...overrides,

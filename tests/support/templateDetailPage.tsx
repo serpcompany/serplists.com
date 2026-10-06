@@ -38,7 +38,6 @@ const {
     isWorkspaceLoading: false,
     roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
     teams: [] as TeamSummary[],
-    teamsUnavailable: false,
     workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
 }));
@@ -106,7 +105,7 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
   const { getResourcePermissions } = await import('@/lib/organizationPermissions');
   const { ownerConsoleContext } = await import('@/lib/consoleRoutes');
   const roleImpliedByTheActiveContext = (id: string) =>
-    id === workspaceState.activeTeamId && !workspaceState.teamsUnavailable
+    id === workspaceState.activeTeamId
       ? workspaceState.canEditTemplates ? 'editor' : 'runner'
       : undefined;
   const roleSetByATestOrImpliedByTheActiveContext = (id: string) =>
@@ -116,9 +115,6 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
       ...workspaceState,
       consoleContext: ownerConsoleContext(workspaceState.activeTeamId),
       getPermissions: (teamId?: string) => getResourcePermissions(teamId, roleSetByATestOrImpliedByTheActiveContext),
-      isRoleUnavailable: (teamId?: string) =>
-        teamId ? workspaceState.teamsUnavailable && !(teamId in workspaceState.roles) : false,
-      retryWorkspace: vi.fn(),
     }),
   };
 });
@@ -210,7 +206,6 @@ export function resetTemplateDetailPageMocks() {
   workspaceState.isWorkspaceLoading = false;
   workspaceState.roles = {};
   workspaceState.teams = [];
-  workspaceState.teamsUnavailable = false;
   workspaceState.workspaceStatus = 'ready';
 }
 
