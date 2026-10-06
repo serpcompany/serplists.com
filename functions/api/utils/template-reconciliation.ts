@@ -394,6 +394,10 @@ export function findNonObjectTemplateEntry(sections: unknown[]): string | null {
         const subItemIndex = getArray(subItems).findIndex((subItem) => !isRecord(subItem));
         if (subItemIndex >= 0) return `Sub-task ${subItemIndex + 1} of ${task} must be an object with a title`;
       }
+      for (const content of contents) {
+        const fieldIndex = getArray(isContentRecord(content) ? content.fields : undefined).findIndex((field) => !isRecord(field));
+        if (fieldIndex >= 0) return `Form field ${fieldIndex + 1} of ${task} must be an object with a label and a kind`;
+      }
     }
   }
   return null;

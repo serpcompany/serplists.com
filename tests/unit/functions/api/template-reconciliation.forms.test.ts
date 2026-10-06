@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calculateRunProgress,
+  findNonObjectTemplateEntry,
   findOpenRunTasks,
   reconcileRunSections,
   resetRunCompletionState,
@@ -139,5 +140,12 @@ describe('form answers in other run state', () => {
     ]);
     expect(calculateRunProgress(run)).toBe(100);
     expect(findOpenRunTasks(run)).toEqual({ total: 1, open: [] });
+  });
+});
+
+describe('a Template import with a form field that is not an object', () => {
+  it('names the field and its task', () => {
+    expect(findNonObjectTemplateEntry(sections(formTask('t1', [field('a')]), { id: 't2', title: 'T', contents: [{ type: 'form', fields: [field('b'), 'x'] }] })))
+      .toBe('Form field 2 of task 2 in section 1 must be an object with a label and a kind');
   });
 });
