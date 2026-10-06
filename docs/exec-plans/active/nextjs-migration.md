@@ -1,7 +1,7 @@
 # Next.js migration
 
 - **Status:** active
-- **Last updated:** 2026-09-30
+- **Last updated:** 2026-10-06
 - **Goal:** Replace the Vite single-page app with a Next.js app on the stack approved for
   zenbujapanese.com (`apps/web` in the zenbujapanese monorepo), with full functionality and
   normal web-app behavior, and restyle the whole app after aiuxplayground.com using default
@@ -128,6 +128,24 @@ Each of these needs the user's approval, or happens with the domain move:
   check:prod:d1-schema`, with `CLOUDFLARE_ACCOUNT_ID` set to SERP's account ([database
   operations](../../design-docs/database-operations.md#applying-migrations)). Check staging's
   database the same way (`pnpm run verify:staging`) before the first Workers deploy there.
+- **Production D1 migrations 0028 to 0032** (each a human-approved step, applied to staging on
+  2026-10-05 and 2026-10-06): `0028` and `0029` (the public handle registry,
+  [public handles plan](../completed/public-handles.md)), `0030` (Organization avatar and
+  description, [Organization public profiles](../completed/organization-profiles.md)), `0031`
+  (Required tools, [required tools plan](../completed/required-tools.md)) and `0032` (sitemap
+  triggers for Organizations, [profiles directory](../completed/profiles-directory.md)).
+  - Before `0028`, check production's usernames and Organization slugs for collisions and values
+    outside the handle rule, read-only. `0028`'s backfill stops on a collision, and nothing is
+    renamed automatically. `scripts/check-public-handles.ts` reads only local D1 and staging
+    (`check:public-handles:local`, `check:public-handles:staging`), so it needs a production
+    variant first ([database operations](../../design-docs/database-operations.md)).
+  - Back up and note a Time Travel bookmark, then apply them with `0026` and `0027` as above:
+    `pnpm run db:migrate:d1:prod` applies every pending migration in order, and
+    `check:prod:d1-schema` then requires the registry, the new columns and the trigger text.
+  - All are additive, and code that predates them never names the new table or columns, so
+    they go in before the deploy that ships the code, which the pending-migration gate requires
+    anyway. Two follow-ups wait a release after that deploy: TD-15 and TD-84
+    ([tech debt tracker](../tech-debt-tracker.md)).
 - **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../SECURITY.md#rate-limits))
   matches requests by host and path, so it should keep applying once `serplists.com` points at
   the Worker; confirm it after the domain move.

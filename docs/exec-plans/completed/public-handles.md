@@ -1,7 +1,7 @@
 # Public handles
 
-- **Status:** active
-- **Last updated:** 2026-10-05
+- **Status:** completed
+- **Last updated:** 2026-10-06
 - **Goal:** Users and Organizations share one case-insensitive namespace of public handles, so
   `/profile/:handle` can later serve either without choosing by lookup order (issue #233; it
   unblocks #232, #207 and #237).
@@ -17,12 +17,15 @@
   6), Time Travel bookmark `00000ab2-00000000-000050fb-bd7954aae6b6ac1af0b53fa7ab762d76`
   noted, `verify:staging` passes, 4 User and 2 Organization handles registered, and the
   staging deploy ran.
-- [ ] PR 2: the rule on the inputs: usernames also accept `-`, and Organization slugs accept the
-  full rule (uppercase, `_` and `.`) with 30 characters at most instead of 120. Migration
-  `0029` gives the sitemap's user triggers `-` too.
-- [ ] Apply `0029` to staging (owner go-ahead at that step).
-- [ ] Production: the collision check, a backup, `0028` and `0029`, each after a separate
-  owner go-ahead.
+- [x] PR 2 (#281): the rule on the inputs: usernames also accept `-`, and Organization slugs
+  accept the full rule (uppercase, `_` and `.`) with 30 characters at most instead of 120.
+  Migration `0029` gives the sitemap's user triggers `-` too.
+- [x] `0029` applied to staging after #281 merged (2026-10-05, owner go-ahead): Time Travel
+  bookmark `00000ab7-00000000-000050fb-e0e50e1906c86c7d1701cdbb476e9b7c` noted first, and
+  `verify:staging` passes.
+- Production moved to the launch steps in the [Next.js migration plan](../active/nextjs-migration.md#left-for-launch): a production variant of the
+  read-only collision check, a backup, then `0028` and `0029` with the later migrations, each
+  after the owner's go-ahead.
 
 ## Decision log
 
