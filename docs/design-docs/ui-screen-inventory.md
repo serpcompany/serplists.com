@@ -304,11 +304,12 @@ existing content, invent nothing):
     (primary) signed out, or the account menu (avatar dropdown) signed in. Below `md` a menu
     button opens the same menus as labelled groups, the theme switch and the account actions
     in a Sheet.
-  - Footer: brand and the existing blurb, then the columns "Templates" (the header's
-    Templates menu: Template Library and Categories), "Company" (About) and "Support"
-    (Contact).
-  - Not copied: the search button, the Newsletter button, the feedback widget, social links,
-    the copyright line.
+  - Footer: brand, the existing blurb and a row of social icon links (YouTube, Facebook,
+    LinkedIn, GitHub, Medium, Instagram, X, Reddit; added 2026-10-06, #287), then the columns
+    "Templates" (the header's Templates menu: Template Library and Categories), "Company"
+    (About) and "Support" (Contact).
+  - Not copied: the search button, the Newsletter button, the feedback widget, the copyright
+    line.
 - **REFERENCE IMAGES:** home-1.png, home-2.png, home-mobile.png (header); home-8.png,
   home-9.png (footer).
 - **STRUCTURE (built):**
@@ -316,13 +317,13 @@ existing content, invent nothing):
     bottom border). Header zones: brand left; navigation menu center (2 dropdowns and a link);
     actions right.
     Phone: menu button, brand, primary button or avatar. Middle: the page. Bottom: footer
-    band: brand column (brand link, blurb), link columns (heading, links).
+    band: brand column (brand link, blurb, social icon links), link columns (heading, links).
   - COMPONENT TYPES: navigation menu trigger (a dropdown with titled links and their
     descriptions; active state); navigation menu link (active state); icon button; ghost
-    button; primary button; avatar dropdown trigger; sheet; footer column.
+    button; primary button; avatar dropdown trigger; sheet; footer column; icon link.
   - DATA FIELDS: brand name; navigation item (label, href or menu links, active); menu link
     (label, description, href, active); user initial; blurb; footer column title; footer link
-    (label, href).
+    (label, href); social link (network, label, href).
 - **PROOF PASS:** Pass (step 1). Checked on the header and footer of every step 1
   screenshot, and on public-menu-mobile-light-signed-out.png, against home-1.png,
   home-2.png, home-mobile.png, home-8.png and home-9.png. Zones, order and component types
@@ -356,6 +357,14 @@ existing content, invent nothing):
     `tests/unit/components/publicSiteLinks.test.ts`.
   - The footer's column titles are h2s since step 2b, so a page whose last heading is its h1
     (My Runs, a sign-in page on a phone) never skips a level into them.
+  - The social links (`publicSocialLinks` in `src/components/layout/publicSiteLinks.ts`) are a
+    list named "SERP Lists on social media" of ghost icon buttons (36px), each named "SERP Lists
+    on <network>" and opening in a new tab (`rel="noopener noreferrer"`). The logos are Simple
+    Icons paths (CC0) in `src/components/layout/socialNetworkIcons.ts`, filled with the text
+    color: Lucide has no Medium, Reddit or X logo and has deprecated the brand icons it has,
+    and Simple Icons dropped LinkedIn's, so its path comes from Simple Icons 9.21.0. They are
+    not in the reference footer's place (two icon links beside the brand row) but under the
+    blurb in the brand column, which keeps the columns' layout on phones.
 
 ### Signed-in console shell
 

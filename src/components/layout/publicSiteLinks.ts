@@ -1,3 +1,4 @@
+import type { SocialNetwork } from '@/components/layout/socialNetworkIcons';
 import { FEATURES } from '@/data/publicFeatures';
 import { CATEGORY_INDEX_PAGE_TEXT, TEMPLATE_LIBRARY_PAGE_TEXT } from '@/lib/publicPageMeta';
 import {
@@ -23,6 +24,8 @@ export type PublicHeaderItem =
   | { kind: 'menu'; label: string; links: readonly PublicSiteLink[]; sectionPath?: string };
 
 export type PublicFooterGroup = { title: string; items: readonly PublicSiteLink[] };
+
+export type PublicSocialLink = { href: string; label: string; network: SocialNetwork };
 
 const templateLinks: readonly PublicSiteLink[] = [
   {
@@ -55,4 +58,15 @@ export const publicFooterGroups: readonly PublicFooterGroup[] = [
   { title: 'Templates', items: [...templateLinks, profilesLink] },
   { title: 'Company', items: [{ href: buildAboutPath(), label: 'About' }] },
   { title: 'Support', items: [{ href: buildContactPath(), label: 'Contact' }] },
+];
+
+export const publicSocialLinks: readonly PublicSocialLink[] = [
+  { href: 'https://www.youtube.com/@serplists', label: 'YouTube', network: 'youtube' },
+  { href: 'https://www.facebook.com/serplists', label: 'Facebook', network: 'facebook' },
+  { href: 'https://www.linkedin.com/company/serplists', label: 'LinkedIn', network: 'linkedin' },
+  { href: 'https://github.com/serplists', label: 'GitHub', network: 'github' },
+  { href: 'https://medium.com/@serplists', label: 'Medium', network: 'medium' },
+  { href: 'https://www.instagram.com/serplists/', label: 'Instagram', network: 'instagram' },
+  { href: 'https://x.com/serplists', label: 'X', network: 'x' },
+  { href: 'https://www.reddit.com/r/serplists/', label: 'Reddit', network: 'reddit' },
 ];
