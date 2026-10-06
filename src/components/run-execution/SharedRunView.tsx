@@ -13,6 +13,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { isTaskFormBlocking } from '@/features/run-execution/runFormAnswers';
 import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { buildPublicTemplatesPath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
@@ -116,54 +117,64 @@ export function SharedRunView({
                   <Badge variant="secondary">{completed === total ? 'Complete' : `${completed}/${total}`}</Badge>
                 </div>
                 <div className="flex flex-col gap-3 p-4">
-                  {section.items.map((item, itemIndex) => (
-                    <div key={item.id} className="rounded-lg border">
-                      <div className="flex items-start gap-3 p-4">
-                        <Checkbox
-                          aria-label={getTaskCheckboxLabel(item.title, itemIndex + 1)}
-                          checked={item.isCompleted}
-                          className="mt-0.5"
-                          disabled={isRunCompleted}
-                          onCheckedChange={(checked) => onToggleTask(item.id, checked === true)}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <h3
-                            className={cn(
-                              'font-medium wrap-break-word',
-                              item.isCompleted && 'text-muted-foreground line-through',
-                            )}
-                          >
-                            {item.title}
-                          </h3>
-                          {item.description ? (
-                            <p className="mt-2 text-sm whitespace-pre-line text-muted-foreground">
-                              {item.description}
-                            </p>
-                          ) : null}
+                  {section.items.map((item, itemIndex) => {
+                    const waitsForForm = !isRunCompleted && item.isCompleted !== true && isTaskFormBlocking(item);
+                    const formNoteId = `shared-form-note-${index}-${itemIndex}`;
+                    return (
+                      <div key={item.id} className="rounded-lg border">
+                        <div className="flex items-start gap-3 p-4">
+                          <Checkbox
+                            aria-describedby={waitsForForm ? formNoteId : undefined}
+                            aria-label={getTaskCheckboxLabel(item.title, itemIndex + 1)}
+                            checked={item.isCompleted}
+                            className="mt-0.5"
+                            disabled={isRunCompleted || waitsForForm}
+                            onCheckedChange={(checked) => onToggleTask(item.id, checked === true)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h3
+                              className={cn(
+                                'font-medium wrap-break-word',
+                                item.isCompleted && 'text-muted-foreground line-through',
+                              )}
+                            >
+                              {item.title}
+                            </h3>
+                            {item.description ? (
+                              <p className="mt-2 text-sm whitespace-pre-line text-muted-foreground">
+                                {item.description}
+                              </p>
+                            ) : null}
+                            {waitsForForm ? (
+                              <p className="mt-2 text-sm text-muted-foreground" id={formNoteId}>
+                                This task can be ticked once its form is answered.
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      {item.contents && item.contents.length > 0 ? (
+                        {item.contents && item.contents.length > 0 ? (
+                          <div className="border-t p-4">
+                            <ContentRenderer
+                              contents={item.contents}
+                              disabled={isRunCompleted}
+                              onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
+                                onToggleSubItem(item.id, contentIndex, subItemIndex, isCompleted)
+                              }
+                            />
+                          </div>
+                        ) : null}
                         <div className="border-t p-4">
-                          <ContentRenderer
-                            contents={item.contents}
-                            disabled={isRunCompleted}
-                            onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
-                              onToggleSubItem(item.id, contentIndex, subItemIndex, isCompleted)
-                            }
+                          <RunNotesEditor
+                            draft={noteDrafts[item.id]}
+                            label="Task notes"
+                            onDraftChange={(notes) => onNoteDraftChange(item.id, notes)}
+                            onSave={(notes) => onSaveNotes(item.id, notes)}
+                            savedValue={item.notes}
                           />
                         </div>
-                      ) : null}
-                      <div className="border-t p-4">
-                        <RunNotesEditor
-                          draft={noteDrafts[item.id]}
-                          label="Task notes"
-                          onDraftChange={(notes) => onNoteDraftChange(item.id, notes)}
-                          onSave={(notes) => onSaveNotes(item.id, notes)}
-                          savedValue={item.notes}
-                        />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </Card>
