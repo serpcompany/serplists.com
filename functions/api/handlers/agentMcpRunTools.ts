@@ -4,14 +4,17 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
   checkActiveRunCapacity,
+  checkReopenCapacity,
   countActiveRuns,
-  isReopening,
+  findReopenLimitHitAfterMiss,
+  reopenCapacitySql,
   runInsertStatements,
+  type ActiveRunLimitHit,
   type RunOwnerContext,
 } from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
 import type { RunUpdates } from "../utils/checklist-runs";
-import { insertRowWhere } from "../utils/guarded-insert";
+import { allConditions, insertRowWhere } from "../utils/guarded-insert";
 import { batchChanges } from "../utils/guarded-writes";
 import { log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
@@ -92,14 +95,16 @@ export async function startRun(
   });
   const batchResults = await db.batch(runInsertStatements(db, run, auditEvent, owner, limit));
   if (limit !== null && batchChanges(batchResults[0]) === 0) {
-    throw new ToolError("Active run limit reached", "limit_reached", { limit, current: await countActiveRuns(env, owner) });
+    throw activeRunLimitError({ limit, current: await countActiveRuns(env, owner) });
   }
   return result;
 }
 
+const activeRunLimitError = (hit: ActiveRunLimitHit) => new ToolError("Active run limit reached", "limit_reached", { ...hit });
+
 async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<number | null> {
   const { limit, hit } = await checkActiveRunCapacity(env, owner, owner.userId);
-  if (hit) throw new ToolError("Active run limit reached", "limit_reached", { ...hit });
+  if (hit) throw activeRunLimitError(hit);
   return limit;
 }
 
@@ -163,9 +168,10 @@ export async function updateRun(
   if (args.operation === "set_run_status" && args.status === "completed" && existing.status !== "completed") {
     assertRunCanBeCompleted(sections);
   }
-  if (args.operation === "set_run_status" && isReopening(existing.status, args.status)) {
-    await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
-  }
+  const reopen = args.operation === "set_run_status"
+    ? await checkReopenCapacity(env, existing, args.status, identity.userId)
+    : null;
+  if (reopen?.hit) throw activeRunLimitError(reopen.hit);
 
   const now = new Date().toISOString();
   const updates: RunUpdates = { revision: currentRevision + 1, updated_at: now };
@@ -210,7 +216,7 @@ export async function updateRun(
       db,
       schema.auditEvents,
       auditEvent,
-      runRevisionExistsSql(args.runId, identity.userId, currentRevision),
+      allConditions(runRevisionExistsSql(args.runId, identity.userId, currentRevision), reopenCapacitySql(reopen)),
     ),
     db.update(schema.checklistRuns)
       .set(updates)
@@ -226,6 +232,8 @@ export async function updateRun(
   const auditChanges = batchChanges(batchResults[0]);
   const updateChanges = batchChanges(batchResults[1]);
   if (auditChanges === 0 && updateChanges === 0) {
+    const hit = await findReopenLimitHitAfterMiss(env, reopen);
+    if (hit) throw activeRunLimitError(hit);
     throw new ToolError("Run changed while it was being updated; fetch it again", "edit_conflict");
   }
   if (auditChanges !== 1 || updateChanges !== 1) {

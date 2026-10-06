@@ -6,15 +6,14 @@ import { readJsonPayload } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
 import {
-  auditedRunUpdate,
   getRunSubject,
   serializeSharedChecklistRun,
   sharedChecklistRunSelect,
+  writeAuditedRunUpdate,
   type RunUpdates,
 } from '../utils/checklist-runs';
-import { batchWriteMissed } from '../utils/guarded-writes';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
-import { reopenLimitResponse } from '../utils/active-run-limit';
+import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
 import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
@@ -69,7 +68,8 @@ export async function handleSharedChecklist(
     });
   }
 
-  const reopenRefusal = await reopenLimitResponse(env, existingSharedRun, status, userId);
+  const reopen = await checkReopenCapacity(env, existingSharedRun, status, userId);
+  const reopenRefusal = reopenLimitResponse(reopen);
   if (reopenRefusal) return reopenRefusal;
 
   const storedSections = readStoredRunSections(existingSharedRun.items);
@@ -130,19 +130,15 @@ export async function handleSharedChecklist(
     request,
     createdAt: now,
   });
-  const batchResults = await db.batch(auditedRunUpdate(
-    db,
-    existingSharedRun.id,
-    and(eq(checklistRuns.revision, currentRevision), activeShare),
+  const missed = await writeAuditedRunUpdate(env, db, {
+    runId: existingSharedRun.id,
+    guard: and(eq(checklistRuns.revision, currentRevision), activeShare),
+    reopen,
     updates,
     auditEvent,
-  ));
-
-  if (batchWriteMissed(batchResults[1])) {
-    return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
-      code: 'edit_conflict',
-    });
-  }
+    conflictMessage: 'Checklist run changed while it was being saved. Refresh before saving again.',
+  });
+  if (missed) return missed;
 
   return json({ success: true, revision: currentRevision + 1, progress: updates.progress });
 }

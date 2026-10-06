@@ -218,6 +218,9 @@ repeat an id the template already holds elsewhere.
 
 `start_run` counts active runs first only to give a friendly `limit_reached`; the guarded
 insert enforces the limit ([system overview](system-overview.md#authorization-and-entitlements)).
+`update_run` reopening a completed run with `set_run_status` does the same: its guarded audit
+insert repeats the count, so concurrent reopens cannot pass the Free limit, and a miss while
+the limit is reached fails with `limit_reached`, not `edit_conflict`.
 
 `update_run` inserts its audit row only while the run still has the expected revision, and
 updates the run only when that audit row exists. If one lands without the other, it logs

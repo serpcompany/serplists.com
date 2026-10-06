@@ -16,7 +16,7 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 import { schema } from '@functions/api/db';
 import {
   activeRunsInContext,
-  findActiveRunLimitHit,
+  checkActiveRunCapacity,
   isReopening,
   runInsertStatements,
 } from '@functions/api/utils/active-run-limit';
@@ -39,7 +39,10 @@ describe('isReopening', () => {
   });
 });
 
-describe('findActiveRunLimitHit', () => {
+const capacityHit = async (...args: Parameters<typeof checkActiveRunCapacity>) =>
+  (await checkActiveRunCapacity(...args)).hit;
+
+describe('checkActiveRunCapacity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -51,25 +54,25 @@ describe('findActiveRunLimitHit', () => {
 
   it('reports the limit when a Free Personal context is full', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 3 }]);
-    expect(await findActiveRunLimitHit(env, { userId: 'owner', teamId: null }, 'actor')).toEqual({ limit: 3, current: 3 });
+    expect(await capacityHit(env, { userId: 'owner', teamId: null }, 'actor')).toEqual({ limit: 3, current: 3 });
     expect(getEntitlementsForUser).toHaveBeenCalledWith(env, 'owner');
   });
 
   it('allows one more run below the limit', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 2 }]);
-    expect(await findActiveRunLimitHit(env, { userId: 'owner', teamId: null })).toBeNull();
+    expect(await capacityHit(env, { userId: 'owner', teamId: null })).toBeNull();
   });
 
   it('uses the Organization plan for Organization runs', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 5 }]);
-    expect(await findActiveRunLimitHit(env, { userId: 'owner', teamId: 'org-1' }, 'actor')).toEqual({ limit: 3, current: 5 });
+    expect(await capacityHit(env, { userId: 'owner', teamId: 'org-1' }, 'actor')).toEqual({ limit: 3, current: 5 });
     expect(getEntitlementsForContext).toHaveBeenCalledWith(env, { type: 'team', teamId: 'org-1', userId: 'actor' });
     expect(getEntitlementsForUser).not.toHaveBeenCalled();
   });
 
   it('skips the count on plans without a limit', async () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
-    expect(await findActiveRunLimitHit(env, { userId: 'owner', teamId: null })).toBeNull();
+    expect(await capacityHit(env, { userId: 'owner', teamId: null })).toBeNull();
     expect(dbMocks.db.select).not.toHaveBeenCalled();
   });
 });

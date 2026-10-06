@@ -6,9 +6,8 @@ import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
 import { json, jsonError } from '../utils/response';
 import { readJsonPayload } from '../utils/request-json';
 import { buildAuditEventValues } from '../utils/audit';
-import { auditedRunUpdate, findRunToUpdate, getRunSubject, type RunUpdates } from '../utils/checklist-runs';
-import { batchWriteMissed } from '../utils/guarded-writes';
-import { reopenLimitResponse } from '../utils/active-run-limit';
+import { findRunToUpdate, getRunSubject, writeAuditedRunUpdate, type RunUpdates } from '../utils/checklist-runs';
+import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 
@@ -66,7 +65,8 @@ export async function updateChecklistRun(
     const tooLarge = contentTooLargeResponse('run', nextSections, parseJsonArray(existingRun.items) ?? []);
     if (tooLarge) return tooLarge;
   }
-  const reopenRefusal = await reopenLimitResponse(env, existingRun, status, userId);
+  const reopen = await checkReopenCapacity(env, existingRun, status, userId);
+  const reopenRefusal = reopenLimitResponse(reopen);
   if (reopenRefusal) return reopenRefusal;
 
   const now = new Date().toISOString();
@@ -92,17 +92,19 @@ export async function updateChecklistRun(
     request,
     createdAt: now,
   });
-  const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
-    existingRun.team_id ? eq(checklistRuns.team_id, existingRun.team_id) : eq(checklistRuns.user_id, userId),
-    eq(checklistRuns.revision, currentRevision),
-    isNull(checklistRuns.deleted_at),
-  ), updates, auditEvent));
-
-  if (batchWriteMissed(batchResults[1])) {
-    return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
-      code: 'edit_conflict',
-    });
-  }
+  const missed = await writeAuditedRunUpdate(env, db, {
+    runId: checklistId,
+    guard: and(
+      existingRun.team_id ? eq(checklistRuns.team_id, existingRun.team_id) : eq(checklistRuns.user_id, userId),
+      eq(checklistRuns.revision, currentRevision),
+      isNull(checklistRuns.deleted_at),
+    ),
+    reopen,
+    updates,
+    auditEvent,
+    conflictMessage: 'Checklist run changed while it was being saved. Refresh before saving again.',
+  });
+  if (missed) return missed;
 
   return json({ success: true, revision: currentRevision + 1 });
 }

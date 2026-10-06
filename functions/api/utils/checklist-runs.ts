@@ -1,8 +1,10 @@
 import { and, eq, getTableColumns, isNull, sql, type SQL } from 'drizzle-orm';
 import { schema, type createDb } from '../db';
 import type { Env } from '../types';
+import { reopenCapacitySql, reopenMissLimitResponse, type ReopenCapacity } from './active-run-limit';
 import type { AuditSubject } from './audit';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { batchWriteMissed } from './guarded-writes';
 import { jsonError } from './response';
 import { canUpdateRun, canViewRun } from './run-access';
 import { runSourceTemplateUsableSql } from './template-access';
@@ -128,6 +130,25 @@ export function auditedRunUpdate(
     insertRowWhere(db, auditEvents, auditEvent, rowExistsSql(checklistRuns.id, runId, guard)),
     db.update(checklistRuns).set(updates).where(and(eq(checklistRuns.id, runId), guard)),
   ] as const;
+}
+
+export async function writeAuditedRunUpdate(
+  env: Env,
+  db: ReturnType<typeof createDb>,
+  write: {
+    runId: string;
+    guard: SQL | undefined;
+    reopen: ReopenCapacity | null;
+    updates: Record<string, unknown>;
+    auditEvent: typeof schema.auditEvents.$inferInsert;
+    conflictMessage: string;
+  },
+): Promise<Response | null> {
+  const guard = and(write.guard, reopenCapacitySql(write.reopen));
+  const batchResults = await db.batch(auditedRunUpdate(db, write.runId, guard, write.updates, write.auditEvent));
+  if (!batchWriteMissed(batchResults[1])) return null;
+  return (await reopenMissLimitResponse(env, write.reopen))
+    ?? jsonError(write.conflictMessage, 409, { code: 'edit_conflict' });
 }
 
 export function getRunSubject(run: Pick<RunRow, 'team_id' | 'user_id'>, fallbackUserId: string): AuditSubject {

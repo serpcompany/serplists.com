@@ -164,8 +164,8 @@ JSON fields:
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
 - The Template limit is enforced the same way: create, clone and restore count first for a clear error, then repeat the count inside the insert (`templateCapacityAvailableSql` in `functions/api/utils/template-writes.ts`).
-- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
-- Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status`. Reopens check it only before the write (TD-17).
+- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the write itself with the guarded statements in `functions/api/utils/active-run-limit.ts`: web run create and MCP `start_run` insert only while the count is under the limit, and restore and every reopen repeat the count in their `UPDATE` (`activeRunCapacityAvailableSql`; MCP `update_run` in the guarded audit insert its update depends on). A pre-check count only gives an early, friendly error, and a write that misses while the context is at its limit answers `403 limit_reached` (the MCP tool error `limit_reached`) rather than `edit_conflict`.
+- Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status` (`checkReopenCapacity`).
 
 ## Audit And History
 
