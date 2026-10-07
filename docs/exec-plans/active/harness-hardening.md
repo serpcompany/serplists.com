@@ -243,7 +243,8 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - A coverage test fails on any tracked format neither check reads.
 - 2026-10-01: staging deploys to its Worker (`deploy-staging.yml`) on a push to `staging` that
   passes CI, replacing the disconnected Pages deploy. Staging lives on
-  `https://serp-checklists-preview.serpcompany.workers.dev` until its domain moves.
+  `https://serp-checklists-preview.serpcompany.workers.dev` until its domain moves (it moved to
+  `https://staging.serplists.com` on 2026-10-06).
 - 2026-10-01: phase 4 and the other leftovers are tracked in issue #259 for the next PR.
 - 2026-10-01: phase 4, test side of rounds 1 to 3 done.
   - Round 1: `tests/tsconfig.json` runs in `pnpm run typecheck`, and the 684 errors are fixed,

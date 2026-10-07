@@ -2,9 +2,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
+import { SMOKE_TEST_HEADER } from "../src/lib/seo/siteOrigin";
+
 export const DEPLOYMENT_PROBE_PATHS = ["/api/health", "/api/templates"];
 
-type ProbeFetch = (url: string, init: { redirect: "manual"; signal: AbortSignal }) => Promise<Response>;
+type ProbeFetch = (
+  url: string,
+  init: { redirect: "manual"; signal: AbortSignal; headers: Record<string, string> },
+) => Promise<Response>;
 type ProbeResult = { status: number } | { status: null; reason: string };
 
 const failedRequestSchema = z.object({
@@ -20,7 +25,11 @@ function whyTheRequestFailed(error: unknown): string {
 
 async function probe(url: string, { fetchImpl, timeoutMs }: { fetchImpl: ProbeFetch; timeoutMs: number }): Promise<ProbeResult> {
   try {
-    const response = await fetchImpl(url, { redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    const response = await fetchImpl(url, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { [SMOKE_TEST_HEADER]: "1" },
+    });
     await response.body?.cancel().catch(() => {});
     return { status: response.status };
   } catch (error) {
@@ -64,10 +73,10 @@ export async function verifyDeployment({
     if (result.status === 200) {
       log(`${url} -> 200`);
     } else if (result.status === null) {
-      log(`::error::${url} gave no response (${result.reason}) after deploy. Check the Pages deployment logs and bindings.`);
+      log(`::error::${url} gave no response (${result.reason}) after deploy. Check the Worker's deployment logs and bindings.`);
       return 1;
     } else if (result.status >= 500) {
-      log(`::error::${url} returned ${result.status} after deploy. Check the Pages deployment logs and bindings.`);
+      log(`::error::${url} returned ${result.status} after deploy. Check the Worker's deployment logs and bindings.`);
       return 1;
     } else {
       log(`::warning::${url} returned ${result.status} (access policy?); could not verify.`);

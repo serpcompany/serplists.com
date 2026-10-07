@@ -433,8 +433,16 @@ The production Worker (`--env production`) attaches no route yet, so it serves o
 moves at launch ([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)).
 Before the first production deploy, production D1 needs its pending migrations (the deploy
 blocks on `verify:prod:d1`) and the production Worker its secrets
-([SECURITY.md](SECURITY.md#secrets-and-environment)), or the deploy's checks fail. Staging lives on its Worker's
-`workers.dev` address, `https://serp-checklists-preview.serpcompany.workers.dev`.
+([SECURITY.md](SECURITY.md#secrets-and-environment)), or the deploy's checks fail. Staging lives on
+`https://staging.serplists.com`, served by its Worker through a zone route
+(`staging.serplists.com/*`, `[[env.preview.routes]]` in `wrangler.toml`, so each deploy keeps
+it attached). The hostname's proxied DNS record still names the retired Pages project, which
+the route answers before; replacing the record and the route with a Worker custom domain needs
+a token that can edit DNS. The Worker's `workers.dev` address,
+`https://serp-checklists-preview.serpcompany.workers.dev`, redirects there (308), except for a
+request carrying the smoke-test header (`x-serplists-smoke-test`), which the deploy's checks
+(`scripts/verify-deployment.ts`, `scripts/check-site-standards.ts`) send so they test the new
+deployment before the domain serves it.
 
 The staging deploy:
 
@@ -489,7 +497,7 @@ explicitly per environment, never inferred from the host.
 | Environment | `wrangler.toml` env | `SITE_ENV` | Canonical host |
 | --- | --- | --- | --- |
 | Production | `production` | `production` | `serplists.com` |
-| Staging | `preview` | `staging` | `serp-checklists-preview.serpcompany.workers.dev` |
+| Staging | `preview` | `staging` | `staging.serplists.com` |
 | Local (`next dev`, `pnpm preview`) | top level | unset | none |
 
 A Wrangler environment inherits no bindings from the top level of `wrangler.toml`, so each

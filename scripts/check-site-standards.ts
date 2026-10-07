@@ -30,7 +30,7 @@ type SiteGetOptions = { host?: string | undefined; sendSmokeTestHeader?: boolean
 
 const CANONICAL_ORIGINS: Record<SiteEnvironment, string> = {
   production: "https://serplists.com",
-  staging: "https://serp-checklists-preview.serpcompany.workers.dev",
+  staging: "https://staging.serplists.com",
 };
 
 const ONE_SEEDED_PAGE_OF_EACH_KIND = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];

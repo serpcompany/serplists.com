@@ -2,7 +2,7 @@ import { canonicalPath } from '../http/urlStandard';
 
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 
-export const STAGING_ORIGIN = 'https://serp-checklists-preview.serpcompany.workers.dev';
+export const STAGING_ORIGIN = 'https://staging.serplists.com';
 
 export const SMOKE_TEST_HEADER = 'x-serplists-smoke-test';
 
