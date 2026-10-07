@@ -25,44 +25,63 @@ const ciWorkflowSchema = z.object({
   ),
 });
 
-const deployJob = deployWorkflowSchema.parse(yaml.load(readFileSync('.github/workflows/deploy-staging.yml', 'utf8'))).jobs.deploy;
-const steps = deployJob.steps;
 const ciJobs = ciWorkflowSchema.parse(yaml.load(readFileSync('.github/workflows/ci.yml', 'utf8'))).jobs;
 
-const indexOfStepRunning = (command: string) => steps.findIndex((step) => step.run?.includes(command));
+const ENVIRONMENTS = [
+  {
+    name: 'staging',
+    workflow: 'deploy-staging.yml',
+    branch: 'staging',
+    migrationGate: 'pnpm run verify:staging',
+    wranglerEnv: 'preview',
+    database: 'serp-checklists-staging-db',
+  },
+  {
+    name: 'production',
+    workflow: 'deploy-production.yml',
+    branch: 'main',
+    migrationGate: 'pnpm run verify:prod:d1',
+    wranglerEnv: 'production',
+    database: 'serp-checklists-db',
+  },
+] as const;
 
-describe('the staging deploy', () => {
-  it('runs from CI only on a push to staging, after the quality gate and the schema parity check pass', () => {
-    const callers = Object.values(ciJobs).filter((job) => job.uses === './.github/workflows/deploy-staging.yml');
+describe.each(ENVIRONMENTS)('the $name deploy', ({ name, workflow, branch, migrationGate, wranglerEnv, database }) => {
+  const deployJob = deployWorkflowSchema.parse(yaml.load(readFileSync(`.github/workflows/${workflow}`, 'utf8'))).jobs.deploy;
+  const steps = deployJob.steps;
+  const indexOfStepRunning = (command: string) => steps.findIndex((step) => step.run?.includes(command));
+
+  it(`runs from CI only on a push to ${branch}, after the quality gate and the schema parity check pass`, () => {
+    const callers = Object.values(ciJobs).filter((job) => job.uses === `./.github/workflows/${workflow}`);
 
     expect(callers).toHaveLength(1);
     const [caller] = callers;
     expect([caller?.needs].flat()).toEqual(expect.arrayContaining(['quality', 'db-parity']));
     expect(caller?.if).toContain("github.event_name == 'push'");
-    expect(caller?.if).toContain("github.ref_name == 'staging'");
+    expect(caller?.if).toContain(`github.ref_name == '${branch}'`);
     expect(caller?.secrets).toBe('inherit');
   });
 
-  it('refuses to deploy while staging D1 has migrations it has not applied', () => {
-    const gate = indexOfStepRunning('pnpm run verify:staging');
+  it(`refuses to deploy while ${name} D1 has migrations it has not applied`, () => {
+    const gate = indexOfStepRunning(migrationGate);
 
     expect(gate).toBeGreaterThan(-1);
     expect(gate).toBeLessThan(indexOfStepRunning('pnpm run build:worker'));
     expect(gate).toBeLessThan(indexOfStepRunning('opennextjs-cloudflare deploy'));
   });
 
-  it('builds as staging, kept out of search engines, with Agent Access shown', () => {
-    expect(deployJob.env['SITE_ENV']).toBe('staging');
+  it(`builds as ${name}, with Agent Access shown`, () => {
+    expect(deployJob.env['SITE_ENV']).toBe(name);
     expect(deployJob.env['NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED']).toBe('true');
     expect(indexOfStepRunning('pnpm run build:worker')).toBeGreaterThan(-1);
   });
 
-  it("deploys the preview environment, which wrangler.toml binds to staging's D1", () => {
+  it(`deploys the ${wranglerEnv} environment, which wrangler.toml binds to ${name}'s D1`, () => {
     const deployStep = steps.find((step) => step.id === 'deploy');
 
-    expect(deployStep?.run).toContain('opennextjs-cloudflare deploy --env preview');
-    expect(readWranglerToml().env.preview.d1_databases).toContainEqual(
-      expect.objectContaining({ binding: 'DB', database_name: 'serp-checklists-staging-db' }),
+    expect(deployStep?.run).toContain(`opennextjs-cloudflare deploy --env ${wranglerEnv}`);
+    expect(readWranglerToml().env[wranglerEnv].d1_databases).toContainEqual(
+      expect.objectContaining({ binding: 'DB', database_name: database }),
     );
   });
 
@@ -74,11 +93,17 @@ describe('the staging deploy', () => {
 
   it('checks the new deployment responds and meets the site standards', () => {
     const deployIndex = steps.findIndex((step) => step.id === 'deploy');
-    for (const command of ['node --import tsx scripts/verify-deployment.ts', 'node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" staging']) {
+    for (const command of ['node --import tsx scripts/verify-deployment.ts', `node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" ${name}`]) {
       const probe = steps.find((step) => step.run?.trim() === command);
       assert.exists(probe, `no step runs ${command}`);
       expect(probe.env?.['DEPLOY_URL']).toBe('${{ steps.deploy.outputs.url }}');
       expect(steps.indexOf(probe)).toBeGreaterThan(deployIndex);
     }
+  });
+});
+
+describe('the production deploy before the domain moves', () => {
+  it('attaches no route, so a deploy never takes over serplists.com before the cutover', () => {
+    expect(readWranglerToml().env.production).not.toHaveProperty('routes');
   });
 });

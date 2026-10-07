@@ -30,6 +30,7 @@
     "check:staging:d1-schema": "node --import tsx scripts/check-production-d1-schema.ts --database DB --label staging --preview",
     "check:public-handles:local": "node --import tsx scripts/check-public-handles.ts",
     "check:public-handles:staging": "node --import tsx scripts/check-public-handles.ts --staging",
+    "check:public-handles:prod": "node --import tsx scripts/check-public-handles.ts --production",
     "schema:portable:generate": "node --import tsx scripts/generate-portable-template-json-schema.ts",
     "schema:portable:check": "node --import tsx scripts/generate-portable-template-json-schema.ts --check",
     "db:schema:generate": "node --import tsx scripts/generate-db-schema-doc.ts",

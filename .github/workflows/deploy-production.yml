@@ -1,0 +1,70 @@
+name: Deploy production to Cloudflare Workers
+
+on:
+  workflow_call:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
+      COREPACK_ENABLE_AUTO_PIN: "0"
+      SITE_ENV: production
+      NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED: "true"
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+      CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate environment contract
+        run: pnpm run typecheck:env
+
+      - name: Block the deploy while production D1 has pending migrations
+        run: pnpm run verify:prod:d1
+
+      - name: Build the Worker for production
+        run: pnpm run build:worker
+
+      - name: Deploy the production Worker
+        id: deploy
+        run: |
+          set -o pipefail
+          pnpm exec opennextjs-cloudflare deploy --env production | tee deploy.log
+          url=$(grep -oE 'https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev' deploy.log | head -1)
+          if [ -z "$url" ]; then
+            echo "::error::The deploy printed no workers.dev URL, so the new deployment cannot be checked."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the new deployment responds
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: node --import tsx scripts/verify-deployment.ts
+
+      - name: Check the deployment against the site standards
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" production
