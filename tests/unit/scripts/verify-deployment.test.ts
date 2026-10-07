@@ -2,7 +2,8 @@ import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { elementAt } from '../../support/elements';
 
-import { verifyDeployment } from '../../../scripts/verify-deployment';
+import { DEPLOYMENT_PROBE_PATHS, verifyDeployment } from '../../../scripts/verify-deployment';
+import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 
 const BASE_URL = 'https://serp-checklists-preview.serp.workers.dev';
 
@@ -132,6 +133,23 @@ describe('verifyDeployment', () => {
     });
 
     expect(inits.every((init) => init?.redirect === 'manual')).toBe(true);
+  });
+
+  it("sends the smoke-test header, so a workers.dev address whose environment has its own domain answers instead of redirecting there", async () => {
+    const inits: Array<RequestInit | undefined> = [];
+    const code = await verifyDeployment({
+      baseUrl: 'https://serp-checklists-preview.serpcompany.workers.dev',
+      fetchImpl: async (_url: string, init?: RequestInit) => {
+        inits.push(init);
+        return new Response('ok', { status: 200 });
+      },
+      sleep: async () => {},
+      log: () => {},
+    });
+
+    expect(code).toBe(0);
+    expect(inits.length).toBe(DEPLOYMENT_PROBE_PATHS.length);
+    expect(inits.every((init) => new Headers(init?.headers).get(SMOKE_TEST_HEADER) === '1')).toBe(true);
   });
 
   it('skips the probe with a warning when it is given no deployment URL', async () => {

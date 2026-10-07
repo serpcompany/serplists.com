@@ -149,10 +149,13 @@ Each of these needs the user's approval, or happens with the domain move:
 - **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../SECURITY.md#rate-limits))
   matches requests by host and path, so it should keep applying once `serplists.com` points at
   the Worker; confirm it after the domain move.
-- **Staging's domain:** staging lives on its `workers.dev` address for now. When
-  `staging.serplists.com` moves to the Worker, point `STAGING_ORIGIN`
-  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.ts` and staging's
-  `CORS_ALLOWED_ORIGINS` back at it.
+- **Staging's domain** (done 2026-10-06): `staging.serplists.com` left the Pages project and the
+  staging Worker serves it through a zone route (`staging.serplists.com/*`,
+  `[[env.preview.routes]]`; a custom domain would need a token that can delete the hostname's
+  old proxied DNS record, which still names the Pages project); `STAGING_ORIGIN`,
+  `scripts/check-site-standards.ts` and staging's `CORS_ALLOWED_ORIGINS` point at it, and
+  `scripts/verify-deployment.ts` sends the smoke-test header so the deploy's probe reaches the
+  new Worker on its `workers.dev` address instead of the redirect to the domain.
 - **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
   `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
   the move from the Pages project, and `wrangler.jsonc` with the `preview` environment renamed
