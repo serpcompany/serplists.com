@@ -34,6 +34,8 @@ export function formIncompleteDetails(blocked: FormBlockedField[]): { fieldCount
 const isDone = (task: TaskRecord): boolean =>
   typeof task.isCompleted === 'boolean' ? task.isCompleted : task.completed === true;
 
+export const doneTaskFormBlockers = (task: TaskRecord): FormBlockedField[] => (isDone(task) ? taskFormBlockers(task) : []);
+
 const tasksIn = (sections: unknown[]): TaskRecord[] =>
   sectionRecordsIn(normalizeSectionsPayload(sections).sections).flatMap((section) => taskRecordsIn(section.items));
 

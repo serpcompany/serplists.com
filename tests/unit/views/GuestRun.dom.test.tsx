@@ -10,6 +10,7 @@ import { readGuestRun, saveGuestRun, startGuestRun } from '@/features/guest-runs
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import GuestRun from '@/views/GuestRun';
 
+import { downloadFromTheMenu } from '../../support/downloads';
 import { contentAt, present, subTaskAt, taskAt } from '../../support/elements';
 import { guestRunTemplate, guestRunTemplateWithAForm } from '../../support/guestRuns';
 import { queryClientsClearedAfterEachTest } from '../../support/queryClientsPerTest';
@@ -89,7 +90,7 @@ describe('the guest run page of a public Template', () => {
     expect(header.getByText('0 of 3 tasks finished')).toBeTruthy();
     expect(thePageHeader().textContent).toContain('This run is saved in this browser only.');
     expect(screen.getByRole('heading', { level: 2, name: 'Pack the tent' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^(Share|Rename|Stop sharing)$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(Share|Rename|Stop sharing|Export answers)$/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Weekend Camping' }).getAttribute('href')).toBe(TEMPLATE_PAGE);
   });
 
@@ -240,6 +241,15 @@ describe('a guest run of a Template with a form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark Complete' }));
   });
   const storedAnswer = () => contentAt(taskAt(storedRun(), 0, 0), 0).fields?.[0]?.answer;
+  const answerTheClientName = async (name: HTMLElement) => {
+    await typeInto(name, 'Acme');
+    await act(async () => {
+      fireEvent.blur(name);
+    });
+    await waitFor(() => {
+      expect(storedAnswer()).toBe('Acme');
+    });
+  };
 
   it('refuses to complete the task until its required field is answered, says which field, and moves focus to it', async () => {
     await openTheRunPage();
@@ -254,13 +264,7 @@ describe('a guest run of a Template with a form', () => {
     expect(document.activeElement).toBe(name);
     expect(taskAt(storedRun(), 0, 0).isCompleted).toBe(false);
 
-    await typeInto(name, 'Acme');
-    await act(async () => {
-      fireEvent.blur(name);
-    });
-    await waitFor(() => {
-      expect(storedAnswer()).toBe('Acme');
-    });
+    await answerTheClientName(name);
     expect(screen.queryByText('Fill in this field.')).toBeNull();
 
     await markComplete();
@@ -268,6 +272,25 @@ describe('a guest run of a Template with a form', () => {
       expect(taskAt(storedRun(), 0, 0).isCompleted).toBe(true);
     });
     expect(storedAnswer()).toBe('Acme');
+  });
+
+  it('exports the answers this browser holds as JSON named after the run, with the Template it runs', async () => {
+    startGuestRun(guestRunTemplateWithAForm, 'Lake trip');
+    await openTheRunPage();
+    await answerTheClientName(screen.getByRole('textbox', { name: 'Client name' }));
+
+    const download = await downloadFromTheMenu('Export answers', 'Download JSON');
+
+    expect(download.fileName).toBe('lake-trip-answers.json');
+    expect(download.type).toBe('application/json');
+    const exported: unknown = JSON.parse(await download.text());
+    expect(exported).toMatchObject({
+      run: { title: 'Lake trip', status: 'in_progress', template: { id: 'template-camping', title: 'Weekend Camping' } },
+      answers: [
+        { task: { id: 'task-details', isCompleted: false }, field: { id: 'field-name', kind: 'text' }, answer: 'Acme', answerText: 'Acme' },
+        { field: { id: 'field-contract', kind: 'file' }, answer: null, answerText: '' },
+      ],
+    });
   });
 
   it('asks the visitor to log in to upload a file, and comes back to this run after', async () => {

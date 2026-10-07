@@ -13,6 +13,7 @@ import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 
 type RunPageHeaderProps = {
+  answersExport: ReactNode;
   canUpdateRun: boolean;
   description: string;
   editTitle: string;
@@ -34,6 +35,7 @@ type RunPageHeaderProps = {
 };
 
 export function RunPageHeader({
+  answersExport,
   canUpdateRun,
   description,
   editTitle,
@@ -115,6 +117,7 @@ export function RunPageHeader({
               onStopSharing={onStopSharing}
             />
           ) : null}
+          {answersExport}
         </>
       }
     />

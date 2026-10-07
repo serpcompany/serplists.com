@@ -21,6 +21,7 @@ model in `src/features/run-execution/` works, and why.
 | `saveQueue.ts`, `runSaver.ts` | Saves one at a time, double clicks, and recovery when another session saved first |
 | `runExecutionActions.ts` | Each save (tick, Sub-task tick, notes, form answer, title, completion) and the queue entries the page binds |
 | `runFormAnswers.ts` | A task's form: a field and its answer by id, whether the form blocks the task, and the refusal that names the first blocking field |
+| `runAnswersExport.ts` | The CSV and JSON of a Run's form answers and their file name ([exporting answers](#exporting-answers)) |
 | `runPersistence.ts`, `runSharing.ts` | Writing a Run privately or through a share link, Share and Stop sharing |
 | `noteDrafts.ts`, `keptNoteDrafts.ts` | Unsaved task notes, and the notes kept when the session ends |
 | `primaryTaskAction.ts`, `taskReveal.ts` | The task panel's main button, and bringing a newly shown task into view |
@@ -243,8 +244,16 @@ every route that ticks a task applies it:
 - **MCP** `set_task_completed` with `completed: true` fails with the tool error `form_incomplete`
   and the same `details`, and `set_subtask_completed` completes its task only when the form is
   complete ([agent access](agent-access.md)).
+- **MCP fills answers** with `update_run` `set_form_answer`, one field at a time, on the stored
+  Run's field definitions: an answer of the wrong type for its kind, or a non-empty one the rule
+  calls invalid, fails with `invalid_answer` and the field's `formFieldProblemMessage`, as the
+  run page shows it. `null` or an empty answer clears the field, even a required one, and
+  answering never ticks or unticks the task; on a ticked task, an answer that leaves its form
+  blocking fails with `form_incomplete`, as `PUT /api/checklists/<id>` refuses it. A File field
+  can only be cleared (`unsupported_field_kind`), because an agent has no upload.
 - **A completed Run's answers are frozen** like its ticks (`completed-run-freeze.ts`): a save that
-  changes one fails with `409 run_completed` unless it reopens the Run. Notes stay editable.
+  changes one fails with `409 run_completed` unless it reopens the Run, and MCP `set_form_answer`
+  fails with `run_completed`. Notes stay editable.
 - **Template changes** carry answers by field id while the kind is unchanged. A field whose kind
   changed starts empty. The answers of removed and kind-changed fields join the retired work as
   `formAnswer` entries, which "Removed from Template" shows as "label: answer" under their task's
@@ -252,6 +261,35 @@ every route that ticks a task applies it:
   new required field say, reopens, as a task does when a Sub-task is added.
 - Fields never count toward progress, and a form never blocks Finish Run: `findOpenRunTasks` and
   the page's `canFinishRun` look only at tasks and Sub-tasks (`run-completion-rule.test.ts`).
+
+## Exporting answers
+
+"Export answers" (`RunAnswersExportMenu`) sits in the header of the run page and the guest run
+whenever the Run has a form field, for a view-only role too, and never on the shared run link. It
+builds the file in the browser from the Run the page holds, with no request
+(`src/features/run-execution/runAnswersExport.ts`), and downloads it with `downloadFile`
+(`src/lib/utils/downloadFile.ts`, which the template pack export uses too). A typed answer is in
+the file once its save landed: leaving the field to open the menu starts that save.
+
+- **What it holds:** one entry per form field in run order (section, task, field). The answer
+  text is `formatFormAnswer`'s (option labels, "Checked", a number as written), except a file,
+  which reads "<file name> (<full link>)", the link resolved against the page's origin. An
+  unanswered field has an empty text and a `null` answer.
+- **CSV:** columns Section, Task, Field, Type (the editor's type names, `FORM_FIELD_KIND_LABELS`),
+  Required, Answer and Task done; RFC 4180 quoting (a cell with a comma, a quote, a CR or an LF
+  is quoted, with its quotes doubled), CRLF after every record, and a UTF-8 byte order mark so
+  Excel reads accents.
+- **Formula injection:** answers and titles are user text, and a spreadsheet may run a cell that
+  starts with `=`, `+`, `-`, `@`, a tab or a CR as a formula. Every such cell, in any column,
+  gets a leading `'`, which spreadsheets show as text (OWASP's CSV injection advice), except a
+  cell that is only a number (`-5`, `+12`, `-0.25`, `1e3`), which a spreadsheet reads as that
+  number and never as a formula.
+- **JSON:** `run` (`id`, `title`, `status`, `startedAt`, `completedAt` or `null`, and `template`
+  `{ id, title }` when known: the page's Template on a guest run, the Run's recorded source
+  otherwise), `exportedAt`, and `answers`, each `{ section, task, field, answer, answerText }`
+  with the stored answer as it is.
+- **File name:** the run title through `generateSlug`, then `-answers.csv` or `-answers.json`;
+  `run-answers` when the slug is empty.
 
 ## Moving between tasks
 

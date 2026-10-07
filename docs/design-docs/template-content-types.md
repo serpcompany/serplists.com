@@ -66,7 +66,7 @@ which would drop focus and the caret as someone types past `https://`.
 ## Form blocks
 
 A form block (`type: 'form'`) holds fields that the Template defines and every run fills
-in. The plan and its decisions are in [forms](../exec-plans/active/forms.md); the shapes,
+in. The plan and its decisions are in [forms](../exec-plans/completed/forms.md); the shapes,
 kinds and limits live in `src/lib/schemas/formFields.ts`.
 
 - **Stored shape:** `{ id, type: 'form', value: '', fields }`. Each field has an `id`
@@ -95,8 +95,9 @@ kinds and limits live in `src/lib/schemas/formFields.ts`.
 - **Where it is enforced:** the run save, the shared-link save and MCP refuse a task saved
   as done while its form blocks it, with `409 form_incomplete` (an MCP tool error with the
   same code) and `details: { fieldCount, fields: [{ taskId, fieldId, reason }] }`
-  ([run execution](run-execution.md#forms)). Fields never count toward progress, and a form
-  gates only its task, never Finish Run.
+  ([run execution](run-execution.md#forms)). MCP `set_form_answer` checks an answer with the same
+  rule and refuses an invalid one with the field's message (`invalid_answer`). Fields never count
+  toward progress, and a form gates only its task, never Finish Run.
 - **Answers are run state**, like `isCompleted` and `notes`: starting a run, importing and
   copying clear them, portable export leaves them out, and they change neither a Template's
   structure (`RUN_STATE_KEYS`) nor count as an edit in a run's audit (`RUN_STATE_FIELDS`).

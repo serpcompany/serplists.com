@@ -18,6 +18,7 @@ import { CompleteRunButton } from '@/components/run-execution/CompleteRunButton'
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
 import { RetiredRunItems } from '@/components/run-execution/RetiredRunItems';
+import { RunAnswersExportMenu } from '@/components/run-execution/RunAnswersExportMenu';
 import { RunPageHeader } from '@/components/run-execution/RunPageHeader';
 import { RunProvenancePanel } from '@/components/run-execution/RunProvenancePanel';
 import { RunWorkspace } from '@/components/run-execution/RunWorkspace';
@@ -226,6 +227,7 @@ const ChecklistRunPage = () => {
       ) : (
         <DashboardContentShell className="overflow-clip">
           <RunPageHeader
+            answersExport={<RunAnswersExportMenu run={displayRun} />}
             canUpdateRun={canUpdateRun}
             description={describeRunTaskCounts(counts)}
             editTitle={editTitle}

@@ -39,9 +39,9 @@ import { getOwnedTemplate } from "./agentMcpTemplates";
 import {
   getRunArgs,
   parseToolArguments,
+  parseUpdateRunArguments,
   startRunArgs,
   ToolError,
-  updateRunArgs,
 } from "./agentMcpTools";
 
 export async function startRun(
@@ -154,7 +154,7 @@ export async function updateRun(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const args = parseToolArguments(updateRunArgs, rawArguments);
+  const args = parseUpdateRunArguments(rawArguments);
 
   const existing = await getOwnedRun(env, identity.userId, args.runId);
   const currentRevision = typeof existing.revision === "number" ? existing.revision : 1;
@@ -177,6 +177,7 @@ export async function updateRun(
 
   const now = new Date().toISOString();
   const updates: RunUpdates = { revision: currentRevision + 1, updated_at: now };
+  const outcome = applyRunOperation(sections, args);
   if (args.operation === "set_run_status") {
     updates.status = args.status;
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
@@ -188,8 +189,9 @@ export async function updateRun(
       now,
     }));
   } else {
-    applyRunOperation(sections, args);
-    if (args.operation === "set_task_notes") assertRunContentFits(sections, parseStoredSections(existing.items));
+    if (args.operation === "set_task_notes" || args.operation === "set_form_answer") {
+      assertRunContentFits(sections, parseStoredSections(existing.items));
+    }
     updates.items = JSON.stringify(sections);
     updates.progress = calculateRunProgress(sections);
   }
@@ -202,7 +204,7 @@ export async function updateRun(
     action: "checklist_run.updated",
     before: summarizeRunForAudit(existing),
     after: summarizeRunForAudit(nextRun),
-    diff: updateRunAuditDiff(args, existing, updates),
+    diff: updateRunAuditDiff(args, existing, updates, outcome),
     metadata: {
       source: "mcp",
       operation: args.operation,

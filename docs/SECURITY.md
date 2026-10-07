@@ -150,6 +150,12 @@
   file pickers filter on extensions. Files are served as attachments, and every download
   is sent with `X-Content-Type-Options: nosniff`. There is no per-account storage
   quota yet (TD-18).
+- **CSV exports never hand a spreadsheet a formula.** A Run's answers CSV is built in the
+  browser from user text (answers, titles, labels), so any cell starting with `=`, `+`,
+  `-`, `@`, a tab or a CR gets a leading `'`, unless the cell is only a number such as `-5`
+  (`src/features/run-execution/runAnswersExport.ts`,
+  [exporting answers](design-docs/run-execution.md#exporting-answers)). Any new CSV export
+  needs the same guard.
 - **Invites** store only a token hash, never the raw token.
 - **Public responses are allowlisted, not spread from a row.** Public Template
   responses use the fields in `functions/api/utils/template-public.ts`, so they
@@ -425,7 +431,9 @@ time, `list_templates` and `list_runs` return a page at a time with a cursor to 
 whole large template or run, and no edit needs one sent back. MCP run writes keep the same
 content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
-agent writes come back in one result.
+agent writes come back in one result. A form answer it sets keeps its field's limit (10,000
+characters at most, a Long text answer), and it cannot set a File answer, which only an upload
+in the web app makes.
 The cap uses `Content-Length`, or, when it is missing or malformed, reads the body once,
 stopping as soon as it passes the cap, so it buffers at most the cap, and hands the
 handler a request built from those bytes (`readBodyWithinLimit` in

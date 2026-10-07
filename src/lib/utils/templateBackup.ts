@@ -18,6 +18,7 @@ import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { normalizeStringArray, parseJsonArray } from "@/lib/schemas/jsonArrays";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
+import { downloadFile } from "@/lib/utils/downloadFile";
 import { withImportedLinkSource } from "@/lib/utils/mediaSource";
 import {
   detectTemplateSourceExtension,
@@ -218,18 +219,12 @@ export const exportPortableTemplatesToJSON = (
 };
 
 export const downloadBackupFile = (pack: ExportedTemplatePack, filename?: string): void => {
-  const jsonString = JSON.stringify(pack, null, 2);
-  const blob = new Blob([jsonString], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
   const defaultFilename = `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`;
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename || defaultFilename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadFile({
+    content: JSON.stringify(pack, null, 2),
+    fileName: filename || defaultFilename,
+    type: "application/json",
+  });
 };
 
 const parsePortablePackTemplates = (

@@ -105,12 +105,17 @@ a key writes private and Personal.
 A `null` field counts as absent. Models often send the fields a call does not use as `null`
 (OpenAI's strict mode does so for every optional field). Every other value is validated, and
 each message names its field (`notes: Required`), up to five of them, so an agent can correct
-its call.
+its call. The one exception is `update_run`'s `answer` with `set_form_answer`, where `null`
+is the answer that clears a field (`parseUpdateRunArguments`), so leaving `answer` out is
+refused (`answer: Required`) rather than read as clearing; every other operation still ignores
+an `answer: null`.
 
 `update_run` and `update_template` advertise one flat object, describing in prose which
 fields each operation takes. Model APIs reject a `oneOf`, `anyOf` or `allOf` at the root of a
 tool schema (the Messages API refuses the whole request with `400`), and many clients read
 only top-level properties. A Zod discriminated union then enforces each operation's fields.
+A property below the root may still use `anyOf`: `update_run`'s `answer` is a string, a number,
+a boolean, an array of strings or `null`, the same union its validator takes.
 
 ## Result bounds
 
@@ -140,9 +145,9 @@ room for the task and run around the notes, so an agent reads back what it wrote
 
 Run writes keep the web app's run content limit ([SECURITY.md](../SECURITY.md#request-size-limits)),
 checked before the write so an oversized one never commits. The limit counts every task and
-Sub-task as unticked, so of `update_run`'s operations only `set_task_notes` can change the
-size, and content no larger than what it replaces is allowed: a run already over the limit
-can still take shorter notes.
+Sub-task as unticked, so of `update_run`'s operations only `set_task_notes` and
+`set_form_answer` can change the size, and content no larger than what it replaces is allowed:
+a run already over the limit can still take shorter notes and clear an answer.
 
 ## Reading large templates and runs
 
@@ -233,14 +238,42 @@ updates the run only when that audit row exists. If one lands without the other,
 `mcp_tool_invariant` and refuses with `internal_invariant`. `set_run_status` rewrites no
 content and matches the web app's status save: progress stays, reopening keeps the
 completion stamps, and completing a run that is already completed does not stamp it again.
-A completed run is frozen as on the run page: `set_task_completed` and `set_subtask_completed`
-fail with `run_completed` and write nothing, `set_task_notes` still works, and
-`set_run_status` `in_progress` reopens it.
+A completed run is frozen as on the run page: `set_task_completed`, `set_subtask_completed`
+and `set_form_answer` fail with `run_completed` and write nothing, `set_task_notes` still
+works, and `set_run_status` `in_progress` reopens it.
 A task's form gates it as on the run page ([run execution](run-execution.md#forms)):
 `set_task_completed` with `completed: true` fails with `form_incomplete` and writes nothing
 while a required field has no answer or an answer is not valid, its `details` naming each
 `{ taskId, fieldId, reason }`, and `set_subtask_completed` completes the task only when its
 form is complete. `get_run` shows a form block's fields with each answer and leaves `fields` off
-every other block, as it leaves `subItems` off blocks the run page does not show them on. No
-operation sets an answer yet.
-What MCP run events record is in [data persistence](data-persistence.md#json-columns).
+every other block, as it leaves `subItems` off blocks the run page does not show them on.
+
+`set_form_answer` sets one answer: `{ taskId, fieldId, answer }`, where `fieldId` is a field of
+that task's form and `answer` is the field's answer for its kind, the stored shapes in
+`src/lib/schemas/formFields.ts` (`fitsFormAnswerShape`): a string for `text`, `longText`, `url`,
+`email` and `date`, a number for `number`, an option id for `select`, option ids for
+`multiSelect` (stored once each, in the order sent) and a boolean for `checkbox`. After the
+revision check (`edit_conflict`) and the completed-run freeze (`run_completed`), in order:
+
+| Check | Refusal |
+| --- | --- |
+| The task exists | `task_not_found` |
+| The task's form has the field | `field_not_found`, naming the field id |
+| `null` | None: it clears the field, of any kind |
+| A `file` field | `unsupported_field_kind`: an agent has no upload, so a file answer can only be cleared |
+| The answer has the kind's type | `invalid_answer`, naming the type the kind takes (`A Number field takes a number, or null to clear it`) |
+| An empty answer (`''` or blank text, `[]`, `false`) | None: it clears the field, even a required one |
+| The one rule (`findFormFieldProblem`) passes | `invalid_answer` with the field's message from `formFieldProblemMessage`, the run page's (`Enter a real date.`) |
+| A ticked task's form still passes | `form_incomplete`, as the run save refuses clearing a required answer of a done task |
+
+`unsupported_field_kind` and `invalid_answer` name the `taskId`, `fieldId` and `kind` in
+`details` (with `reason: "invalid"` for the rule), `form_incomplete` names the blocking fields as
+`set_task_completed` does, and no refusal writes anything. A cleared field is stored without
+`answer`, as the run page saves an empty one. Answering never ticks or unticks the task: an
+agent ticks it with `set_task_completed` once the form passes. The content limit and progress
+(which answers never change) work as for the other operations, and the result is the run's
+fields with the task, its form fields and answers included.
+What MCP run events record is in [data persistence](data-persistence.md#json-columns): a
+`set_form_answer` diff names the `taskId` and `fieldId` and lists the task in `answersChanged`,
+the key the run audit uses for answer changes, when the stored answer changed, and never holds
+the answer itself.

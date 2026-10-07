@@ -9,6 +9,7 @@ import { findAllElements, findElementOf, handlerOf } from '../../../support/elem
 type HeaderProps = Parameters<typeof RunPageHeader>[0];
 
 const headerProps = (overrides: Partial<HeaderProps> = {}): HeaderProps => ({
+  answersExport: null,
   canUpdateRun: true,
   description: '2 of 3 tasks finished',
   editTitle: 'Launch',
