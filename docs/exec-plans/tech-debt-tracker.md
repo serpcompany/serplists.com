@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-87.**
+then you raise it. **Next ID: TD-88.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 "Size" is `small` (an hour or two, no migration or decision), `medium` (a focused PR) or
@@ -26,3 +26,4 @@ then you raise it. **Next ID: TD-87.**
 | TD-25 | Security | Run Keys never expire; revocation is the only way to end one. The MCP rate limits are in-memory per isolate, so the only global limit is the per-IP Cloudflare WAF rule `MCP rate limit` (see `docs/SECURITY.md`); nothing limits a single key globally. Revoked keys are never deleted, so listing a user's keys still scans all their revoked keys (the response is capped at 50). | Add an optional key expiry, and move the per-key limit to shared state (KV, a Durable Object, or a Workers rate-limiting binding). Pruning old revoked keys deletes user data, so it needs a human decision. | None | medium |
 | TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None | small |
 | TD-84 | Public profiles | `GET /api/profiles/by-username` stays for browser tabs loaded before #232's PR 2; the app now resolves `/profile/:handle` through `GET /api/profiles/by-handle` (the public handle registry). | After a release cycle, delete the route and `handleProfileByUsername`, their tests (`tests/unit/functions/api/profiles-by-username-d1.test.ts` and its cases in `profiles-handler.test.ts`), its rate-limit exemption, its rows-read budget and `d1:profile` scenario, and the docs that name it. | None | small |
+| TD-87 | Runs | A typed form answer (short or long text, URL, email, number, date) saves when its field loses focus, with no draft store and no leave guard, so closing the tab or navigating away while the cursor is still in the field loses that answer. Notes keep drafts (`noteDrafts.ts`, `keptNoteDrafts.ts`) and ask before leaving. | Keep typed answers as drafts like notes, save them with the next queued save or on leave, and include them in the run page's leave guard, with a test that leaves with an answer still focused. | None | medium |

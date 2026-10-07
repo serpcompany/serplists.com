@@ -53,7 +53,23 @@ const withItem = (item: Record<string, unknown>) =>
 const withTools = (...requiredTools: unknown[]) =>
   pack([{ title: 'T', requiredTools, sections: [{ title: 'S', items: [{ title: 'I' }] }] }]);
 
+const withField = (field: Record<string, unknown>) => withContent({ type: 'form', fields: [field] });
+
 const ACCEPTED: Array<[string, unknown]> = [
+  ['a form with one field of every kind', withContent({ type: 'form', value: '', fields: [
+    { label: 'Name', kind: 'text', required: true },
+    { id: 'f2', label: 'Notes', kind: 'longText', description: 'Anything else' },
+    { label: 'Site', kind: 'url' },
+    { label: 'Email', kind: 'email' },
+    { label: 'Seats', kind: 'number', min: 1, max: 9.5 },
+    { label: 'Start', kind: 'date' },
+    { label: 'Plan', kind: 'select', options: [{ label: 'Basic' }, { id: 'pro', label: 'Pro' }] },
+    { label: 'Tags', kind: 'multiSelect', options: [{ label: 'A' }] },
+    { label: 'Agree', kind: 'checkbox', required: false },
+    { label: 'Brief', kind: 'file' },
+  ] })],
+  ['a form field that carries an answer', withField({ label: 'Name', kind: 'text', answer: 'Acme' })],
+  ['options on a field kind that has none', withField({ label: 'Name', kind: 'text', options: [] })],
   ['a text block with no value', withContent({ type: 'text' })],
   ['a text block with an empty value', withContent({ type: 'text', value: '' })],
   ['an image with a value', withContent({ type: 'image', value: 'https://example.com/a.png', uploadType: 'url' })],
@@ -65,6 +81,7 @@ const ACCEPTED: Array<[string, unknown]> = [
     withContent({ type: 'subItems', value: '', subItems: [{ id: 's1', title: 'One', isCompleted: true }] }),
   ],
   ['unknown keys on a content block', withContent({ type: 'text', value: 'x', notes: 'run note' })],
+  ['a 2.0.0 pack, which imports as it did', { ...withItem({ title: 'I' }), schemaVersion: '2.0.0' }],
   ['an unknown key on a section', pack([{ title: 'T', sections: [{ title: 'S', extra: 1, items: [{ title: 'I' }] }] }])],
   ['an unknown key on a template and the pack', pack([{ title: 'T', owner: 'x', sections: [{ title: 'S', items: [{ title: 'I' }] }] }], { source: 'x' })],
   ['required and optional tools', withTools({ name: 'Timer', url: 'https://example.com', required: true }, { name: 'Deck', url: 'HTTP://example.com/a?b#c', required: false })],
@@ -73,6 +90,20 @@ const ACCEPTED: Array<[string, unknown]> = [
 ];
 
 const REJECTED: Array<[string, unknown]> = [
+  ['a form with no fields', withContent({ type: 'form', fields: [] })],
+  ['a form without a field list', withContent({ type: 'form', value: '' })],
+  ['a form with 51 fields', withContent({ type: 'form', fields: Array.from({ length: 51 }, (_, index) => ({ label: `F${index}`, kind: 'text' })) })],
+  ['a form field with a blank label', withField({ label: '  ', kind: 'text' })],
+  ['a form field without a label', withField({ kind: 'text' })],
+  ['a form field label over 200 characters', withField({ label: 'x'.repeat(201), kind: 'text' })],
+  ['help text over 1,000 characters', withField({ label: 'Name', kind: 'text', description: 'x'.repeat(1001) })],
+  ['a form field of an unknown kind', withField({ label: 'Color', kind: 'color' })],
+  ['a dropdown without options', withField({ label: 'Plan', kind: 'select' })],
+  ['a multiple choice with no options', withField({ label: 'Tags', kind: 'multiSelect', options: [] })],
+  ['an option with a blank label', withField({ label: 'Plan', kind: 'select', options: [{ label: ' ' }] })],
+  ['a dropdown with 51 options', withField({ label: 'Plan', kind: 'select', options: Array.from({ length: 51 }, (_, index) => ({ label: `O${index}` })) })],
+  ['a text minimum on a number field', withField({ label: 'Seats', kind: 'number', min: '1' })],
+  ['a required flag that is not true or false', withField({ label: 'Name', kind: 'text', required: 'yes' })],
   ['an image with no value', withContent({ type: 'image' })],
   ['an image with an empty value', withContent({ type: 'image', value: '' })],
   ['an image with a blank value', withContent({ type: 'image', value: '   ' })],
@@ -86,6 +117,7 @@ const REJECTED: Array<[string, unknown]> = [
   ['a section with no items', pack([{ title: 'T', sections: [{ title: 'S', items: [] }] }])],
   ['a template with no sections', pack([{ title: 'T', sections: [] }])],
   ['another schema version', { ...withItem({ title: 'I' }), schemaVersion: '1.0.0' }],
+  ['a schema version that does not exist yet', { ...withItem({ title: 'I' }), schemaVersion: '2.2.0' }],
   ['a tool with a script link', withTools({ name: 'Timer', url: 'javascript:alert(1)', required: true })],
   ['a tool with a link that is not http or https', withTools({ name: 'Timer', url: 'ftp://example.com', required: true })],
   ['a tool link with a space', withTools({ name: 'Timer', url: 'https://example.com/a b', required: true })],
@@ -110,6 +142,7 @@ describe('the published portable template JSON Schema accepts exactly what the i
 });
 
 describe('portable export', () => {
+  const planField = { id: 'f1', label: 'Plan', kind: 'select', required: true, options: [{ id: 'o1', label: 'Pro' }] };
   const storedTemplateWithRunStateAsTheAppHoldsIt = (): ChecklistTemplate => ({
     id: 't1',
     title: 'Launch',
@@ -131,6 +164,7 @@ describe('portable export', () => {
             contents: [
               { id: 'c1', type: 'image', value: 'https://example.com/a.png', uploadType: 'url' },
               { id: 'c2', type: 'subItems', value: '', subItems: [{ id: 'si1', title: 'Laptop', completed: true }] },
+              { id: 'c3', type: 'form', value: '', fields: [{ ...planField, answer: 'o1' }] },
             ],
           },
         ],
@@ -155,7 +189,7 @@ describe('portable export', () => {
     const exported = exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()]);
     const serialized = JSON.stringify(firstOf(exported.templates).sections);
 
-    expect(serialized).not.toMatch(/"(isCompleted|completed|notes)"/);
+    expect(serialized).not.toMatch(/"(isCompleted|completed|notes|answer)"/);
     expect(firstOf(exported.templates).sections).toEqual([
       {
         id: 's1',
@@ -167,6 +201,7 @@ describe('portable export', () => {
             contents: [
               { id: 'c1', type: 'image', value: 'https://example.com/a.png', uploadType: 'url' },
               { id: 'c2', type: 'subItems', value: '', subItems: [{ id: 'si1', title: 'Laptop' }] },
+              { id: 'c3', type: 'form', value: '', fields: [planField] },
             ],
           },
         ],

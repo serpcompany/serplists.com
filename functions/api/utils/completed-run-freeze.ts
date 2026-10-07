@@ -6,7 +6,8 @@ import {
   type ChecklistNodeRecord,
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
-import { isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
+import { getTaskFormFields, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
+import { isFormAnswerEmpty } from '../../../src/lib/schemas/formValidation';
 import { normalizeSectionsPayload } from './payloads';
 import { jsonError } from './response';
 
@@ -29,33 +30,40 @@ function shownSubTasks(task: TaskRecord): unknown[] {
     .flatMap((block) => asArray(block.subItems).filter(isShownSubTask));
 }
 
-function setOnce(states: Map<string, boolean>, key: string, done: boolean): string {
+function setOnce(states: Map<string, string>, key: string, state: string): string {
   let unique = key;
   for (let copy = 2; states.has(unique); copy += 1) unique = `${key}#${copy}`;
-  states.set(unique, done);
+  states.set(unique, state);
   return unique;
 }
 
-function completionStates(sections: unknown[]): Map<string, boolean> {
-  const states = new Map<string, boolean>();
+const doneState = (entry: unknown): string => (isDone(entry) ? 'done' : 'open');
+
+const answerState = (answer: unknown): string => (isFormAnswerEmpty(answer) ? 'empty' : JSON.stringify(answer));
+
+function runStates(sections: unknown[]): Map<string, string> {
+  const states = new Map<string, string>();
   normalizeSectionsPayload(sections).sections.forEach((section, sectionIndex) => {
     asArray(isSectionRecord(section) ? section.items : undefined).forEach((task, taskIndex) => {
       if (!isTaskRecord(task)) return;
-      const taskKey = setOnce(states, textId(task) ?? `${sectionIndex + 1}-${taskIndex + 1}`, isDone(task));
+      const taskKey = setOnce(states, textId(task) ?? `${sectionIndex + 1}-${taskIndex + 1}`, doneState(task));
       shownSubTasks(task).forEach((subTask, subTaskIndex) => {
         const subTaskId = isSubTaskRecord(subTask) ? textId(subTask) : null;
-        setOnce(states, `${taskKey}\u0000${subTaskId ?? `#${subTaskIndex + 1}`}`, isDone(subTask));
+        setOnce(states, `${taskKey}\u0000${subTaskId ?? `#${subTaskIndex + 1}`}`, doneState(subTask));
+      });
+      getTaskFormFields(task).forEach((field, fieldIndex) => {
+        setOnce(states, `${taskKey}\u0000field:${textId(field) ?? `#${fieldIndex + 1}`}`, answerState(field.answer));
       });
     });
   });
   return states;
 }
 
-function changesTaskCompletion(storedSections: unknown[], nextSections: unknown[]): boolean {
-  const stored = completionStates(storedSections);
-  for (const [key, done] of completionStates(nextSections)) {
+function changesRunState(storedSections: unknown[], nextSections: unknown[]): boolean {
+  const stored = runStates(storedSections);
+  for (const [key, state] of runStates(nextSections)) {
     const was = stored.get(key);
-    if (was !== undefined && was !== done) return true;
+    if (was !== undefined && was !== state) return true;
   }
   return false;
 }
@@ -67,6 +75,6 @@ export function completedRunTaskChangeResponse(
   nextSections: unknown[],
 ): Response | null {
   if (run.status !== 'completed' || nextStatus === 'in_progress') return null;
-  if (!changesTaskCompletion(storedSections, nextSections)) return null;
+  if (!changesRunState(storedSections, nextSections)) return null;
   return jsonError(COMPLETED_RUN_FROZEN_MESSAGE, 409, { code: 'run_completed' });
 }

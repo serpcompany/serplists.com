@@ -216,3 +216,35 @@ describe("the run page's own saves of a completed legacy run, whose shapes the p
     }))).resolves.toEqual(expect.objectContaining(httpRefusal));
   });
 });
+
+describe("a completed run's form answers are frozen like its ticks", () => {
+  const withAnswer = (answer: string, notes?: string) => [{
+    id: "s1",
+    title: "Kickoff",
+    items: [{
+      id: "brief",
+      title: "Collect the brief",
+      isCompleted: true,
+      ...(notes === undefined ? {} : { notes }),
+      contents: [{ id: "c1", type: "form", value: "", fields: [{ id: "field_name", label: "Client", kind: "text", required: true, answer }] }],
+    }],
+  }];
+
+  beforeEach(() => {
+    insertOwnedRun(database, { id: "form-done", status: "completed", items: JSON.stringify(withAnswer("Acme")) });
+  });
+
+  it("refuses changing an answer, and keeps notes editable", async () => {
+    await expect(put("form-done", { sections: withAnswer("Other"), expected_revision: 1 })).resolves.toEqual(objectContaining(httpRefusal));
+    expect(stored("revision", "form-done")).toBe(1);
+
+    await expect(put("form-done", { sections: withAnswer("Acme", "Signed"), expected_revision: 1 })).resolves.toBeNull();
+    expect(stored("revision", "form-done")).toBe(2);
+  });
+
+  it("takes answer changes in the PUT that reopens the run", async () => {
+    await expect(put("form-done", { status: "in_progress", sections: withAnswer("Other"), expected_revision: 1 })).resolves.toBeNull();
+
+    expect(stored("status", "form-done")).toBe("in_progress");
+  });
+});

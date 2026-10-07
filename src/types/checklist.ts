@@ -1,7 +1,11 @@
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { ChecklistFormField, FormFieldKind } from "@/lib/schemas/formFields";
+import type { ChecklistContentType } from "@/lib/schemas/storedSections";
 import type { RequiredTool } from "@/lib/schemas/requiredTools";
 import type { PublicTemplateOwner, TemplateOwner } from "@/lib/schemas/templateOwner";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
+
+export type { ChecklistFormField, FormAnswer, FormFieldKind } from "@/lib/schemas/formFields";
 
 export type ChecklistSubItem = {
   id?: string | undefined;
@@ -11,12 +15,13 @@ export type ChecklistSubItem = {
 
 export type ChecklistItemContent = {
   id?: string;
-  type: "text" | "image" | "video" | "file" | "embed" | "subItems";
+  type: ChecklistContentType;
   value: string;
   uploadType?: "url" | "upload" | undefined;
   fileName?: string | undefined;
   fileSize?: number | undefined;
   subItems?: ChecklistSubItem[] | undefined;
+  fields?: ChecklistFormField[] | undefined;
 };
 
 export type ChecklistItem = {
@@ -88,15 +93,24 @@ export type RetiredRunSubTask = {
   isCompleted: boolean;
 };
 
+export type RetiredRunFormAnswer = {
+  fieldId: string;
+  label: string;
+  kind: FormFieldKind;
+  answer: string;
+};
+
 export type RetiredRunTask = RetiredRunSubTask & {
   notes?: string;
   subTasks: RetiredRunSubTask[];
+  answers?: RetiredRunFormAnswer[];
 };
 
 export type RetiredRunItem =
   | { kind: "section"; id: string; title: string; tasks: RetiredRunTask[] }
   | { kind: "item"; id: string; sectionTitle?: string | undefined; task: RetiredRunTask }
-  | { kind: "subItem"; id: string; itemTitle?: string | undefined; subTask: RetiredRunSubTask };
+  | { kind: "subItem"; id: string; itemTitle?: string | undefined; subTask: RetiredRunSubTask }
+  | { kind: "formAnswer"; id: string; itemTitle?: string | undefined; formAnswer: RetiredRunFormAnswer };
 
 export type RunActor = { userId: string; name: string | null; username: string | null };
 

@@ -140,7 +140,8 @@ export const toolDefinitions = [
   {
     name: "get_run",
     description: "Read a personal run: its sections, tasks, subtasks, completion, notes, progress, status, and "
-      + "revision, and retiredItems (work a template change removed, read-only). No result is larger than 32KB, "
+      + "revision, and retiredItems (work a template change removed, read-only). A form block lists its fields, "
+      + "each with its id, label, kind, required flag, and the run's answer when it has one. No result is larger than 32KB, "
       + "what MCP clients take from one call, so a larger run comes back as an outline instead (sectionsOmitted, "
       + "and outline: each section's id, title, taskCount, and bytes; run.retiredCount and run.retiredBytes say "
       + "how much retired work it holds). Read a section with sectionId, or one task with taskId. A section too "
@@ -175,6 +176,9 @@ export const toolDefinitions = [
       + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes, "
       + `which replace the task's notes and can be at most ${TASK_NOTES_LIMITS}, so they fit in one result `
       + "(get_run returns longer notes written in SERP Lists in parts); "
+      + "set_task_completed with completed true fails with form_incomplete while the task's form has a required "
+      + "field without an answer or an answer that is not valid (details.fields names each taskId and fieldId), and "
+      + "ticking a task's last subtask completes the task only when its form is complete; "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
       + "(it fails with run_incomplete, naming open taskIds, otherwise). A completed run's tasks and subtasks are "
       + "frozen: set_task_completed and set_subtask_completed fail with run_completed until set_run_status "

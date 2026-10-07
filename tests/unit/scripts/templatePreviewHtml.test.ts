@@ -37,4 +37,22 @@ describe('templatePreviewHtml', () => {
     expect(html).not.toContain('<script src');
     expect(html).not.toContain('<iframe');
   });
+
+  it('renders a form as its fields, with each kind, required mark, help text and options, never as an embed', () => {
+    const html = renderTemplatePreviewHtml(normalizePortableTemplate({
+      title: 'Intake',
+      sections: [{ title: 'Kickoff', items: [{ title: 'Brief', contents: [{ type: 'form', value: '', fields: [
+        { label: 'Client <name>', kind: 'text', required: true, description: 'As on the contract' },
+        { label: 'Plan', kind: 'select', options: [{ label: 'Basic' }, { label: 'Pro' }] },
+        { label: 'Seats', kind: 'number', min: 1, max: 9 },
+      ] }] }] }],
+    }));
+
+    expect(html).toContain('<div class="card-label">Form</div>');
+    expect(html).toContain('Client &lt;name&gt; <span class="card-meta">Short text, required</span>');
+    expect(html).toContain('<p>As on the contract</p>');
+    expect(html).toContain('<ul class="form-options"><li>Basic</li><li>Pro</li></ul>');
+    expect(html).toContain('Number, optional, 1 to 9');
+    expect(html).not.toContain('embed-card');
+  });
 });

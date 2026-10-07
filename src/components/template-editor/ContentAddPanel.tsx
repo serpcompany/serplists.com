@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import {
+  ClipboardList,
   Code,
   File,
   FileText,
@@ -26,6 +27,7 @@ const CONTENT_TYPES = [
   { type: "file", icon: File, label: "File" },
   { type: "embed", icon: Code, label: "Embed" },
   { type: "subItems", icon: ListChecks, label: "Sub-tasks" },
+  { type: "form", icon: ClipboardList, label: "Form" },
 ] as const satisfies ReadonlyArray<{
   type: TemplateEditorContentType;
   icon: LucideIcon;

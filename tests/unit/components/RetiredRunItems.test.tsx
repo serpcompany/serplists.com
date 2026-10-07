@@ -46,6 +46,28 @@ describe('RetiredRunItems', () => {
     expect(markup).not.toMatch(/<(input|textarea|button)\b/);
   });
 
+  it('shows the answer of a removed field, and the answers of a removed task, as text', () => {
+    const markup = renderToStaticMarkup(<RetiredRunItems items={[
+      { kind: 'formAnswer', id: 'plan', itemTitle: 'Collect brief', formAnswer: { fieldId: 'plan', label: 'Plan', kind: 'select', answer: 'Pro' } },
+      {
+        kind: 'item',
+        id: 'intake',
+        task: {
+          id: 'intake',
+          title: 'Intake',
+          isCompleted: true,
+          subTasks: [],
+          answers: [{ fieldId: 'name', label: 'Client name', kind: 'text', answer: 'Acme' }],
+        },
+      },
+    ]} />);
+
+    expect(markup).toContain('Plan:</span> Pro');
+    expect(markup).toContain('Answer in Collect brief');
+    expect(markup).toContain('Client name:</span> Acme');
+    expect(markup).not.toMatch(/<(input|textarea|button|select)\b/);
+  });
+
   it('renders nothing when no work was removed', () => {
     expect(renderToStaticMarkup(<RetiredRunItems items={[]} />)).toBe('');
   });

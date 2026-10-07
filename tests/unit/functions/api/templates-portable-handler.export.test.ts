@@ -58,7 +58,7 @@ describe('portable template import/export API', () => {
     ]);
 
     expect(data.kind).toBe('serplists-template-pack');
-    expect(data.schemaVersion).toBe('2.0.0');
+    expect(data.schemaVersion).toBe('2.1.0');
     expect(firstOf(data.templates).visibility).toBe('public');
     expect(firstOf(data.templates).seoTitle).toBe('SEO Title');
     expect(firstOf(data.templates).seoDescription).toBe('SEO Description');

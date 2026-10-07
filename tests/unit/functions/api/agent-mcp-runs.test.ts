@@ -55,20 +55,21 @@ describe("retiredWorkOf", () => {
   const retiredTask = { kind: "item", sectionId: "section-1", item: { id: "task-dns", title: "DNS" } };
   const retiredTaskAgain = { kind: "item", sectionId: "old", item: { id: "task-dns", title: "DNS, earlier" } };
   const retiredSubtask = { kind: "subItem", sectionId: "section-1", itemId: "task-1", subItem: { id: "sub-9" } };
+  const retiredAnswer = { kind: "formAnswer", sectionId: "section-1", itemId: "task-1", field: { id: "field-1", answer: "Acme" } };
   const malformed = [{ kind: "section" }, { kind: "item", item: "not a record" }, { sectionId: "section-1" }, { kind: "subItem" }];
-  const retired = [retiredSection, retiredTask, retiredTaskAgain, retiredSubtask, ...malformed];
+  const retired = [retiredSection, retiredTask, retiredTaskAgain, retiredSubtask, retiredAnswer, ...malformed];
 
   it("returns every entry without a scope", () => {
     expect(retiredWorkOf(retired, {})).toEqual(retired);
   });
 
   it("keeps the retired work of the requested section", () => {
-    expect(retiredWorkOf(retired, { sectionId: "section-1" })).toEqual([retiredTask, retiredSubtask, { sectionId: "section-1" }]);
+    expect(retiredWorkOf(retired, { sectionId: "section-1" })).toEqual([retiredTask, retiredSubtask, retiredAnswer, { sectionId: "section-1" }]);
     expect(retiredWorkOf(retired, { sectionId: "old" })).toEqual([retiredSection, retiredTaskAgain]);
   });
 
   it("keeps the retired work of the requested task, including every copy of a repeated id", () => {
-    expect(retiredWorkOf(retired, { taskId: "task-1" })).toEqual([retiredSubtask]);
+    expect(retiredWorkOf(retired, { taskId: "task-1" })).toEqual([retiredSubtask, retiredAnswer]);
     expect(retiredWorkOf(retired, { taskId: "task-dns" })).toEqual([retiredTask, retiredTaskAgain]);
     expect(retiredWorkOf(retired, { sectionId: "old", taskId: "old-2" })).toEqual([
       { kind: "section", section: { id: "old", title: "Old", items: [{ id: "old-2" }] } },

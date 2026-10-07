@@ -18,12 +18,14 @@ import {
   type SectionRecord,
   type TaskRecord,
 } from "../../../src/lib/schemas/jsonRecords";
-import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import { getTaskSubTasks, isFormBlock, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import type { RunUpdates } from "../utils/checklist-runs";
 import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload } from "../utils/payloads";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { findRunCompletionRefusal } from "../utils/run-completion";
+import { FORM_INCOMPLETE_MESSAGE, formIncompleteDetails, taskFormBlockers } from "../utils/run-form-guard";
+import { FORM_INCOMPLETE_CODE } from "../../../src/lib/schemas/formValidation";
 import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
 type RunRow = typeof schema.checklistRuns.$inferSelect;
@@ -48,6 +50,7 @@ export interface RetiredEntryRecord extends JsonRecord {
   section?: unknown;
   item?: unknown;
   subItem?: unknown;
+  field?: unknown;
   sectionId?: unknown;
   itemId?: unknown;
 }
@@ -63,13 +66,21 @@ export function parseRetiredItems(run: Partial<Pick<RunRow, "retired_items">>): 
   return (parseJsonArray(run.retired_items) ?? []).filter(isRetiredEntryRecord);
 }
 
-const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: TaskRecord | ContentRecord): JsonRecord => rest;
+const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: TaskRecord): JsonRecord => rest;
+
+function agentContentView(content: ContentRecord): JsonRecord {
+  const { subItems, fields, ...rest } = content;
+  return {
+    ...rest,
+    ...(isSubTasksBlock(content) && subItems !== undefined ? { subItems } : {}),
+    ...(isFormBlock(content) && fields !== undefined ? { fields } : {}),
+  };
+}
 
 export function agentTaskView(task: TaskRecord): TaskRecord {
   const view: TaskRecord = withoutSubItems(task);
   if (Array.isArray(task.contents)) {
-    view.contents = task.contents.map((content: unknown) =>
-      isContentRecord(content) && !isSubTasksBlock(content) ? withoutSubItems(content) : content);
+    view.contents = task.contents.map((content: unknown) => (isContentRecord(content) ? agentContentView(content) : content));
   }
   return view;
 }
@@ -153,6 +164,8 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
 
   const subtasks = getTaskSubTasks(task);
   if (operation.operation === "set_task_completed") {
+    const blocked = operation.completed ? taskFormBlockers(task) : [];
+    if (blocked.length > 0) throw new ToolError(FORM_INCOMPLETE_MESSAGE, FORM_INCOMPLETE_CODE, formIncompleteDetails(blocked));
     task.isCompleted = operation.completed;
     for (const subtask of subtasks) subtask.isCompleted = operation.completed;
     return;
@@ -161,7 +174,9 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
   const subtask = subtasks.find((candidate) => readTextId(candidate.id) === operation.subtaskId);
   if (!subtask) throw new ToolError("Subtask not found", "subtask_not_found");
   subtask.isCompleted = operation.completed;
-  task.isCompleted = subtasks.length > 0 && subtasks.every((candidate) => candidate.isCompleted === true);
+  task.isCompleted = subtasks.length > 0
+    && subtasks.every((candidate) => candidate.isCompleted === true)
+    && taskFormBlockers(task).length === 0;
 }
 
 const AUDITED_RUN_FIELDS = [
@@ -211,7 +226,9 @@ export function updateRunAuditDiff(
 }
 
 function retiredRecord(entry: RetiredEntryRecord): ChecklistNodeRecord | null {
-  const record = entry.kind === "section" ? entry.section : entry.kind === "item" ? entry.item : entry.subItem;
+  const record = entry.kind === "section" ? entry.section
+    : entry.kind === "item" ? entry.item
+      : entry.kind === "formAnswer" ? entry.field : entry.subItem;
   return isChecklistNodeRecord(record) ? record : null;
 }
 
@@ -222,7 +239,7 @@ function retiredSectionId(entry: RetiredEntryRecord): unknown {
 function retiredEntriesForTask(entries: RetiredEntryRecord[], taskId: string): RetiredEntryRecord[] {
   return entries.flatMap((entry) => {
     if (entry.kind === "item") return retiredRecord(entry)?.id === taskId ? [entry] : [];
-    if (entry.kind === "subItem") return entry.itemId === taskId ? [entry] : [];
+    if (entry.kind === "subItem" || entry.kind === "formAnswer") return entry.itemId === taskId ? [entry] : [];
     const section = entry.kind === "section" && isSectionRecord(entry.section) ? entry.section : null;
     const task = section ? taskRecordsIn(section.items).find((item) => item.id === taskId) : undefined;
     return section && task ? [{ ...entry, section: { ...section, items: [task] } }] : [];

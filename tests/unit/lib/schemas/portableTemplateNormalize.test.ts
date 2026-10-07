@@ -73,4 +73,40 @@ describe('parsePortableTemplate content blocks with ids or file details the stri
       { id: 'c3', type: 'text', value: 'Other' },
     ]);
   });
+
+  it('cleans form blocks: drops answers, blank fields, blank options, choice fields left without options and forms left empty', () => {
+    expect(
+      contentsOf([
+        {
+          id: 'c1',
+          type: 'form',
+          value: '',
+          subItems: [{ title: 'Hidden' }],
+          fields: [
+            { id: 7, label: 'Name', kind: 'text', required: true, answer: 'Acme', options: [{ label: 'x' }], min: 1 },
+            { id: 'f2', label: '  ', kind: 'text' },
+            { id: 'f3', label: 'Color', kind: 'color' },
+            { id: 'f4', label: 'Plan', kind: 'select', required: 'yes', options: [{ id: 2, label: 'Pro' }, { label: ' ' }], answer: '2' },
+            { id: 'f5', label: 'Tags', kind: 'multiSelect', options: [{ label: '' }] },
+            { id: 'f6', label: 'Seats', kind: 'number', min: 1, max: 'nine', description: 7 },
+            'x',
+          ],
+        },
+        { id: 'c2', type: 'form', value: '', fields: [{ label: '', kind: 'text' }] },
+        { id: 'c3', type: 'text', value: 'Note', fields: [{ label: 'Stray', kind: 'text' }] },
+      ]),
+    ).toEqual([
+      {
+        id: 'c1',
+        type: 'form',
+        value: '',
+        fields: [
+          { id: '7', label: 'Name', kind: 'text', required: true },
+          { id: 'f4', label: 'Plan', kind: 'select', options: [{ id: '2', label: 'Pro' }] },
+          { id: 'f6', label: 'Seats', kind: 'number', min: 1 },
+        ],
+      },
+      { id: 'c3', type: 'text', value: 'Note' },
+    ]);
+  });
 });

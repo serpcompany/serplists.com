@@ -96,7 +96,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template
   editor → Template Settings fields (Required tools: "Add tool", then each tool's "Name", "URL"
   and "Required") → outline "Add section" and "Add task to <section>" →
-  Task Details → "Add Block" → "Save" → My Templates. Below `lg` the outline is a sheet:
+  Task Details → "Add Block" (→ "Form": "Add field", each field's "Label", "Type" and
+  "Required") → "Save" → My Templates. Below `lg` the outline is a sheet:
   "Outline" in the editor's top bar → "Add section" or "Add task to <section>" (the sheet
   closes on the new entry's form) → "Outline" again for the next. On a new Template, "Generate from Clipy"
   → "Generate draft" fills the form first. At the plan's Template limit: "Save" → notice
@@ -107,7 +108,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   save came first: "Save" → "Error" alert → "Load latest version".
 - **Run a checklist, complete it, share it:** My Templates → "Start Run" (card hover, card
   actions menu or list row) → Start a Run dialog → "Start Run" → Run page → task checkbox or
-  "Mark Complete" → "Next Task" → … → last task done → "Complete this Run?" dialog →
+  "Mark Complete" (a task with a form: fill in its fields first; with a required field empty or
+  an answer not valid, the click shows each field's message and moves focus to the first, and
+  saves nothing) → "Next Task" → … → last task done → "Complete this Run?" dialog →
   "Complete Run" → My Runs ("Not yet" keeps the Run in progress, and "Complete run" stays on
   the page). From Template detail or a public
   template page: "Start Run" → the same Start a Run dialog → "Start Run" → Run page. Share:

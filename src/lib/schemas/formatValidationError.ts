@@ -8,6 +8,8 @@ const ARRAY_FIELD_LABELS: Record<string, string> = {
   items: "Item",
   contents: "Content block",
   subItems: "Sub-item",
+  fields: "Form field",
+  options: "Option",
   rules: "Rule",
   categories: "Category",
   tags: "Tag",

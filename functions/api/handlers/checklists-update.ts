@@ -9,8 +9,7 @@ import { buildAuditEventValues } from '../utils/audit';
 import { findRunToUpdate, getRunSubject, writeAuditedRunUpdate, type RunUpdates } from '../utils/checklist-runs';
 import { checkReopenCapacity, reopenLimitResponse } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
-import { contentTooLargeResponse } from '../utils/content-limits';
-import { completedRunTaskChangeResponse } from '../utils/completed-run-freeze';
+import { runSectionsSaveRefusal } from '../utils/run-save-guards';
 
 export async function updateChecklistRun(
   request: Request,
@@ -64,10 +63,8 @@ export async function updateChecklistRun(
   }
   if (nextSections) {
     const storedSections = parseJsonArray(existingRun.items) ?? [];
-    const frozen = completedRunTaskChangeResponse(existingRun, status, storedSections, nextSections);
-    if (frozen) return frozen;
-    const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
-    if (tooLarge) return tooLarge;
+    const refusal = runSectionsSaveRefusal(existingRun, status, storedSections, nextSections);
+    if (refusal) return refusal;
   }
   const reopen = await checkReopenCapacity(env, existingRun, status, userId);
   const reopenRefusal = reopenLimitResponse(reopen);

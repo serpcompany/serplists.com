@@ -3,16 +3,22 @@ import {
   type PortableChecklistTemplate,
 } from "./checklistSchema";
 import { formatZodIssues } from "./formatValidationError";
+import { isFormChoiceKind, isFormFieldKind } from "./formFields";
 import {
+  formFieldRecordsIn,
+  formOptionRecordsIn,
   isContentRecord,
   isRecord,
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
   type ContentRecord,
+  type FormFieldRecord,
+  type FormOptionRecord,
   type JsonRecord,
   type SubTaskRecord,
 } from "./jsonRecords";
+import { CHECKLIST_CONTENT_TYPES } from "./storedSections";
 
 interface PortableTemplateRecord extends JsonRecord {
   title?: unknown;
@@ -23,7 +29,7 @@ interface PortableTemplateRecord extends JsonRecord {
 
 const isBlank = (value: unknown): boolean => typeof value !== "string" || value.trim() === "";
 
-const CONTENT_TYPES = new Set(["text", "image", "video", "file", "embed", "subItems"]);
+const CONTENT_TYPES = new Set<string>(CHECKLIST_CONTENT_TYPES);
 const VALUE_CONTENT_TYPES = new Set(["image", "video", "file", "embed"]);
 
 const withoutKey = (record: JsonRecord, key: string): JsonRecord => {
@@ -34,7 +40,7 @@ const withoutKey = (record: JsonRecord, key: string): JsonRecord => {
 const withoutNonString = (record: JsonRecord, key: string): JsonRecord =>
   typeof record[key] === "string" || !(key in record) ? record : withoutKey(record, key);
 
-const withPortableId = (record: ContentRecord | SubTaskRecord): JsonRecord =>
+const withPortableId = (record: ContentRecord | SubTaskRecord | FormFieldRecord | FormOptionRecord): JsonRecord =>
   typeof record.id === "number" && Number.isFinite(record.id)
     ? { ...record, id: String(record.id) }
     : withoutNonString(record, "id");
@@ -59,19 +65,42 @@ function withPortableContentKeys(content: ContentRecord): ContentRecord {
   return { ...cleaned, subItems };
 }
 
+const isFiniteNumber = (value: unknown): boolean => typeof value === "number" && Number.isFinite(value);
+
+function withPortableFieldKeys(field: FormFieldRecord): JsonRecord[] {
+  const { kind } = field;
+  if (!isFormFieldKind(kind) || isBlank(field.label)) return [];
+  const { answer, options, min, max, required, ...rest } = field;
+  let cleaned = withoutNonString(withPortableId(rest), "description");
+  if (typeof required === "boolean") cleaned = { ...cleaned, required };
+  if (kind === "number") {
+    cleaned = { ...cleaned, ...(isFiniteNumber(min) ? { min } : {}), ...(isFiniteNumber(max) ? { max } : {}) };
+  }
+  if (!isFormChoiceKind(kind)) return [cleaned];
+  const kept = formOptionRecordsIn(options).filter((option) => !isBlank(option.label)).map(withPortableId);
+  return kept.length > 0 ? [{ ...cleaned, options: kept }] : [];
+}
+
 function normalizeContents(contents: unknown[]): JsonRecord[] {
   return contents.filter(isContentRecord).flatMap((record) => {
     if (typeof record.type !== "string" || !CONTENT_TYPES.has(record.type)) return [];
     const content = withPortableContentKeys(record);
     const value = typeof content.value === "string" ? content.value : "";
 
+    const { fields, ...withoutFields } = content;
+    if (record.type === "form") {
+      const { subItems, ...form } = withoutFields;
+      const kept = formFieldRecordsIn(fields).flatMap(withPortableFieldKeys);
+      return kept.length > 0 ? [{ ...form, value, fields: kept }] : [];
+    }
+
     if (record.type === "subItems") {
       const subItems = Array.isArray(content.subItems) ? content.subItems : [];
-      return subItems.length > 0 ? [{ ...content, value, subItems }] : [];
+      return subItems.length > 0 ? [{ ...withoutFields, value, subItems }] : [];
     }
 
     if (VALUE_CONTENT_TYPES.has(record.type) && isBlank(value)) return [];
-    const { subItems, ...block } = content;
+    const { subItems, ...block } = withoutFields;
     return [{ ...block, value }];
   });
 }

@@ -27,6 +27,16 @@ describe('templateStructureChanged', () => {
     expect(changed(storedSections, storedSectionsAsTheEditorResendsThem)).toBe(false);
   });
 
+  it('treats form answers as run state, and a changed field definition as a change', () => {
+    const withField = (field: Record<string, unknown>) => [{ id: 's1', title: 'S', items: [{ id: 't1', title: 'T', contents: [
+      { id: 'c1', type: 'form', value: '', fields: [{ id: 'f1', label: 'Name', kind: 'text', required: true, ...field }] },
+    ] }] }];
+
+    expect(changed(withField({}), withField({ answer: 'Acme' }))).toBe(false);
+    expect(changed(withField({}), withField({ required: false }))).toBe(true);
+    expect(changed(withField({}), withField({ kind: 'longText' }))).toBe(true);
+  });
+
   it('treats an empty template and a missing items value as unchanged', () => {
     expect(changed([], [])).toBe(false);
   });

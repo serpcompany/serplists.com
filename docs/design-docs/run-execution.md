@@ -19,12 +19,13 @@ model in `src/features/run-execution/` works, and why.
 | `useRunExecutionModel.ts` | The page's state (the Run, the selected task, unsaved notes, the Activity) and the actions the page calls |
 | `runExecutionLoad.ts`, `runExecutionMappers.ts` | Loading a Run, mapping the API's rows, when a task is finished, and which task to select |
 | `saveQueue.ts`, `runSaver.ts` | Saves one at a time, double clicks, and recovery when another session saved first |
-| `runExecutionActions.ts` | Each save (tick, Sub-task tick, notes, title, completion) and the queue entries the page binds |
+| `runExecutionActions.ts` | Each save (tick, Sub-task tick, notes, form answer, title, completion) and the queue entries the page binds |
+| `runFormAnswers.ts` | A task's form: a field and its answer by id, whether the form blocks the task, and the refusal that names the first blocking field |
 | `runPersistence.ts`, `runSharing.ts` | Writing a Run privately or through a share link, Share and Stop sharing |
 | `noteDrafts.ts`, `keptNoteDrafts.ts` | Unsaved task notes, and the notes kept when the session ends |
 | `primaryTaskAction.ts`, `taskReveal.ts` | The task panel's main button, and bringing a newly shown task into view |
 | `runHistory.ts`, `retiredRunItems.ts`, `useRunShareLink.ts`, `runTitle.ts`, `taskCheckboxLabel.ts` | The Activity preview, work removed from the Template, the share link dialog, renames, and the task checkbox's accessible name |
-| `useRunPageActions.ts` | The run pages' handlers for ticks, notes and completion, with their toasts and the completion dialog's state |
+| `useRunPageActions.ts` | The run pages' handlers for ticks, notes, form answers and completion, with their toasts, the completion dialog's state and the task whose completion its form refused (`formAttempt`) |
 
 The page is `src/views/ChecklistRun.tsx`, and a shared Run's layout is
 `src/components/run-execution/SharedRunView.tsx`. The task panel, the task list and the phone
@@ -86,8 +87,8 @@ not at the click:
 ### Double clicks
 
 Each queued save has a key naming what the user asked for: `toggle:<task>:<value>` (with the
-block and row for a Sub-task), `notes:<task>:<text>`, `title:<title>`, `complete`, `share` and
-`stop-sharing`. A save whose key is already queued or running is dropped and answers `ignored`:
+block and row for a Sub-task), `notes:<task>:<text>`, `answer:<task>:<field>:<answer as JSON>`,
+`title:<title>`, `complete`, `share` and `stop-sharing`. A save whose key is already queued or running is dropped and answers `ignored`:
 it is the second click of a double click, and repeating it would send a second save, or a second
 completion that conflicts with the first. A different value, such as an untick after a tick, is
 queued as usual.
@@ -99,7 +100,8 @@ behind another, or retried on a reloaded Run, therefore never inverts the user's
 the same change made elsewhere, and a tick that changes nothing sends no request
 (`itemHasCompletion`). Mark Complete ticks every Sub-task of the task too, and a Sub-task tick
 recomputes its task from every Sub-tasks block, not only the clicked one
-(`areItemSubItemsCompleted`). A Sub-task save records the Sub-task's id when it is bound, and
+(`areItemSubItemsCompleted`), and leaves the task open while its form blocks it. A Sub-task
+save records the Sub-task's id when it is bound, and
 `findRunSubItem` finds it by block and row, or by that id when a reloaded Run moved it to another
 row.
 
@@ -162,6 +164,44 @@ its history.
   else's text. A shared Run's page is public and stays open, with its notes, after a sign-out, so
   nothing is kept for it.
 
+## Form answers
+
+A task's Form block holds fields the Template defines; the run keeps each answer on its field
+(`answer`), found by field id. What blocks a task is the one rule in
+`src/lib/schemas/formValidation.ts` (`findFormFieldProblems`), which the API shares.
+
+- `ContentRenderer` renders a form's inputs only when the page passes `onFormAnswerChange`: the
+  run page and the guest run, while the Run is open and the role can change it. Otherwise
+  (template pages, a completed Run, a view-only role, the shared run page) it lists the fields
+  and answers read-only (`FormFieldList`).
+- Each input keeps what the user typed until its save lands, so the field never jumps back.
+  Typed answers (short and long text, URL, email, number, date) save when the field loses focus;
+  a dropdown, a multiple choice, a checkbox and a file save when they change. An answer equal to
+  the saved one sends nothing, unless a save of another answer to the field is still on its way
+  or failed. An empty answer is saved as no answer, and a number that is not a number is not
+  saved.
+- `saveRunFormAnswer` is queued like any save (`answer:<task>:<field>:<answer>`), so it builds on
+  the latest Run and sends its revision. Its retry after `409 edit_conflict` runs only when the
+  reload left that field's answer as it was. It refuses a completed Run (answers freeze, as ticks
+  do) and a share link (`shared_disabled`: answers there are read-only), and a field the task no
+  longer has answers `not_found`.
+- A field's message (`formFieldProblemMessage`) shows once the field was left or changed, and
+  is computed from what the input shows, not only from what is saved.
+- Mark Complete and the task checkbox stay available. `toggleRunItem` refuses to complete a task
+  whose form blocks it before it sends anything (also a task stored as ticked), with
+  `{ kind: 'error', code: 'form_incomplete' }` and a message naming the first blocking field
+  ("Finish this task's form first. <label>: <message>"). The API refuses the same save with
+  `409 form_incomplete`, which the page treats the same way; the answers saved before it stay.
+  `useRunPageActions` toasts the message and counts the refusal on that task (`formAttempt`);
+  the task panel then shows every field's message, and the first form with a problem moves
+  focus to its first one and scrolls it to the middle of the window. A count on mount (the
+  task opened again later) moves nothing.
+- A form gates ticking its task, not completing the Run: `isRunItemFinished` and the API's
+  `findOpenRunTasks` both count a ticked task as finished whatever its form holds
+  (`tests/unit/functions/api/run-completion-rule.test.ts`). Every save path refuses to tick a
+  blocked task, and reconciling a Run reopens a done task whose form a Template change now
+  blocks, so a ticked task with a blocking form is rare. Fields don't count toward progress.
+
 ## Completing a Run
 
 - A task is finished when it is ticked and so is every Sub-task in all of its Sub-tasks blocks
@@ -183,6 +223,35 @@ its history.
   (`usePageVisit`). The leave guard lets them go, since completion saved every draft; a note typed
   while completion was saving still asks. A guest on a share link stays, and the page shows the
   Run completed.
+
+## Forms
+
+A task's form ([form blocks](template-content-types.md#form-blocks)) gates that task and
+nothing else. `findFormFieldProblems` (`src/lib/schemas/formValidation.ts`) is the one rule, and
+every route that ticks a task applies it:
+
+- **`PUT /api/checklists/<id>`** checks each task saved as done whose completion or answers
+  changed, with the stored Run's field definitions and the submitted answers matched by field id
+  (`functions/api/utils/run-form-guard.ts`). The client's copy of the definitions is never trusted,
+  so a payload that drops the form or its `required` flag still fails. A task already done with the
+  answers it was done with is not checked again. The refusal is `409 form_incomplete` with
+  `FORM_INCOMPLETE_MESSAGE` and `details: { fieldCount, fields: [{ taskId, fieldId, reason }] }`,
+  the first 50 fields, and nothing is written.
+- **The shared link** keeps answers read-only: `mergeSharedRunState` copies only completion and
+  notes, so answers a visitor sends are ignored, and ticking a task whose stored form blocks it is
+  refused the same way.
+- **MCP** `set_task_completed` with `completed: true` fails with the tool error `form_incomplete`
+  and the same `details`, and `set_subtask_completed` completes its task only when the form is
+  complete ([agent access](agent-access.md)).
+- **A completed Run's answers are frozen** like its ticks (`completed-run-freeze.ts`): a save that
+  changes one fails with `409 run_completed` unless it reopens the Run. Notes stay editable.
+- **Template changes** carry answers by field id while the kind is unchanged. A field whose kind
+  changed starts empty. The answers of removed and kind-changed fields join the retired work as
+  `formAnswer` entries, which "Removed from Template" shows as "label: answer" under their task's
+  name, and an answer comes back if its field does. A done task whose form now blocks it, after a
+  new required field say, reopens, as a task does when a Sub-task is added.
+- Fields never count toward progress, and a form never blocks Finish Run: `findOpenRunTasks` and
+  the page's `canFinishRun` look only at tasks and Sub-tasks (`run-completion-rule.test.ts`).
 
 ## Moving between tasks
 
@@ -246,10 +315,12 @@ and the page reuses this model rather than a copy of it:
   `createRun` (the active context, its plan gates and their messages), then the created Run is
   loaded by id (`loadRunExecutionData`), so the progress lands on the content the server copied,
   and `carryGuestRunProgress` (`guestRunProgress.ts`) copies ticks and notes onto it by task id,
-  each Sub-task by id or, without one, by block and row (`findRunSubItem`), before one
-  `updateRun` saves it with the loaded revision. A task with Sub-tasks is done exactly when all
-  of them are, and the Run is completed only when the guest run was and every task carried over
-  done. The browser's copy is removed only after that save. A plan gate keeps it: `upgrade_required`
+  each Sub-task by id or, without one, by block and row (`findRunSubItem`), and each form answer
+  by field id while the field's type is unchanged, before one `updateRun` saves it with the
+  loaded revision. A task with Sub-tasks is done exactly when all of them are, a task whose form
+  now blocks it is not carried as done, and the Run is completed only when the guest run was and
+  every task carried over done. A guest's File field shows "Log in to upload", a link to Log in
+  that comes back to the run. The browser's copy is removed only after that save. A plan gate keeps it: `upgrade_required`
   starts Personal checkout (the button stays busy through `useRedirectPending`) or shows the
   Organization's paid-plan message, as Start Run does. If the save of the progress fails after the
   Run was created, the guest run stays and the new Run keeps no progress.

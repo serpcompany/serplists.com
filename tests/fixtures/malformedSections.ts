@@ -2,6 +2,8 @@ export const sectionsWithContents = (...contents: unknown[]) => [{ id: 's1', tit
 
 const withContent = (content: unknown) => sectionsWithContents(content);
 
+const withFormField = (field: Record<string, unknown>) => withContent({ type: 'form', value: '', fields: [field] });
+
 export const MALFORMED_CONTENTS_A_TEMPLATE_STORED = [
   { type: 'subItems', value: '', subItems: 'x' },
   { type: 'text', value: {} },
@@ -30,4 +32,21 @@ export const malformedSectionsStoredBeforeValidation: Array<[string, unknown[]]>
   ['an object item title', [{ id: 's1', title: 'S', items: [{ id: 'i1', title: { en: 'x' } }] }]],
   ['a non-object section', ['x']],
   ['a non-object item', [{ id: 's1', title: 'S', items: [7] }]],
+  ['a string form field list', withContent({ type: 'form', value: '', fields: 'x' })],
+  ['a non-object form field', withContent({ type: 'form', value: '', fields: ['x'] })],
+  ['a form field of an unknown kind', withFormField({ id: 'f', label: 'Name', kind: 'color' })],
+  ['a form field without a kind', withFormField({ id: 'f', label: 'Name' })],
+  ['an object form field label', withFormField({ id: 'f', label: {}, kind: 'text' })],
+  ['a text required flag', withFormField({ id: 'f', label: 'Name', kind: 'text', required: 'yes' })],
+  ['an object help text', withFormField({ id: 'f', label: 'Name', kind: 'text', description: { en: 'x' } })],
+  ['a string option list', withFormField({ id: 'f', label: 'Plan', kind: 'select', options: 'x' })],
+  ['a non-object option', withFormField({ id: 'f', label: 'Plan', kind: 'select', options: ['x'] })],
+  ['an object option label', withFormField({ id: 'f', label: 'Plan', kind: 'select', options: [{ id: 'a', label: {} }] })],
+  ['a text minimum', withFormField({ id: 'f', label: 'Count', kind: 'number', min: '1' })],
+  ['a number answer to a text field', withFormField({ id: 'f', label: 'Name', kind: 'text', answer: 5 })],
+  ['a text answer to a number field', withFormField({ id: 'f', label: 'Count', kind: 'number', answer: '5' })],
+  ['a text answer to a multiple choice field', withFormField({ id: 'f', label: 'Tags', kind: 'multiSelect', answer: 'a' })],
+  ['a number among multiple choice answers', withFormField({ id: 'f', label: 'Tags', kind: 'multiSelect', answer: ['a', 2] })],
+  ['a text answer to a checkbox', withFormField({ id: 'f', label: 'Agree', kind: 'checkbox', answer: 'yes' })],
+  ['a file answer without a URL', withFormField({ id: 'f', label: 'Upload', kind: 'file', answer: { fileName: 'a.pdf' } })],
 ];

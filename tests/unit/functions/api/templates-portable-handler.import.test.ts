@@ -64,6 +64,29 @@ describe('portable template import/export API', () => {
     expect(inserted.rules).toContain('required-field');
   });
 
+  it('imports a 2.1.0 pack with a form, giving its fields ids and storing no answers', async () => {
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const response = await importPack([{
+      title: 'Client intake',
+      sections: [{ title: 'Kickoff', items: [{ title: 'Brief', contents: [{ type: 'form', fields: [
+        { label: 'Client', kind: 'text', required: true, answer: 'From the exporting run' },
+        { label: 'Plan', kind: 'select', options: [{ label: 'Pro' }] },
+      ] }] }] }],
+    }], { schemaVersion: '2.1.0' });
+
+    expect((await readSuccessfulJson(response, importBody)).imported).toBe(1);
+    const stored = storedSectionsIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
+    const [form] = taskAt({ sections: stored }, 0, 0).contents ?? [];
+    expect(form).toEqual(objectContaining({
+      type: 'form',
+      fields: [
+        { id: 'legacy-field-1-1-1', label: 'Client', kind: 'text', required: true },
+        { id: 'legacy-field-1-1-2', label: 'Plan', kind: 'select', options: [{ id: 'option-1', label: 'Pro' }] },
+      ],
+    }));
+  });
+
   it('imports portable template packs into paid team workspaces', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([activeMember('editor')]).mockResolvedValue([]);
 

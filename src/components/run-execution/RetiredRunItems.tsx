@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { Archive, CheckCircle2, Circle } from 'lucide-react';
 
-import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
+import type { RetiredRunFormAnswer, RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
 
 function CompletionState({ isCompleted }: { isCompleted: boolean }): JSX.Element {
   return isCompleted ? (
@@ -31,6 +31,25 @@ function SubTaskList({ subTasks }: { subTasks: RetiredRunSubTask[] }): JSX.Eleme
   );
 }
 
+function FormAnswerLine({ answer }: { answer: RetiredRunFormAnswer }): JSX.Element {
+  return (
+    <p className="text-sm whitespace-pre-wrap wrap-break-word text-foreground">
+      <span className="font-medium">{answer.label || 'Untitled field'}:</span> {answer.answer}
+    </p>
+  );
+}
+
+function FormAnswerList({ answers }: { answers: RetiredRunFormAnswer[] | undefined }): JSX.Element | null {
+  if (!answers?.length) return null;
+  return (
+    <div className="mt-2 space-y-1 border-l border-border pl-3">
+      {answers.map((answer, index) => (
+        <FormAnswerLine key={`${answer.fieldId}:${index}`} answer={answer} />
+      ))}
+    </div>
+  );
+}
+
 function RetiredTask({ task, context }: { task: RetiredRunTask; context?: string | undefined }): JSX.Element {
   return (
     <div>
@@ -45,6 +64,7 @@ function RetiredTask({ task, context }: { task: RetiredRunTask; context?: string
         </p>
       ) : null}
       <SubTaskList subTasks={task.subTasks} />
+      <FormAnswerList answers={task.answers} />
     </div>
   );
 }
@@ -73,6 +93,15 @@ function RetiredEntry({ entry }: { entry: RetiredRunItem }): JSX.Element {
           </div>
           <p className="text-xs text-muted-foreground">
             {entry.itemTitle ? `Sub-task of ${entry.itemTitle}` : 'Sub-task'}
+          </p>
+        </div>
+      );
+    case 'formAnswer':
+      return (
+        <div>
+          <FormAnswerLine answer={entry.formAnswer} />
+          <p className="text-xs text-muted-foreground">
+            {entry.itemTitle ? `Answer in ${entry.itemTitle}` : 'Form answer'}
           </p>
         </div>
       );

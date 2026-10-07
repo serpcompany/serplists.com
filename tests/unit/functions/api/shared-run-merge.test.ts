@@ -205,3 +205,24 @@ describe('sharedRunUpdateSchema', () => {
     expect(parsed).toEqual({ status: 'completed', expected_revision: 2 });
   });
 });
+
+describe('mergeSharedRunState and form answers', () => {
+  it('keeps the stored answers and field definitions, whatever a visitor sends', () => {
+    const storedForm = [{
+      id: 's1',
+      title: 'Kickoff',
+      items: [{
+        id: 'i1',
+        title: 'Brief',
+        isCompleted: false,
+        contents: [{ id: 'c1', type: 'form', value: '', fields: [{ id: 'f1', label: 'Name', kind: 'text', required: true, answer: 'Acme' }] }],
+      }],
+    }];
+    const merged = mergeSharedRunState(storedForm, sharedRunUpdateSchema.parse({
+      sections: [{ id: 's1', items: [{ id: 'i1', contents: [{ type: 'form', fields: [{ id: 'f1', required: false, answer: 'Changed' }] }] }] }],
+      expected_revision: 1,
+    }).sections ?? []);
+
+    expect(merged).toEqual({ sections: storedForm });
+  });
+});

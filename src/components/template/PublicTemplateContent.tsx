@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   File,
   Link2,
   ListTodo,
@@ -9,6 +10,7 @@ import {
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
+import { FormFieldList } from '@/components/shared/FormFieldList';
 import { cn } from '@/lib/utils';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
@@ -139,6 +141,17 @@ export function PublicTemplateContent({
                 <span>{getSubItemDisplayTitle(subItem, index)}</span>
               </div>
             ))}
+          </div>
+        ) : null;
+
+      case 'form':
+        return content.fields?.length ? (
+          <div className="mt-4 space-y-2 border-l-2 pl-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <ClipboardList className="size-4" />
+              Form
+            </div>
+            <FormFieldList fields={content.fields} />
           </div>
         ) : null;
 

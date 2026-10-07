@@ -1,4 +1,10 @@
-import type { ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
+import type { ChecklistFormField, ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
+
+const withNewFieldIds = (fields: ChecklistFormField[] | undefined): { fields?: ChecklistFormField[] } =>
+  fields ? { fields: fields.map((field) => ({ ...field, id: `field_${Date.now()}_${Math.random().toString(36).slice(2, 11)}` })) } : {};
+
+const withoutAnswers = (fields: ChecklistFormField[] | undefined): { fields?: ChecklistFormField[] } =>
+  fields ? { fields: fields.map(({ answer: _cleared, ...field }) => field) } : {};
 
 export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemplate[] => {
   return templates.map(template => {
@@ -16,7 +22,8 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
             subItems: content.subItems?.map(subItem => ({
               ...subItem,
               id: `subitem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-            }))
+            })),
+            ...withNewFieldIds(content.fields),
           }))
         }))
       })),
@@ -58,7 +65,8 @@ const withCompletionCleared = (sections: ChecklistSection[]): ChecklistSection[]
         subItems: content.subItems?.map(subItem => ({
           ...subItem,
           isCompleted: false
-        }))
+        })),
+        ...withoutAnswers(content.fields),
       }))
     }))
   }));

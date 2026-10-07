@@ -163,7 +163,8 @@ export const getSelectedRunItem = (
 };
 
 export const isRunItemFinished = (item: ChecklistItem): boolean =>
-  item.isCompleted === true && getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
+  item.isCompleted === true &&
+  getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
 
 export const areAllRunItemsCompleted = (run: ChecklistRun): boolean =>
   run.sections.every((section) => section.items.every(isRunItemFinished));

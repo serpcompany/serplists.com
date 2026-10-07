@@ -26,6 +26,17 @@ const normalizeSubItems = (subItems?: { title: string }[]) => {
 };
 
 type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
+type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];
+
+type NormalizedFormField = {
+  label: string;
+  kind: PortableFormField["kind"];
+  required: boolean;
+  description?: string;
+  options?: { label: string }[];
+  min?: number;
+  max?: number;
+};
 
 type NormalizedContent = {
   type: PortableContent["type"];
@@ -34,6 +45,7 @@ type NormalizedContent = {
   fileName?: string;
   fileSize?: number;
   subItems?: { title: string }[];
+  fields?: NormalizedFormField[];
 };
 
 type NormalizedItem = { title: string; description?: string; contents?: NormalizedContent[] };
@@ -55,6 +67,20 @@ type NormalizedTemplate = {
   requiredTools?: NonNullable<PortableChecklistTemplate["requiredTools"]>;
 };
 
+const normalizeFormField = (field: PortableFormField): NormalizedFormField => {
+  const next: NormalizedFormField = { label: field.label.trim(), kind: field.kind, required: field.required ?? false };
+  const description = trimOptionalString(field.description);
+  if (description) next.description = description;
+  if (field.kind === "select" || field.kind === "multiSelect") {
+    next.options = field.options.map((option) => ({ label: option.label.trim() }));
+  }
+  if (field.kind === "number" && typeof field.min === "number") next.min = field.min;
+  if (field.kind === "number" && typeof field.max === "number") next.max = field.max;
+  return next;
+};
+
+const holdsNoValue = (type: PortableContent["type"]) => type === "subItems" || type === "form";
+
 const normalizeContents = (contents?: PortableContent[]) => {
   if (!Array.isArray(contents) || contents.length === 0) return undefined;
 
@@ -63,13 +89,13 @@ const normalizeContents = (contents?: PortableContent[]) => {
       type: content.type,
     };
 
-    const normalizedValue = content.type === "subItems"
+    const normalizedValue = holdsNoValue(content.type)
       ? ""
       : typeof content.value === "string"
         ? content.value.trim()
         : "";
 
-    if (content.type !== "subItems" || normalizedValue) {
+    if (!holdsNoValue(content.type)) {
       nextContent.value = normalizedValue;
     }
 
@@ -84,6 +110,8 @@ const normalizeContents = (contents?: PortableContent[]) => {
       const normalizedSubItems = normalizeSubItems(content.subItems);
       if (normalizedSubItems) nextContent.subItems = normalizedSubItems;
     }
+
+    if (content.type === "form") nextContent.fields = content.fields.map(normalizeFormField);
 
     return nextContent;
   });

@@ -60,3 +60,16 @@ Size: 240 KB
 **Embedded Content**
 
 https://status.example.com
+
+- [ ] **Record the launch sign-off**
+
+Every run records who approved the launch and how it went.
+
+**Form**
+
+- Approved by (Short text, required)
+- Approver email (Email, required)
+- Release channel (Dropdown, required)
+  - Options: Stable, Beta
+- Error rate after one hour (%) (Number, optional, 0 to 100): Read it from the status dashboard.
+- Rollback plan reviewed (Checkbox, required)

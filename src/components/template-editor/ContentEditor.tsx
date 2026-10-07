@@ -8,6 +8,7 @@ import { ReorderHandle, ReorderHint, ReorderMoveButtons } from "@/components/tem
 import { dropIndicatorClass, ROW_ACTIONS_REVEAL_CLASS } from "@/components/template-editor/reorder";
 import { useBlockDrag } from "@/components/template-editor/useBlockDrag";
 import { EmbedContentEditor } from "@/components/template-editor/content-types/EmbedContentEditor";
+import { FormFieldsEditor } from "@/components/template-editor/content-types/FormFieldsEditor";
 import { MediaContentEditor } from "@/components/template-editor/content-types/MediaContentEditor";
 import { SubItemsEditor } from "@/components/template-editor/content-types/SubItemsEditor";
 import { TextContentEditor } from "@/components/template-editor/content-types/TextContentEditor";
@@ -134,6 +135,15 @@ export function ContentEditor({
             sectionIndex={sectionIndex}
           />
         );
+      case "form":
+        return (
+          <FormFieldsEditor
+            key={contentIndex}
+            contentIndex={contentIndex}
+            itemIndex={itemIndex}
+            sectionIndex={sectionIndex}
+          />
+        );
       default:
         return null;
     }
@@ -149,6 +159,7 @@ export function ContentEditor({
     file: "File",
     embed: "Embed",
     subItems: "Sub-tasks",
+    form: "Form",
   };
 
   return (

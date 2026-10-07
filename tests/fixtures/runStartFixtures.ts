@@ -19,6 +19,15 @@ export const TEMPLATE_SECTIONS_CARRYING_RUN_STATE = [
               { id: 'sub-3', title: 'Docs updated' },
             ],
           },
+          {
+            id: 'c-form',
+            type: 'form',
+            value: '',
+            fields: [
+              { id: 'field-1', label: 'Client', kind: 'text', required: true, answer: 'Left by the last runner' },
+              { id: 'field-2', label: 'Plan', kind: 'select', required: false, options: [{ id: 'option-1', label: 'Pro' }], answer: 'option-1' },
+            ],
+          },
         ],
       },
       { id: 'task-2', title: 'Legacy task', completed: true, subItems: [{ id: 'sub-4', title: 'Direct', isCompleted: true }] },
@@ -45,6 +54,15 @@ export const UNTICKED_RUN_SECTIONS = [
               { id: 'sub-1', title: 'Tests pass', isCompleted: false },
               { id: 'sub-2', title: 'Preview checked', isCompleted: false },
               { id: 'sub-3', title: 'Docs updated', isCompleted: false },
+            ],
+          },
+          {
+            id: 'c-form',
+            type: 'form',
+            value: '',
+            fields: [
+              { id: 'field-1', label: 'Client', kind: 'text', required: true },
+              { id: 'field-2', label: 'Plan', kind: 'select', required: false, options: [{ id: 'option-1', label: 'Pro' }] },
             ],
           },
         ],
