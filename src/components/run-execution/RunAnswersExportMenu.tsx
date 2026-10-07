@@ -39,7 +39,7 @@ export function RunAnswersExportMenu({ run, template }: RunAnswersExportMenuProp
         <Download data-icon="inline-start" />
         Export answers
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-auto min-w-(--anchor-width)">
         <DropdownMenuItem onClick={() => exportAs('csv')}>
           <FileSpreadsheet />
           Download CSV
