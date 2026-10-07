@@ -87,6 +87,10 @@ _Avoid_: Run, task
 The Resource Owner that currently controls a Template.
 _Avoid_: Creator
 
+**Template Library**:
+The public discovery surface at `/templates/` that lists Public Templates.
+_Avoid_: Discover, Discover Templates, Browse Templates
+
 **Run**:
 An execution snapshot created from a Template, with progress and history independent from the source Template.
 _Avoid_: Template
@@ -96,7 +100,7 @@ A code agent that acts through explicitly delegated access without becoming a Us
 _Avoid_: Agent user, machine profile
 
 **Run Key**:
-A revocable credential that authorizes an Agent to write private templates and operate runs within its permitted Personal or Organization scope.
+A revocable credential that authorizes an Agent to do what its permissions allow (read or write templates, read or write runs) within its permitted Personal or Organization scope. Permissions are chosen when the key is created and cannot be changed.
 _Avoid_: User session, agent account
 
 ### Visibility
@@ -113,4 +117,5 @@ _Avoid_: Unpublished draft
 
 - Capitalize Personal and Organization when naming an Ownership Context: "Switch to Personal", "Organization settings", "Create Organization".
 - Label a paid Organization's plan "Paid". The stored plan value `team` is a legacy implementation detail.
-- Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code.
+- Call `/templates/` the Template Library: "Template Library" where it is a navigation label or a heading, "Browse the Template Library" on buttons. ESLint flags its old names in UI code (Discover, Discover Templates, Browse Templates); prose such as "browse public templates" is fine.
+- Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code: it flags a capitalized Team or Workspace, and "workspace" in prose in any case, the retired term, but not a lowercase "team".

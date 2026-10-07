@@ -1,36 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = { from: vi.fn(), where: vi.fn(), limit: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn(), returning: vi.fn() };
-  return {
-    db: {
-      select: vi.fn(() => selectChain),
-      update: vi.fn(() => updateChain),
-    },
-    selectChain,
-    updateChain,
-  };
-});
-
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
+import { dbMocks } from "../../../support/mockedDrizzleD1";
+import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 
 import {
   authenticatePersonalRunKey,
   createPersonalRunKeySecret,
   markPersonalRunKeyUsed,
 } from "@functions/api/utils/personal-run-key";
+import { apiEnv } from "../../../support/apiEnv";
+import { anyInstanceOf } from "../../../support/asymmetricMatchers";
 
-const mockEnv = { DB: {} as D1Database };
+const mockEnv = apiEnv();
 
 describe("personal run key utility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.returning.mockResolvedValue([]);
   });
 
@@ -47,7 +33,7 @@ describe("personal run key utility", () => {
 
   it("authenticates an active key using a read without recording discovery as use", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "key-1", userId: "user-1", name: "Codex", lastUsedAt: null },
+      { id: "key-1", userId: "user-1", name: "Codex", permissions: '["runs:write","bogus"]', lastUsedAt: null },
     ]);
 
     const identity = await authenticatePersonalRunKey(
@@ -57,7 +43,13 @@ describe("personal run key utility", () => {
       mockEnv,
     );
 
-    expect(identity).toEqual({ keyId: "key-1", userId: "user-1", name: "Codex", lastUsedAt: null });
+    expect(identity).toEqual({
+      keyId: "key-1",
+      userId: "user-1",
+      name: "Codex",
+      permissions: ["templates:read", "runs:read", "runs:write"],
+      lastUsedAt: null,
+    });
     expect(dbMocks.db.select).toHaveBeenCalledOnce();
     expect(dbMocks.db.update).not.toHaveBeenCalled();
   });
@@ -68,9 +60,8 @@ describe("personal run key utility", () => {
     "Bearer ordinary-token",
     "Bearer slrk_has spaces",
   ])("rejects malformed authorization without querying D1: %s", async (authorization) => {
-    const headers = authorization ? { Authorization: authorization } : undefined;
     const identity = await authenticatePersonalRunKey(
-      new Request("http://localhost/api/mcp", { headers }),
+      new Request("http://localhost/api/mcp", authorization ? { headers: { Authorization: authorization } } : {}),
       mockEnv,
     );
 
@@ -98,10 +89,11 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: null,
     });
 
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: expect.any(String) });
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: anyInstanceOf(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
 
     vi.clearAllMocks();
@@ -109,6 +101,7 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: new Date().toISOString(),
     });
     expect(dbMocks.db.update).not.toHaveBeenCalled();

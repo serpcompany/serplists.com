@@ -1,14 +1,22 @@
 import { Env } from './types';
 import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
-import { getClientIp, log } from './utils/logger';
-import { checkRateLimit } from './utils/rate-limit';
-import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
-import { isBodyWithinLimit } from './utils/body';
-import { 
-  handleProfileByUsername, 
+import { describeErrorForLog, getClientIp, log } from './utils/logger';
+import { sanitizeLogPath } from './utils/log-path';
+import { runWithRequestId } from './utils/request-context';
+import { checkAuthRateLimit } from './utils/auth-rate-limit';
+import { checkRouteRateLimit, routeRateLimitResponse } from './utils/route-rate-limit';
+import { createBetterAuth } from './better-auth';
+import { getAuthEmailPolicy, isProductionAuthPolicy } from './utils/auth-policy';
+import { checkRequestBodyLimit } from './utils/body-limit';
+import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
+import { TEST_ACCOUNTS_DISABLED_MESSAGE, blockedTestEmailDomain } from './utils/test-email-block';
+import {
+  handleProfileByHandle,
+  handleProfileByUsername,
   handleProfileById
 } from './handlers/auth';
+import { handleProfileDirectory } from './handlers/profile-directory';
 import { handleTemplates } from './handlers/templates';
 import { handleChecklists } from './handlers/checklists';
 import { handleUploads } from './handlers/uploads';
@@ -19,87 +27,115 @@ import { handleTeams } from './handlers/teams';
 import { handleGenerateTemplateFromClipy } from './handlers/clipy';
 import { handleAgentKeys } from './handlers/agent-keys';
 import { handleAgentMcp } from './handlers/agentMcp';
-import { jsonError } from './utils/response';
+import { authJsonError, jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
-const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
-
-function isProductionHost(hostname: string): boolean {
-  return hostname === 'serplists.com' || hostname.endsWith('.serplists.com');
-}
-
 function isLocalRequest(url: URL): boolean {
+  return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+}
+
+const TEST_EMAIL_CHECKED_AUTH_PATHS = new Set([
+  'auth/register',
+  'auth/login',
+  'auth/sign-up/email',
+  'auth/sign-in/email',
+]);
+
+function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: boolean): boolean {
+  const signUpSendsVerificationEmail = path === 'auth/sign-up/email' && emailVerificationRequired;
   return (
-    url.hostname === 'localhost' ||
-    url.hostname === '127.0.0.1' ||
-    url.port === '8788'
-  );
-}
-
-function isBlockedTestEmail(email: string): boolean {
-  const lower = email.trim().toLowerCase();
-  const atIndex = lower.lastIndexOf('@');
-  if (atIndex < 0) return false;
-  const domain = lower.slice(atIndex + 1);
-  return blockedTestEmailDomains.has(domain);
-}
-
-function isAuthEmailConfigured(env: Env): boolean {
-  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
-}
-
-function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean): boolean {
-  if (path === 'auth/sign-up/email') {
-    return isProdRequest;
-  }
-
-  return (
+    signUpSendsVerificationEmail ||
     path === 'auth/request-password-reset' ||
     path === 'auth/send-verification-email'
   );
 }
 
-export const onRequestGet = handleRequest;
-export const onRequestPost = handleRequest;
-export const onRequestPut = handleRequest;
-export const onRequestDelete = handleRequest;
-export const onRequestOptions = handleCORS;
-
-// Default export for module workers (required for tests)
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return handleCORS({ request, env });
-    }
-    return handleRequest({ request, env });
+async function blockedTestEmailResponse(request: Request, logPath: string): Promise<Response | null> {
+  let body: unknown;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return authJsonError('Invalid JSON', 400);
   }
+  const email =
+    typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
+      ? body.email
+      : '';
+  const blockedDomain = email ? blockedTestEmailDomain(email) : null;
+  if (!blockedDomain) return null;
+  log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path: logPath });
+  return authJsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403, { code: 'test_account_blocked' });
+}
+
+async function handleAuthPost(request: Request, env: Env, path: string, logPath: string): Promise<Response> {
+  if (isProductionAuthPolicy(env) && TEST_EMAIL_CHECKED_AUTH_PATHS.has(path)) {
+    const blocked = await blockedTestEmailResponse(request, logPath);
+    if (blocked) return blocked;
+  }
+
+  const emailPolicy = getAuthEmailPolicy(env);
+  if (
+    requiresConfiguredAuthEmail(path, emailPolicy.emailVerificationRequired) &&
+    !emailPolicy.emailAuthAvailable
+  ) {
+    return authJsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
+      code: 'auth_email_unavailable',
+    });
+  }
+
+  return createBetterAuth(env, request).handler(request);
+}
+
+const api = {
+  fetch(request: Request, env: Env): Promise<Response> {
+    return dispatch({ request, env });
+  },
 };
+
+export default api;
+
+function dispatch(context: { request: Request; env: Env }): Promise<Response> {
+  if (context.request.method === 'OPTIONS') {
+    return handleCORS(context);
+  }
+  return handleRequest(context);
+}
 
 async function handleCORS(context: { request: Request; env: Env }): Promise<Response> {
   return buildCorsPreflightResponse(context.request, context.env);
 }
 
-async function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
-  const { env } = context;
+function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
   const requestId = crypto.randomUUID();
+  return runWithRequestId(requestId, () => respondToRequest(context, requestId));
+}
+
+async function respondToRequest(context: { request: Request; env: Env }, requestId: string): Promise<Response> {
+  const { env } = context;
   const requestHeaders = new Headers(context.request.headers);
   requestHeaders.set('X-Request-Id', requestId);
-  const request = new Request(context.request, { headers: requestHeaders });
+  requestHeaders.delete('X-Forwarded-Host');
+  let request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
+  const logPath = sanitizeLogPath(path);
   const startMs = Date.now();
-  const ip = getClientIp(request);
+  const rateLimitIp = getClientIp(request);
+  const isAuthPath = path.startsWith('auth');
+  const errorResponse = (message: string, status: number) =>
+    isAuthPath ? authJsonError(message, status) : jsonError(message, status);
 
-  const finalize = (resp: Response) => {
+  const finalize = (handlerResponse: Response) => {
+    const resp =
+      request.method === 'HEAD' && handlerResponse.body ? new Response(null, handlerResponse) : handlerResponse;
     resp.headers.set('X-Request-Id', requestId);
     applyCorsHeaders(resp, request, env);
     log('info', 'api_request', {
       requestId,
       method: request.method,
-      path,
+      path: logPath,
       status: resp.status,
       durationMs: Date.now() - startMs,
-      ip: ip ?? undefined,
     });
     return resp;
   };
@@ -117,117 +153,63 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     } catch (error) {
       log('error', 'env_validation_error', {
         requestId,
-        path,
-        message: error instanceof Error ? error.message : String(error),
+        path: logPath,
+        ...describeErrorForLog(error),
       });
-      response = jsonError('Server configuration error', 500);
+      response = errorResponse('Server configuration error', 500);
       return finalize(response);
     }
 
-    if (
-      (request.method === 'POST' || request.method === 'PUT') &&
-      request.headers.get('Content-Type')?.includes('application/json')
-    ) {
-      const maxBytes = path.startsWith('templates/backup') ? 2 * 1024 * 1024 : 1024 * 1024;
-      const maxLabel = path.startsWith('templates/backup') ? '2MB' : '1MB';
-      const contentLength = request.headers.get('Content-Length');
-      if (contentLength) {
-        const bytes = Number.parseInt(contentLength, 10);
-        if (Number.isFinite(bytes) && bytes > maxBytes) {
-          response = jsonError(`Payload too large (max ${maxLabel})`, 413);
-          return finalize(response);
+    const bodyCheck = await checkRequestBodyLimit(request, path);
+    if ('rejection' in bodyCheck) {
+      response = errorResponse(bodyCheck.rejection.error, bodyCheck.rejection.status);
+      return finalize(response);
+    }
+    request = bodyCheck.request;
+
+    if (rateLimitIp) {
+      const limitParams = { method: request.method, path, ip: rateLimitIp, isLocal: isLocalRequest(url) };
+      const authLimit = checkAuthRateLimit(limitParams);
+      const routeLimit = authLimit ? null : checkRouteRateLimit(limitParams);
+      const limit = authLimit ?? routeLimit?.result;
+      if (limit && !limit.allowed) {
+        if (routeLimit) {
+          response = routeRateLimitResponse(routeLimit.bucket, limit.retryAfterSeconds);
+        } else {
+          response = authJsonError('Too many requests. Please try again later.', 429, {
+            code: 'rate_limited',
+            retryAfterSeconds: limit.retryAfterSeconds,
+          });
         }
-      } else {
-        const ok = await isBodyWithinLimit(request.clone(), maxBytes);
-        if (!ok) {
-          response = jsonError(`Payload too large (max ${maxLabel})`, 413);
-          return finalize(response);
-        }
+        return finalize(response);
       }
     }
 
-    if (ip) {
-      const isAuth = path.startsWith('auth/');
-      const isSensitiveWrite =
-        (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
-        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams') || path === 'agent-keys' || path.startsWith('agent-keys/') || path === 'mcp');
-
-      if (isAuth) {
-        const limit = isLocalRequest(url)
-          ? checkRateLimit(`auth:${ip}`, { windowMs: 60 * 60 * 1000, max: 300 })
-          : checkRateLimit(`auth:${ip}`, { windowMs: 5 * 60 * 1000, max: 30 });
-        if (!limit.allowed) {
-          response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
-          return finalize(response);
-        }
-      } else if (isSensitiveWrite) {
-        const limit = checkRateLimit(`write:${ip}`, { windowMs: 60 * 1000, max: 120 });
-        if (!limit.allowed) {
-          response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
-          return finalize(response);
-        }
-      }
+    if (isAuthPath) {
+      const rejection = rejectUnsafeAuthRequest(request, env);
+      if (rejection) return finalize(rejection);
     }
 
-    // Handle specific auth routes
     if (path === 'health') {
       response = new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
       });
     } else if (path === 'auth/status' && request.method === 'GET') {
       response = new Response(
-        JSON.stringify(getAuthEmailPolicy(env, request)),
+        JSON.stringify(getAuthEmailPolicy(env)),
         {
           headers: { 'Content-Type': 'application/json' },
         }
       );
     } else if (path.startsWith('auth') && request.method === 'POST') {
-      let isProdRequest = isProductionHost(url.hostname);
-      if (!isProdRequest && env.FRONTEND_URL) {
-        try {
-          isProdRequest = isProductionHost(new URL(env.FRONTEND_URL).hostname);
-        } catch {
-          // Ignore malformed FRONTEND_URL.
-        }
-      }
-
-      if (
-        isProdRequest &&
-        (path === 'auth/register' ||
-          path === 'auth/login' ||
-          path === 'auth/sign-up/email' ||
-          path === 'auth/sign-in/email')
-      ) {
-        try {
-          const body: unknown = await request.clone().json();
-          const email =
-            typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
-              ? body.email
-              : '';
-          if (email && isBlockedTestEmail(email)) {
-            log('warn', 'blocked_test_user_auth', { email, path });
-            response = jsonError('Test accounts are disabled in production', 403);
-            return finalize(response);
-          }
-        } catch {
-          // Ignore parse errors; auth handler will validate payloads.
-        }
-      }
-
-      if (requiresConfiguredAuthEmail(path, isProdRequest) && !isAuthEmailConfigured(env)) {
-        response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
-          code: 'auth_email_unavailable',
-        });
-        return finalize(response);
-      }
-
-      const auth = createBetterAuth(env, request);
-      response = await auth.handler(request);
+      response = await handleAuthPost(request, env, path, logPath);
     } else if (path.startsWith('auth')) {
       const auth = createBetterAuth(env, request);
       response = await auth.handler(request);
+    } else if (path === 'profiles') {
+      response = await handleProfileDirectory(request, env);
+    } else if (path === 'profiles/by-handle') {
+      response = await handleProfileByHandle(request, env);
     } else if (path === 'profiles/by-username') {
       response = await handleProfileByUsername(request, env);
     } else if (path === 'profiles/by-id') {
@@ -257,22 +239,15 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     }
   } catch (error) {
     if (error instanceof SyntaxError) {
-      response = new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      response = errorResponse('Invalid JSON', 400);
     } else {
       log('error', 'api_error', {
         requestId,
         method: request.method,
-        path,
-        ip: ip ?? undefined,
-        error: error instanceof Error ? error.message : String(error),
+        path: logPath,
+        ...describeErrorForLog(error),
       });
-      response = new Response(JSON.stringify({ error: 'Internal Server Error' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      response = errorResponse('Internal Server Error', 500);
     }
   }
 

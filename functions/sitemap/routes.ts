@@ -1,0 +1,176 @@
+import { count, eq, sql } from 'drizzle-orm';
+
+import { sitemapProfileRevisions, teams, templates, users } from '../../db/schema/index';
+import { createDb } from '../api/db';
+import type { Env } from '../api/types';
+import { cachedSitemap, type SitemapContext, type SitemapRevisions } from './cache';
+import { listedOrganizationCondition, validUsernameCondition } from './listedOwners';
+import {
+  buildDurableShardIndex,
+  bundledInventoryLastmod,
+  bundledTemplateEntries,
+  catalogPageEntry,
+  handleInMemoryPagedSitemap,
+  handlePagedDatabaseSitemap,
+  isValidTemplateSlug,
+  isValidUsername,
+  loadRowsOfTwoLists,
+  loadCategoryEntries,
+  methodNotAllowed,
+  mostRecentLastmod,
+  renderSitemapIndex,
+  requestSupportsSitemap,
+  selectPublicTemplatesOfListedOwners,
+  sitemapImplementationLastmod,
+  staticSitemapEntries,
+  templateOwnerHandle,
+  validTemplateSlugCondition,
+  xmlResponse,
+  type SitemapEntry,
+  type SitemapRowPage,
+} from './shared';
+
+export const shardPageParam = (fileName: string): string =>
+  /^(\d+)\.xml$/i.exec(fileName)?.[1] ?? fileName;
+
+type Db = ReturnType<typeof createDb>;
+
+type ProfileRow = {
+  handle: string | null;
+  created_at: string;
+  updated_at: string | null;
+  profile_revision: string | null;
+};
+
+type TemplateRow = {
+  handle: string | null;
+  slug: string | null;
+  created_at: string;
+  updated_at: string | null;
+  owner_updated_at: string | null;
+};
+
+const selectListedUsers = (db: Db) => db
+  .select({
+    handle: users.username,
+    created_at: users.created_at,
+    updated_at: users.updated_at,
+    profile_revision: sitemapProfileRevisions.revised_at,
+  })
+  .from(users)
+  .leftJoin(sitemapProfileRevisions, eq(sitemapProfileRevisions.user_id, users.id))
+  .where(validUsernameCondition)
+  .orderBy(users.id);
+
+const selectListedOrganizations = (db: Db) => db
+  .select({
+    handle: teams.slug,
+    created_at: teams.created_at,
+    updated_at: teams.updated_at,
+    profile_revision: sql<string | null>`null`,
+  })
+  .from(teams)
+  .where(listedOrganizationCondition)
+  .orderBy(teams.id);
+
+const countListedUsers = async (db: Db): Promise<number> =>
+  (await db.select({ total: count() }).from(users).where(validUsernameCondition)).at(0)?.total ?? 0;
+
+const loadListedProfiles = (db: Db, page: SitemapRowPage): Promise<ProfileRow[]> => loadRowsOfTwoLists(
+  { load: ({ limit, offset }) => selectListedUsers(db).limit(limit).offset(offset), count: () => countListedUsers(db) },
+  ({ limit, offset }) => selectListedOrganizations(db).limit(limit).offset(offset),
+  page,
+);
+
+const selectListedTemplates = (db: Db) =>
+  selectPublicTemplatesOfListedOwners(db, { handle: templateOwnerHandle, slug: templates.slug }, validTemplateSlugCondition)
+    .orderBy(templates.id);
+
+function profileEntry(row: ProfileRow): SitemapEntry | null {
+  const handle = row.handle?.trim() ?? '';
+  return isValidUsername(handle) ? {
+    path: `/profile/${encodeURIComponent(handle)}/`,
+    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
+  } : null;
+}
+
+function templateEntry(row: TemplateRow): SitemapEntry | null {
+  const handle = row.handle?.trim() ?? '';
+  const slug = row.slug?.trim() ?? '';
+  return isValidUsername(handle) && isValidTemplateSlug(slug) ? {
+    path: `/profile/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}/`,
+    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
+  } : null;
+}
+
+const entriesOf = <Row>(rows: Row[], toEntry: (row: Row) => SitemapEntry | null): SitemapEntry[] =>
+  rows.flatMap((row) => toEntry(row) ?? []);
+
+function templateCatalogEntries(revisions: SitemapRevisions): SitemapEntry[] {
+  const landingPage = catalogPageEntry('/templates/');
+  return [{
+    ...landingPage,
+    lastmod: mostRecentLastmod(landingPage.lastmod, revisions.get('templates'), bundledInventoryLastmod('templates')),
+  }, ...bundledTemplateEntries()];
+}
+
+export const serveSitemapIndex = (context: SitemapContext): Promise<Response> =>
+  cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions), 'index');
+
+async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
+  const db = createDb(env);
+  const profiles = entriesOf([...await selectListedUsers(db), ...await selectListedOrganizations(db)], profileEntry);
+  const databaseTemplates = entriesOf(await selectListedTemplates(db), templateEntry);
+  const categoryEntries = await loadCategoryEntries(env);
+  const templateEntries = [...templateCatalogEntries(revisions), ...databaseTemplates];
+  const entries = [
+    ...await buildDurableShardIndex(env, 'pages', staticSitemapEntries(), sitemapImplementationLastmod()),
+    ...await buildDurableShardIndex(env, 'categories', categoryEntries,
+      mostRecentLastmod(revisions.get('categories'), bundledInventoryLastmod('categories'), sitemapImplementationLastmod())),
+    ...await buildDurableShardIndex(env, 'profiles', profiles,
+      mostRecentLastmod(revisions.get('profiles'), sitemapImplementationLastmod())),
+    ...await buildDurableShardIndex(env, 'templates', templateEntries,
+      mostRecentLastmod(revisions.get('templates'), bundledInventoryLastmod('templates'), sitemapImplementationLastmod())),
+  ];
+  return xmlResponse(request, renderSitemapIndex(entries));
+}
+
+export const servePagesSitemap = (request: Request, page: string): Promise<Response> =>
+  handleInMemoryPagedSitemap(request, page, staticSitemapEntries);
+
+export const serveCategoriesSitemap = (context: SitemapContext, page: string): Promise<Response> =>
+  cachedSitemap(context, (request) => handleInMemoryPagedSitemap(
+    request,
+    page,
+    () => loadCategoryEntries(context.env),
+  ), { kind: 'categories', page });
+
+export const serveProfilesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
+  const db = createDb(context.env);
+  return cachedSitemap(context, (request) => handlePagedDatabaseSitemap<ProfileRow>({
+    request,
+    params: { page },
+    loadRows: (page) => loadListedProfiles(db, page),
+    toEntry: profileEntry,
+  }), { kind: 'profiles', page });
+};
+
+export const serveTemplatesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
+  const db = createDb(context.env);
+  return cachedSitemap(context, (request, revisions) => handlePagedDatabaseSitemap<TemplateRow>({
+    request,
+    params: { page },
+    prefixEntries: templateCatalogEntries(revisions),
+    loadRows: async ({ limit, offset }) => await selectListedTemplates(db).limit(limit).offset(offset),
+    toEntry: templateEntry,
+  }), { kind: 'templates', page });
+};
+
+export const redirectLegacySitemap = (request: Request, shard: 'pages' | 'categories'): Response => {
+  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
+  const legacyPage = new URL(request.url).searchParams.get('page');
+  const page = legacyPage && /^\d+$/.test(legacyPage) && Number(legacyPage) >= 1
+    ? legacyPage
+    : '1';
+  return Response.redirect(`https://serplists.com/sitemaps/${shard}/${page}.xml`, 308);
+};

@@ -1,6 +1,3 @@
--- Ensure template slugs are unique.
--- If duplicates exist, suffix the later ones with a stable id fragment.
-
 WITH duplicate_slugs AS (
   SELECT slug
   FROM templates
@@ -21,4 +18,3 @@ SET slug = slug || '-' || substr(id, 1, 8)
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_slug_unique ON templates(slug);
-

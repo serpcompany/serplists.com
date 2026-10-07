@@ -1,39 +1,38 @@
 import { env } from "@/env";
 import { createAuthClient } from "better-auth/react";
 import { usernameClient } from "better-auth/client/plugins";
+import { AuthStatusError, parseRetryAfterSeconds } from "@/lib/auth/authErrors";
+import { authStatusSchema, type AuthStatus } from "@/lib/schemas/authStatus";
 
-const DEV_API_BASE_URL = env.VITE_API_URL ?? "http://localhost:8788/api";
-const API_BASE_URL = import.meta.env.DEV ? DEV_API_BASE_URL : env.VITE_API_URL ?? "/api";
+import { resolveApiBaseUrl, resolveApiServerOrigin } from "@/lib/apiBaseUrl";
 
-const resolveServerOrigin = (): string => {
-  if (API_BASE_URL.startsWith("http://") || API_BASE_URL.startsWith("https://")) {
-    return new URL(API_BASE_URL).origin;
-  }
-  return window.location.origin;
-};
+const API_BASE_URL = resolveApiBaseUrl({
+  configuredUrl: env.NEXT_PUBLIC_API_URL,
+  pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
+});
+
+const PLACEHOLDER_ORIGIN_FOR_SERVER_RENDER = "http://localhost";
+
+const pageOrigin = (): string =>
+  typeof window === "undefined" ? PLACEHOLDER_ORIGIN_FOR_SERVER_RENDER : window.location.origin;
 
 export const authClient = createAuthClient({
-  baseURL: resolveServerOrigin(),
+  baseURL: resolveApiServerOrigin(API_BASE_URL, pageOrigin),
   plugins: [usernameClient()],
   fetchOptions: {
     credentials: "include",
   },
 });
 
-export async function getAuthStatus(): Promise<{
-  accountRegistrationAvailable?: boolean;
-  emailAuthAvailable: boolean;
-  emailVerificationRequired?: boolean;
-}> {
+export async function getAuthStatus(): Promise<AuthStatus> {
   const response = await fetch(`${API_BASE_URL}/auth/status`, {
     credentials: "include",
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to load auth status: ${response.status}`);
+    throw new AuthStatusError(response.status, parseRetryAfterSeconds(response.headers.get("Retry-After")));
   }
 
-  return (await response.json()) as { emailAuthAvailable: boolean };
+  const body: unknown = await response.json();
+  return authStatusSchema.parse(body);
 }
-
-export type Session = typeof authClient.$Infer.Session;

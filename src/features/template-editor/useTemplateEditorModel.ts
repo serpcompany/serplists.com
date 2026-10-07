@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
+import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
+import type { LoadedTemplateOwnership } from "@/features/template-editor/templateEditPermission";
 import {
   type SaveTemplateInput,
   type SaveTemplateResult,
@@ -11,80 +12,162 @@ import {
   buildTemplateEditorFormValues,
   normalizeTemplateEditorFormForSave,
   type TemplateEditorFormValues,
+  validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
+import { findTemplateEditorSlugIssue } from "@/lib/forms/templateEditorDetailsForm";
+import { findTemplateEditorRequiredToolsIssues } from "@/lib/forms/templateEditorRequiredTools";
 import { api } from "@/lib/api";
+import { resolvePublicTemplateOwnerSlug } from "@/lib/routes";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
 type TemplateEditorModelDependencies = {
-  apiClient?: TemplateEditorApiClient;
-  getCachedTemplate?: (id: string) => ChecklistTemplate | undefined;
+  apiClient?: TemplateEditorApiClient | undefined;
   saveTemplate?: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
 };
 
 type TemplateEditorModelOptions = {
-  id?: string;
+  id?: string | undefined;
 };
 
 type LoadTemplateEditorDataOptions = {
   id?: string;
-  getCachedTemplate: (id: string) => ChecklistTemplate | undefined;
 };
 
 type SaveTemplateEditorDataOptions = {
-  id?: string;
+  id?: string | undefined;
+  expectedVersion?: number | undefined;
+  storedSlug?: string | undefined;
   values: TemplateEditorFormValues;
+  loadedIsPublic?: boolean | undefined;
 };
 
 type SaveTemplateEditorDependencies = {
   saveTemplate: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
 };
 
+export type TemplateEditorSaveResult = SaveTemplateResult & {
+  savedValues?: TemplateEditorFormValues;
+  stale?: boolean;
+};
+
 export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
-  templateSlug?: string;
+  templateSlug?: string | undefined;
+  version?: number | undefined;
+  ownerSlug?: string | null | undefined;
+  ownership?: LoadedTemplateOwnership | undefined;
 };
 
-export const buildDefaultTemplateEditorTemplate =
+const buildDefaultTemplateEditorTemplate =
   (): Partial<ChecklistTemplate> => ({});
 
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
+  slugs: { storedSlug?: string | undefined; savedSlug?: string | undefined } = {},
+  stored?: SaveTemplateResult["saved"],
 ): TemplateEditorLoadResult => {
-  const normalizedForm = normalizeTemplateEditorFormForSave(values);
+  const normalizedForm = normalizeTemplateEditorFormForSave(values, slugs);
+  const slug = slugs.savedSlug ?? (normalizedForm.seoUrl || slugs.storedSlug || "");
 
   return {
     initialValues: buildTemplateEditorFormValues({
-      title: normalizedForm.title,
+      title: stored?.title ?? normalizedForm.title,
       description: normalizedForm.description,
-      sections: normalizedForm.sections,
+      sections: stored?.sections ?? normalizedForm.sections,
       seoTitle: normalizedForm.seoTitle,
       seoDescription: normalizedForm.seoDescription,
-      seoUrl: normalizedForm.seoUrl,
-      slug: normalizedForm.seoUrl,
+      seoUrl: slug,
+      slug,
       categories: normalizedForm.categories,
       tags: normalizedForm.tags,
+      requiredTools: normalizedForm.requiredTools,
       type: normalizedForm.templateType,
       isPublic: normalizedForm.isPublic,
     }),
     loadError: null,
-    templateSlug: normalizedForm.seoUrl || undefined,
+    templateSlug: slug || undefined,
   };
 };
 
 export const shouldNavigateToTemplatesAfterSave = (params: {
-  id?: string;
+  id?: string | undefined;
   result: SaveTemplateResult;
 }): boolean => params.result.success && !params.id;
 
+export const shouldLockTemplateEditorWhileSaving = (params: {
+  id?: string | undefined;
+  isSaving: boolean;
+}): boolean => params.isSaving && !params.id;
+
+export const getTemplateSaveSuccessMessage = (params: {
+  id?: string | undefined;
+  result: SaveTemplateResult;
+}): string | null => {
+  if (!params.result.success) {
+    return null;
+  }
+  return params.id ? "Template saved" : "Template created";
+};
+
+export const shouldApplyTemplateEditorSaveResult = (params: {
+  requestedId?: string | undefined;
+  currentId?: string | undefined;
+  mounted: boolean;
+}): boolean => params.mounted && params.requestedId === params.currentId;
+
+export type TemplateSaveFeedback = {
+  successMessage: string | null;
+  errorMessage: string | null;
+  navigateToTemplates: boolean;
+  inlineErrors: SaveTemplateResult["errors"] | null;
+};
+
+export const resolveTemplateSaveFeedback = (params: {
+  id?: string | undefined;
+  result: TemplateEditorSaveResult;
+}): TemplateSaveFeedback => {
+  const successMessage = getTemplateSaveSuccessMessage(params);
+  if (params.result.stale) {
+    const failure = params.result.success ? null : params.result.errors[0]?.message ?? "Failed to save template";
+    return {
+      successMessage,
+      errorMessage: failure ? `Template not saved: ${failure}` : null,
+      navigateToTemplates: false,
+      inlineErrors: null,
+    };
+  }
+  return {
+    successMessage,
+    errorMessage: null,
+    navigateToTemplates: shouldNavigateToTemplatesAfterSave(params),
+    inlineErrors: params.result.errors,
+  };
+};
+
 const buildLoadResult = (
   template?: Partial<ChecklistTemplate>,
+  storedSections: unknown = template?.sections,
 ): TemplateEditorLoadResult => ({
-  initialValues: buildTemplateEditorFormValues(template),
+  initialValues: buildTemplateEditorFormValues({ ...template, sections: storedSections }),
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
+  version: template?.version,
+  ownerSlug: template?.id
+    ? resolvePublicTemplateOwnerSlug({
+        id: template.id,
+        userId: template.userId ?? "",
+        ownerProfile: template.ownerProfile,
+        owner: template.owner,
+        ownerType: template.ownerType,
+        teamId: template.teamId,
+      })
+    : undefined,
+  ownership: template?.id
+    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic ?? false }
+    : undefined,
 });
 
 const getApiClient = (
@@ -110,22 +193,14 @@ export const loadTemplateEditorData = async (
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
   }
 
-  const cachedTemplate = options.getCachedTemplate(options.id);
-  if (cachedTemplate) {
-    return buildLoadResult(cachedTemplate);
-  }
-
   try {
-    const fetchedTemplate = await getApiClient(dependencies).getTemplateById(
-      options.id,
-    );
+    const fetchedTemplate = await getApiClient(dependencies).getTemplateById(options.id);
+    const template = mapApiTemplateToChecklistTemplate(fetchedTemplate, options.id);
+    const storedSections = Array.isArray(fetchedTemplate.sections)
+      ? fetchedTemplate.sections
+      : template.sections;
 
-    return buildLoadResult(
-      mapApiTemplateToChecklistTemplate(
-        fetchedTemplate as Record<string, unknown>,
-        options.id,
-      ),
-    );
+    return buildLoadResult(template, storedSections);
   } catch (error) {
     return {
       initialValues: buildTemplateEditorFormValues(),
@@ -140,9 +215,24 @@ export const saveTemplateEditorData = async (
   options: SaveTemplateEditorDataOptions,
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
-  const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
+  const normalizedForm = normalizeTemplateEditorFormForSave(options.values, {
+    storedSlug: options.storedSlug,
+  });
+  const slugIssue = findTemplateEditorSlugIssue(options.values.seoUrl, options.storedSlug);
+  const validationErrors = [
+    ...validateTemplateEditorFormForSave(normalizedForm),
+    ...findTemplateEditorRequiredToolsIssues(options.values.requiredTools).map((message) => ({ type: "validation" as const, message })),
+    ...(slugIssue ? [{ type: "validation" as const, message: slugIssue }] : []),
+  ];
+  if (validationErrors.length > 0) {
+    return { success: false, errors: validationErrors };
+  }
+  const visibilityUnchanged = Boolean(options.id) && options.loadedIsPublic === normalizedForm.isPublic;
+
   return dependencies.saveTemplate({
     id: options.id,
+    expectedVersion: options.expectedVersion,
+    storedSlug: options.storedSlug,
     title: normalizedForm.title,
     description: normalizedForm.description,
     sections: normalizedForm.sections,
@@ -152,7 +242,8 @@ export const saveTemplateEditorData = async (
     templateType: normalizedForm.templateType,
     categories: normalizedForm.categories,
     tags: normalizedForm.tags,
-    isPublic: normalizedForm.isPublic,
+    requiredTools: normalizedForm.requiredTools,
+    isPublic: visibilityUnchanged ? undefined : normalizedForm.isPublic,
   });
 };
 
@@ -160,29 +251,39 @@ export const useTemplateEditorModel = (
   options: TemplateEditorModelOptions,
   dependencies?: TemplateEditorModelDependencies,
 ) => {
-  const { getTemplate } = useTemplateLists();
   const {
     saveTemplate: persistTemplateSave,
     isSaving,
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
-  const baseGetTemplateRef = useRef(getTemplate);
+  const expectedVersionRef = useRef<number | undefined>(undefined);
+  const currentIdRef = useRef(options.id);
+  const mountedRef = useRef(true);
+  const loadedIsPublicRef = useRef<boolean | undefined>(undefined);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
   );
-  const getCachedTemplateRef = useRef<
-    ((id: string) => ChecklistTemplate | undefined) | undefined
-  >(dependencies?.getCachedTemplate);
+  const [reloadCount, setReloadCount] = useState(0);
   const [initialValues, setInitialValues] = useState<TemplateEditorFormValues>(
     () => buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
   );
   const [loading, setLoading] = useState(() => Boolean(options.id));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
+  const [ownerSlug, setOwnerSlug] = useState<string | null | undefined>();
+  const [ownership, setOwnership] = useState<LoadedTemplateOwnership | undefined>();
 
-  apiClientRef.current = dependencies?.apiClient;
-  baseGetTemplateRef.current = getTemplate;
-  getCachedTemplateRef.current = dependencies?.getCachedTemplate;
+  useLayoutEffect(() => {
+    apiClientRef.current = dependencies?.apiClient;
+    currentIdRef.current = options.id;
+  });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,11 +291,14 @@ export const useTemplateEditorModel = (
     const load = async () => {
       if (!options.id) {
         loadedTemplateIdRef.current = null;
+        expectedVersionRef.current = undefined;
         setInitialValues(
           buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
         );
         setLoadError(null);
         setTemplateSlug(undefined);
+        setOwnerSlug(undefined);
+        setOwnership(undefined);
         setLoading(false);
         return;
       }
@@ -205,16 +309,11 @@ export const useTemplateEditorModel = (
       }
 
       setLoading(true);
+      expectedVersionRef.current = undefined;
 
       const result = await loadTemplateEditorData(
-        {
-          id: options.id,
-          getCachedTemplate:
-            getCachedTemplateRef.current ?? baseGetTemplateRef.current,
-        },
-        {
-          apiClient: apiClientRef.current,
-        },
+        { id: options.id },
+        { apiClient: apiClientRef.current },
       );
 
       if (cancelled) {
@@ -222,9 +321,13 @@ export const useTemplateEditorModel = (
       }
 
       loadedTemplateIdRef.current = options.id;
+      expectedVersionRef.current = result.version;
+      loadedIsPublicRef.current = result.loadError ? undefined : result.initialValues.isPublic;
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
+      setOwnerSlug(result.ownerSlug);
+      setOwnership(result.ownership);
       setLoading(false);
     };
 
@@ -233,37 +336,74 @@ export const useTemplateEditorModel = (
     return () => {
       cancelled = true;
     };
-  }, [options.id]);
+  }, [options.id, reloadCount]);
+
+  const getVersion = () => expectedVersionRef.current;
+  const setVersion = (version: number | undefined) => {
+    expectedVersionRef.current = version;
+  };
+
+  const reload = () => {
+    loadedTemplateIdRef.current = null;
+    setReloadCount((count) => count + 1);
+  };
 
   const save = async (
     values: TemplateEditorFormValues,
-  ): Promise<SaveTemplateResult> => {
+  ): Promise<TemplateEditorSaveResult> => {
+    const submitted = cloneTemplateEditorFormValues(values);
+    const requestedId = options.id;
     const result = await saveTemplateEditorData(
       {
-        id: options.id,
-        values,
+        id: requestedId,
+        expectedVersion: expectedVersionRef.current,
+        loadedIsPublic: loadedIsPublicRef.current,
+        storedSlug: templateSlug,
+        values: submitted,
       },
       {
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
       },
     );
 
-    if (result.success) {
-      const savedState = buildTemplateEditorSavedState(values);
-      setInitialValues(savedState.initialValues);
-      setLoadError(null);
-      setTemplateSlug(savedState.templateSlug || templateSlug);
+    if (
+      !shouldApplyTemplateEditorSaveResult({
+        requestedId,
+        currentId: currentIdRef.current,
+        mounted: mountedRef.current,
+      })
+    ) {
+      return { ...result, stale: true };
     }
 
-    return result;
+    if (!result.success) {
+      return result;
+    }
+
+    expectedVersionRef.current = result.version;
+    const savedState = buildTemplateEditorSavedState(
+      submitted,
+      { storedSlug: templateSlug, savedSlug: result.slug },
+      result.saved,
+    );
+    loadedIsPublicRef.current = savedState.initialValues.isPublic;
+    setLoadError(null);
+    setTemplateSlug(savedState.templateSlug || templateSlug);
+
+    return { ...result, savedValues: savedState.initialValues };
   };
 
   return {
+    getVersion,
     initialValues,
     loading,
     loadError,
+    reload,
     save,
+    setVersion,
     isSaving,
+    ownerSlug,
+    ownership,
     templateSlug,
   };
 };

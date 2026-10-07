@@ -1,44 +1,36 @@
 import type { Env } from '../types';
-
-export function normalizeOrigin(value: string): string | null {
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
-}
+import { parseAllowedOrigin, parseOriginList } from './origin-list';
 
 export function resolveConfiguredCorsOrigins(env: Env): string[] {
   const allowed = new Set<string>();
 
   if (env.FRONTEND_URL) {
-    const origin = normalizeOrigin(env.FRONTEND_URL);
+    const origin = parseAllowedOrigin(env.FRONTEND_URL);
     if (origin) allowed.add(origin);
   }
 
   if (env.CORS_ALLOWED_ORIGINS) {
-    for (const raw of env.CORS_ALLOWED_ORIGINS.split(",")) {
-      const trimmed = raw.trim();
-      if (!trimmed) continue;
-      const origin = normalizeOrigin(trimmed);
-      if (origin) allowed.add(origin);
-    }
+    for (const origin of parseOriginList(env.CORS_ALLOWED_ORIGINS).origins) allowed.add(origin);
   }
 
   return Array.from(allowed);
 }
 
+function isCorsAllowlistSet(env: Env): boolean {
+  return Boolean(env.FRONTEND_URL?.trim() || env.CORS_ALLOWED_ORIGINS?.trim());
+}
+
+export function resolveTrustedOrigins(request: Request, env: Env): Set<string> {
+  return new Set([new URL(request.url).origin, ...resolveConfiguredCorsOrigins(env)]);
+}
+
 export function resolveCorsOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('Origin');
-  const allowed = new Set(resolveConfiguredCorsOrigins(env));
-
-  if (allowed.size === 0) {
-    if (!origin) return '*';
-    return origin;
-  }
   if (!origin) return '*';
+  if (origin === 'null') return null;
 
-  return allowed.has(origin) ? origin : null;
+  if (!isCorsAllowlistSet(env)) return origin;
+  return resolveConfiguredCorsOrigins(env).includes(origin) ? origin : null;
 }
 
 export function applyCorsHeaders(response: Response, request: Request, env: Env): Response {
@@ -51,7 +43,7 @@ export function applyCorsHeaders(response: Response, request: Request, env: Env)
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-Request-Id, X-CSRF-Token, X-Requested-With'
   );
-  response.headers.set('Access-Control-Expose-Headers', 'X-Request-Id');
+  response.headers.set('Access-Control-Expose-Headers', 'X-Request-Id, Retry-After');
 
   if (origin !== '*') {
     response.headers.append('Vary', 'Origin');

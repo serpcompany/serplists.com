@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { users } from "./users";
 
-export const stripe_customers = sqliteTable(
+export const stripeCustomers = sqliteTable(
   "stripe_customers",
   {
     user_id: text("user_id"),
@@ -13,7 +13,7 @@ export const stripe_customers = sqliteTable(
   (table) => [primaryKey({ columns: [table.user_id] })],
 );
 
-export const stripe_subscriptions = sqliteTable(
+export const stripeSubscriptions = sqliteTable(
   "stripe_subscriptions",
   {
     stripe_subscription_id: text("stripe_subscription_id"),
@@ -35,7 +35,7 @@ export const stripe_subscriptions = sqliteTable(
   ],
 );
 
-export const stripe_webhook_events = sqliteTable(
+export const stripeWebhookEvents = sqliteTable(
   "stripe_webhook_events",
   {
     id: text("id"),

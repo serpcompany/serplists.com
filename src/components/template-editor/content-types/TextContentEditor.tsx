@@ -1,11 +1,10 @@
+import { useId } from "react";
+
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ReactMarkdown from "react-markdown";
 import { FileText } from "lucide-react";
-import remarkGfm from "remark-gfm";
-import { normalizeMarkdownDisplayText } from "@/lib/utils/markdownDisplay";
-import { safeUrl } from "@/lib/utils/safeUrl";
+import { MarkdownBlock } from "@/components/shared/MarkdownBlock";
 
 interface TextContentEditorProps {
   value: string;
@@ -13,9 +12,10 @@ interface TextContentEditorProps {
 }
 
 export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) => {
+  const textareaId = useId();
   return (
     <div>
-      <Label className="flex items-center gap-2 mb-3">
+      <Label className="flex items-center gap-2 mb-3" htmlFor={textareaId}>
         <FileText className="h-4 w-4" /> Text Content
       </Label>
       <Tabs defaultValue="edit">
@@ -25,6 +25,7 @@ export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) =
         </TabsList>
         <TabsContent value="edit">
           <Textarea
+            id={textareaId}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Enter text or markdown content"
@@ -32,11 +33,7 @@ export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) =
           />
         </TabsContent>
         <TabsContent value="preview">
-          <div className="prose prose-sm max-w-none min-h-[150px] rounded-md border p-3 whitespace-pre-line">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-              {normalizeMarkdownDisplayText(value)}
-            </ReactMarkdown>
-          </div>
+          <MarkdownBlock value={value} className="min-h-[150px] rounded-md border p-3" />
         </TabsContent>
       </Tabs>
     </div>

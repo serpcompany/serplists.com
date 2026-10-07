@@ -1,15 +1,21 @@
-# Installed automatically by `pnpm install` (the `prepare` script).
-# Commit hooks stay fast (staged files only); push runs the full gate CI runs.
 pre-commit:
   parallel: true
   commands:
     secret-scan:
-      run: pnpm exec secretlint {staged_files}
+      run: node --import tsx scripts/secret-scan.ts {staged_files}
     lint:
-      glob: "*.{ts,tsx,js,mjs,cjs}"
-      run: pnpm exec eslint --no-warn-ignored --pass-on-unpruned-suppressions {staged_files}
+      glob: "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
+      run: pnpm exec eslint --no-warn-ignored {staged_files}
+    comments:
+      glob: "*{.yml,.yaml,.toml,.sql,.css,.json,.jsonc,.xml,.xsd,.svg,.md,.patch,.diff,.gitignore,.gitattributes,.npmrc,.dev.vars*,.env*}"
+      run: node --import tsx scripts/check-no-comments.ts {staged_files}
+
+commit-msg:
+  commands:
+    fix-needs-a-test:
+      run: node --import tsx scripts/check-fix-commits.ts --commit-msg {1}
 
 pre-push:
   commands:
     verify:
-      run: pnpm run verify
+      run: node --import tsx scripts/run-at-low-priority.ts pnpm run verify

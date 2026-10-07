@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+
+import { generateSlug as serverSlug } from '@functions/api/utils/slug';
+import { categorySlug } from '@functions/sitemap/shared';
+import { generateSlug as clientSlug } from '@/utils/urlHelpers';
+import { buildCategorySlug } from '@/lib/routes';
+
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const hasNoLettersOfAnotherScriptThanLatin = (input: string) => !/[^\P{L}\p{Script=Latin}]/u.test(input);
+
+const cases: Array<[string, string]> = [
+  ['Café Opening Checklist', 'cafe-opening-checklist'],
+  ['Umzugscheckliste für Familien', 'umzugscheckliste-fur-familien'],
+  ['Crème Brûlée', 'creme-brulee'],
+  ['Señor Niño', 'senor-nino'],
+  ['Straße', 'strasse'],
+  ['STRASSE ẞ', 'strasse-ss'],
+  ['Ærø Ferry Łódź', 'aero-ferry-lodz'],
+  ['Œuvre Þing Đakovo', 'oeuvre-thing-dakovo'],
+  ['İstanbul Trip', 'istanbul-trip'],
+  ['ﬁnal ＡＢＣ ２０２６', 'final-abc-2026'],
+  ["Mom's List", 'moms-list'],
+  ['Q&A Prep', 'qa-prep'],
+  ['🚀 Launch Plan', 'launch-plan'],
+  ['Список покупок', ''],
+  ['   ', ''],
+];
+
+describe('one slug rule for templates, Organizations, and categories', () => {
+  it.each(cases)('%s -> %s', (input, expected) => {
+    expect(serverSlug(input)).toBe(expected);
+  });
+
+  it.each(cases)('the page, the API, and the sitemap agree on %s', (input) => {
+    expect(clientSlug(input)).toBe(serverSlug(input));
+    expect(categorySlug(input)).toBe(buildCategorySlug(input));
+  });
+
+  it.each(cases.filter(([input]) => hasNoLettersOfAnotherScriptThanLatin(input)))(
+    'gives the Latin-script category %s the template slug, since a category slug also keeps letters of other scripts',
+    (input) => {
+      expect(categorySlug(input)).toBe(serverSlug(input));
+      expect(buildCategorySlug(input)).toBe(serverSlug(input));
+    },
+  );
+
+  it('keeps a category name in another script instead of dropping it', () => {
+    expect(serverSlug('Список покупок')).toBe('');
+    expect(categorySlug('Список покупок')).toBe('список-покупок');
+    expect(buildCategorySlug('Список покупок')).toBe('список-покупок');
+  });
+
+  it.each(cases)('gives a stored slug back unchanged, so resending it never changes a URL (%s)', (input) => {
+    const slug = serverSlug(input);
+    expect(serverSlug(slug)).toBe(slug);
+    if (slug) expect(slug).toMatch(SLUG_PATTERN);
+  });
+
+  it('resolves an accented category from the slug the sitemap lists', () => {
+    expect(buildCategorySlug(categorySlug('Café Guides'))).toBe(buildCategorySlug('Café Guides'));
+    expect(categorySlug('Café Guides')).toBe('cafe-guides');
+  });
+});

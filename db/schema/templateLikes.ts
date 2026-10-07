@@ -2,7 +2,7 @@ import { primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { templates } from "./templates";
 import { users } from "./users";
 
-export const template_likes = sqliteTable(
+export const templateLikes = sqliteTable(
   "template_likes",
   {
     user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

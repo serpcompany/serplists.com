@@ -3,29 +3,74 @@
   "description": "SQL-only objects preserved by the Wrangler migration history and excluded from the Drizzle schema.",
   "triggers": [
     {
+      "name": "public_handles_teams_delete",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_delete AFTER DELETE ON teams BEGIN DELETE FROM public_handles WHERE owner_type = 'team' AND owner_id = OLD.id; END"
+    },
+    {
+      "name": "public_handles_teams_insert",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_insert AFTER INSERT ON teams WHEN NEW.slug IS NOT NULL AND trim(NEW.slug) <> '' BEGIN INSERT INTO public_handles (handle, owner_type, owner_id, created_at) VALUES (lower(trim(NEW.slug)), 'team', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now')); END"
+    },
+    {
+      "name": "public_handles_teams_update",
+      "table": "teams",
+      "definition": "CREATE TRIGGER public_handles_teams_update AFTER UPDATE OF slug ON teams WHEN OLD.slug IS NOT NEW.slug BEGIN DELETE FROM public_handles WHERE owner_type = 'team' AND owner_id = NEW.id; INSERT INTO public_handles (handle, owner_type, owner_id, created_at) SELECT lower(trim(NEW.slug)), 'team', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE NEW.slug IS NOT NULL AND trim(NEW.slug) <> ''; END"
+    },
+    {
+      "name": "public_handles_users_delete",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_delete AFTER DELETE ON users BEGIN DELETE FROM public_handles WHERE owner_type = 'user' AND owner_id = OLD.id; END"
+    },
+    {
+      "name": "public_handles_users_insert",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_insert AFTER INSERT ON users WHEN NEW.username IS NOT NULL AND trim(NEW.username) <> '' BEGIN INSERT INTO public_handles (handle, owner_type, owner_id, created_at) VALUES (lower(trim(NEW.username)), 'user', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now')); END"
+    },
+    {
+      "name": "public_handles_users_update",
+      "table": "users",
+      "definition": "CREATE TRIGGER public_handles_users_update AFTER UPDATE OF username ON users WHEN OLD.username IS NOT NEW.username BEGIN DELETE FROM public_handles WHERE owner_type = 'user' AND owner_id = NEW.id; INSERT INTO public_handles (handle, owner_type, owner_id, created_at) SELECT lower(trim(NEW.username)), 'user', NEW.id, strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE NEW.username IS NOT NULL AND trim(NEW.username) <> ''; END"
+    },
+    {
       "name": "sitemap_owner_users_insert",
       "table": "users",
       "definition": "CREATE TRIGGER sitemap_owner_users_insert AFTER INSERT ON users BEGIN INSERT INTO sitemap_owner_revisions VALUES(NEW.id,COALESCE(NEW.updated_at,NEW.created_at)); END"
     },
     {
+      "name": "sitemap_teams_delete",
+      "table": "teams",
+      "definition": "CREATE TRIGGER sitemap_teams_delete AFTER DELETE ON teams WHEN OLD.archived_at IS NULL AND LENGTH(TRIM(OLD.slug)) BETWEEN 3 AND 30 AND TRIM(OLD.slug) NOT GLOB '*[^A-Za-z0-9_.-]*' BEGIN UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles'; END"
+    },
+    {
+      "name": "sitemap_teams_insert",
+      "table": "teams",
+      "definition": "CREATE TRIGGER sitemap_teams_insert AFTER INSERT ON teams WHEN NEW.archived_at IS NULL AND LENGTH(TRIM(NEW.slug)) BETWEEN 3 AND 30 AND TRIM(NEW.slug) NOT GLOB '*[^A-Za-z0-9_.-]*' BEGIN UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles'; END"
+    },
+    {
+      "name": "sitemap_teams_update",
+      "table": "teams",
+      "definition": "CREATE TRIGGER sitemap_teams_update AFTER UPDATE ON teams WHEN (OLD.slug IS NOT NEW.slug OR OLD.archived_at IS NOT NEW.archived_at OR OLD.created_at IS NOT NEW.created_at OR OLD.updated_at IS NOT NEW.updated_at) AND ((OLD.archived_at IS NULL AND LENGTH(TRIM(OLD.slug)) BETWEEN 3 AND 30 AND TRIM(OLD.slug) NOT GLOB '*[^A-Za-z0-9_.-]*') OR (NEW.archived_at IS NULL AND LENGTH(TRIM(NEW.slug)) BETWEEN 3 AND 30 AND TRIM(NEW.slug) NOT GLOB '*[^A-Za-z0-9_.-]*')) BEGIN INSERT INTO sitemap_category_revisions SELECT DISTINCT t.category,strftime('%Y-%m-%d %H:%M:%f','now') FROM templates t WHERE (OLD.slug IS NOT NEW.slug OR OLD.archived_at IS NOT NEW.archived_at) AND t.team_id=NEW.id AND +t.owner_type='team' AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles' OR ((OLD.slug IS NOT NEW.slug OR OLD.archived_at IS NOT NEW.archived_at) AND ( (kind='templates' AND EXISTS (SELECT 1 FROM templates t WHERE t.team_id=NEW.id AND +t.owner_type='team' AND +t.is_public=1 AND t.deleted_at IS NULL)) OR (kind='categories' AND EXISTS (SELECT 1 FROM templates t WHERE t.team_id=NEW.id AND +t.owner_type='team' AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'')) )); END"
+    },
+    {
       "name": "sitemap_templates_delete",
       "table": "templates",
-      "definition": "CREATE TRIGGER sitemap_templates_delete AFTER DELETE ON templates WHEN OLD.owner_type='user' AND OLD.team_id IS NULL AND OLD.is_public=1 AND OLD.deleted_at IS NULL BEGIN INSERT INTO sitemap_profile_revisions VALUES(OLD.user_id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT OLD.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE OLD.category IS NOT NULL AND TRIM(OLD.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now'); END"
+      "definition": "CREATE TRIGGER sitemap_templates_delete AFTER DELETE ON templates WHEN OLD.is_public=1 AND OLD.deleted_at IS NULL AND ((OLD.owner_type='user' AND OLD.team_id IS NULL) OR (OLD.owner_type='team' AND OLD.team_id IS NOT NULL AND OLD.team_id<>'')) BEGIN INSERT INTO sitemap_profile_revisions SELECT OLD.user_id,strftime('%Y-%m-%d %H:%M:%f','now') WHERE OLD.owner_type='user' AND OLD.team_id IS NULL ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT OLD.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE OLD.category IS NOT NULL AND TRIM(OLD.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind<>'profiles' OR (OLD.owner_type='user' AND OLD.team_id IS NULL); END"
     },
     {
       "name": "sitemap_templates_insert",
       "table": "templates",
-      "definition": "CREATE TRIGGER sitemap_templates_insert AFTER INSERT ON templates WHEN NEW.owner_type='user' AND NEW.team_id IS NULL AND NEW.is_public=1 AND NEW.deleted_at IS NULL BEGIN INSERT INTO sitemap_profile_revisions VALUES(NEW.user_id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT NEW.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE NEW.category IS NOT NULL AND TRIM(NEW.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now'); END"
+      "definition": "CREATE TRIGGER sitemap_templates_insert AFTER INSERT ON templates WHEN NEW.is_public=1 AND NEW.deleted_at IS NULL AND ((NEW.owner_type='user' AND NEW.team_id IS NULL) OR (NEW.owner_type='team' AND NEW.team_id IS NOT NULL AND NEW.team_id<>'')) BEGIN INSERT INTO sitemap_profile_revisions SELECT NEW.user_id,strftime('%Y-%m-%d %H:%M:%f','now') WHERE NEW.owner_type='user' AND NEW.team_id IS NULL ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT NEW.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE NEW.category IS NOT NULL AND TRIM(NEW.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind<>'profiles' OR (NEW.owner_type='user' AND NEW.team_id IS NULL); END"
     },
     {
       "name": "sitemap_templates_update",
       "table": "templates",
-      "definition": "CREATE TRIGGER sitemap_templates_update AFTER UPDATE ON templates WHEN (OLD.owner_type='user' AND OLD.team_id IS NULL AND OLD.is_public=1 AND OLD.deleted_at IS NULL) OR (NEW.owner_type='user' AND NEW.team_id IS NULL AND NEW.is_public=1 AND NEW.deleted_at IS NULL) BEGIN INSERT INTO sitemap_profile_revisions VALUES(OLD.user_id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_profile_revisions VALUES(NEW.user_id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT OLD.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE OLD.category IS NOT NULL AND TRIM(OLD.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT NEW.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE NEW.category IS NOT NULL AND TRIM(NEW.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now'); END"
+      "definition": "CREATE TRIGGER sitemap_templates_update AFTER UPDATE ON templates WHEN (OLD.is_public=1 AND OLD.deleted_at IS NULL AND ((OLD.owner_type='user' AND OLD.team_id IS NULL) OR (OLD.owner_type='team' AND OLD.team_id IS NOT NULL AND OLD.team_id<>''))) OR (NEW.is_public=1 AND NEW.deleted_at IS NULL AND ((NEW.owner_type='user' AND NEW.team_id IS NULL) OR (NEW.owner_type='team' AND NEW.team_id IS NOT NULL AND NEW.team_id<>''))) BEGIN INSERT INTO sitemap_profile_revisions SELECT OLD.user_id,strftime('%Y-%m-%d %H:%M:%f','now') WHERE (OLD.owner_type='user' AND OLD.team_id IS NULL AND OLD.is_public=1 AND OLD.deleted_at IS NULL) OR (NEW.owner_type='user' AND NEW.team_id IS NULL AND NEW.is_public=1 AND NEW.deleted_at IS NULL) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_profile_revisions SELECT NEW.user_id,strftime('%Y-%m-%d %H:%M:%f','now') WHERE (OLD.owner_type='user' AND OLD.team_id IS NULL AND OLD.is_public=1 AND OLD.deleted_at IS NULL) OR (NEW.owner_type='user' AND NEW.team_id IS NULL AND NEW.is_public=1 AND NEW.deleted_at IS NULL) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT OLD.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE OLD.category IS NOT NULL AND TRIM(OLD.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT NEW.category,strftime('%Y-%m-%d %H:%M:%f','now') WHERE NEW.category IS NOT NULL AND TRIM(NEW.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind<>'profiles' OR (OLD.owner_type='user' AND OLD.team_id IS NULL AND OLD.is_public=1 AND OLD.deleted_at IS NULL) OR (NEW.owner_type='user' AND NEW.team_id IS NULL AND NEW.is_public=1 AND NEW.deleted_at IS NULL); END"
     },
     {
       "name": "sitemap_users_delete",
       "table": "users",
-      "definition": "CREATE TRIGGER sitemap_users_delete BEFORE DELETE ON users BEGIN INSERT INTO sitemap_category_revisions SELECT DISTINCT t.category,strftime('%Y-%m-%d %H:%M:%f','now') FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE (kind='profiles' AND LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.]*') OR (kind='templates' AND LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.]*' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL)) OR (kind='categories' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'')); END"
+      "definition": "CREATE TRIGGER sitemap_users_delete BEFORE DELETE ON users BEGIN INSERT INTO sitemap_category_revisions SELECT DISTINCT t.category,strftime('%Y-%m-%d %H:%M:%f','now') FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE (kind='profiles' AND LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.-]*') OR (kind='templates' AND LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.-]*' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL)) OR (kind='categories' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=OLD.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'')); END"
     },
     {
       "name": "sitemap_users_delete_cleanup",
@@ -35,17 +80,17 @@
     {
       "name": "sitemap_users_insert",
       "table": "users",
-      "definition": "CREATE TRIGGER sitemap_users_insert AFTER INSERT ON users WHEN LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.]*' BEGIN INSERT INTO sitemap_profile_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles'; END"
+      "definition": "CREATE TRIGGER sitemap_users_insert AFTER INSERT ON users WHEN LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.-]*' BEGIN INSERT INTO sitemap_profile_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles'; END"
     },
     {
       "name": "sitemap_users_update_owner",
       "table": "users",
-      "definition": "CREATE TRIGGER sitemap_users_update_owner AFTER UPDATE ON users WHEN OLD.username IS NOT NEW.username OR OLD.name IS NOT NEW.name BEGIN INSERT INTO sitemap_owner_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT DISTINCT t.category,strftime('%Y-%m-%d %H:%M:%f','now') FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE (kind='templates' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL) AND ( (LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.]*') OR (LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.]*') )) OR (kind='categories' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'')); END"
+      "definition": "CREATE TRIGGER sitemap_users_update_owner AFTER UPDATE ON users WHEN OLD.username IS NOT NEW.username OR OLD.name IS NOT NEW.name BEGIN INSERT INTO sitemap_owner_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; INSERT INTO sitemap_category_revisions SELECT DISTINCT t.category,strftime('%Y-%m-%d %H:%M:%f','now') FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'' ON CONFLICT(category) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE (kind='templates' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL) AND ( (LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.-]*') OR (LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.-]*') )) OR (kind='categories' AND EXISTS (SELECT 1 FROM templates t WHERE t.user_id=NEW.id AND t.owner_type='user' AND t.team_id IS NULL AND +t.is_public=1 AND t.deleted_at IS NULL AND t.category IS NOT NULL AND TRIM(t.category)<>'')); END"
     },
     {
       "name": "sitemap_users_update_profile",
       "table": "users",
-      "definition": "CREATE TRIGGER sitemap_users_update_profile AFTER UPDATE ON users WHEN OLD.username IS NOT NEW.username OR OLD.name IS NOT NEW.name OR OLD.avatar_url IS NOT NEW.avatar_url BEGIN INSERT INTO sitemap_profile_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles' AND ( (LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.]*') OR (LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.]*') ); END"
+      "definition": "CREATE TRIGGER sitemap_users_update_profile AFTER UPDATE ON users WHEN OLD.username IS NOT NEW.username OR OLD.name IS NOT NEW.name OR OLD.avatar_url IS NOT NEW.avatar_url BEGIN INSERT INTO sitemap_profile_revisions VALUES(NEW.id,strftime('%Y-%m-%d %H:%M:%f','now')) ON CONFLICT(user_id) DO UPDATE SET revised_at=excluded.revised_at; UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE kind='profiles' AND ( (LENGTH(TRIM(OLD.username)) BETWEEN 3 AND 30 AND TRIM(OLD.username) NOT GLOB '*[^A-Za-z0-9_.-]*') OR (LENGTH(TRIM(NEW.username)) BETWEEN 3 AND 30 AND TRIM(NEW.username) NOT GLOB '*[^A-Za-z0-9_.-]*') ); END"
     }
   ]
 }

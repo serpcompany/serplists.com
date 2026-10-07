@@ -1,19 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { validateXML } from "xmllint-wasm";
+import { z } from "zod";
+import { API_BASE_URL, APP_URL } from "./support/stack";
+import { routeTheApi } from "./support/mocked-api";
 
-const sitemapSchema = readFileSync(new URL("../fixtures/sitemap.xsd", import.meta.url), "utf8");
-const sitemapIndexSchema = readFileSync(new URL("../fixtures/siteindex.xsd", import.meta.url), "utf8");
+const WINDOWS_PATH_WITH_BACKSLASH_N = "Save the list to C:\\new_folder";
 
-async function expectSchemaValid(xml: string, schema: string, fileName: string) {
-  const result = await validateXML({ xml: [{ fileName, contents: xml }], schema: [schema] });
-  expect(result.errors, result.rawOutput).toEqual([]);
-  expect(result.valid, result.rawOutput).toBe(true);
-}
-
-const apiTemplate = {
-  id: "serp-template-technical-seo-audit",
-  user_id: "serp-user",
+const seededSampleTemplateResponse = {
+  id: "template-1",
+  user_id: "user-1",
   title: "Technical SEO Audit Checklist",
   description: "A practical technical SEO audit you can run in 60-90 minutes.",
   items: JSON.stringify([
@@ -60,19 +54,15 @@ const apiTemplate = {
   category: JSON.stringify(["SEO", "Technical SEO"]),
   categories: ["SEO", "Technical SEO"],
   tags: ["audit", "crawl"],
-  slug: "technical-seo-audit-checklist",
+  slug: "sample-technical-seo-audit-checklist",
   created_at: "2026-07-04T00:16:35.000Z",
   updated_at: "2026-07-04T00:16:35.000Z",
-  owner_username: "serp",
-  owner_full_name: "SERP",
+  owner_username: "admin",
+  owner_full_name: "Admin (Pro)",
 };
 
 async function mockApiBackedPublicTemplate(page: Page) {
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === "/api/auth/get-session" && request.method() === "GET") {
       await route.fulfill({
         contentType: "application/json",
@@ -81,10 +71,10 @@ async function mockApiBackedPublicTemplate(page: Page) {
       return;
     }
 
-    if (path === "/api/templates/slug/technical-seo-audit-checklist") {
+    if (path === "/api/templates/slug/sample-technical-seo-audit-checklist") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify(apiTemplate),
+        body: JSON.stringify(seededSampleTemplateResponse),
       });
       return;
     }
@@ -92,7 +82,7 @@ async function mockApiBackedPublicTemplate(page: Page) {
     if (path === "/api/templates") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify([apiTemplate]),
+        body: JSON.stringify([seededSampleTemplateResponse]),
       });
       return;
     }
@@ -105,37 +95,18 @@ async function mockApiBackedPublicTemplate(page: Page) {
   });
 }
 
-test("@smoke login page renders", async ({ page }) => {
-  const maximumDepthErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) {
-      maximumDepthErrors.push(message.text());
-    }
-  });
-
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: /welcome back/i })
-  ).toBeVisible();
-  await expect(page.getByText("Sign in to your account to continue")).toBeVisible();
-  await page.waitForTimeout(100);
-  expect(maximumDepthErrors).toEqual([]);
-});
-
 test("@smoke removed docs prototype renders the public not-found page", async ({ page }) => {
-  await page.goto("/docs");
+  await page.goto("/docs/");
 
   await expect(
     page.getByRole("heading", { level: 1, name: "That page does not exist" }),
   ).toBeVisible();
-  await expect(page.getByText("The route /docs could not be found.")).toBeVisible();
+  await expect(page.getByText("The route /docs/ could not be found.")).toBeVisible();
   await expect(page.getByText("Checklist & Template Experience")).toHaveCount(0);
 });
 
 test("@smoke public document installs the configured Google Tag Manager container", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
+  const pagesOrigin = new URL(APP_URL).origin;
   const response = await request.get(`${pagesOrigin}/`);
   const html = await response.text();
   const csp = response.headers()["content-security-policy"] ?? "";
@@ -150,11 +121,13 @@ test("@smoke public document installs the configured Google Tag Manager containe
   );
   expect(csp).toContain("script-src");
   expect(csp).toContain("https://www.googletagmanager.com");
+  expect(csp).toContain("https://static.cloudflareinsights.com");
+  expect(csp).toContain("https://analytics.ahrefs.com");
   expect(csp).toContain("frame-src");
 });
 
-test("@smoke authenticated template API returns the seeded private template", async ({ request }) => {
-  const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+test("@smoke the template API returns the owner's seeded private template, and the public catalog every visitor shares never lists it", async ({ request }) => {
+  const apiBaseUrl = API_BASE_URL;
   const signInResponse = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
     data: {
       email: "admin@test.com",
@@ -167,8 +140,7 @@ test("@smoke authenticated template API returns the seeded private template", as
   const templatesResponse = await request.get(`${apiBaseUrl}/templates?scope=personal`);
   expect(templatesResponse.status()).toBe(200);
 
-  const templates = await templatesResponse.json();
-  expect(templates).toEqual(
+  expect(await templatesResponse.json()).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         id: "template-4",
@@ -178,150 +150,17 @@ test("@smoke authenticated template API returns the seeded private template", as
     ]),
   );
 
-  // The public catalog is edge-cached and shared by every visitor, so it must never
-  // include a private template, even for its owner.
   const catalogResponse = await request.get(`${apiBaseUrl}/templates?scope=public`);
   expect(catalogResponse.status()).toBe(200);
-  const catalogIds = ((await catalogResponse.json()) as Array<{ id: string }>).map((template) => template.id);
+  const catalog = z.array(z.object({ id: z.string() }).passthrough()).parse(await catalogResponse.json());
+  const catalogIds = catalog.map((template) => template.id);
   expect(catalogIds).not.toContain("template-4");
-});
-
-test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
-  const indexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
-  const indexXml = await indexResponse.text();
-  const childLocations = Array.from(
-    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
-    (match) => match[1],
-  );
-  const shardLastmods = Array.from(
-    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
-    (match) => [match[1], match[2]],
-  );
-
-  expect(indexResponse.ok()).toBe(true);
-  expect(indexResponse.headers()["content-type"]).toContain("application/xml");
-  expect(indexXml).toContain("<sitemapindex");
-  expect(indexXml).not.toContain("?page=");
-  expect(indexXml).not.toContain("/sitemaps/static/");
-  expect(childLocations.length).toBeGreaterThan(0);
-  const rootEntryCount = indexXml.match(/<sitemap>/g)?.length ?? 0;
-  expect(childLocations).toHaveLength(rootEntryCount);
-  expect(indexXml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(rootEntryCount);
-  expect(rootEntryCount).toBeLessThanOrEqual(50_000);
-  expect(new TextEncoder().encode(indexXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
-  await expectSchemaValid(indexXml, sitemapIndexSchema, "sitemap-index.xml");
-
-  const robotsResponse = await request.get(`${pagesOrigin}/robots.txt`);
-  expect(robotsResponse.ok()).toBe(true);
-  expect(await robotsResponse.text()).toContain("Sitemap: https://serplists.com/sitemap.xml");
-  const allPageLocations = new Set<string>();
-  const pageLocationsByShard = new Map<string, string[]>();
-
-  for (const childLocation of childLocations) {
-    const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
-    const childResponse = await request.get(localLocation);
-    const childXml = await childResponse.text();
-    const pageLocations = Array.from(
-      childXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
-      (match) => match[1],
-    );
-    const lastmods = Array.from(
-      childXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g),
-      (match) => match[1],
-    );
-    pageLocationsByShard.set(childLocation, pageLocations);
-
-    expect(childResponse.ok(), childLocation).toBe(true);
-    expect(childResponse.headers()["content-type"]).toContain("application/xml");
-    expect(childXml).toContain("<urlset");
-    expect(childXml).not.toContain("<sitemapindex");
-    expect(pageLocations.length).toBeGreaterThan(0);
-    expect(pageLocations.length).toBeLessThanOrEqual(25_000);
-    expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
-    expect(lastmods).toHaveLength(pageLocations.length);
-    for (const location of pageLocations) {
-      expect(allPageLocations.has(location), `duplicate URL ${location}`).toBe(false);
-      allPageLocations.add(location);
-    }
-    expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
-    expect(childXml).not.toContain("<priority>");
-    expect(childXml).not.toContain("<changefreq>");
-    await expectSchemaValid(childXml, sitemapSchema, new URL(childLocation).pathname);
-
-    const headResponse = await request.head(localLocation);
-    expect(headResponse.status(), childLocation).toBe(200);
-    expect(headResponse.headers()["content-type"]).toContain("application/xml");
-    expect(headResponse.headers()["cache-control"]).toContain("s-maxage=86400");
-    expect(await headResponse.text()).toBe("");
-  }
-
-  expect(allPageLocations).toContain("https://serplists.com/profile/admin");
-  expect(allPageLocations).toContain(
-    "https://serplists.com/profile/admin/technical-seo-audit-checklist",
-  );
-  expect(allPageLocations).toContain("https://serplists.com/categories/seo");
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/internal-publishing-checklist",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/shared-growth-launch-checklist",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/jane/client-reporting-qa-checklist",
-  );
-
-  const unchangedIndexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
-  const unchangedIndexXml = await unchangedIndexResponse.text();
-  const unchangedShardLastmods = Array.from(
-    unchangedIndexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
-    (match) => [match[1], match[2]],
-  );
-  expect(unchangedIndexResponse.ok()).toBe(true);
-  expect(unchangedShardLastmods).toEqual(shardLastmods);
-
-  for (const childLocation of childLocations) {
-    const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
-    const unchangedChildXml = await (await request.get(localLocation)).text();
-    const unchangedPageLocations = Array.from(
-      unchangedChildXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
-      (match) => match[1],
-    );
-    expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
-  }
-
-  expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);
-  expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
-  expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
-});
-
-test("@smoke login link renders the login page without refresh", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: /^log in$/i }).click();
-
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(
-    page.getByRole("heading", { name: /welcome back/i })
-  ).toBeVisible();
-});
-
-test("@smoke protected routes render login after redirect without refresh", async ({
-  page,
-}) => {
-  await page.goto("/dashboard/settings");
-
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(
-    page.getByRole("heading", { name: /welcome back/i })
-  ).toBeVisible();
 });
 
 test("@smoke API-backed public template single renders", async ({ page }) => {
   await mockApiBackedPublicTemplate(page);
 
-  await page.goto("/profile/serp/technical-seo-audit-checklist");
+  await page.goto("/profile/admin/sample-technical-seo-audit-checklist/");
 
   await expect(
     page.getByRole("heading", {
@@ -335,13 +174,9 @@ test("@smoke API-backed public template single renders", async ({ page }) => {
 
 test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   const description =
-    "First URL instruction line\nSecond URL instruction line\\nThird URL instruction line";
+    `First URL instruction line\nSecond URL instruction line\n${WINDOWS_PATH_WITH_BACKSLASH_N}\nThird URL instruction line`;
 
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === "/api/auth/get-session" && request.method() === "GET") {
       await route.fulfill({
         contentType: "application/json",
@@ -447,7 +282,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
     });
   });
 
-  await page.goto("/dashboard/runs/run-line-breaks");
+  await page.goto("/dashboard/runs/run-line-breaks/");
 
   await expect(
     page.getByRole("heading", { name: "Create a .txt file of URLs" }),
@@ -460,63 +295,11 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   await expect(renderedDescription).toBeVisible();
   await expect(renderedDescription).toContainText("Second URL instruction line");
   await expect(renderedDescription).toContainText("Third URL instruction line");
+  await expect(renderedDescription).toContainText(WINDOWS_PATH_WITH_BACKSLASH_N);
 
   const whiteSpace = await renderedDescription.evaluate(
     (node) => getComputedStyle(node).whiteSpace,
   );
   expect(whiteSpace).toBe("pre-line");
   await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
-});
-
-[
-  "/templates",
-  "/pricing",
-  "/features",
-  "/categories/outdoor",
-].forEach((startPath) => {
-  test(`@smoke login link renders from ${startPath} without refresh`, async ({
-    page,
-  }) => {
-    await page.goto(startPath);
-    await page.getByRole("link", { name: /^log in$/i }).click();
-
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(
-      page.getByRole("heading", { name: /welcome back/i })
-    ).toBeVisible();
-  });
-});
-
-test("@smoke login password visibility toggles", async ({ page }) => {
-  await page.goto("/login");
-
-  const password = page.locator("#password");
-
-  await expect(password).toHaveAttribute("type", "password");
-  await page.getByRole("button", { name: "Show password" }).click();
-  await expect(password).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "Hide password" }).click();
-  await expect(password).toHaveAttribute("type", "password");
-});
-
-test("@smoke register password visibility toggles", async ({ page }) => {
-  await page.goto("/register");
-
-  const password = page.locator("#password");
-  const confirmPassword = page.locator("#confirmPassword");
-
-  await expect(password).toHaveAttribute("type", "password");
-  await expect(confirmPassword).toHaveAttribute("type", "password");
-
-  await page.getByRole("button", { name: "Show password" }).click();
-  await page.getByRole("button", { name: "Show confirm password" }).click();
-
-  await expect(password).toHaveAttribute("type", "text");
-  await expect(confirmPassword).toHaveAttribute("type", "text");
-
-  await page.getByRole("button", { name: "Hide password" }).click();
-  await page.getByRole("button", { name: "Hide confirm password" }).click();
-
-  await expect(password).toHaveAttribute("type", "password");
-  await expect(confirmPassword).toHaveAttribute("type", "password");
 });

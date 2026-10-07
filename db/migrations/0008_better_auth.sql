@@ -1,12 +1,8 @@
--- Better Auth (cookie sessions) schema additions.
--- Keep existing `users` table (used by templates/runs) and add required auth fields.
-
 ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN auth_created_at INTEGER;
 ALTER TABLE users ADD COLUMN auth_updated_at INTEGER;
 ALTER TABLE users ADD COLUMN display_username TEXT;
 
--- Backfill required fields for existing users
 UPDATE users
 SET name = COALESCE(
   name,
@@ -32,7 +28,6 @@ SET auth_updated_at = COALESCE(
 )
 WHERE auth_updated_at IS NULL;
 
--- Better Auth core tables
 CREATE TABLE IF NOT EXISTS account (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL,
@@ -77,7 +72,6 @@ CREATE TABLE IF NOT EXISTS verification (
 
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON verification(identifier);
 
--- Migrate existing bcrypt password hashes into Better Auth credential accounts.
 INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
 SELECT
   lower(hex(randomblob(16))),

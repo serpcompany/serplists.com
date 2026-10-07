@@ -2,20 +2,23 @@ import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { buildDefaultRunName, resolveRunName, RUN_TITLE_MAX_LENGTH } from "@/lib/runs/runName";
+import { createJustOpenedGuard, isRepeatClick } from "@/lib/utils/repeatClick";
+
+const RUN_NAME_FIELD_ID = "run-name";
 
 interface RunNameDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   templateTitle: string;
-  onConfirm: (name: string) => void;
+  onConfirm: (name: string) => void | Promise<void>;
   loading?: boolean;
 }
 
@@ -27,38 +30,40 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
   loading = false,
 }) => {
   const [runName, setRunName] = useState("");
-  
-  const defaultName = `${templateTitle} - ${new Date().toLocaleString()}`;
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setRunName("");
+  }
+  const [{ markOpened, handleOpenChange }] = useState(() => createJustOpenedGuard());
+
+  const defaultName = buildDefaultRunName(templateTitle);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = runName.trim() || defaultName;
-    onConfirm(finalName);
-    setRunName("");
+    if (loading) return;
+    void onConfirm(resolveRunName(runName, templateTitle));
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={handleOpenChange(loading, onOpenChange)}>
+      <DialogContent className="sm:max-w-md" closeDisabled={loading} ref={markOpened}>
         <DialogHeader>
-          <DialogTitle>Name Your Checklist Run</DialogTitle>
-          <DialogDescription>
-            Give your new checklist run a descriptive name to help you track progress.
-          </DialogDescription>
+          <DialogTitle>Start a Run</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="runName">Run Name</Label>
-              <Input
-                id="runName"
-                value={runName}
-                onChange={(e) => setRunName(e.target.value)}
-                placeholder={defaultName}
-                autoFocus
-              />
-            </div>
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor={RUN_NAME_FIELD_ID}>Run name</FieldLabel>
+            <Input
+              id={RUN_NAME_FIELD_ID}
+              value={runName}
+              onChange={(e) => setRunName(e.target.value)}
+              placeholder={defaultName}
+              maxLength={RUN_TITLE_MAX_LENGTH}
+              disabled={loading}
+              autoFocus
+            />
+          </Field>
           <DialogFooter>
             <Button
               type="button"
@@ -68,8 +73,14 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Start Checklist"}
+            <Button
+              type="submit"
+              disabled={loading}
+              onClick={(event) => {
+                if (isRepeatClick(event)) event.preventDefault();
+              }}
+            >
+              {loading ? "Starting…" : "Start Run"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,0 +1,44 @@
+import { expect, test, type Page } from '@playwright/test';
+
+import { apiJsonAt, apiRecord as callApi } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
+import { navigateInApp } from './support/navigation';
+import { loginAsAdmin } from './support/sign-in';
+
+const NEW_TEMPLATE_VERSION = 1;
+
+async function loadPublicCatalogIntoMemory(page: Page) {
+  await page.goto('/templates/');
+  await expect(page.getByRole('heading', { name: 'Template Library' })).toBeVisible();
+}
+
+test('shows edits and unpublishing on a public template page after the catalog loaded', async ({ page }) => {
+  await loginAsAdmin(page);
+  const stamp = Date.now();
+  const created = await apiJsonAt(page, '/templates', 'POST', savedTemplateSchema, {
+    title: `Freshness Original ${stamp}`,
+    slug: `freshness-check-${stamp}`,
+    is_public: true,
+    sections: [{ id: 'fresh-section', title: 'Original section', items: [{ id: 'fresh-item', title: 'Task' }] }],
+  });
+  const templateId = created.id;
+  const publicPath = `/profile/admin/${String(created.slug)}/`;
+
+  try {
+    await loadPublicCatalogIntoMemory(page);
+
+    await callApi(page, 'PUT', `/templates/${templateId}`, {
+      title: `Freshness Edited ${stamp}`,
+      expected_version: NEW_TEMPLATE_VERSION,
+    });
+    await navigateInApp(page, publicPath);
+    await expect(page.getByRole('heading', { level: 1, name: `Freshness Edited ${stamp}` })).toBeVisible();
+
+    await callApi(page, 'PUT', `/templates/${templateId}`, { is_public: false });
+    await navigateInApp(page, '/templates/');
+    await navigateInApp(page, publicPath);
+    await expect(page.getByRole('heading', { name: 'Template not found' })).toBeVisible();
+  } finally {
+    await callApi(page, 'DELETE', `/templates/${templateId}`);
+  }
+});

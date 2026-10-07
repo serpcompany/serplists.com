@@ -1,11 +1,22 @@
 import { Env } from '../types';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { findPublicProfileOwner } from '../utils/public-profile-owner';
 import { json, jsonError } from '../utils/response';
+
+export async function handleProfileByHandle(request: Request, env: Env): Promise<Response> {
+  const handle = new URL(request.url).searchParams.get('handle')?.trim();
+  if (!handle) {
+    return jsonError('Handle required', 400);
+  }
+
+  const owner = await findPublicProfileOwner(env, handle);
+  return owner ? json(owner.profile) : jsonError('Profile not found', 404);
+}
 
 export async function handleProfileByUsername(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const username = url.searchParams.get('username');
+  const username = url.searchParams.get('username')?.trim();
   const db = createDb(env);
   const { users } = schema;
 
@@ -13,7 +24,8 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
     return jsonError('Username required', 400);
   }
 
-  const [user] = await db
+  const candidates = Array.from(new Set([username, username.toLowerCase()]));
+  const matches = await db
     .select({
       id: users.id,
       full_name: users.name,
@@ -22,8 +34,9 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
       created_at: users.created_at
     })
     .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
+    .where(inArray(users.username, candidates))
+    .limit(candidates.length);
+  const user = matches.find((match) => match.username === username) ?? matches[0];
 
   if (!user) {
     return jsonError('User not found', 404);
@@ -51,7 +64,7 @@ export async function handleProfileById(request: Request, env: Env): Promise<Res
       created_at: users.created_at
     })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(and(eq(users.id, userId), isNotNull(users.username)))
     .limit(1);
 
   if (!user) {

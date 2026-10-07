@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { apiEnv } from "../../../support/apiEnv";
+import { getApiEnv } from "@functions/api/env";
 import { resolveAuthSecret } from "@functions/api/utils/auth-secret";
 
 describe("resolveAuthSecret", () => {
@@ -27,5 +29,13 @@ describe("resolveAuthSecret", () => {
         JWT_SECRET: "also-short",
       })
     ).toThrow(/32\+ char BETTER_AUTH_SECRET/);
+  });
+});
+
+describe("getApiEnv", () => {
+  it("fails when neither auth secret is usable, so the router answers with its configuration error instead of running without one", () => {
+    expect(() => getApiEnv(apiEnv({ BETTER_AUTH_SECRET: "short", JWT_SECRET: "also-short" }))).toThrow(
+      /32\+ char BETTER_AUTH_SECRET/,
+    );
   });
 });

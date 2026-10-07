@@ -1,34 +1,39 @@
-// Simple analytics tracking for MVP
 interface AnalyticsEvent {
   event: string;
-  properties?: Record<string, unknown>;
+  properties?: Record<string, unknown> | undefined;
   timestamp: number;
   url: string;
   userAgent: string;
 }
 
+const MAX_EVENTS_KEPT = 100;
+
 class Analytics {
   private events: AnalyticsEvent[] = [];
   private isEnabled: boolean = true;
 
-  constructor() {
-    // Track page views automatically
+  constructor(inBrowser: boolean) {
+    this.isEnabled = inBrowser;
+    if (!inBrowser) return;
+
     this.trackPageView();
-    
-    // Track page navigation for SPAs
+    this.trackClientSideNavigations();
+  }
+
+  private trackClientSideNavigations() {
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
-    
+
     history.pushState = (...args: Parameters<typeof history.pushState>) => {
       originalPushState.apply(history, args);
       setTimeout(() => this.trackPageView(), 0);
     };
-    
+
     history.replaceState = (...args: Parameters<typeof history.replaceState>) => {
       originalReplaceState.apply(history, args);
       setTimeout(() => this.trackPageView(), 0);
     };
-    
+
     window.addEventListener('popstate', () => {
       this.trackPageView();
     });
@@ -46,13 +51,9 @@ class Analytics {
     };
 
     this.events.push(analyticsEvent);
-    
-    // Log for debugging
     console.info('Analytics:', event, properties);
-    
-    // Keep only last 100 events in memory
-    if (this.events.length > 100) {
-      this.events = this.events.slice(-100);
+    if (this.events.length > MAX_EVENTS_KEPT) {
+      this.events = this.events.slice(-MAX_EVENTS_KEPT);
     }
   }
 
@@ -104,25 +105,28 @@ class Analytics {
     });
   }
 
-  // Get events for debugging/export
   getEvents() {
     return [...this.events];
   }
 
-  // Enable/disable tracking
   setEnabled(enabled: boolean) {
     this.isEnabled = enabled;
   }
 }
 
-// Global analytics instance
-export const analytics = new Analytics();
+const isBrowser = typeof window !== 'undefined';
 
-// Error tracking setup
-window.addEventListener('error', (event) => {
-  analytics.trackError(new Error(event.message), 'window_error');
-});
+export const analytics = new Analytics(isBrowser);
 
-window.addEventListener('unhandledrejection', (event) => {
-  analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
-});
+const trackUncaughtErrors = () => {
+  window.addEventListener('error', (event) => {
+    analytics.trackError(new Error(event.message), 'window_error');
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason: unknown = event.reason;
+    analytics.trackError(new Error(reason === undefined ? undefined : String(reason)), 'unhandled_promise_rejection');
+  });
+};
+
+if (isBrowser) trackUncaughtErrors();

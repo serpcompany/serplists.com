@@ -1,0 +1,187 @@
+diff --git a/wrangler-dist/cli.js b/wrangler-dist/cli.js
+index 9ea457eff14f2c0c6697219425f99e00a03e7625..242cb4b2cc7a974059549c3687f326476277c8c5 100644
+--- a/wrangler-dist/cli.js
++++ b/wrangler-dist/cli.js
+@@ -207048,6 +207048,7 @@ var init_ProxyController = __esm({
+       latestConfig;
+       latestBundle;
+       secret = crypto2.randomUUID();
++      userWorkerRelays = new (require("./serplists-user-worker-relay.js")).UserWorkerRelays();
+       createProxyWorker() {
+         if (this._torndown) {
+           return;
+@@ -207260,11 +207261,12 @@ var init_ProxyController = __esm({
+             if (!ready) {
+               return;
+             }
++            const hostMetadata = await this.userWorkerRelays.relay(message);
+             return proxyWorker.dispatchFetch(
+               `http://dummy/cdn-cgi/ProxyWorker/${message.type}`,
+               {
+                 headers: { Authorization: this.secret },
+-                cf: { hostMetadata: message }
++                cf: { hostMetadata }
+               }
+             );
+           });
+@@ -207452,6 +207454,7 @@ var init_ProxyController = __esm({
+         this.proxyWorker = void 0;
+         await Promise.all([
+           proxyWorker?.dispose(),
++          this.userWorkerRelays.close(),
+           this.inspectorProxyWorkerWebSocket?.promise.then((ws) => ws.close()).catch(() => {
+           })
+         ]);
+diff --git a/wrangler-dist/serplists-user-worker-relay.js b/wrangler-dist/serplists-user-worker-relay.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ff916129c5d83c44080e7ac00da6c12724eb90f
+--- /dev/null
++++ b/wrangler-dist/serplists-user-worker-relay.js
+@@ -0,0 +1,147 @@
++"use strict";
++
++const http = require("node:http");
++const net = require("node:net");
++
++const HOP_BY_HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-connection"]);
++const NO_TIME_LIMITS_OF_ITS_OWN = { requestTimeout: 0, headersTimeout: 0 };
++const NEVER_CLOSE_AN_IDLE_CONNECTION = 0;
++const NEW_CONNECTION_FOR_EVERY_REQUEST = false;
++
++function forwardedHeaders(rawHeaders, hostOverride) {
++  const headers = [];
++  for (let i = 0; i < rawHeaders.length; i += 2) {
++    const name = rawHeaders[i];
++    const lower = name.toLowerCase();
++    if (HOP_BY_HOP_HEADERS.has(lower)) continue;
++    headers.push(name, hostOverride !== undefined && lower === "host" ? hostOverride : rawHeaders[i + 1]);
++  }
++  return headers;
++}
++
++function failAsALostConnectionToTheWorker(req, res) {
++  if (res.headersSent) res.destroy();
++  else req.socket.destroy();
++}
++
++function relayToTheWorker(target, host) {
++  const port = Number(target.port);
++  return (req, res) => {
++    const upstream = http.request(
++      {
++        host: target.hostname,
++        port,
++        method: req.method,
++        path: req.url,
++        headers: forwardedHeaders(req.rawHeaders, host),
++        setHost: false,
++        agent: NEW_CONNECTION_FOR_EVERY_REQUEST,
++      },
++      (upstreamRes) => {
++        res.writeHead(upstreamRes.statusCode, upstreamRes.statusMessage, forwardedHeaders(upstreamRes.rawHeaders));
++        upstreamRes.pipe(res);
++        upstreamRes.on("error", () => res.destroy());
++      },
++    );
++    upstream.on("error", () => failAsALostConnectionToTheWorker(req, res));
++    res.on("close", () => {
++      if (!res.writableFinished) upstream.destroy();
++    });
++    req.pipe(upstream);
++  };
++}
++
++function tunnelUpgradesToTheWorker(target, host, tunnels) {
++  const port = Number(target.port);
++  return (req, socket, head) => {
++    const upstream = net.connect(port, target.hostname, () => {
++      const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
++      for (let i = 0; i < req.rawHeaders.length; i += 2) {
++        const name = req.rawHeaders[i];
++        lines.push(`${name}: ${name.toLowerCase() === "host" ? host : req.rawHeaders[i + 1]}`);
++      }
++      upstream.write(`${lines.join("\r\n")}\r\n\r\n`);
++      if (head.length > 0) upstream.write(head);
++      upstream.pipe(socket);
++      socket.pipe(upstream);
++    });
++    const tunnel = { socket, upstream };
++    tunnels.add(tunnel);
++    const close = () => {
++      tunnels.delete(tunnel);
++      socket.destroy();
++      upstream.destroy();
++    };
++    for (const end of [socket, upstream]) {
++      end.on("close", close);
++      end.on("error", close);
++    }
++  };
++}
++
++function startRelay(target) {
++  const host = `${target.hostname}:${target.port}`;
++  const tunnels = new Set();
++  const server = http.createServer(NO_TIME_LIMITS_OF_ITS_OWN, relayToTheWorker(target, host));
++  server.keepAliveTimeout = NEVER_CLOSE_AN_IDLE_CONNECTION;
++  server.on("upgrade", tunnelUpgradesToTheWorker(target, host, tunnels));
++  server.on("clientError", (_error, socket) => socket.destroy());
++  server.unref();
++  return new Promise((resolve, reject) => {
++    server.once("error", reject);
++    server.listen(0, "127.0.0.1", () => {
++      server.off("error", reject);
++      resolve({ server, tunnels });
++    });
++  });
++}
++
++function stopRelay(relay, { dropOpenConnections }) {
++  return relay.then(
++    ({ server, tunnels }) =>
++      new Promise((resolve) => {
++        server.close(() => resolve());
++        if (dropOpenConnections) {
++          server.closeAllConnections();
++          for (const { socket, upstream } of tunnels) {
++            socket.destroy();
++            upstream.destroy();
++          }
++        }
++      }),
++    () => {},
++  );
++}
++
++const playsALocalWorker = (message, target) => message.type === "play" && target?.protocol === "http:";
++
++class UserWorkerRelays {
++  #relays = new Map();
++
++  async relay(message) {
++    const target = message.proxyData?.userWorkerUrl;
++    if (!playsALocalWorker(message, target)) return message;
++    const key = `${target.hostname}:${target.port}`;
++    this.#retireRelaysToOtherWorkers(key);
++    if (!this.#relays.has(key)) this.#relays.set(key, startRelay(target));
++    const { server } = await this.#relays.get(key);
++    const relayUrl = { protocol: "http:", hostname: "127.0.0.1", port: String(server.address().port) };
++    return { ...message, proxyData: { ...message.proxyData, userWorkerUrl: relayUrl } };
++  }
++
++  async close() {
++    const relays = [...this.#relays.values()];
++    this.#relays.clear();
++    await Promise.all(relays.map((relay) => stopRelay(relay, { dropOpenConnections: true })));
++  }
++
++  #retireRelaysToOtherWorkers(key) {
++    for (const [otherKey, other] of this.#relays) {
++      if (otherKey === key) continue;
++      this.#relays.delete(otherKey);
++      void stopRelay(other, { dropOpenConnections: false });
++    }
++  }
++}
++
++module.exports = { UserWorkerRelays };

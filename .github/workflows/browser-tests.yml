@@ -1,0 +1,78 @@
+name: Browser tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+
+concurrency:
+  group: browser-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
+  COREPACK_ENABLE_AUTO_PIN: "0"
+
+jobs:
+  browser-tests:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        env:
+          SITE_ENV: production
+        run: pnpm run build:worker
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Smoke tests
+        if: github.base_ref != 'main'
+        run: pnpm run test:smoke -- --skip-build
+
+      - name: Browser specs this pull request adds or changes
+        if: github.base_ref != 'main'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          specs=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'tests/e2e/*.spec.ts' | tr '\n' ' ')
+          if [ -z "$specs" ]; then
+            echo "This pull request changes no browser spec."
+            exit 0
+          fi
+          echo "Browser specs this pull request adds or changes: $specs"
+          pnpm run test:e2e:full --skip-build $specs
+
+      - name: Full end-to-end tests (promotions to main)
+        if: github.base_ref == 'main'
+        run: pnpm run test:e2e:full -- --skip-build
+
+      - name: Upload Playwright evidence (traces, videos, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-evidence
+          path: tests/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

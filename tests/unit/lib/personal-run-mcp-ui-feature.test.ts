@@ -9,4 +9,9 @@ describe("Personal Run MCP UI feature gate", () => {
     expect(isPersonalRunMcpUiEnabled("staging.serplists.com")).toBe(false);
     expect(isPersonalRunMcpUiEnabled("serplists.com")).toBe(false);
   });
+
+  it("defaults on for IPv6 loopback, bare or with the brackets location.hostname and URL.hostname keep", () => {
+    expect(isPersonalRunMcpUiEnabled(new URL("http://[::1]:5173/dashboard/settings").hostname)).toBe(true);
+    expect(isPersonalRunMcpUiEnabled("::1")).toBe(true);
+  });
 });

@@ -7,7 +7,10 @@
     },
     "schemaVersion": {
       "type": "string",
-      "const": "2.0.0"
+      "enum": [
+        "2.0.0",
+        "2.1.0"
+      ]
     },
     "exportedAt": {
       "type": "string"
@@ -92,70 +95,737 @@
                       "contents": {
                         "type": "array",
                         "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "default": ""
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ],
+                              "additionalProperties": true
                             },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "text",
-                                "image",
-                                "video",
-                                "file",
-                                "embed",
-                                "subItems"
-                              ]
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "image"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
                             },
-                            "value": {
-                              "type": "string",
-                              "default": ""
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "video"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
                             },
-                            "uploadType": {
-                              "type": "string",
-                              "enum": [
-                                "url",
-                                "upload"
-                              ]
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "file"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
                             },
-                            "fileName": {
-                              "type": "string"
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "embed"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
                             },
-                            "fileSize": {
-                              "type": "number"
-                            },
-                            "subItems": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "subItems"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "default": ""
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
                                   },
-                                  "title": {
-                                    "type": "string",
-                                    "minLength": 1
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "subItems"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "form"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "default": ""
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
                                   }
                                 },
-                                "required": [
-                                  "title"
-                                ],
-                                "additionalProperties": false
-                              }
+                                "fields": {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "text"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "longText"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "url"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "email"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "number"
+                                          },
+                                          "min": {
+                                            "type": "number"
+                                          },
+                                          "max": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "date"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "select"
+                                          },
+                                          "options": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string"
+                                                },
+                                                "label": {
+                                                  "type": "string",
+                                                  "maxLength": 200,
+                                                  "pattern": "\\S"
+                                                }
+                                              },
+                                              "required": [
+                                                "label"
+                                              ],
+                                              "additionalProperties": true
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 50
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind",
+                                          "options"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "multiSelect"
+                                          },
+                                          "options": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string"
+                                                },
+                                                "label": {
+                                                  "type": "string",
+                                                  "maxLength": 200,
+                                                  "pattern": "\\S"
+                                                }
+                                              },
+                                              "required": [
+                                                "label"
+                                              ],
+                                              "additionalProperties": true
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 50
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind",
+                                          "options"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "checkbox"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string",
+                                            "maxLength": 200,
+                                            "pattern": "\\S"
+                                          },
+                                          "required": {
+                                            "type": "boolean"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "maxLength": 1000
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "file"
+                                          }
+                                        },
+                                        "required": [
+                                          "label",
+                                          "kind"
+                                        ],
+                                        "additionalProperties": true
+                                      }
+                                    ]
+                                  },
+                                  "minItems": 1,
+                                  "maxItems": 50
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "fields"
+                              ],
+                              "additionalProperties": true
                             }
-                          },
-                          "required": [
-                            "type"
-                          ],
-                          "additionalProperties": false
+                          ]
                         }
                       }
                     },
                     "required": [
                       "title"
                     ],
-                    "additionalProperties": false
+                    "additionalProperties": true
                   },
                   "minItems": 1
                 }
@@ -164,7 +834,7 @@
                 "title",
                 "items"
               ],
-              "additionalProperties": false
+              "additionalProperties": true
             },
             "minItems": 1
           },
@@ -197,7 +867,32 @@
                 "type",
                 "path"
               ],
-              "additionalProperties": false
+              "additionalProperties": true
+            }
+          },
+          "requiredTools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "url": {
+                  "type": "string",
+                  "pattern": "^[Hh][Tt][Tt][Pp][Ss]?:\\/\\/[^\\s<>\"/?#]+[^\\s<>\"]*$"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "required": [
+                "name",
+                "url"
+              ],
+              "additionalProperties": true
             }
           }
         },
@@ -205,7 +900,7 @@
           "title",
           "sections"
         ],
-        "additionalProperties": false
+        "additionalProperties": true
       }
     },
     "manifest": {
@@ -228,12 +923,31 @@
         "assetWarnings": {
           "type": "integer",
           "minimum": 0
+        },
+        "skippedTemplates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "reason"
+            ],
+            "additionalProperties": true
+          }
         }
       },
       "required": [
         "totalTemplates"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "required": [
@@ -242,8 +956,8 @@
     "exportedAt",
     "templates"
   ],
-  "additionalProperties": false,
-  "title": "SERP Lists Portable Template Pack v2.0.0",
+  "additionalProperties": true,
+  "title": "SERP Lists Portable Template Pack v2.1.0",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://serplists.com/schema/portable-template-pack.schema.json",
   "description": "Canonical portable SERP Lists template-pack contract generated from the Zod source of truth."

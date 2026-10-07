@@ -1,0 +1,467 @@
+import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+
+import { createApiError } from '@/lib/api-errors';
+import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
+
+import type { NoteDrafts } from '@/features/run-execution/noteDrafts';
+import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
+import { createRunSaver, RUN_CHANGED_ELSEWHERE_MESSAGE, type RunSaverContext } from '@/features/run-execution/runSaver';
+import { bindRunSaves, toggleRunItem, toggleRunSubItem } from '@/features/run-execution/runExecutionActions';
+import { loadRunExecutionData } from '@/features/run-execution/runExecutionLoad';
+
+const runStatus = z.enum(['in_progress', 'completed']);
+
+const CONFLICT = { code: 'edit_conflict', error: 'Checklist run changed since it was loaded. Refresh before saving again.' };
+
+const sections = (done: Record<string, boolean>, notes: Record<string, string> = {}): ChecklistSection[] => [
+  {
+    id: 'section-1',
+    title: 'Checklist',
+    items: ['item-1', 'item-2', 'item-3'].map((id) => {
+      const note = notes[id];
+      return {
+        id,
+        title: id,
+        isCompleted: done[id] === true,
+        ...(note === undefined ? {} : { notes: note }),
+        contents:
+          id === 'item-3'
+            ? [{ type: 'subItems' as const, value: '', subItems: [{ id: 'sub-1', title: 'Sub', isCompleted: done['sub-1'] === true }] }]
+            : [],
+      };
+    }),
+  },
+];
+
+type SavedRun = ChecklistRun & { revision: number };
+
+const buildRun = (revision: number, done: Record<string, boolean> = {}, notes: Record<string, string> = {}): SavedRun => ({
+  id: 'run-1',
+  templateId: 'template-1',
+  title: 'Launch',
+  status: 'in_progress',
+  progress: 0,
+  sections: sections(done, notes),
+  startedAt: '2026-04-18T00:00:00.000Z',
+  userId: 'user-1',
+  templateVersion: 1,
+  revision,
+});
+
+const createServerRefusingStaleRevisions = (initial: SavedRun) => {
+  let stored = initial;
+  const sent: ChecklistRun[] = [];
+  const accept = (run: ChecklistRun) => {
+    sent.push(run);
+    if (run.revision !== stored.revision) throw createApiError(409, CONFLICT);
+    stored = { ...run, revision: stored.revision + 1 };
+    return stored;
+  };
+  const record = () => ({
+    id: stored.id,
+    title: stored.title,
+    status: stored.status,
+    sections: stored.sections,
+    revision: stored.revision,
+    template_id: stored.templateId,
+  });
+  return {
+    apiClient: {
+      createChecklistRunShare: vi.fn(),
+      getChecklistById: vi.fn(async () => record()),
+      getSharedChecklist: vi.fn(async () => record()),
+      revokeChecklistRunShare: vi.fn(),
+      updateSharedChecklist: vi.fn(async (_token: string, body: { expected_revision: number; sections: ChecklistSection[]; status: string }) => {
+        const saved = accept({ ...stored, revision: body.expected_revision, sections: body.sections, status: runStatus.parse(body.status) });
+        return { success: true as const, revision: saved.revision, progress: saved.progress };
+      }),
+    },
+    record,
+    saveFromAnotherSession: (change: (run: ChecklistRun) => ChecklistRun) => {
+      stored = { ...change(stored), revision: stored.revision + 1 };
+    },
+    sent,
+    stored: () => stored,
+    updateRun: vi.fn(async (run: ChecklistRun) => accept(run)),
+  };
+};
+
+const createPage = (
+  server: ReturnType<typeof createServerRefusingStaleRevisions>,
+  initial: ChecklistRun,
+  shareToken?: string,
+  noteDrafts: NoteDrafts = {},
+) => {
+  const page = { latest: initial as ChecklistRun | null, notFound: false };
+  const dependencies = { apiClient: server.apiClient, updateRun: server.updateRun };
+  const keepAnOkRunAsTheLatest = (result: RunExecutionActionResult) => {
+    if (result.kind === 'ok' && result.run) page.latest = result.run;
+    return result;
+  };
+  const context: RunSaverContext = {
+    apply: keepAnOkRunAsTheLatest,
+    latest: () => page.latest,
+    onNotFound: () => {
+      page.notFound = true;
+    },
+    reload: () => loadRunExecutionData({ runId: shareToken ? undefined : 'run-1', shareToken }, dependencies),
+  };
+  const saver = createRunSaver();
+  const saves = bindRunSaves({ dependencies, noteDrafts: () => noteDrafts, shareToken });
+  return { context, page, saver, saves };
+};
+
+const openThePage = (run: () => SavedRun, shareToken?: string, noteDrafts?: NoteDrafts) => {
+  const server = createServerRefusingStaleRevisions(run());
+  return { server, ...createPage(server, run(), shareToken, noteDrafts) };
+};
+
+const aPageWhereAnotherSessionTickedTask1 = (shareToken?: string, noteDrafts?: NoteDrafts) => {
+  const page = openThePage(() => buildRun(5), shareToken, noteDrafts);
+  page.server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+  return page;
+};
+
+const aSaverThatReportsSaves = (server: ReturnType<typeof createServerRefusingStaleRevisions>) => {
+  const onSaved = vi.fn();
+  return {
+    onSaved,
+    saver: createRunSaver(onSaved),
+    saves: bindRunSaves({ dependencies: { apiClient: server.apiClient, updateRun: server.updateRun }, noteDrafts: () => ({}) }),
+  };
+};
+
+describe('a run page whose run was saved by another session', () => {
+  it('reloads on an edit conflict, retries once on the latest run, and keeps both changes', async () => {
+    const { server, context, page, saver, saves } = aPageWhereAnotherSessionTickedTask1();
+
+    const result = await saver(saves.toggleItem('item-2', true), context);
+
+    expect(result).toMatchObject({ kind: 'ok' });
+    expect(server.sent.map((run) => run.revision)).toEqual([5, 6]);
+    expect(server.stored().revision).toBe(7);
+    expect(page.latest?.revision).toBe(7);
+    expect(page.latest?.sections[0]?.items.map((item) => item.isCompleted)).toEqual([true, true, false]);
+  });
+
+  it('builds saves queued behind the conflict on the reloaded run', async () => {
+    const { server, context, page, saver, saves } = aPageWhereAnotherSessionTickedTask1();
+
+    const [first, second] = await Promise.all([
+      saver(saves.toggleItem('item-2', true), context),
+      saver(saves.toggleSubItem('item-3', 0, 0, true), context),
+    ]);
+
+    expect(first.kind).toBe('ok');
+    expect(second.kind).toBe('ok');
+    expect(server.sent.map((run) => run.revision)).toEqual([5, 6, 7]);
+    expect(page.latest?.revision).toBe(8);
+    expect(page.latest?.sections[0]?.items.map((item) => item.isCompleted)).toEqual([true, true, true]);
+  });
+
+  it('does not undo a tick the other session already made on the same task, and sends no retry for it', async () => {
+    const { server, context, page, saver, saves } = aPageWhereAnotherSessionTickedTask1();
+
+    const result = await saver(saves.toggleItem('item-1', true), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.sent).toHaveLength(1);
+    expect(server.stored().sections[0]?.items[0]?.isCompleted).toBe(true);
+    expect(page.latest?.sections[0]?.items[0]?.isCompleted).toBe(true);
+  });
+
+  it('does not undo a sub-task tick the other session already made', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-3': true, 'sub-1': true }) }));
+
+    const result = await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.sent).toHaveLength(1);
+    expect(page.latest?.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(true);
+  });
+
+  it('retries only once, even when another session saves again between the reload and the retry, and then reports the conflict with the latest run shown', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5));
+    server.saveFromAnotherSession((run) => run);
+    server.apiClient.getChecklistById.mockImplementation(async () => {
+      server.saveFromAnotherSession((run) => run);
+      return { ...server.record(), revision: server.stored().revision - 1 };
+    });
+
+    const result = await saver(saves.toggleItem('item-2', true), context);
+
+    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
+    expect(server.sent).toHaveLength(2);
+    expect(page.latest?.revision).toBe(6);
+  });
+
+  it('marks the run not found when the reload finds it gone', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5));
+    server.saveFromAnotherSession((run) => run);
+    server.apiClient.getChecklistById.mockRejectedValue(createApiError(404, { error: 'Not found' }));
+
+    const result = await saver(saves.toggleItem('item-2', true), context);
+
+    expect(result).toEqual({ kind: 'not_found' });
+    expect(page.notFound).toBe(true);
+    expect(server.sent).toHaveLength(1);
+  });
+
+  it('does not overwrite task notes another session changed', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5, {}, { 'item-1': 'old' }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({}, { 'item-1': 'teammate' }) }));
+
+    const result = await saver(saves.notes('item-1', 'mine'), context);
+
+    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
+    expect(server.sent).toHaveLength(1);
+    expect(server.stored().sections[0]?.items[0]?.notes).toBe('teammate');
+    expect(page.latest?.sections[0]?.items[0]?.notes).toBe('teammate');
+  });
+
+  it('retries a notes save when the other session changed a different task', async () => {
+    const { server, context, saver, saves } = openThePage(() => buildRun(5));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-2': true }) }));
+
+    const result = await saver(saves.notes('item-1', 'mine'), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.stored().sections[0]?.items.map((item) => [item.isCompleted, item.notes])).toEqual([
+      [false, 'mine'],
+      [true, undefined],
+      [false, undefined],
+    ]);
+  });
+
+  it('saves the task notes with Mark Complete when the other session already completed the task, since the page then moves on', async () => {
+    const { server, context, saver, saves } = aPageWhereAnotherSessionTickedTask1(undefined, { 'item-1': 'mine' });
+
+    const result = await saver(saves.toggleItem('item-1', true), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.sent.map((run) => run.revision)).toEqual([5, 6]);
+    expect(server.stored().sections[0]?.items[0]).toMatchObject({ isCompleted: true, notes: 'mine' });
+  });
+
+  it('does not send completion again when the other session already completed the run', async () => {
+    const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5, allDone));
+    server.saveFromAnotherSession((run) => ({ ...run, completedAt: '2026-04-20T00:00:00.000Z', status: 'completed' }));
+
+    const result = await saver(saves.complete, context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.sent).toHaveLength(1);
+    expect(page.latest?.status).toBe('completed');
+  });
+
+  it('recovers the same way on a shared run link', async () => {
+    const { server, context, page, saver, saves } = aPageWhereAnotherSessionTickedTask1('share-token');
+
+    const result = await saver(saves.toggleItem('item-2', true), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.apiClient.getSharedChecklist).toHaveBeenCalledWith('share-token');
+    expect(server.apiClient.getChecklistById).not.toHaveBeenCalled();
+    expect(server.sent.map((run) => run.revision)).toEqual([5, 6]);
+    expect(page.latest?.sections[0]?.items.map((item) => item.isCompleted)).toEqual([true, true, false]);
+  });
+});
+
+describe('run actions keep what the retry needs', () => {
+  it('keeps the API error code on an error result', async () => {
+    const updateRun = vi.fn(async () => {
+      throw createApiError(409, CONFLICT);
+    });
+
+    const result = await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun(5) }, { updateRun });
+
+    expect(result).toEqual({ kind: 'error', code: 'edit_conflict', message: CONFLICT.error });
+  });
+
+  it('writes nothing when the task already has the chosen value', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun(5, { 'item-1': true });
+
+    const result = await toggleRunItem({ isCompleted: true, itemId: 'item-1', run }, { updateRun });
+
+    expect(result).toMatchObject({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('toggles queued while an earlier save is in flight', () => {
+  const runWhereTask2HasSubTasksAAndB = (done: { 'item-2'?: boolean; a?: boolean; b?: boolean }): SavedRun => ({
+    ...buildRun(1),
+    sections: [
+      {
+        id: 'section-1',
+        title: 'Checklist',
+        items: [
+          { id: 'item-1', title: 'item-1', isCompleted: false, contents: [] },
+          {
+            id: 'item-2',
+            title: 'item-2',
+            isCompleted: done['item-2'] === true,
+            contents: [
+              {
+                type: 'subItems',
+                value: '',
+                subItems: [
+                  { id: 'a', title: 'A', isCompleted: done.a === true },
+                  { id: 'b', title: 'B', isCompleted: done.b === true },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const task = (page: { latest: ChecklistRun | null }) => {
+    const item = page.latest?.sections[0]?.items[1];
+    return [item?.isCompleted, ...(item?.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted)];
+  };
+
+  it('Mark Complete, then ticking a sub-task that still looks unticked, keeps both ticked with one save, as Mark Complete already ticked it', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => runWhereTask2HasSubTasksAAndB({}));
+
+    await Promise.all([
+      saver(saves.toggleItem('item-2', true), context),
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+    ]);
+
+    expect(task(page)).toEqual([true, true, true]);
+    expect(server.sent).toHaveLength(1);
+  });
+
+  it('ticking the last sub-task, then Mark Complete before it saves, keeps every sub-task ticked', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => runWhereTask2HasSubTasksAAndB({ b: true }));
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+      saver(saves.toggleItem('item-2', true), context),
+    ]);
+
+    expect(task(page)).toEqual([true, true, true]);
+    expect(server.stored().sections[0]?.items[1]?.isCompleted).toBe(true);
+    expect(server.sent).toHaveLength(1);
+  });
+
+  it('ticking the last sub-task, then typing a note and Mark Complete, saves the note', async () => {
+    const { server, context, saver, saves } = openThePage(() => runWhereTask2HasSubTasksAAndB({ b: true }), undefined, { 'item-2': 'checked' });
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+      saver(saves.toggleItem('item-2', true), context),
+    ]);
+
+    expect(server.stored().sections[0]?.items[1]).toMatchObject({ isCompleted: true, notes: 'checked' });
+    expect(server.sent).toHaveLength(2);
+  });
+
+  it('applies an untick as an untick even when the task changed before it ran', async () => {
+    const { context, page, saver, saves } = openThePage(() => runWhereTask2HasSubTasksAAndB({ 'item-2': true, a: true, b: true }));
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 1, false), context),
+      saver(saves.toggleItem('item-2', false), context),
+    ]);
+
+    expect(task(page)).toEqual([false, false, false]);
+  });
+});
+
+describe('toggle keys and no-op saves', () => {
+  it('ignores a double click that asks for the same value, but queues a different one', async () => {
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(1));
+
+    const [first, repeat] = await Promise.all([
+      saver(saves.toggleItem('item-1', true), context),
+      saver(saves.toggleItem('item-1', true), context),
+    ]);
+    expect(first.kind).toBe('ok');
+    expect(repeat).toEqual({ kind: 'ignored' });
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-3', 0, 0, true), context),
+      saver(saves.toggleSubItem('item-3', 0, 0, false), context),
+    ]);
+    expect(page.latest?.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(false);
+    expect(server.sent).toHaveLength(3);
+  });
+
+  it('Mark Complete still saves when the task is done but a sub-task is not', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun(1, { 'item-3': true });
+
+    const result = await toggleRunItem({ isCompleted: true, itemId: 'item-3', run }, { updateRun });
+
+    expect(updateRun).toHaveBeenCalledOnce();
+    if (result.kind !== 'ok' || !result.run) throw new Error('expected ok result');
+    expect(result.run.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(true);
+  });
+
+  it('sends nothing when a sub-task already has the chosen value', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun(1, { 'item-3': true, 'sub-1': true });
+
+    const result = await toggleRunSubItem(
+      { contentIndex: 0, isCompleted: true, itemId: 'item-3', run, subItemIndex: 0 },
+      { updateRun },
+    );
+
+    expect(result).toMatchObject({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('a run completed while a toggle waits in the queue', () => {
+  it('refuses the toggle once completion has landed, so the run never reads Completed with open tasks', async () => {
+    const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
+    const { server, context, page, saver, saves } = openThePage(() => buildRun(5, allDone));
+
+    const [completed, untick] = await Promise.all([
+      saver(saves.complete, context),
+      saver(saves.toggleItem('item-1', false), context),
+    ]);
+
+    expect(completed.kind).toBe('ok');
+    expect(untick.kind).toBe('error');
+    expect(server.sent).toHaveLength(1);
+    expect(server.stored().status).toBe('completed');
+    expect(server.stored().sections[0]?.items.every((item) => item.isCompleted)).toBe(true);
+    expect(page.latest?.status).toBe('completed');
+  });
+});
+
+describe('refreshing the run Changelog once a burst of saves settles, not once per click, since each refresh reads D1', () => {
+  it('reports once, with the latest run, when a burst of saves with an ignored double click has finished and one of them saved', async () => {
+    const { server, context, page } = openThePage(() => buildRun(5));
+    const { onSaved, saver, saves } = aSaverThatReportsSaves(server);
+
+    const tickTask1 = () => saver(saves.toggleItem('item-1', true), context);
+    await Promise.all([tickTask1(), tickTask1(), saver(saves.toggleItem('item-2', true), context)]);
+
+    expect(server.sent).toHaveLength(2);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenLastCalledWith(page.latest);
+
+    await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
+    expect(onSaved).toHaveBeenCalledTimes(2);
+    expect(onSaved).toHaveBeenLastCalledWith(page.latest);
+  });
+
+  it('does not report when nothing was saved', async () => {
+    const { server, context } = openThePage(() => buildRun(5));
+    server.updateRun.mockRejectedValue(new Error('offline'));
+    const { onSaved, saver, saves } = aSaverThatReportsSaves(server);
+
+    const result = await saver(saves.toggleItem('item-1', true), context);
+
+    expect(result.kind).toBe('error');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+});

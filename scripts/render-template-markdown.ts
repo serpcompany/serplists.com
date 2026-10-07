@@ -1,7 +1,8 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { portableChecklistTemplateSchema } from "../src/lib/schemas/checklistSchema";
-import { normalizePortableTemplate, renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
+import { normalizePortableTemplate } from "../src/lib/templates/portableTemplateNormalization";
+import { renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
 
 const run = async () => {
   const [inputArg, outputArg] = process.argv.slice(2);

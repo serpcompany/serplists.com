@@ -1,28 +1,35 @@
-// Centralized type definitions for checklist functionality
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { ChecklistFormField, FormFieldKind } from "@/lib/schemas/formFields";
+import type { ChecklistContentType } from "@/lib/schemas/storedSections";
+import type { RequiredTool } from "@/lib/schemas/requiredTools";
+import type { PublicTemplateOwner, TemplateOwner } from "@/lib/schemas/templateOwner";
+import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
+
+export type { ChecklistFormField, FormAnswer, FormFieldKind } from "@/lib/schemas/formFields";
 
 export type ChecklistSubItem = {
-  id: string;
+  id?: string | undefined;
   title: string;
-  isCompleted?: boolean;
+  isCompleted?: boolean | undefined;
 };
 
 export type ChecklistItemContent = {
-  id?: string; // Assigned by the template editor; imported, repo, and legacy content may not have one
-  type: "text" | "image" | "video" | "file" | "embed" | "subItems";
-  value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
-  uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
-  fileName?: string; // Original filename for uploaded files
-  fileSize?: number; // File size in bytes for uploaded files
-  subItems?: ChecklistSubItem[]; // Only used when type is "subItems"
+  id?: string;
+  type: ChecklistContentType;
+  value: string;
+  uploadType?: "url" | "upload" | undefined;
+  fileName?: string | undefined;
+  fileSize?: number | undefined;
+  subItems?: ChecklistSubItem[] | undefined;
+  fields?: ChecklistFormField[] | undefined;
 };
 
 export type ChecklistItem = {
   id: string;
   title: string;
-  description?: string;
-  contents?: ChecklistItemContent[];
-  isCompleted?: boolean;
+  description?: string | undefined;
+  contents?: ChecklistItemContent[] | undefined;
+  isCompleted?: boolean | undefined;
   notes?: string;
 };
 
@@ -32,33 +39,34 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
-// Rules are always parsed with portableTemplateRuleSchema (API responses, imports, repo packs),
-// so `severity` has its default applied.
-export type TemplateRule = PortableTemplateRule;
+type TemplateRule = PortableTemplateRule;
 
 export type ChecklistTemplate = {
   id: string;
   title: string;
-  description?: string;
-  type?: "checklist" | "recipe";
+  description?: string | undefined;
+  type?: "checklist" | "recipe" | undefined;
   sections: ChecklistSection[];
   userId: string;
   createdAt: string;
   updatedAt: string;
   isPublic: boolean;
-  slug?: string;
-  seoTitle?: string;
-  seoDescription?: string;
-  seoUrl?: string;
-  rules?: TemplateRule[];
+  slug?: string | undefined;
+  seoTitle?: string | undefined;
+  seoDescription?: string | undefined;
+  seoUrl?: string | undefined;
+  rules?: TemplateRule[] | undefined;
+  requiredTools?: RequiredTool[] | undefined;
   categories?: string[];
   tags?: string[];
-  version?: number;
+  version?: number | undefined;
   ownerProfile?: {
-    full_name?: string;
-    username?: string;
-  };
-  teamId?: string;
+    full_name?: string | undefined;
+    username?: string | undefined;
+  } | undefined;
+  teamId?: string | undefined;
+  ownerType?: "user" | "team" | undefined;
+  owner?: TemplateOwner | PublicTemplateOwner | undefined;
 };
 
 export type TemplateSavePayload = {
@@ -67,15 +75,55 @@ export type TemplateSavePayload = {
   description?: string;
   type?: "checklist" | "recipe";
   sections: ChecklistSection[];
-  isPublic: boolean;
+  isPublic?: boolean | undefined;
   seoTitle?: string;
   seoDescription?: string;
-  seoUrl?: string;
+  seoUrl?: string | undefined;
   rules?: TemplateRule[];
+  requiredTools?: RequiredTool[];
   categories?: string[];
   tags?: string[];
-  slug?: string;
+  slug?: string | undefined;
   version?: number;
+};
+
+export type RetiredRunSubTask = {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+};
+
+export type RetiredRunFormAnswer = {
+  fieldId: string;
+  label: string;
+  kind: FormFieldKind;
+  answer: string;
+};
+
+export type RetiredRunTask = RetiredRunSubTask & {
+  notes?: string;
+  subTasks: RetiredRunSubTask[];
+  answers?: RetiredRunFormAnswer[];
+};
+
+export type RetiredRunItem =
+  | { kind: "section"; id: string; title: string; tasks: RetiredRunTask[] }
+  | { kind: "item"; id: string; sectionTitle?: string | undefined; task: RetiredRunTask }
+  | { kind: "subItem"; id: string; itemTitle?: string | undefined; subTask: RetiredRunSubTask }
+  | { kind: "formAnswer"; id: string; itemTitle?: string | undefined; formAnswer: RetiredRunFormAnswer };
+
+export type RunActor = { userId: string; name: string | null; username: string | null };
+
+export type RunProvenance = {
+  origin: "web" | "mcp" | "unknown";
+  startedBy: RunActor | null;
+  owner?: { type: "personal" | "organization"; id: string; name: string | null } | undefined;
+  template?: { id: string | null; title: string | null; requiredTools?: RequiredTool[] | undefined; version: number } | undefined;
+  agentKeyName?: string | null | undefined;
+  authorizedBy?: RunActor | null | undefined;
+  createdBy?: RunActor | null | undefined;
+  assignedTo?: RunActor | null | undefined;
+  completedBy?: RunActor | null | undefined;
 };
 
 export type ChecklistRun = {
@@ -86,29 +134,31 @@ export type ChecklistRun = {
   progress: number;
   sections: ChecklistSection[];
   startedAt: string;
-  completedAt?: string;
+  completedAt?: string | undefined;
+  createdAt?: string | undefined;
+  updatedAt?: string | undefined;
   userId: string;
   templateVersion?: number;
-  revision?: number;
+  revision?: number | undefined;
   isStale?: boolean;
   isPublic?: boolean;
-  teamId?: string;
+  teamId?: string | undefined;
+  retiredItems?: RetiredRunItem[];
+  provenance?: RunProvenance | undefined;
 };
 
 export type TemplateImportOptions = {
   visibility?: "preserve" | "public" | "private";
 };
 
-export type TemplateExportFormat = "backup" | "portable";
-
 export type TemplateImportFailure = {
   index: number;
   title: string;
   reason: string;
-  code: "invalid_sections" | "oversized_asset" | "insert_failed";
+  code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "content_too_large" | "insert_failed";
 };
 
-export type TemplateImportSuccess = {
+type TemplateImportSuccess = {
   index: number;
   title: string;
   id: string;
@@ -135,11 +185,12 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
-  createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
-  updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
+  createRun: (params: { templateId: string; runName?: string | undefined; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
+  updateRun: (run: ChecklistRun, options?: { includeTitle?: boolean }) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
+  markRunShared?: (runId: string) => void;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

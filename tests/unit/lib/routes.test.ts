@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
 import {
-  LEGACY_ACCOUNT_PATH,
-  LEGACY_CONSOLE_PROFILE_PATH,
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
+  buildConsoleArchivePath,
   buildConsoleHomePath,
   buildConsoleRunPath,
   buildConsoleRunsPath,
@@ -18,19 +18,21 @@ import {
   buildConsoleTemplateImportPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
-  buildRunPath,
-  buildRunUrl,
+  buildOrganizationProfilePath,
   buildPublicCategoriesPath,
   buildPublicCategoryPath,
   buildPublicFeaturePath,
   buildPublicProfilePath,
+  buildProfilePreviewPath,
+  getCanonicalProfilePath,
   buildPublicTemplatesPath,
   buildPublicTemplatePath,
   buildSharePath,
-  findCategoryNameBySlug,
+  findCategoryNameByLegacySlug,
+  hasCanonicalPublicTemplatePath,
   isBlankTemplateEditorRoute,
+  isPathWithin,
   resolveLegacyTemplatesCategoryRedirectPath,
-  resolveConsoleSection,
   resolvePublicRouteTier,
   resolvePublicTemplateOwnerSlug,
   resolveRouteShell,
@@ -49,59 +51,67 @@ const baseTemplate: ChecklistTemplate = {
 
 describe('routes', () => {
   it('builds the canonical public routes', () => {
-    expect(buildPublicTemplatesPath()).toBe('/templates');
-    expect(buildPublicCategoriesPath()).toBe('/categories');
+    expect(buildPublicTemplatesPath()).toBe('/templates/');
+    expect(buildPublicCategoriesPath()).toBe('/categories/');
     expect(buildPublicCategoryPath('Technical SEO')).toBe(
-      '/categories/technical-seo',
+      '/categories/technical-seo/',
     );
-    expect(buildPublicProfilePath('alice')).toBe('/profile/alice');
+    expect(buildPublicProfilePath('alice')).toBe('/profile/alice/');
     expect(buildPublicTemplatePath('alice', 'video-downloader')).toBe(
-      '/profile/alice/video-downloader',
+      '/profile/alice/video-downloader/',
     );
     expect(buildPublicFeaturePath('template-builder')).toBe(
-      '/features/template-builder',
+      '/features/template-builder/',
     );
-    expect(buildSharePath('share-123')).toBe('/share/share-123');
+    expect(buildSharePath('share-123')).toBe('/share/share-123/');
+  });
+
+  it('gives a profile whose username looks like a file name a page URL', () => {
+    expect(buildPublicProfilePath('john.doe')).toBe('/profile/john.doe/');
+  });
+
+  it("links the console home straight to the dashboard's home, since /dashboard/ only redirects there", () => {
+    expect(buildConsoleHomePath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/');
   });
 
   it('builds the canonical console routes', () => {
-    expect(buildConsoleHomePath()).toBe('/dashboard');
-    expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates');
-    expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new');
-    expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates');
-    expect(buildConsoleTemplatePath('template-1')).toBe(
-      '/dashboard/templates/template-1',
+    expect(buildConsoleTemplatesPath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/');
+    expect(buildConsoleTemplateCreatePath(PERSONAL_CONSOLE)).toBe('/dashboard/templates/new/');
+    expect(buildConsoleTemplateImportPath(PERSONAL_CONSOLE)).toBe('/dashboard/import-templates/');
+    expect(buildConsoleTemplatePath('template-1', PERSONAL_CONSOLE)).toBe(
+      '/dashboard/templates/template-1/',
     );
-    expect(buildConsoleTemplateEditPath('template-1')).toBe(
-      '/dashboard/templates/template-1/edit',
+    expect(buildConsoleTemplateEditPath('template-1', PERSONAL_CONSOLE)).toBe(
+      '/dashboard/templates/template-1/edit/',
     );
-    expect(buildConsoleRunsPath()).toBe('/dashboard/runs');
-    expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1');
-    expect(buildRunPath('run-1')).toBe('/run/run-1');
-    expect(buildRunUrl('run-1', 'https://serplists.com')).toBe(
-      'https://serplists.com/run/run-1',
-    );
-    expect(buildConsoleSettingsPath()).toBe('/dashboard/settings');
-    expect(LEGACY_ACCOUNT_PATH).toBe('/account');
-    expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
+    expect(buildConsoleRunsPath(PERSONAL_CONSOLE)).toBe('/dashboard/runs/');
+    expect(buildConsoleRunPath('run-1', PERSONAL_CONSOLE)).toBe('/dashboard/runs/run-1/');
+    expect(buildConsoleSettingsPath(PERSONAL_CONSOLE)).toBe('/dashboard/settings/');
+    expect(buildConsoleArchivePath(PERSONAL_CONSOLE)).toBe('/dashboard/archive/');
   });
 
-  it('flags template editor routes that should render on a blank workspace shell', () => {
+  it('flags template editor routes that should render on a blank workspace shell, with or without the trailing slash the router reports', () => {
     expect(isBlankTemplateEditorRoute('/dashboard/templates/new')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/edit')).toBe(true);
     expect(isBlankTemplateEditorRoute('/console/templates/template-1/edit')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates')).toBe(false);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1')).toBe(false);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/new/')).toBe(true);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/edit/')).toBe(true);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/')).toBe(false);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/')).toBe(false);
   });
 
-  it('builds and resolves category slugs', () => {
+  it('builds category slugs', () => {
     expect(buildCategorySlug('Technical SEO')).toBe('technical-seo');
-    expect(
-      findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'technical-seo'),
-    ).toBe('Technical SEO');
-    expect(
-      findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'missing'),
-    ).toBeNull();
+  });
+
+  it('finds an accented category from the URL it had before its letters were folded', () => {
+    const categories = ['Café Guides', 'Technical SEO'];
+
+    expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides/');
+    expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
+    expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
   });
 
   it('redirects legacy category-only template queries to canonical category routes', () => {
@@ -109,12 +119,12 @@ describe('routes', () => {
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=technical-seo'),
       ),
-    ).toBe('/categories/technical-seo');
+    ).toBe('/categories/technical-seo/');
     expect(
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=Technical%20SEO'),
       ),
-    ).toBe('/categories/technical-seo');
+    ).toBe('/categories/technical-seo/');
     expect(
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=technical-seo&sort=recent'),
@@ -127,7 +137,7 @@ describe('routes', () => {
     ).toBeNull();
   });
 
-  it('classifies routes into public and console shells', () => {
+  it('classifies routes into public and console shells, with or without the trailing slash the router reports', () => {
     expect(resolveRouteShell('/')).toBe('public');
     expect(resolveRouteShell('/templates')).toBe('public');
     expect(resolveRouteShell('/checklists')).toBe('public');
@@ -140,9 +150,13 @@ describe('routes', () => {
     expect(resolveRouteShell('/dashboard/runs/run-1')).toBe('console');
     expect(resolveRouteShell('/console')).toBe('console');
     expect(resolveRouteShell('/account')).toBe('console');
+    expect(resolveRouteShell('/templates/')).toBe('public');
+    expect(resolveRouteShell('/profile/alice/ultimate-camping-checklist/')).toBe('public');
+    expect(resolveRouteShell('/dashboard/templates/')).toBe('console');
+    expect(resolveRouteShell('/dashboard/runs/run-1/')).toBe('console');
   });
 
-  it('labels public routes by discovery emphasis', () => {
+  it('labels public routes by discovery emphasis, with or without the trailing slash the router reports', () => {
     expect(resolvePublicRouteTier('/')).toBe('marketing');
     expect(resolvePublicRouteTier('/templates')).toBe('core');
     expect(resolvePublicRouteTier('/checklists')).toBe('core');
@@ -155,25 +169,15 @@ describe('routes', () => {
       'secondary',
     );
     expect(resolvePublicRouteTier('/share/share-123')).toBe('minimal');
-  });
-
-  it('maps console routes to persistent navigation sections', () => {
-    expect(resolveConsoleSection('/dashboard')).toBe('home');
-    expect(resolveConsoleSection('/dashboard/templates')).toBe('templates');
-    expect(resolveConsoleSection('/dashboard/templates/template-1')).toBe(
-      'templates',
-    );
-    expect(resolveConsoleSection('/dashboard/import-templates')).toBe(
-      'templates',
-    );
-    expect(resolveConsoleSection('/dashboard/runs')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/settings')).toBe('account');
-    expect(resolveConsoleSection('/dashboard/profile')).toBe('account');
-    expect(resolveConsoleSection('/console')).toBe('home');
-    expect(resolveConsoleSection('/account')).toBe('account');
-    expect(resolveConsoleSection('/templates')).toBeNull();
-    expect(resolveConsoleSection('/checklists')).toBeNull();
+    expect(resolvePublicRouteTier('/templates/')).toBe('core');
+    expect(resolvePublicRouteTier('/profile/alice/')).toBe('core');
+    expect(resolvePublicRouteTier('/profiles')).toBe('core');
+    expect(resolvePublicRouteTier('/profiles/')).toBe('core');
+    expect(resolvePublicRouteTier('/categories/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/categories/outdoor/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/features/template-builder/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/share/share-123/')).toBe('minimal');
+    expect(resolvePublicRouteTier('/pricing/')).toBe('marketing');
   });
 
   it('resolves public owner slugs from template ownership data', () => {
@@ -202,6 +206,20 @@ describe('routes', () => {
     expect(resolvePublicTemplateOwnerSlug(baseTemplate)).toBeNull();
   });
 
+  it("resolves an Organization Template to its Organization's handle, and never falls back to its Creator", () => {
+    const createdByAlice = { ...baseTemplate, ownerProfile: { username: 'alice' }, ownerType: 'team' as const, teamId: 'org-1' };
+
+    expect(
+      resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team', publicHandle: ' Acme-Launch ', displayName: 'Acme' } }),
+    ).toBe('Acme-Launch');
+    expect(buildCanonicalPublicTemplatePath({ ...createdByAlice, slug: 'launch', owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: null } })).toBe(
+      '/profile/Acme-Launch/launch/',
+    );
+    expect(resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team' } })).toBeNull();
+    expect(resolvePublicTemplateOwnerSlug({ ...createdByAlice, owner: { type: 'team', teamId: 'org-1', publicHandle: null, displayName: null } })).toBeNull();
+    expect(resolvePublicTemplateOwnerSlug(createdByAlice)).toBeNull();
+  });
+
   it('builds canonical public template paths from template records', () => {
     expect(
       buildCanonicalPublicTemplatePath({
@@ -209,7 +227,7 @@ describe('routes', () => {
         slug: 'video-downloader',
         ownerProfile: { username: 'alice' },
       }),
-    ).toBe('/profile/alice/video-downloader');
+    ).toBe('/profile/alice/video-downloader/');
 
     expect(
       buildCanonicalPublicTemplatePath({
@@ -217,7 +235,7 @@ describe('routes', () => {
         slug: 'starter-template',
         userId: REPO_TEMPLATE_USER_ID,
       }),
-    ).toBe(`/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template`);
+    ).toBe(`/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template/`);
 
     expect(
       buildCanonicalPublicTemplatePath({
@@ -231,6 +249,76 @@ describe('routes', () => {
         ...baseTemplate,
         ownerProfile: { username: 'alice' },
       }),
-    ).toBe('/profile/alice/template-1');
+    ).toBe('/profile/alice/template-1/');
+  });
+
+  it('reports which templates have a public URL for discovery', () => {
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: 'alice' } })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, id: 'repo:starter' })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, userId: REPO_TEMPLATE_USER_ID })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { full_name: 'No Handle' } })).toBe(false);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: '  ' } })).toBe(false);
+    expect(hasCanonicalPublicTemplatePath(baseTemplate)).toBe(false);
+  });
+});
+
+describe('isPathWithin', () => {
+  it('matches the page a link names and the pages under it in any form or case, and the home page only itself', () => {
+    expect(isPathWithin('/dashboard/templates/abc/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/dashboard/templates', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/Dashboard/Templates/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(true);
+    expect(isPathWithin('/dashboard/runs/', buildConsoleTemplatesPath(PERSONAL_CONSOLE))).toBe(false);
+    expect(isPathWithin('/', '/')).toBe(true);
+    expect(isPathWithin('/about/', '/')).toBe(false);
+  });
+});
+
+describe('buildOrganizationProfilePath', () => {
+  it("links an Organization's public profile at its handle", () => {
+    expect(buildOrganizationProfilePath({ type: 'team', slug: 'acme-launch' })).toBe('/profile/acme-launch/');
+    expect(buildOrganizationProfilePath({ type: 'team', slug: ' Acme.Launch ' })).toBe('/profile/Acme.Launch/');
+  });
+
+  it('has no profile to link for Personal or for an Organization without a handle', () => {
+    expect(buildOrganizationProfilePath({ type: 'personal', slug: 'alice' })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team' })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team', slug: null })).toBeNull();
+    expect(buildOrganizationProfilePath({ type: 'team', slug: '  ' })).toBeNull();
+  });
+});
+
+describe('getCanonicalProfilePath', () => {
+  it('sends a mixed-case profile URL to the stored lowercase username', () => {
+    expect(getCanonicalProfilePath('JohnDoe', 'johndoe')).toBe('/profile/johndoe/');
+  });
+
+  it('stays on a URL that already uses the stored username', () => {
+    expect(getCanonicalProfilePath('johndoe', 'johndoe')).toBeNull();
+  });
+
+  it('treats a legacy mixed-case username as its own canonical form', () => {
+    expect(getCanonicalProfilePath('MixedCase', 'MixedCase')).toBeNull();
+  });
+
+  it('does nothing without both usernames', () => {
+    expect(getCanonicalProfilePath(undefined, 'johndoe')).toBeNull();
+    expect(getCanonicalProfilePath('JohnDoe', null)).toBeNull();
+  });
+});
+
+describe('buildProfilePreviewPath', () => {
+  it('links the saved username as stored, even a legacy mixed-case one', () => {
+    expect(buildProfilePreviewPath('JaneDoe', 'JaneDoe')).toBe('/profile/JaneDoe/');
+    expect(buildProfilePreviewPath('  johndoe ', 'johndoe')).toBe('/profile/johndoe/');
+  });
+
+  it('previews the lowercase form an unsaved edit will be stored as', () => {
+    expect(buildProfilePreviewPath('JANEDOE', 'JaneDoe')).toBe('/profile/janedoe/');
+    expect(buildProfilePreviewPath('JohnDoe', 'john')).toBe('/profile/johndoe/');
+    expect(buildProfilePreviewPath('JohnDoe', undefined)).toBe('/profile/johndoe/');
+  });
+
+  it('has no URL for an empty field', () => {
+    expect(buildProfilePreviewPath('  ', 'JaneDoe')).toBeNull();
   });
 });

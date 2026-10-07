@@ -1,0 +1,60 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { assert, describe, expect, it } from 'vitest';
+
+import { metadata as rootMetadata } from '@/app/layout';
+import { buildPageMetadata } from '@/lib/seo/pageMetadata';
+import { z } from 'zod';
+
+const pngSize = (file: string) => {
+  const bytes = readFileSync(file);
+  expect(bytes.subarray(1, 4).toString('ascii'), `${file} is a PNG`).toBe('PNG');
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+};
+
+const expectShippedCardImage = (url: string | undefined) => {
+  expect(url).toMatch(/^https:\/\/serplists\.com\/[\w/-]+\.png$/);
+  assert.exists(url);
+  const file = path.join('public', new URL(url).pathname);
+  expect(existsSync(file), file).toBe(true);
+  expect(pngSize(file)).toEqual({ width: 1200, height: 630 });
+};
+
+const imageEntry = z
+  .object({
+    url: z.union([z.string(), z.instanceof(URL)]),
+    width: z.union([z.number(), z.string()]).optional(),
+    height: z.union([z.number(), z.string()]).optional(),
+  })
+  .passthrough();
+
+type ImageEntry = z.output<typeof imageEntry>;
+
+const firstImage = (images: unknown): ImageEntry => {
+  const [image] = z.array(z.unknown()).safeParse(images).data ?? [images];
+  return typeof image === 'string' || image instanceof URL ? { url: image } : imageEntry.parse(image);
+};
+
+const resolveAgainstMetadataBase = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();
+
+describe('link preview image, one absolute 1200x630 PNG since social sites render neither SVG images nor relative URLs', () => {
+  it('is an absolute PNG in the root layout defaults, shipped in public/', () => {
+    const image = firstImage(rootMetadata.openGraph?.images);
+    const ogImage = resolveAgainstMetadataBase(image.url);
+
+    expectShippedCardImage(ogImage);
+    expect(resolveAgainstMetadataBase(firstImage(rootMetadata.twitter?.images).url)).toBe(ogImage);
+    expect(Number(image.width)).toBe(1200);
+    expect(Number(image.height)).toBe(630);
+  });
+
+  it('is the same absolute PNG on every page with its own metadata', () => {
+    const metadata = buildPageMetadata({ title: 'Template Library', path: '/templates' });
+    const ogImage = String(firstImage(metadata.openGraph?.images).url);
+
+    expectShippedCardImage(ogImage);
+    expect(String(firstImage(metadata.twitter?.images).url)).toBe(ogImage);
+    expect(ogImage).toBe(resolveAgainstMetadataBase(firstImage(rootMetadata.openGraph?.images).url));
+  });
+
+});

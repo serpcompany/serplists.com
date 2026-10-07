@@ -9,5 +9,3 @@ export const PUBLIC_CATEGORY_REGISTRY = [
   { slug: 'project-management', name: 'Project Management', description: 'Project planning, milestones, and team coordination templates' },
   { slug: 'compliance', name: 'Compliance & Legal', description: 'Regulatory compliance, audits, and legal process checklists' },
 ] as const;
-
-export type PublicCategorySlug = (typeof PUBLIC_CATEGORY_REGISTRY)[number]['slug'];

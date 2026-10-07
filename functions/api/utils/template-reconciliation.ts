@@ -1,51 +1,58 @@
-type JsonRecord = Record<string, unknown>;
+import { z } from 'zod';
+import { toProgressPercent } from '../../../src/lib/progress';
+import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
+import { withoutFormAnswers } from '../../../src/lib/schemas/formFields';
+import {
+  isContentRecord,
+  isRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  taskRecordsIn,
+  type ChecklistNodeRecord,
+  type FormFieldRecord,
+  type JsonRecord,
+  type SectionRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from '../../../src/lib/schemas/jsonRecords';
+import {
+  assignMissingStableTemplateIdentities,
+  getArray,
+  getFormFields,
+  getId,
+  getSubItems,
+  mapFormBlocks,
+  mapSubTasksBlocks,
+  normalizeLegacySectionShape,
+} from './template-identities';
+import {
+  reconcileFormFields,
+  reopenWhenFormBlocks,
+  retiredFormAnswersOf,
+  type RetiredFormAnswerEntry,
+} from './template-form-reconciliation';
+
+export { assignMissingStableTemplateIdentities, validateStableTemplateIdentities } from './template-identities';
 
 export type RetiredRunEntry =
-  | { kind: 'section'; section: JsonRecord }
-  | { kind: 'item'; sectionId: string; sectionTitle?: string; item: JsonRecord }
+  | { kind: 'section'; section: SectionRecord }
+  | { kind: 'item'; sectionId: string; sectionTitle?: string; item: TaskRecord }
   | {
       kind: 'subItem';
       sectionId: string;
       itemId: string;
       itemTitle?: string;
-      subItem: JsonRecord;
-    };
+      subItem: SubTaskRecord;
+    }
+  | RetiredFormAnswerEntry;
 
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const wasCompleted = (runValue: TaskRecord | SubTaskRecord | undefined): boolean =>
+  typeof runValue?.isCompleted === 'boolean' ? runValue.isCompleted : runValue?.completed === true;
 
-const getId = (value: unknown): string | null => {
-  if (!isRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {
-    return null;
-  }
-  return value.id;
-};
-
-const getArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
-
-function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
-  const records = values.filter(isRecord);
-  if (records.length === 0) return [];
-  if (Array.isArray(records[0].items)) return records;
-
-  return [{
-    id: '1',
-    title: 'Checklist',
-    items: records,
-  }];
-}
-
-function getSubItems(item: JsonRecord): JsonRecord[] {
-  const direct = getArray(item.subItems).filter(isRecord);
-  const nested = getArray(item.contents)
-    .filter(isRecord)
-    .flatMap((content) => getArray(content.subItems).filter(isRecord));
-  return [...direct, ...nested];
-}
-
-function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | undefined): JsonRecord {
-  const next = { ...templateValue };
-  next.isCompleted = runValue?.isCompleted === true;
+function preserveRunState(templateValue: TaskRecord, runValue: TaskRecord | undefined): TaskRecord {
+  const next: TaskRecord = { ...templateValue };
+  next.isCompleted = wasCompleted(runValue);
 
   if (typeof runValue?.notes === 'string') {
     next.notes = runValue.notes;
@@ -56,133 +63,295 @@ function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | unde
   return next;
 }
 
-function reconcileSubItems(
-  templateSubItems: unknown[],
-  previousById: Map<string, JsonRecord>,
-  retainedIds: Set<string>,
-): JsonRecord[] {
-  return templateSubItems.filter(isRecord).map((templateSubItem) => {
-    const id = getId(templateSubItem);
-    if (id) retainedIds.add(id);
-    return preserveRunState(templateSubItem, id ? previousById.get(id) : undefined);
-  });
+type EarlierRetired = ReturnType<typeof createEarlierRetiredLookup>;
+
+const storedRecord = z.record(z.unknown());
+const storedRetiredWork = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('section'), section: storedRecord }),
+  z.object({ kind: z.literal('item'), item: storedRecord }),
+  z.object({ kind: z.literal('subItem'), subItem: storedRecord }),
+  z.object({ kind: z.literal('formAnswer'), field: storedRecord }),
+]);
+
+function retiredWorkOf(entry: unknown): { kind: RetiredRunEntry['kind']; record: ChecklistNodeRecord } | null {
+  const parsed = storedRetiredWork.safeParse(entry);
+  if (!parsed.success) return null;
+  const work = parsed.data;
+  switch (work.kind) {
+    case 'section':
+      return { kind: work.kind, record: work.section };
+    case 'item':
+      return { kind: work.kind, record: work.item };
+    case 'subItem':
+      return { kind: work.kind, record: work.subItem };
+    case 'formAnswer':
+      return { kind: work.kind, record: work.field };
+  }
+}
+
+function createEarlierRetiredLookup(previousRetired: unknown[]) {
+  const remaining: JsonRecord[] = previousRetired.filter(isRecord);
+  const take = (kind: RetiredRunEntry['kind'], id: string): ChecklistNodeRecord | undefined => {
+    for (let index = remaining.length - 1; index >= 0; index -= 1) {
+      const work = retiredWorkOf(remaining[index]);
+      if (work?.kind !== kind) continue;
+      if (getId(work.record) === id) {
+        remaining.splice(index, 1);
+        return work.record;
+      }
+    }
+    return undefined;
+  };
+  return { take, remaining };
+}
+
+function freshRunState(value: TaskRecord): TaskRecord {
+  const { completed, ...next } = preserveRunState(value, undefined);
+  return next;
+}
+
+const resetSubItems = (subItems: unknown[]): unknown[] =>
+  subItems.map((subItem) => (isSubTaskRecord(subItem) ? freshRunState(subItem) : subItem));
+
+function resetTaskState(item: unknown): unknown {
+  if (!isTaskRecord(item)) return item;
+
+  const next = freshRunState(item);
+  if (Array.isArray(item.subItems)) next.subItems = resetSubItems(item.subItems);
+  if (Array.isArray(item.contents)) {
+    next.contents = mapFormBlocks(item.contents.map((content: unknown) => (
+      isContentRecord(content) && Array.isArray(content.subItems)
+        ? { ...content, subItems: resetSubItems(content.subItems) }
+        : content
+    )), withoutFormAnswers);
+  }
+  return next;
+}
+
+export function resetRunCompletionState(sections: unknown[]): unknown[] {
+  return sections.map((section) => (
+    isSectionRecord(section) && Array.isArray(section.items)
+      ? { ...section, items: section.items.map(resetTaskState) }
+      : section
+  ));
+}
+
+function indexById<Work extends ChecklistNodeRecord>(records: Work[]): Map<string, Work[]> {
+  const index = new Map<string, Work[]>();
+  for (const record of records) {
+    const id = getId(record);
+    const copies = id ? index.get(id) : undefined;
+    if (copies) copies.push(record);
+    else if (id) index.set(id, [record]);
+  }
+  return index;
+}
+
+function createRunMatcher(kind: 'item' | 'subItem' | 'formAnswer', previous: ChecklistNodeRecord[], earlierRetired: EarlierRetired) {
+  const claimed = new Set<JsonRecord>();
+  const anywhere = indexById(previous);
+  const claimFirst = (copies: ChecklistNodeRecord[] | undefined) => {
+    const copy = copies?.find((record) => !claimed.has(record));
+    if (copy) claimed.add(copy);
+    return copy;
+  };
+  return {
+    claimed,
+    underParent: (id: string | null, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
+      (id ? claimFirst(previousUnderParentById.get(id)) : undefined),
+    elsewhere: (id: string | null): ChecklistNodeRecord | undefined => {
+      if (!id) return undefined;
+      const copies = anywhere.get(id);
+      if (!copies) return earlierRetired.take(kind, id);
+      return copies.length === 1 ? claimFirst(copies) : undefined;
+    },
+  };
+}
+
+type RunMatcher = ReturnType<typeof createRunMatcher>;
+
+function withoutClaimed(records: unknown, claimed: Set<JsonRecord>): unknown[] {
+  return getArray(records).filter((record) => !(isRecord(record) && claimed.has(record)));
+}
+
+function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claimedFields: Set<JsonRecord>): TaskRecord {
+  const movedSubItems = getSubItems(item).some((subItem) => claimed.has(subItem));
+  const movedFields = getFormFields(item).some((field) => claimedFields.has(field));
+  if (!movedSubItems && !movedFields) return item;
+  const contents = mapSubTasksBlocks(getArray(item.contents), (list) => withoutClaimed(list, claimed));
+  return { ...item, contents: mapFormBlocks(contents, (list) => withoutClaimed(list, claimedFields)) };
+}
+
+function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
+  const previousItems = getArray(section.items);
+  const kept = withoutClaimed(previousItems, items.claimed)
+    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed, fields.claimed) : item));
+  if (previousItems.length > 0 && kept.length === 0) return null;
+  return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
+    ? section
+    : { ...section, items: kept };
 }
 
 function reconcileItem(
-  templateItem: JsonRecord,
-  previousItem: JsonRecord | undefined,
-  retired: RetiredRunEntry[],
-  sectionId: string,
-): JsonRecord {
+  templateItem: TaskRecord,
+  previousItem: TaskRecord | undefined,
+  subItemMatches: Map<JsonRecord, TaskRecord | undefined>,
+  fieldMatches: Map<JsonRecord, FormFieldRecord | undefined>,
+): TaskRecord {
   const next = preserveRunState(templateItem, previousItem);
-  const previousSubItems = previousItem ? getSubItems(previousItem) : [];
-  const previousSubItemsById = new Map(
-    previousSubItems.flatMap((subItem) => {
-      const id = getId(subItem);
-      return id ? [[id, subItem] as const] : [];
-    }),
-  );
-  const retainedSubItemIds = new Set<string>();
-  const context = {
-    sectionId,
-    itemId: getId(templateItem) ?? '',
-    itemTitle: typeof templateItem.title === 'string' ? templateItem.title : undefined,
-  };
-
-  if (Array.isArray(templateItem.subItems)) {
-    next.subItems = reconcileSubItems(templateItem.subItems, previousSubItemsById, retainedSubItemIds);
-  }
+  const reconcileSubItems = (list: unknown[]) =>
+    list.filter(isSubTaskRecord).map((subItem) => preserveRunState(subItem, subItemMatches.get(subItem)));
 
   if (Array.isArray(templateItem.contents)) {
-    next.contents = templateItem.contents.map((content) => {
-      if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-      return {
-        ...content,
-        subItems: reconcileSubItems(content.subItems, previousSubItemsById, retainedSubItemIds),
-      };
-    });
+    next.contents = reconcileFormFields(mapSubTasksBlocks(templateItem.contents, reconcileSubItems), fieldMatches);
   }
 
-  for (const previousSubItem of previousSubItems) {
-    const id = getId(previousSubItem);
-    if (id && !retainedSubItemIds.has(id)) {
-      retired.push({ kind: 'subItem', ...context, subItem: previousSubItem });
-    }
+  const reconciledSubItems = getSubItems(next);
+  if (reconciledSubItems.length > 0) {
+    next.isCompleted = reconciledSubItems.every((subItem) => subItem.isCompleted === true);
   }
 
-  return next;
+  return reopenWhenFormBlocks(next);
 }
 
 export function reconcileRunSections(
   previousSections: unknown[],
   templateSections: unknown[],
   previousRetired: unknown[],
-): { sections: JsonRecord[]; retired: RetiredRunEntry[] } {
+): { sections: SectionRecord[]; retired: JsonRecord[]; newlyRetired: RetiredRunEntry[] } {
   const previousSectionShape = normalizeLegacySectionShape(previousSections);
-  const templateSectionShape = normalizeLegacySectionShape(templateSections);
+  const templateSectionShape = sanitizeStoredSections(normalizeLegacySectionShape(templateSections));
   const normalizedPreviousSections = assignMissingStableTemplateIdentities(previousSectionShape);
   const normalizedTemplateSections = assignMissingStableTemplateIdentities(
     templateSectionShape,
     previousSectionShape,
   );
-  const retired = previousRetired.filter(isRecord) as RetiredRunEntry[];
+  const earlierRetired = createEarlierRetiredLookup(previousRetired);
   const previousById = new Map(
     normalizedPreviousSections.flatMap((section) => {
       const id = getId(section);
       return id ? [[id, section] as const] : [];
     }),
   );
-  const retainedSectionIds = new Set<string>();
+  const previousItems = normalizedPreviousSections.flatMap((section) => taskRecordsIn(section.items));
+  const items = createRunMatcher('item', previousItems, earlierRetired);
+  const subItems = createRunMatcher('subItem', previousItems.flatMap(getSubItems), earlierRetired);
+  const fields = createRunMatcher('formAnswer', previousItems.flatMap(getFormFields), earlierRetired);
 
-  const sections = normalizedTemplateSections.map((templateSection) => {
-    const sectionId = getId(templateSection) ?? '';
-    retainedSectionIds.add(sectionId);
-    const previousSection = previousById.get(sectionId);
-    const previousItems = getArray(previousSection?.items).filter(isRecord);
-    const previousItemsById = new Map(
-      previousItems.flatMap((item) => {
-        const id = getId(item);
-        return id ? [[id, item] as const] : [];
-      }),
-    );
-    const retainedItemIds = new Set<string>();
-    const items = getArray(templateSection.items).filter(isRecord).map((templateItem) => {
-      const itemId = getId(templateItem) ?? '';
-      retainedItemIds.add(itemId);
-      return reconcileItem(templateItem, previousItemsById.get(itemId), retired, sectionId);
-    });
-
-    for (const previousItem of previousItems) {
-      const itemId = getId(previousItem);
-      if (itemId && !retainedItemIds.has(itemId)) {
-        retired.push({
-          kind: 'item',
-          sectionId,
-          sectionTitle: typeof templateSection.title === 'string' ? templateSection.title : undefined,
-          item: previousItem,
-        });
-      }
-    }
-
-    return { ...templateSection, items };
+  const matchedSections = normalizedTemplateSections.map((templateSection) => {
+    const id = getId(templateSection) ?? '';
+    const previous: SectionRecord | undefined = previousById.get(id) ?? earlierRetired.take('section', id);
+    const previousItems = taskRecordsIn(previous?.items);
+    return { templateSection, id, previousItems, parent: indexById(previousItems) };
   });
+  const templateItems = matchedSections.flatMap(({ templateSection, parent }) =>
+    taskRecordsIn(templateSection.items).map((templateItem) => ({ templateItem, parent })));
 
-  for (const previousSection of normalizedPreviousSections) {
-    const sectionId = getId(previousSection);
-    if (sectionId && !retainedSectionIds.has(sectionId)) {
-      retired.push({ kind: 'section', section: previousSection });
+  const itemMatches = new Map<JsonRecord, TaskRecord | undefined>();
+  for (const { templateItem, parent } of templateItems) {
+    itemMatches.set(templateItem, items.underParent(getId(templateItem), parent));
+  }
+  for (const { templateItem } of templateItems) {
+    if (!itemMatches.get(templateItem)) itemMatches.set(templateItem, items.elsewhere(getId(templateItem)));
+  }
+  const subItemMatches = new Map<JsonRecord, TaskRecord | undefined>();
+  for (const { templateItem } of templateItems) {
+    const previousItem = itemMatches.get(templateItem);
+    const parent = indexById(previousItem ? getSubItems(previousItem) : []);
+    for (const subItem of getSubItems(templateItem)) {
+      subItemMatches.set(subItem, subItems.underParent(getId(subItem), parent));
+    }
+  }
+  for (const { templateItem } of templateItems) {
+    for (const subItem of getSubItems(templateItem)) {
+      if (!subItemMatches.get(subItem)) subItemMatches.set(subItem, subItems.elsewhere(getId(subItem)));
+    }
+  }
+  const fieldMatches = new Map<JsonRecord, FormFieldRecord | undefined>();
+  for (const { templateItem } of templateItems) {
+    const previousItem = itemMatches.get(templateItem);
+    const parent = indexById(previousItem ? getFormFields(previousItem) : []);
+    for (const field of getFormFields(templateItem)) fieldMatches.set(field, fields.underParent(getId(field), parent));
+  }
+  for (const { templateItem } of templateItems) {
+    for (const field of getFormFields(templateItem)) {
+      if (!fieldMatches.get(field)) fieldMatches.set(field, fields.elsewhere(getId(field)));
     }
   }
 
-  return { sections, retired };
+  const retired: RetiredRunEntry[] = [];
+  const sections = matchedSections.map(({ templateSection, id: sectionId, previousItems: sectionPreviousItems }) => {
+    const sectionItems = taskRecordsIn(templateSection.items).map((templateItem) => {
+      const previousItem = itemMatches.get(templateItem);
+      for (const subItem of previousItem ? getSubItems(previousItem) : []) {
+        if (subItems.claimed.has(subItem) || !getId(subItem)) continue;
+        retired.push({
+          kind: 'subItem',
+          sectionId,
+          itemId: getId(templateItem) ?? '',
+          ...(typeof templateItem.title === 'string' ? { itemTitle: templateItem.title } : {}),
+          subItem,
+        });
+      }
+      retired.push(...retiredFormAnswersOf(sectionId, templateItem, previousItem, fields.claimed, fieldMatches));
+      return reconcileItem(templateItem, previousItem, subItemMatches, fieldMatches);
+    });
+
+    for (const previousItem of sectionPreviousItems) {
+      if (items.claimed.has(previousItem) || !getId(previousItem)) continue;
+      retired.push({
+        kind: 'item',
+        sectionId,
+        ...(typeof templateSection.title === 'string' ? { sectionTitle: templateSection.title } : {}),
+        item: withoutMovedSubItems(previousItem, subItems.claimed, fields.claimed),
+      });
+    }
+
+    return { ...templateSection, items: sectionItems };
+  });
+
+  const retainedSectionIds = new Set(matchedSections.map(({ id }) => id));
+  for (const previousSection of normalizedPreviousSections) {
+    const sectionId = getId(previousSection);
+    if (!sectionId || retainedSectionIds.has(sectionId)) continue;
+    const section = withoutMovedWork(previousSection, items, subItems, fields);
+    if (section) retired.push({ kind: 'section', section });
+  }
+
+  return { sections, retired: [...earlierRetired.remaining, ...retired], newlyRetired: retired };
+}
+
+export type RetiredRunSummary = { kind: RetiredRunEntry['kind']; id: string; title: string };
+
+const retiredEntryTitle = (entry: RetiredRunEntry): unknown => {
+  switch (entry.kind) {
+    case 'section':
+      return entry.section.title;
+    case 'item':
+      return entry.item.title;
+    case 'subItem':
+      return entry.subItem.title;
+    case 'formAnswer':
+      return entry.field.label;
+  }
+};
+
+const retiredEntryRecord = (entry: RetiredRunEntry): ChecklistNodeRecord =>
+  entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.kind === 'subItem' ? entry.subItem : entry.field;
+
+export function summarizeRetiredEntries(entries: RetiredRunEntry[]): RetiredRunSummary[] {
+  return entries.map((entry) => {
+    const title = retiredEntryTitle(entry);
+    return { kind: entry.kind, id: getId(retiredEntryRecord(entry)) ?? '', title: typeof title === 'string' ? title : '' };
+  });
 }
 
 export function calculateRunProgress(sections: unknown[]): number {
   let completed = 0;
   let total = 0;
 
-  for (const section of sections.filter(isRecord)) {
-    for (const item of getArray(section.items).filter(isRecord)) {
+  for (const section of sections.filter(isSectionRecord)) {
+    for (const item of taskRecordsIn(section.items)) {
       total += 1;
       if (item.isCompleted === true) completed += 1;
 
@@ -193,181 +362,43 @@ export function calculateRunProgress(sections: unknown[]): number {
     }
   }
 
-  return total > 0 ? Math.round((completed / total) * 100) : 0;
+  return toProgressPercent(completed, total);
 }
 
-export function validateStableTemplateIdentities(sections: unknown[]): string | null {
-  const sectionIds = new Set<string>();
-  const itemIds = new Set<string>();
-  const subItemIds = new Set<string>();
-
-  for (const section of sections) {
-    const sectionId = getId(section);
-    if (!sectionId) return 'Every template section requires a stable id';
-    if (sectionIds.has(sectionId)) return `Duplicate section id: ${sectionId}`;
-    sectionIds.add(sectionId);
-
-    for (const item of getArray((section as JsonRecord).items)) {
-      const itemId = getId(item);
-      if (!itemId) return `Every item in section ${sectionId} requires a stable id`;
-      if (itemIds.has(itemId)) return `Duplicate item id: ${itemId}`;
-      itemIds.add(itemId);
-
-      for (const subItem of getSubItems(item as JsonRecord)) {
-        const subItemId = getId(subItem);
-        if (!subItemId) return `Every sub-item in item ${itemId} requires a stable id`;
-        if (subItemIds.has(subItemId)) return `Duplicate sub-item id: ${subItemId}`;
-        subItemIds.add(subItemId);
+export function findOpenRunTasks(sections: unknown[]): { total: number; open: string[] } {
+  let total = 0;
+  const open: string[] = [];
+  for (const section of sections.filter(isSectionRecord)) {
+    for (const item of taskRecordsIn(section.items)) {
+      total += 1;
+      if (!wasCompleted(item) || getSubItems(item).some((subItem) => !wasCompleted(subItem))) {
+        open.push(getId(item) ?? '');
       }
     }
   }
-
-  return null;
+  return { total, open };
 }
 
-function matchSiblingIdentities(
-  currentRecords: JsonRecord[],
-  previousRaw: JsonRecord[],
-  previousNormalized: JsonRecord[],
-  fallbackId: (index: number) => string,
-): Array<{ id: string; previousIndex: number | null }> {
-  const matches: Array<{ id?: string; previousIndex: number | null }> = currentRecords.map(() => ({ previousIndex: null }));
-  const usedPrevious = new Set<number>();
-
-  currentRecords.forEach((current, currentIndex) => {
-    const currentId = getId(current);
-    if (!currentId) return;
-    const previousIndex = previousNormalized.findIndex(
-      (candidate, candidateIndex) => !usedPrevious.has(candidateIndex) && getId(candidate) === currentId,
-    );
-    if (previousIndex < 0) return;
-    matches[currentIndex] = { id: currentId, previousIndex };
-    usedPrevious.add(previousIndex);
-  });
-
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
-    const title = typeof current.title === 'string' ? current.title : null;
-    if (!title || currentRecords.filter((candidate) => candidate.title === title).length !== 1) return;
-    const candidates = previousRaw.flatMap((candidate, candidateIndex) =>
-      !usedPrevious.has(candidateIndex) && candidate.title === title ? [candidateIndex] : []
-    );
-    if (candidates.length !== 1 || getId(previousRaw[candidates[0]])) return;
-    const previousIndex = candidates[0];
-    matches[currentIndex] = {
-      id: getId(previousNormalized[previousIndex]) ?? fallbackId(currentIndex),
-      previousIndex,
-    };
-    usedPrevious.add(previousIndex);
-  });
-
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
-    if (
-      previousRaw[currentIndex]
-      && !usedPrevious.has(currentIndex)
-      && !getId(previousRaw[currentIndex])
-    ) {
-      matches[currentIndex] = {
-        id: getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex),
-        previousIndex: currentIndex,
-      };
-      usedPrevious.add(currentIndex);
-      return;
+export function findNonObjectTemplateEntry(sections: unknown[]): string | null {
+  for (const [sectionIndex, section] of sections.entries()) {
+    const where = `section ${sectionIndex + 1}`;
+    if (!isSectionRecord(section)) return `Section ${sectionIndex + 1} must be an object`;
+    for (const [itemIndex, item] of getArray(section.items).entries()) {
+      const task = `task ${itemIndex + 1} in ${where}`;
+      if (!isTaskRecord(item)) return `Task ${itemIndex + 1} in ${where} must be an object with a title`;
+      const contents = getArray(item.contents);
+      const contentIndex = contents.findIndex((content) => !isRecord(content));
+      if (contentIndex >= 0) return `Content block ${contentIndex + 1} of ${task} must be an object`;
+      const subItemLists = [item.subItems, ...contents.map((content) => (isContentRecord(content) ? content.subItems : undefined))];
+      for (const subItems of subItemLists) {
+        const subItemIndex = getArray(subItems).findIndex((subItem) => !isRecord(subItem));
+        if (subItemIndex >= 0) return `Sub-task ${subItemIndex + 1} of ${task} must be an object with a title`;
+      }
+      for (const content of contents) {
+        const fieldIndex = getArray(isContentRecord(content) ? content.fields : undefined).findIndex((field) => !isRecord(field));
+        if (fieldIndex >= 0) return `Form field ${fieldIndex + 1} of ${task} must be an object with a label and a kind`;
+      }
     }
-    matches[currentIndex] = {
-      id: getId(current) ?? fallbackId(currentIndex),
-      previousIndex: null,
-    };
-  });
-
-  return matches.map((match, index) => ({
-    id: match.id ?? fallbackId(index),
-    previousIndex: match.previousIndex,
-  }));
-}
-
-function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]): JsonRecord[] {
-  const previousNormalized = previousSections.length > 0
-    ? assignIdentities(previousSections, [])
-    : [];
-  const sectionMatches = matchSiblingIdentities(
-    sections,
-    previousSections,
-    previousNormalized,
-    (index) => `legacy-section-${index + 1}`,
-  );
-
-  return sections.map((section, sectionIndex) => {
-    const sectionMatch = sectionMatches[sectionIndex];
-    const sectionId = sectionMatch.id;
-    const previousSectionRaw = sectionMatch.previousIndex === null
-      ? undefined
-      : previousSections[sectionMatch.previousIndex];
-    const previousSectionNormalized = sectionMatch.previousIndex === null
-      ? undefined
-      : previousNormalized[sectionMatch.previousIndex];
-    const previousItemsRaw = getArray(previousSectionRaw?.items).filter(isRecord);
-    const previousItemsNormalized = getArray(previousSectionNormalized?.items).filter(isRecord);
-    const currentItems = getArray(section.items).filter(isRecord);
-    const itemMatches = matchSiblingIdentities(
-      currentItems,
-      previousItemsRaw,
-      previousItemsNormalized,
-      (index) => `legacy-item-${sectionIndex + 1}-${index + 1}`,
-    );
-
-    return {
-      ...section,
-      id: sectionId,
-      items: currentItems.map((item, itemIndex) => {
-        const itemMatch = itemMatches[itemIndex];
-        const itemId = itemMatch.id;
-        const previousItemRaw = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsRaw[itemMatch.previousIndex];
-        const previousItemNormalized = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsNormalized[itemMatch.previousIndex];
-        const previousSubItemsRaw = previousItemRaw ? getSubItems(previousItemRaw) : [];
-        const previousSubItemsNormalized = previousItemNormalized ? getSubItems(previousItemNormalized) : [];
-        const currentSubItems = getSubItems(item);
-        const subItemMatches = matchSiblingIdentities(
-          currentSubItems,
-          previousSubItemsRaw,
-          previousSubItemsNormalized,
-          (index) => `legacy-subitem-${sectionIndex + 1}-${itemIndex + 1}-${index + 1}`,
-        );
-        let subItemSequence = 0;
-        const assignSubItems = (subItems: unknown[]) => subItems.filter(isRecord).map((subItem) => ({
-          ...subItem,
-          id: subItemMatches[subItemSequence++].id,
-        }));
-
-        return {
-          ...item,
-          id: itemId,
-          ...(Array.isArray(item.subItems) ? { subItems: assignSubItems(item.subItems) } : {}),
-          ...(Array.isArray(item.contents)
-            ? {
-                contents: item.contents.map((content) => {
-                  if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-                  return { ...content, subItems: assignSubItems(content.subItems) };
-                }),
-              }
-            : {}),
-        };
-      }),
-    };
-  });
-}
-
-export function assignMissingStableTemplateIdentities(
-  sections: unknown[],
-  previousSections: unknown[] = [],
-): JsonRecord[] {
-  return assignIdentities(
-    normalizeLegacySectionShape(sections),
-    normalizeLegacySectionShape(previousSections),
-  );
+  }
+  return null;
 }

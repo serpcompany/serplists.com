@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 
 import { getOutboundLinkProps } from '@/lib/utils/clipyUrl';
@@ -10,11 +10,59 @@ interface VideoEmbedProps {
   className?: string;
 }
 
+const DEFAULT_CLASS_NAME = "h-64 w-full rounded-md";
+
+const OpenVideoLink: React.FC<{ url: string }> = ({ url }) => (
+  <div className="p-4">
+    <a
+      {...getOutboundLinkProps(url)}
+      className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+    >
+      Open video
+      <ExternalLink aria-hidden="true" className="h-4 w-4" />
+    </a>
+  </div>
+);
+
+const READY_STATE_HAVE_NOTHING = 0;
+
+interface NativeVideoViewProps {
+  className?: string;
+  failed: boolean;
+  onFail: () => void;
+  url: string;
+}
+
+export const NativeVideoView: React.FC<NativeVideoViewProps> = ({
+  className = DEFAULT_CLASS_NAME,
+  failed,
+  onFail,
+  url,
+}) => {
+  if (failed) return <OpenVideoLink url={url} />;
+
+  return (
+    <video
+      key={url}
+      src={url}
+      className={className}
+      controls
+      onError={(event) => {
+        if (event.currentTarget.readyState === READY_STATE_HAVE_NOTHING) onFail();
+      }}
+      preload="metadata"
+    >
+      Your browser does not support embedded video.
+    </video>
+  );
+};
+
 export const VideoEmbed: React.FC<VideoEmbedProps> = ({ 
   url, 
-  title = "YouTube video",
-  className = "h-64 w-full rounded-md"
+  title = "Embedded video",
+  className = DEFAULT_CLASS_NAME
 }) => {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const source = getVideoEmbedSource(url);
   
   if (source?.kind === 'iframe') {
@@ -30,7 +78,7 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
         {source.outboundUrl ? (
           <a
             {...getOutboundLinkProps(source.outboundUrl)}
-            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow-xs backdrop-blur-xs transition-colors hover:bg-black/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white"
           >
             Watch on Clipy
             <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
@@ -40,12 +88,19 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
     );
   }
 
+  if (source?.kind === 'link') {
+    return <OpenVideoLink url={source.url} />;
+  }
+
   if (source?.kind === 'video') {
+    const videoUrl = source.url;
     return (
-      <video className={className} controls preload="metadata">
-        <source src={source.url} />
-        Your browser does not support embedded video.
-      </video>
+      <NativeVideoView
+        className={className}
+        failed={failedUrl === videoUrl}
+        onFail={() => setFailedUrl(videoUrl)}
+        url={videoUrl}
+      />
     );
   }
   

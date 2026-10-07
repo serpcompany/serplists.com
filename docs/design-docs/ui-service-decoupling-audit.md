@@ -124,14 +124,14 @@ Assessment:
 
 Key checklist/template screens:
 
-- `src/pages/Templates.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/TemplateEditor.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/Dashboard.tsx`
-- `src/pages/ChecklistLibrary.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/views/Templates.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/PublicTemplate.tsx`
+- `src/views/TemplateEditor.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/Dashboard.tsx`
+- `src/views/ChecklistLibrary.tsx`
+- `src/views/PublicProfile.tsx`
 
 Assessment:
 
@@ -189,11 +189,11 @@ Impact:
 
 Examples:
 
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/TemplateEditor.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/views/PublicTemplate.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/TemplateEditor.tsx`
+- `src/views/PublicProfile.tsx`
 - `src/components/TemplateBackup.tsx`
 - `src/components/shared/AvatarUpload.tsx`
 - `UserInfo.tsx` (removed 2026-09-27)
@@ -238,10 +238,10 @@ Impact:
 Examples:
 
 - `src/contexts/TemplatesContext.tsx`
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/views/PublicTemplate.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/PublicProfile.tsx`
 
 Why this matters:
 
@@ -573,11 +573,11 @@ Target:
 
 Priority routes:
 
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/TemplateEditor.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/views/PublicTemplate.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/TemplateEditor.tsx`
+- `src/views/PublicProfile.tsx`
 
 Expected result:
 

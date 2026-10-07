@@ -16,6 +16,13 @@ rules:
     type: required-field
     path: sections[].items[].title
     severity: error
+requiredTools:
+  - name: Time tracker
+    url: https://example.com/tools/time-tracker
+    required: true
+  - name: Slideshow app
+    url: https://example.com/tools/slides
+    required: false
 sections:
   - title: Preparation
     items:
@@ -59,3 +66,28 @@ sections:
             fileSize: 245760
           - type: embed
             value: https://status.example.com
+      - title: Record the launch sign-off
+        description: Every run records who approved the launch and how it went.
+        contents:
+          - type: form
+            fields:
+              - label: Approved by
+                kind: text
+                required: true
+              - label: Approver email
+                kind: email
+                required: true
+              - label: Release channel
+                kind: select
+                required: true
+                options:
+                  - label: Stable
+                  - label: Beta
+              - label: Error rate after one hour (%)
+                kind: number
+                min: 0
+                max: 100
+                description: Read it from the status dashboard.
+              - label: Rollback plan reviewed
+                kind: checkbox
+                required: true

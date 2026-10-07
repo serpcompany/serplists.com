@@ -1,0 +1,142 @@
+import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
+
+import { apiJson } from './support/api-requests';
+import { savedTemplateSchema } from './support/api-bodies';
+import { countCheckoutsSentTo } from './support/billing';
+import { loginAsAdmin } from './support/sign-in';
+import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
+import { deleteTemplate } from './support/template-editor';
+
+const LATE_NAVIGATION_WINDOW_MS = 500;
+
+async function createTemplateViaApi(page: Page, title: string): Promise<string> {
+  const template = await apiJson(page, '/templates', savedTemplateSchema, {
+    method: 'POST',
+    body: {
+      is_public: false,
+      sections: [{ id: 'slow-section', title: 'Prep', items: [{ id: 'slow-task', title: 'First task' }] }],
+      title,
+    },
+  });
+  return template.id;
+}
+
+async function allowTimeForALateNavigation(page: Page) {
+  await page.waitForTimeout(LATE_NAVIGATION_WINDOW_MS);
+}
+
+async function holdRunCreationUntilReleased(page: Page) {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const created: { runId: string | null } = { runId: null };
+
+  await page.route('**/api/checklists', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+
+    await held;
+    const response = await route.fetch();
+    const body = z.object({ id: z.string().optional() }).passthrough().parse(await response.json());
+    created.runId = body.id ?? null;
+    await route.fulfill({ response });
+  });
+
+  return { created, release };
+}
+
+test('stays on the page the user went Back to when a public Start Run finishes', async ({ page }) => {
+  await loginAsAdmin(page);
+  const { created, release } = await holdRunCreationUntilReleased(page);
+
+  await page.goto('/templates/');
+  await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
+  const dialog = await startARunFromTheFirstStartRun(page);
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/templates\/$/);
+
+  release();
+  await expect.poll(() => created.runId).toBeTruthy();
+  await allowTimeForALateNavigation(page);
+  await expect(page).toHaveURL(/\/templates\/$/);
+
+  await deleteRun(page, created.runId ?? '');
+});
+
+test('stays on the page the user went Back to when a template Start Run finishes', async ({ page }) => {
+  await loginAsAdmin(page);
+  const templateId = await createTemplateViaApi(page, `QA slow run ${Date.now()}`);
+  const { created, release } = await holdRunCreationUntilReleased(page);
+
+  await page.goto('/dashboard/templates/');
+  await page.goto(`/dashboard/templates/${templateId}/`);
+  const dialog = await startARunFromTheFirstStartRun(page);
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+
+  release();
+  await expect.poll(() => created.runId).toBeTruthy();
+  await allowTimeForALateNavigation(page);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+
+  await deleteRun(page, created.runId ?? '');
+  await deleteTemplate(page, templateId);
+});
+
+test('opens the new run when the user waits on the template page', async ({ page }) => {
+  await loginAsAdmin(page);
+  const templateId = await createTemplateViaApi(page, `QA run stays ${Date.now()}`);
+
+  await page.goto(`/dashboard/templates/${templateId}/`);
+  await startARunFromTheFirstStartRun(page);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
+
+  await deleteRun(page, runIdInTheUrl(page));
+  await deleteTemplate(page, templateId);
+});
+
+test('does not start checkout from the page the user went Back to when a My Templates run hits the limit', async ({ page }) => {
+  await loginAsAdmin(page);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let answered = false;
+  await page.route('**/api/checklists', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    await held;
+    await route.fulfill({
+      body: JSON.stringify({
+        code: 'limit_reached',
+        error: 'Active run limit reached. Upgrade to Pro to create more checklist runs.',
+      }),
+      contentType: 'application/json',
+      status: 403,
+    });
+    answered = true;
+  });
+  const checkout = await countCheckoutsSentTo(page, '/pricing/?checkout=stubbed');
+
+  await page.goto('/dashboard/runs/');
+  await page.goto('/dashboard/templates/');
+  await page.getByRole('button', { name: 'Show templates in list view' }).click();
+  const dialog = await startARunFromTheFirstStartRun(page);
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+
+  release();
+  await expect.poll(() => answered).toBe(true);
+  await allowTimeForALateNavigation(page);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+  expect(checkout.requests).toBe(0);
+});

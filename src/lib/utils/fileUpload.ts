@@ -1,12 +1,17 @@
-import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
+import { optimizeImage, isImageFile, prepareAvatarImage } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
+import { getUploadedAssetKey, isUploadedAssetUrl } from "@/lib/utils/mediaSource";
+import {
+  isAllowedUpload,
+  unsupportedUploadMessage,
+  uploadAcceptAttribute,
+} from "@/lib/schemas/uploadTypes";
+import { formatUploadLimit, UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 
 export type TemplateUploadBucket =
   | 'template-images'
   | 'template-videos'
   | 'template-files';
-
-export type UploadedAssetBucket = TemplateUploadBucket | 'avatars';
 
 export type UploadResult = {
   success: boolean;
@@ -19,40 +24,33 @@ export type UploadResult = {
 export const uploadFile = async (
   file: File,
   bucket: TemplateUploadBucket,
-  userId: string
 ): Promise<UploadResult> => {
   try {
     let fileToUpload = file;
-    
-    // Optimize images before upload
-    if (isImageFile(file)) {
+
+    if (bucket === 'template-images' && isImageFile(file)) {
       try {
         fileToUpload = await optimizeImage(file, {
           maxWidth: 1920,
           maxHeight: 1080,
           quality: 0.8
         });
-        console.log('Image optimized:', { 
-          original: file.size, 
-          optimized: fileToUpload.size, 
-          savings: Math.round((1 - fileToUpload.size / file.size) * 100) + '%' 
-        });
       } catch (optimizationError) {
         console.warn('Image optimization failed, uploading original:', optimizationError);
-        // Continue with original file if optimization fails
       }
     }
 
-    // API handles key naming; userId is kept for callsite compatibility.
-    void userId;
+    if (!isAllowedUpload(bucket, fileToUpload)) {
+      return { success: false, error: unsupportedUploadMessage(bucket) };
+    }
 
     const result = await api.uploadToR2({ bucket, file: fileToUpload });
 
     return {
       success: true,
       url: result.url,
-      fileName: result.fileName || file.name,
-      fileSize: result.fileSize || file.size,
+      fileName: result.fileName || fileToUpload.name,
+      fileSize: result.fileSize || fileToUpload.size,
     };
   } catch (error) {
     console.error('Upload error:', error);
@@ -63,35 +61,14 @@ export const uploadFile = async (
   }
 };
 
-export const deleteFile = async (
-  url: string,
-  bucket: TemplateUploadBucket,
-): Promise<boolean> => {
-  void bucket;
-  return deleteUploadedAsset(url);
-};
+export { getUploadedAssetKey, isUploadedAssetUrl };
 
-export const getUploadedAssetKey = (url: string): string | null => {
-  try {
-    const parsed = new URL(url, 'https://serplists.local');
-    const isUploadEndpoint =
-      parsed.pathname === '/api/uploads/file' ||
-      parsed.pathname === '/uploads/file';
-    const key = parsed.searchParams.get('key')?.trim();
-
-    return isUploadEndpoint && key ? key : null;
-  } catch (error) {
-    return null;
-  }
-};
-
-export const isUploadedAssetUrl = (url: string): boolean =>
-  getUploadedAssetKey(url) !== null;
+export const uploadAvatar = async (file: File) => api.uploadToR2({ bucket: 'avatars', file: await prepareAvatarImage(file) });
 
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);
 
-  if (!key) {
+  if (!key?.startsWith('avatars/')) {
     return false;
   }
 
@@ -104,31 +81,32 @@ export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   }
 };
 
+const BUCKET_BY_BLOCK_TYPE = {
+  image: 'template-images',
+  video: 'template-videos',
+  file: 'template-files',
+} as const satisfies Record<'image' | 'video' | 'file', TemplateUploadBucket>;
+
 export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  const maxSize = 50 * 1024 * 1024; // 50MB
-
+  const maxSize = UPLOAD_MAX_BYTES[BUCKET_BY_BLOCK_TYPE[type]];
   if (file.size > maxSize) {
-    return { valid: false, error: 'File size must be less than 50MB' };
+    return { valid: false, error: `File size must be ${formatUploadLimit(maxSize)} or less` };
   }
 
-  switch (type) {
-    case 'image':
-      if (!file.type.startsWith('image/')) {
-        return { valid: false, error: 'Please select an image file' };
-      }
-      break;
-    case 'video':
-      if (!file.type.startsWith('video/')) {
-        return { valid: false, error: 'Please select a video file' };
-      }
-      break;
-    case 'file':
-      // Allow any file type for general file uploads
-      break;
+  if (type === 'image') {
+    return file.type.startsWith('image/')
+      ? { valid: true }
+      : { valid: false, error: 'Please select an image file' };
   }
 
-  return { valid: true };
+  const bucket = BUCKET_BY_BLOCK_TYPE[type];
+  return isAllowedUpload(bucket, file)
+    ? { valid: true }
+    : { valid: false, error: unsupportedUploadMessage(bucket) };
 };
+
+export const uploadAcceptTypesForBlock = (type: 'image' | 'video' | 'file'): string =>
+  type === 'image' ? 'image/*' : uploadAcceptAttribute(BUCKET_BY_BLOCK_TYPE[type]);

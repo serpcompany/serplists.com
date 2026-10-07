@@ -1,0 +1,129 @@
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf, taskIn } from "../../../support/elements";
+import { sqlExpression } from "../../../support/drizzleSql";
+import { storedSectionsIn } from "../../../support/storedJson";
+import {
+  callTool,
+  dbMocks,
+  expectAToolError,
+  ownedTemplate,
+  resetAgentMcpHandlerMocks,
+  sectionsOfAtLeast,
+} from "../../../support/agentMcpHandler";
+import { FREE_PLAN, PRO_PLAN } from "../../../fixtures/plans";
+import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import {
+  RUN_SECTIONS_WITH_LEGACY_IDS,
+  TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS,
+  TEMPLATE_SECTIONS_CARRYING_RUN_STATE,
+  UNTICKED_RUN_SECTIONS,
+} from "../../../fixtures/runStartFixtures";
+import { mcpRunResult } from "../../../support/agentMcp";
+import { arrayContaining, objectContaining, stringContaining } from "../../../support/asymmetricMatchers";
+
+const startRun = () => callTool("start_run", { templateId: "template-1" });
+
+describe("personal run MCP handler", () => {
+  beforeEach(resetAgentMcpHandlerMocks);
+
+  it("starts a persistent personal run from an owned template snapshot", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      ...ownedTemplate([{
+        id: "section-1",
+        title: "Release",
+        items: [{ id: "task-1", title: "Verify", isCompleted: true }],
+      }]),
+      content_version: 4,
+    }]);
+
+    const body = await startRun();
+
+    expect(body.result.isError).toBeUndefined();
+    expect(body.result.structuredContent.run).toEqual(objectContaining({
+      templateId: "template-1",
+      title: "Release SOP",
+      revision: 1,
+    }));
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
+    expect(inserted.user_id).toBe("user-1");
+    expect(inserted.team_id).toBeNull();
+    expect(taskIn(storedSectionsIn(inserted.items), 0, 0).isCompleted).toBe(false);
+    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(objectContaining({
+      action: "checklist_run.created",
+      metadata_json: stringContaining('"personalRunKeyId":"key-1"'),
+    }));
+  });
+
+  it.each([
+    ["", TEMPLATE_SECTIONS_CARRYING_RUN_STATE, UNTICKED_RUN_SECTIONS],
+    [" and the ids its Template's next save stores", TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS, RUN_SECTIONS_WITH_LEGACY_IDS],
+  ])("starts a run with every task and Sub-task unticked%s, exactly as a web start stores it", async (_ids, templateSections, runSections) => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...ownedTemplate(templateSections), content_version: 2 }]);
+
+    const body = await startRun();
+
+    expect(body.result.isError).toBeUndefined();
+    expect(storedSectionsIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].items)).toEqual(runSections);
+  });
+
+  describe("Free plan active run limit", () => {
+    const renderSql = (query: unknown) => new SQLiteSyncDialect().sqlToQuery(sqlExpression(query));
+
+    beforeEach(() => {
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
+    });
+
+    it("rejects start_run when a concurrent start filled the limit after the pre-check", async () => {
+      const preCheckLeavingOneSlot = [{ count: 2 }];
+      const recountAfterTheGuardedInsertIsRefused = [{ count: 3 }];
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
+        .mockResolvedValueOnce(preCheckLeavingOneSlot)
+        .mockResolvedValueOnce(recountAfterTheGuardedInsertIsRefused);
+      dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+      const body = await startRun();
+
+      expectAToolError(body, {
+        error: "limit_reached",
+        details: { limit: 3, current: 3 },
+      });
+      expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+    });
+
+    it("inserts the run and its audit event only while the owner is under the limit", async () => {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
+        .mockResolvedValueOnce([{ count: 2 }]);
+
+      const body = await startRun();
+
+      expect(body.result.isError).toBeUndefined();
+      expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+      expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: "conditional-insert" }, { kind: "conditional-insert" }]);
+
+      const conditionalInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => renderSql(query));
+      const runInsert = firstOf(conditionalInserts);
+      const auditInsert = elementAt(conditionalInserts, 1);
+      expect(runInsert.sql).toMatch(/where \(select count\(\*\) from "checklist_runs" where .*"status" = \? .*\) < \?$/s);
+      expect(runInsert.params.at(-1)).toBe(3);
+      const startedRunId = mcpRunResult.parse(body.result.structuredContent).run.id;
+      expect(runInsert.params).toEqual(arrayContaining([startedRunId, "user-1", "in_progress"]));
+      expect(auditInsert.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);
+      expect(auditInsert.params.at(-1)).toBe(startedRunId);
+    });
+
+    it("keeps a plain insert for plans without an active run limit", async () => {
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))]);
+
+      const body = await startRun();
+
+      expect(body.result.isError).toBeUndefined();
+      expect(dbMocks.insertChain.select).not.toHaveBeenCalled();
+      expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: "insert" }, { kind: "insert" }]);
+    });
+  });
+});

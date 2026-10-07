@@ -1,56 +1,62 @@
+'use client';
+
+import type { JSX } from 'react';
 import React from 'react';
 import { Users, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/page-shell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { signOutAndLeave } from '@/features/auth/signOut';
 import {
   DEV_TEST_USERS,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
   getDevTestUserPasswordHelp,
   type DevTestUser,
 } from '@/lib/auth/devUsers';
+import { getPostSignInDestination } from '@/lib/auth/returnPath';
 import {
-  buildConsoleHomePath,
+  buildHomePath,
+  buildPublicCategoriesPath,
+  DASHBOARD_PATH,
   isBlankTemplateEditorRoute,
+  isPathWithin,
   isPublicTemplatesDiscoveryPath,
 } from '@/lib/routes';
 import { toast } from 'sonner';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 
-function resolveFrontendPort(): string {
-  return typeof window === 'undefined' ? '' : window.location.port;
+import { useIsClient } from '@/hooks/useIsClient';
+import { moveOnAfterAnAccountChange } from '@/lib/navigation/moveOnAfterAnAccountChange';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+
+function resolveOrigin(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin;
 }
 
 export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useAppRouter();
+  const hydrated = useIsClient();
   const [isVisible, setIsVisible] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Only show in development
-  if (!import.meta.env.DEV) return null;
+  if (process.env.NODE_ENV === 'production' || !hydrated) return null;
 
-  if (isBlankTemplateEditorRoute(location.pathname)) {
+  if (isBlankTemplateEditorRoute(pathname)) {
     return null;
   }
 
-  if (isPublicTemplatesDiscoveryPath(location.pathname)) {
+  if (isPublicTemplatesDiscoveryPath(pathname)) {
     return null;
   }
 
   if (
-    location.pathname === '/' ||
-    location.pathname.startsWith('/categories') ||
-    location.pathname.startsWith('/profile/') ||
-    location.pathname.startsWith('/run/') ||
-    location.pathname.startsWith('/share/')
+    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/share/', DASHBOARD_PATH].some(
+      (section) => isPathWithin(pathname, section),
+    )
   ) {
-    return null;
-  }
-
-  if (location.pathname.startsWith(buildConsoleHomePath())) {
     return null;
   }
 
@@ -72,21 +78,31 @@ export function DevLoginBar(): JSX.Element | null {
       const result = await login(testUser.email, testUser.password);
       if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
-        navigate(buildConsoleHomePath());
+        moveOnAfterAnAccountChange(() => router.push(getPostSignInDestination(null)));
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
-    } catch (error) {
-      toast.error('Login error - is the API running on port 8788?');
+    } catch {
+      toast.error('Login error - check the dev server log (tmp/logs/dev-all.log).');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.success('Logged out');
-    navigate('/');
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await signOutAndLeave({
+        logout,
+        onSignedOut: () => {
+          toast.success('Logged out');
+          router.push(buildHomePath());
+        },
+        onError: (message) => toast.error(message),
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -126,7 +142,7 @@ export function DevLoginBar(): JSX.Element | null {
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={handleLogout}
+                onClick={() => void handleLogout()}
                 disabled={isLoading}
               >
                 Logout
@@ -145,7 +161,7 @@ export function DevLoginBar(): JSX.Element | null {
       </PageContainer>
       
       <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 text-center">
-        API: http://localhost:8788 | Frontend: http://localhost:{resolveFrontendPort()} | 
+        App and API: {resolveOrigin()} | 
         <span className="ml-1">{getDevTestUserPasswordHelp()}</span>
       </div>
     </div>

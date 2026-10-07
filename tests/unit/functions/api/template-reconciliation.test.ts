@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
 import {
   calculateRunProgress,
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
+import { sectionsOf } from '../../../support/reconciledSections';
+import { objectContaining } from '../../../support/asymmetricMatchers';
+import type { StoredTask } from '../../../support/storedJson';
+import { normalizeSections } from '@/lib/utils/checklistSections';
 
 const originalRun = [
   {
@@ -72,32 +77,32 @@ describe('template run reconciliation', () => {
 
     const result = reconcileRunSections(originalRun, evolvedTemplate, []);
 
-    expect(result.sections[0].title).toBe('Launch content');
-    expect(result.sections[0].items.map((item) => item.id)).toEqual([
+    expect(firstOf(sectionsOf(result)).title).toBe('Launch content');
+    expect(firstOf(sectionsOf(result)).items.map((item) => item.id)).toEqual([
       'item-media',
       'item-copy',
     ]);
-    expect(result.sections[0].items[0].isCompleted).toBe(false);
-    expect(result.sections[0].items[1]).toMatchObject({
+    expect(taskIn(sectionsOf(result), 0, 0).isCompleted).toBe(false);
+    expect(taskIn(sectionsOf(result), 0, 1)).toMatchObject({
       id: 'item-copy',
       title: 'Write listing copy',
       description: 'New instructions',
-      isCompleted: true,
+      isCompleted: false,
       notes: 'Approved by Devin',
     });
-    expect(result.sections[0].items[1].contents[0].subItems).toEqual([
+    expect(contentAt(taskIn(sectionsOf(result), 0, 1), 0).subItems).toEqual([
       { id: 'sub-long', title: 'Full description', isCompleted: false },
       { id: 'sub-tagline', title: 'Tagline', isCompleted: false },
       { id: 'sub-short', title: 'Short copy', isCompleted: true },
     ]);
     expect(result.retired).toEqual([
-      expect.objectContaining({
+      objectContaining({
         kind: 'item',
         sectionId: 'section-content',
-        item: expect.objectContaining({ id: 'item-retired', notes: 'Kept for audit history' }),
+        item: objectContaining({ id: 'item-retired', notes: 'Kept for audit history' }),
       }),
     ]);
-    expect(calculateRunProgress(result.sections)).toBe(40);
+    expect(calculateRunProgress(result.sections)).toBe(20);
   });
 
   it('archives removed sub-items without counting them toward readiness', () => {
@@ -124,10 +129,37 @@ describe('template run reconciliation', () => {
     const result = reconcileRunSections(originalRun, evolvedTemplate, []);
 
     expect(result.retired).toEqual([
-      expect.objectContaining({ kind: 'subItem', subItem: expect.objectContaining({ id: 'sub-long' }) }),
-      expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-retired' }) }),
+      objectContaining({ kind: 'subItem', subItem: objectContaining({ id: 'sub-long' }) }),
+      objectContaining({ kind: 'item', item: objectContaining({ id: 'item-retired' }) }),
     ]);
     expect(calculateRunProgress(result.sections)).toBe(100);
+  });
+
+  it('never reports 100% while a task or sub-task is left, however large the run: 199 of 200 units is 99, not a rounded 100', () => {
+    const sections = [
+      {
+        id: 'section-1',
+        title: 'Launch',
+        items: Array.from({ length: 40 }, (_, itemIndex) => ({
+          id: `item-${itemIndex}`,
+          title: `Task ${itemIndex}`,
+          isCompleted: true,
+          contents: [
+            {
+              type: 'subItems',
+              value: '',
+              subItems: Array.from({ length: 4 }, (_, subIndex) => ({
+                id: `sub-${itemIndex}-${subIndex}`,
+                title: `Step ${subIndex}`,
+                isCompleted: !(itemIndex === 0 && subIndex === 0),
+              })),
+            },
+          ],
+        })),
+      },
+    ];
+
+    expect(calculateRunProgress(sections)).toBe(99);
   });
 
   it('rejects missing or duplicate identities at every template level', () => {
@@ -157,7 +189,7 @@ describe('template run reconciliation', () => {
     ])).toMatch(/sub-item/i);
   });
 
-  it('preserves legacy id-less progress on the first template evolution', () => {
+  it('preserves legacy id-less progress on the first template evolution, reopening a task that gains an incomplete Sub-task', () => {
     const legacyRun = [
       {
         title: 'Content',
@@ -194,21 +226,65 @@ describe('template run reconciliation', () => {
 
     const result = reconcileRunSections(legacyRun, firstEvolution, []);
 
-    expect(result.sections[0]).toMatchObject({ id: 'legacy-section-1', title: 'Renamed content section' });
-    expect(result.sections[0].items[0]).toMatchObject({
+    expect(sectionsOf(result)[0]).toMatchObject({ id: 'legacy-section-1', title: 'Renamed content section' });
+    expect(taskIn(sectionsOf(result), 0, 0)).toMatchObject({
       id: 'legacy-item-1-1',
       title: 'Renamed copy task',
-      isCompleted: true,
+      isCompleted: false,
       notes: 'Legacy note',
     });
-    expect(result.sections[0].items[0].contents[0].subItems).toEqual([
-      expect.objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
-      expect.objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
+    expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
+      objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
+      objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
     ]);
-    expect(result.sections[0].items[1]).toMatchObject({
+    expect(taskIn(sectionsOf(result), 0, 1)).toMatchObject({
       id: 'legacy-item-1-2',
       isCompleted: false,
     });
+  });
+
+  it('keeps the progress of Sub-tasks stored with legacy numeric ids through a template edit after the run page saved the run', () => {
+    const legacyRun = [{
+      id: 's1',
+      title: 'Content',
+      items: [{
+        id: 'i1',
+        title: 'Write copy',
+        isCompleted: false,
+        contents: [{
+          type: 'subItems',
+          value: '',
+          subItems: [{ id: 7, title: 'Short copy', isCompleted: true }, { id: 8, title: 'Long copy', isCompleted: false }],
+        }],
+      }],
+    }];
+    const templateWithReadIds = [{
+      id: 's1',
+      title: 'Content',
+      items: [{
+        id: 'i1',
+        title: 'Write copy',
+        contents: [{
+          type: 'subItems',
+          value: '',
+          subItems: [
+            { id: 'legacy-subitem-1-1-1', title: 'Short copy' },
+            { id: 'legacy-subitem-1-1-2', title: 'Long copy' },
+            { id: 'sub-new', title: 'Proofread' },
+          ],
+        }],
+      }],
+    }];
+    const savedFromTheRunPage = normalizeSections(structuredClone(legacyRun));
+
+    const result = reconcileRunSections(savedFromTheRunPage, templateWithReadIds, []);
+
+    expect(result.newlyRetired).toEqual([]);
+    expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
+      objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
+      objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
+      objectContaining({ id: 'sub-new', isCompleted: false }),
+    ]);
   });
 
   it('normalizes a legacy flat run before reconciling its first sectioned template edit', () => {
@@ -234,16 +310,16 @@ describe('template run reconciliation', () => {
 
     expect(result.retired).toEqual([]);
     expect(result.sections).toEqual([
-      expect.objectContaining({
+      objectContaining({
         id: '1',
         items: [
-          expect.objectContaining({
+          objectContaining({
             id: 'legacy-item-1-1',
             title: 'Publish renamed listing',
             isCompleted: true,
             notes: 'Submitted copy is approved',
           }),
-          expect.objectContaining({
+          objectContaining({
             id: '1-2',
             title: 'Upload new screenshots',
             isCompleted: false,
@@ -251,5 +327,84 @@ describe('template run reconciliation', () => {
         ],
       }),
     ]);
+  });
+
+  describe('task completion follows its Sub-tasks', () => {
+    type Json = Record<string, unknown>;
+    const subTasks = (...entries: Array<[string, boolean?]>) =>
+      entries.map(([id, isCompleted]) => ({ id, title: id, ...(isCompleted === undefined ? {} : { isCompleted }) }));
+    const block = (subItems: Json[]) => ({ type: 'subItems', value: '', subItems });
+    const run = (isCompleted: boolean, ...blocks: Json[][]) => [
+      { id: 's', title: 'S', items: [{ id: 'task', title: 'Write copy', isCompleted, contents: blocks.map(block) }, { id: 'publish', title: 'Publish', isCompleted: false }] },
+    ];
+    const template = (...blocks: Json[][]) => [
+      { id: 's', title: 'S', items: [{ id: 'task', title: 'Write copy', contents: blocks.map(block) }, { id: 'publish', title: 'Publish' }] },
+    ];
+    const reconciledTask = (previous: unknown[], next: unknown[]) =>
+      taskIn(sectionsOf(reconcileRunSections(previous, next, [])), 0, 0);
+    const subTasksBlockRows = (item: StoredTask) => (item.contents ?? [])
+      .filter((content) => content.type === 'subItems')
+      .flatMap((content) => content.subItems ?? []);
+
+    it('reopens a completed task when the template adds a Sub-task to it', () => {
+      const previous = run(true, subTasks(['short', true], ['long', true]));
+      const result = reconcileRunSections(previous, template(subTasks(['short'], ['long'], ['tagline'])), []);
+      const task = taskIn(sectionsOf(result), 0, 0);
+
+      expect(task.isCompleted).toBe(false);
+      expect(subTasksBlockRows(task).map((subItem) => [subItem.id, subItem.isCompleted]))
+        .toEqual([['short', true], ['long', true], ['tagline', false]]);
+      expect(calculateRunProgress(result.sections)).toBe(40);
+    });
+
+    it('reopens the task when the new Sub-task is in another Sub-tasks block', () => {
+      const previous = run(true, subTasks(['short', true]));
+      expect(reconciledTask(previous, template(subTasks(['short']), subTasks(['tagline']))).isCompleted).toBe(false);
+    });
+
+    it('completes a task when its only unfinished Sub-task is removed', () => {
+      const previous = run(false, subTasks(['short', true], ['long', false]));
+      expect(reconciledTask(previous, template(subTasks(['short']))).isCompleted).toBe(true);
+    });
+
+    it('keeps the run state of a task whose Sub-tasks are all removed', () => {
+      expect(reconciledTask(run(true, subTasks(['short', true])), template()).isCompleted).toBe(true);
+      expect(reconciledTask(run(false, subTasks(['short', false])), template()).isCompleted).toBe(false);
+    });
+
+    it('keeps legacy completed Sub-tasks complete', () => {
+      const previous = run(true, [{ id: 'short', title: 'short', completed: true }]);
+      const task = reconciledTask(previous, template(subTasks(['short'])));
+
+      expect(task.isCompleted).toBe(true);
+      expect(firstOf(subTasksBlockRows(task)).isCompleted).toBe(true);
+    });
+
+    it('never leaves a task complete with an unfinished Sub-task', () => {
+      const evolutions: unknown[][] = [
+        template(subTasks(['short'], ['long'])),
+        template(subTasks(['long'], ['short'])),
+        template(subTasks(['short'], ['long'], ['tagline'])),
+        template(subTasks(['short'])),
+        template(subTasks(['short']), subTasks(['long'])),
+        [{ id: 's', title: 'S', items: [{ id: 'task', title: 'Write copy', subItems: subTasks(['short'], ['extra']) }] }],
+      ];
+      const previousRuns = [
+        run(true, subTasks(['short', true], ['long', true])),
+        run(true, subTasks(['short', true], ['long', false])),
+        run(false, subTasks(['short', true], ['long', true])),
+        run(false, subTasks(['short', false], ['long', false])),
+      ];
+
+      for (const previous of previousRuns) {
+        for (const next of evolutions) {
+          const task = reconciledTask(previous, next);
+          const subItems = subTasksBlockRows(task);
+          if (subItems.length > 0) {
+            expect(task.isCompleted).toBe(subItems.every((subItem) => subItem.isCompleted === true));
+          }
+        }
+      }
+    });
   });
 });

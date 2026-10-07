@@ -1,0 +1,1 @@
+export const MAX_TEMPLATES_PER_IMPORT = 5;

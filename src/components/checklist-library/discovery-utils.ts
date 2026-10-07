@@ -1,6 +1,10 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
-import { buildCategorySlug } from '@/lib/routes';
+import { uniqueCategoryNames } from '@/lib/categorySlug';
+import { resolvePublicTemplateOwnerName } from '@/lib/repoTemplateCatalog';
+import { buildCategorySlug, findCategoryNameByLegacySlug } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
+import { getTemplateRecencyTime } from '@/lib/templates/templateRecency';
 
 export type DiscoverySort = 'popular' | 'trending' | 'recent';
 
@@ -17,12 +21,9 @@ export const getTemplateSectionCount = (
 ): number =>
   template.sections.length;
 
-export const getTemplateItemCount = (template: ChecklistTemplate): number =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
-
 export const getTemplateOwnerLabel = (
   template: ChecklistTemplate,
-): string => template.ownerProfile?.full_name ?? template.ownerProfile?.username ?? 'Community';
+): string => resolvePublicTemplateOwnerName(template) ?? 'Community';
 
 const getTemplateSearchText = (template: ChecklistTemplate): string =>
   [
@@ -48,15 +49,15 @@ const compareByPopularity = (
     return rightSectionCount - leftSectionCount;
   }
 
-  const leftItemCount = getTemplateItemCount(left);
-  const rightItemCount = getTemplateItemCount(right);
+  const leftItemCount = countTemplateItems(left);
+  const rightItemCount = countTemplateItems(right);
 
   if (rightItemCount !== leftItemCount) {
     return rightItemCount - leftItemCount;
   }
 
   return (
-    new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() ||
+    getTemplateRecencyTime(right) - getTemplateRecencyTime(left) ||
     compareText(left.title, right.title)
   );
 };
@@ -65,15 +66,15 @@ const compareByTrending = (
   left: ChecklistTemplate,
   right: ChecklistTemplate,
 ): number => {
-  const leftItemCount = getTemplateItemCount(left);
-  const rightItemCount = getTemplateItemCount(right);
+  const leftItemCount = countTemplateItems(left);
+  const rightItemCount = countTemplateItems(right);
 
   if (rightItemCount !== leftItemCount) {
     return rightItemCount - leftItemCount;
   }
 
-  const leftUpdatedAt = new Date(left.updatedAt).getTime();
-  const rightUpdatedAt = new Date(right.updatedAt).getTime();
+  const leftUpdatedAt = getTemplateRecencyTime(left);
+  const rightUpdatedAt = getTemplateRecencyTime(right);
 
   if (rightUpdatedAt !== leftUpdatedAt) {
     return rightUpdatedAt - leftUpdatedAt;
@@ -86,8 +87,8 @@ const compareByRecent = (
   left: ChecklistTemplate,
   right: ChecklistTemplate,
 ): number => {
-  const leftUpdatedAt = new Date(left.updatedAt).getTime();
-  const rightUpdatedAt = new Date(right.updatedAt).getTime();
+  const leftUpdatedAt = getTemplateRecencyTime(left);
+  const rightUpdatedAt = getTemplateRecencyTime(right);
 
   if (rightUpdatedAt !== leftUpdatedAt) {
     return rightUpdatedAt - leftUpdatedAt;
@@ -109,7 +110,7 @@ export const filterAndSortTemplates = (
   },
 ): ChecklistTemplate[] => {
   const normalizedQuery = normalizeQuery(searchQuery ?? '');
-  const normalizedCategorySlug = normalizeQuery(categorySlug ?? '');
+  const normalizedCategorySlug = categorySlug?.trim() ? buildCategorySlug(categorySlug) : null;
 
   const filtered = templates.filter((template) => {
     const matchesSearch =
@@ -117,10 +118,11 @@ export const filterAndSortTemplates = (
       getTemplateSearchText(template).includes(normalizedQuery);
 
     const matchesCategory =
-      normalizedCategorySlug.length === 0 ||
-      template.categories?.some(
-        (category) => buildCategorySlug(category) === normalizedCategorySlug,
-      ) === true;
+      normalizedCategorySlug === null ||
+      (normalizedCategorySlug !== '' &&
+        template.categories?.some(
+          (category) => buildCategorySlug(category) === normalizedCategorySlug,
+        ) === true);
 
     return matchesSearch && matchesCategory;
   });
@@ -143,8 +145,9 @@ export const buildDiscoveryCategories = (
   const categoryLabelBySlug = new Map<string, string>();
 
   templates.forEach((template) => {
-    template.categories?.forEach((category) => {
+    uniqueCategoryNames(template.categories ?? []).forEach((category) => {
       const slug = buildCategorySlug(category);
+      if (!slug) return;
       categoryCountsBySlug.set(slug, (categoryCountsBySlug.get(slug) ?? 0) + 1);
       if (!categoryLabelBySlug.has(slug)) {
         categoryLabelBySlug.set(slug, category);
@@ -158,7 +161,7 @@ export const buildDiscoveryCategories = (
 
   sourceCategories.forEach((name) => {
     const slug = buildCategorySlug(name);
-    if (categoriesBySlug.has(slug)) {
+    if (!slug || categoriesBySlug.has(slug)) {
       return;
     }
 
@@ -178,4 +181,14 @@ export const buildDiscoveryCategories = (
 
       return compareText(left.name, right.name);
     });
+};
+
+export const findCategoryByLegacySlug = (
+  categories: DiscoveryCategory[],
+  slug: string,
+): DiscoveryCategory | null => {
+  if (!slug) return null;
+  const renamed = categories.filter((category) => category.slug !== slug);
+  const name = findCategoryNameByLegacySlug(renamed.map((category) => category.name), slug);
+  return renamed.find((category) => category.name === name) ?? null;
 };

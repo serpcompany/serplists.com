@@ -5,33 +5,25 @@ import { lintSingleTemplateSource, lintYamlTemplateBundle } from '@/../scripts/l
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+const issuesInTheExampleBundle = async (name: string) => {
+  const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples', name);
+  return [
+    ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
+      jsonPath: path.join(baseDir, 'template.json'),
+      markdownPath: path.join(baseDir, 'template.md'),
+      readmePath: path.join(baseDir, 'README.md'),
+      previewHtmlPath: path.join(baseDir, 'preview.html'),
+    })),
+  ];
+};
+
 describe('template example assets', () => {
   it('keeps the minimal example assets valid and synced', async () => {
-    const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples/minimal');
-    const issues = [
-      ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
-        jsonPath: path.join(baseDir, 'template.json'),
-        markdownPath: path.join(baseDir, 'template.md'),
-        readmePath: path.join(baseDir, 'README.md'),
-        previewHtmlPath: path.join(baseDir, 'preview.html'),
-      })),
-    ];
-
-    expect(issues).toEqual([]);
+    expect(await issuesInTheExampleBundle('minimal')).toEqual([]);
   });
 
   it('keeps the full example assets valid and synced', async () => {
-    const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples/full');
-    const issues = [
-      ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
-        jsonPath: path.join(baseDir, 'template.json'),
-        markdownPath: path.join(baseDir, 'template.md'),
-        readmePath: path.join(baseDir, 'README.md'),
-        previewHtmlPath: path.join(baseDir, 'preview.html'),
-      })),
-    ];
-
-    expect(issues).toEqual([]);
+    expect(await issuesInTheExampleBundle('full')).toEqual([]);
   });
 
   it('keeps standalone yaml example source valid', async () => {

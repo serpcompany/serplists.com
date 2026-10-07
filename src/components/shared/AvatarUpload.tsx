@@ -1,35 +1,50 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, User, X } from "lucide-react";
+import { Camera, User, X, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
+import { deleteUploadedAsset, uploadAvatar } from "@/lib/utils/fileUpload";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
   onAvatarUpdate?: (newAvatarUrl: string) => void;
   size?: "sm" | "md" | "lg";
   editable?: boolean;
+  fallbackIcon?: LucideIcon;
+  saveAvatar?: (avatarUrl: string | null) => Promise<string | null>;
 }
 
-export const AvatarUpload = ({ 
-  currentAvatarUrl, 
-  onAvatarUpdate, 
-  size = "md", 
-  editable = true 
+export const AvatarUpload = ({
+  currentAvatarUrl,
+  onAvatarUpdate,
+  size = "md",
+  editable = true,
+  fallbackIcon: FallbackIcon = User,
+  saveAvatar,
 }: AvatarUploadProps) => {
   const { user, refreshProfile } = useAuth();
+  const saveOnTheAccount = async (avatarUrl: string | null): Promise<string | null> => {
+    const result = await authClient.updateUser({ image: avatarUrl });
+    if (result?.error) {
+      return result.error.message || (avatarUrl ? "Failed to update avatar. Please try again." : "Failed to remove avatar. Please try again.");
+    }
+    await refreshProfile();
+    return null;
+  };
+  const save = saveAvatar ?? saveOnTheAccount;
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sizeClasses = {
-    sm: "h-12 w-12",
-    md: "h-24 w-24",
-    lg: "h-32 w-32"
+    sm: "size-12",
+    md: "size-16",
+    lg: "size-20"
   };
 
   const handleFileSelect = () => {
@@ -37,27 +52,27 @@ export const AvatarUpload = ({
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error("Please select an image file");
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
+    if (!isAllowedUpload("avatars", file)) {
+      toast.error("Please select a PNG, JPEG, WebP, or GIF image");
       return;
     }
 
     setIsUploading(true);
 
     try {
-      const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await authClient.updateUser({ image: upload.url });
-      await refreshProfile();
+      const upload = await uploadAvatar(file);
+      const refusal = await save(upload.url);
+      if (refusal) {
+        await deleteUploadedAsset(upload.url);
+        toast.error(refusal);
+        return;
+      }
+
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
       }
@@ -65,7 +80,7 @@ export const AvatarUpload = ({
       onAvatarUpdate?.(upload.url);
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error("Failed to upload avatar");
+      toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {
       setIsUploading(false);
     }
@@ -77,9 +92,13 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      await authClient.updateUser({ image: null });
+      const refusal = await save(null);
+      if (refusal) {
+        toast.error(refusal);
+        return;
+      }
+
       await deleteUploadedAsset(currentAvatarUrl);
-      await refreshProfile();
       toast.success("Avatar removed successfully!");
       onAvatarUpdate?.("");
     } catch (error) {
@@ -91,57 +110,49 @@ export const AvatarUpload = ({
   };
 
   return (
-    <div className="relative group">
-      <Avatar className={`${sizeClasses[size]}`}>
+    <div className="flex flex-wrap items-center gap-4">
+      <Avatar className={sizeClasses[size]}>
         <AvatarImage src={currentAvatarUrl || undefined} />
         <AvatarFallback>
-          <User className="h-1/2 w-1/2" />
+          <FallbackIcon className="size-1/2" />
         </AvatarFallback>
       </Avatar>
-      
+
       {editable && (
-        <>
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            size="icon"
-            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+            size="sm"
             onClick={handleFileSelect}
             disabled={isUploading || isRemoving}
             aria-label="Upload avatar"
           >
-            {isUploading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <Camera className="h-4 w-4" />
-            )}
+            {isUploading ? <Spinner data-icon="inline-start" /> : <Camera data-icon="inline-start" />}
+            Upload avatar
           </Button>
 
           {currentAvatarUrl ? (
             <Button
               variant="outline"
-              size="icon"
-              className="absolute -bottom-2 -left-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              size="sm"
               onClick={handleRemoveAvatar}
               disabled={isUploading || isRemoving}
               aria-label="Remove avatar"
             >
-              {isRemoving ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
+              {isRemoving ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
+              Remove avatar
             </Button>
           ) : null}
-          
+
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={uploadAcceptAttribute("avatars")}
             onChange={handleFileUpload}
             disabled={isUploading || isRemoving}
             className="hidden"
           />
-        </>
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,139 @@
+import { Copy, Download, History, MoreHorizontal, Pencil, PlayCircle, Share2, Trash2, Users } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { CopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
+
+import { Link } from '@/components/navigation/Link';
+
+type TemplateDetailActionsProps = {
+  canEdit: boolean;
+  canShare: boolean;
+  canDuplicate: boolean;
+  canTransfer: boolean;
+  copyButton: CopyTemplateButton;
+  editHref: string;
+  exportDisabled: boolean;
+  exportLabel: string;
+  isCloning: boolean;
+  isCreatingShare: boolean;
+  isChangingVisibility: boolean;
+  isSignedIn: boolean;
+  loginHref: string;
+  onClone: () => void;
+  onDelete: () => void;
+  onExport: () => void;
+  onShare: () => void;
+  onStartRun: () => void;
+  onTransfer: () => void;
+  runsHref: string | null;
+  showStartRun: boolean;
+};
+
+export function TemplateDetailActions({
+  canDuplicate,
+  canEdit,
+  canShare,
+  canTransfer,
+  copyButton,
+  editHref,
+  exportDisabled,
+  exportLabel,
+  isChangingVisibility,
+  isCloning,
+  isCreatingShare,
+  isSignedIn,
+  loginHref,
+  onClone,
+  onDelete,
+  onExport,
+  onShare,
+  onStartRun,
+  onTransfer,
+  runsHref,
+  showStartRun,
+}: TemplateDetailActionsProps) {
+  return (
+    <>
+      {canEdit ? (
+        <>
+          {canShare ? (
+            <Button disabled={isChangingVisibility} onClick={onShare} variant="outline">
+              <Share2 data-icon="inline-start" />
+              {isCreatingShare ? 'Creating...' : 'Share'}
+            </Button>
+          ) : null}
+          <Link href={editHref} className={buttonVariants({ variant: 'outline' })}>
+            <Pencil data-icon="inline-start" />
+            Edit
+          </Link>
+        </>
+      ) : isSignedIn ? (
+        copyButton.visible ? (
+          <Button disabled={copyButton.disabled} onClick={onClone} variant="outline">
+            <Copy data-icon="inline-start" />
+            {copyButton.label}
+          </Button>
+        ) : null
+      ) : copyButton.visible ? (
+        <Link href={loginHref} className={buttonVariants({ variant: 'outline' })}>
+          Log in to copy template
+        </Link>
+      ) : null}
+
+      {runsHref ? (
+        <Link href={runsHref} className={buttonVariants({ variant: 'outline' })}>
+          <History data-icon="inline-start" />
+          View runs
+        </Link>
+      ) : null}
+
+      {showStartRun ? (
+        <Button onClick={onStartRun}>
+          <PlayCircle data-icon="inline-start" />
+          Start Run
+        </Button>
+      ) : null}
+
+      {canEdit ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button aria-label="Template actions" size="icon" variant="ghost" />}
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canDuplicate ? (
+              <DropdownMenuItem disabled={isCloning} onClick={onClone}>
+                <Copy />
+                {isCloning ? 'Duplicating...' : 'Duplicate'}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem disabled={exportDisabled} onClick={onExport}>
+              <Download />
+              {exportLabel}
+            </DropdownMenuItem>
+            {canTransfer ? (
+              <DropdownMenuItem onClick={onTransfer}>
+                <Users />
+                Transfer to Organization
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} variant="destructive">
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </>
+  );
+}
