@@ -65,6 +65,7 @@ function createEchoingWorker() {
     let body = '';
     req.on('data', (chunk: Buffer) => (body += chunk.toString()));
     req.on('end', () => {
+      res.setHeader('content-type', 'application/json');
       res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
       res.end(JSON.stringify({ method: req.method, url: req.url, host: req.headers.host, body }));
     });

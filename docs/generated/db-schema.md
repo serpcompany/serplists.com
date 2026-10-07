@@ -114,7 +114,7 @@ Indexes:
 | `created_at` | text | no | CURRENT_TIMESTAMP |  |
 | `last_used_at` | text | yes |  |  |
 | `revoked_at` | text | yes |  |  |
-| `permissions` | text | no | "[\"templates:read\",\"runs:read\",\"runs:write\"]" |  |
+| `permissions` | text | no | "[\\"templates:read\\",\\"runs:read\\",\\"runs:write\\"]" |  |
 
 Indexes:
 

@@ -151,7 +151,11 @@ They are Node code, so their globals are Node's: browser globals such as `window
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
-files, so they stay fast; the push hook runs the full gate.
+files, so they stay fast; the push hook runs the full gate. Each commit hook starts `node`
+directly, never a `pnpm`, `npx` or `yarn` shim: lefthook splits a long `{staged_files}` list
+into batches, but on Windows a shim runs through `cmd.exe`, whose 8,191-character command line a
+large commit (a promotion merge staging thousands of files) overflows
+(`tests/unit/config/lefthook.test.ts`).
 
 Local checks are kept light, so the machine stays usable while they run:
 - `scripts/run-at-low-priority.ts` starts the push hook's `pnpm run verify`, and any heavy
@@ -185,9 +189,12 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `.spec.` file beside the code.
   - It runs twice:
     - in the Lefthook commit-msg hook (`--commit-msg`), on the staged files;
-    - in CI's Quality Gate on a pull request (`--range origin/<base>..<head>`), on every
-      commit but merges. That step needs the full history, so the Quality Gate checks out
-      with `fetch-depth: 0`.
+    - in CI's Quality Gate on a pull request (`--range origin/staging..<head>`), on every
+      commit but merges that `staging` does not hold yet. For a pull request into `staging`
+      that is the whole pull request; a promotion into `main` adds only its merge commit, since
+      `staging` already accepted every commit it carries (some of them, such as two from before
+      this rule, would fail it). That step needs the full history, so the Quality Gate checks
+      out with `fetch-depth: 0`.
   - A commit that fixes no behavior takes another type: `refactor:`, `build:`, `docs:`,
     `test:` or `chore:`.
 - **Docs** (`pnpm run docs:check`, part of `check:repo`) reads `AGENTS.md`, `ARCHITECTURE.md`,

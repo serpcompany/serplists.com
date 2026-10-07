@@ -4,12 +4,11 @@ import { is, SQL } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../db/schema/index";
 import { matchesGeneratedText } from "./lib/line-endings";
+import { markdownTableCell } from "./lib/markdownTableCell";
 import { readSqlOnlySchema } from "./lib/sql-only-schema";
 
 const outputPath = path.join(process.cwd(), "docs/generated/db-schema.md");
 const sqlOnlyPath = path.join(process.cwd(), "db/sql-only-schema.json");
-
-const escapeCell = (value: string) => value.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
 function formatDefault(value: unknown): string {
   if (value === undefined) return "";
@@ -57,7 +56,7 @@ for (const table of tables) {
       .filter(Boolean)
       .join("; ");
     lines.push(
-      `| \`${column.name}\` | ${column.getSQLType()} | ${column.notNull ? "no" : "yes"} | ${escapeCell(formatDefault(column.default))} | ${escapeCell(key)} |`,
+      `| \`${column.name}\` | ${column.getSQLType()} | ${column.notNull ? "no" : "yes"} | ${markdownTableCell(formatDefault(column.default))} | ${markdownTableCell(key)} |`,
     );
   }
   if (table.indexes.length > 0) {

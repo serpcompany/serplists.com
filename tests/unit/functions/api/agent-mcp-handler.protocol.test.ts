@@ -97,7 +97,7 @@ describe("personal run MCP handler", () => {
     const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
     expect(spec).toContain("\n## MCP Changes For Agents\n");
     const notes = spec.slice(spec.indexOf("\n## MCP Changes For Agents\n"));
-    expect(notes).toMatch(new RegExp(`^### ${MCP_SERVER_VERSION.replace(/\./g, "\\.")} `, "m"));
+    expect(notes).toContain(`\n### ${MCP_SERVER_VERSION} `);
   });
 
   it("rejects invalid request ids and incomplete initialize parameters", async () => {

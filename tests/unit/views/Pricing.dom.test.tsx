@@ -120,7 +120,7 @@ describe('Pricing', () => {
     expect(html).not.toContain('Upgrade');
     expect(html).not.toContain('Manage Pro');
     expect(html).not.toContain('Manage subscription');
-    expect(html).toContain(PLAN_UNKNOWN_MESSAGE.replace("'", '&#x27;'));
+    expect(html).toContain(PLAN_UNKNOWN_MESSAGE.replaceAll("'", '&#x27;'));
     expect(html).toContain('Retry');
     expect(html).toContain('role="alert"');
   });
@@ -137,7 +137,7 @@ describe('Pricing', () => {
 
     expect(html).toContain('Manage Pro');
     expect(html).not.toContain('Upgrade — $9/month');
-    expect(html).not.toContain(PLAN_UNKNOWN_MESSAGE.replace("'", '&#x27;'));
+    expect(html).not.toContain(PLAN_UNKNOWN_MESSAGE.replaceAll("'", '&#x27;'));
   });
 
   it('shows the plan check, not the upgrade, while the status loads', () => {
