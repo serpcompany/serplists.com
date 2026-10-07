@@ -72,14 +72,14 @@ test("a Template's form is filled in on its run, and the task completes only onc
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByText(COMPLETE_REFUSED)).toBeVisible();
-  await expect(page.getByText('Fill in this field.')).toBeVisible();
+  await expect(page.getByText('Fill in this field.', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Client name' })).toBeFocused();
   expect((await readRun(page, runId)).completed).toEqual([false]);
 
   await page.getByRole('textbox', { name: 'Client name' }).fill('Acme');
   await page.getByRole('textbox', { name: 'Website' }).fill('https://acme.example');
   await chooseFrom(page, 'Plan', 'Growth');
-  await expect(page.getByText('Fill in this field.')).toHaveCount(0);
+  await expect(page.getByText('Fill in this field.', { exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect.poll(async () => (await readRun(page, runId)).completed).toEqual([true]);
