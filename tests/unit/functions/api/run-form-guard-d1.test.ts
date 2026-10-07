@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   checklistsRefusal,
   insertOwnedRun,
@@ -141,5 +142,63 @@ describe("the other routes that tick tasks hold the same rule", () => {
         message: FORM_INCOMPLETE_MESSAGE,
         details: { fieldCount: 1, fields: [{ taskId: "brief", fieldId: "field_name", reason: "required" }] },
       });
+  });
+});
+
+describe("MCP set_form_answer fills a form on the stored run", () => {
+  const answer = (expectedRevision: number, fieldId: string, value: unknown) =>
+    updateRunRefusal(database, { runId: "open", expectedRevision, operation: "set_form_answer", taskId: "brief", fieldId, answer: value });
+  const tick = (expectedRevision: number) =>
+    updateRunRefusal(database, { runId: "open", expectedRevision, operation: "set_task_completed", taskId: "brief", completed: true });
+  const storedAnswers = () => getTaskFormFields(storedBrief()).map((field) => field.answer);
+  const formAnswerAudits = () => database.sqlite
+    .prepare("SELECT diff_json AS diff FROM audit_events WHERE resource_id = 'open' AND metadata_json LIKE '%set_form_answer%' ORDER BY created_at")
+    .all();
+
+  it("answers the form, refuses an invalid answer, and then lets set_task_completed tick the task", async () => {
+    await expect(tick(1)).resolves.toEqual(expect.objectContaining({ code: "form_incomplete" }));
+
+    await expect(answer(1, "field_name", "Acme")).resolves.toBeNull();
+    await expect(answer(2, "field_email", "not an email")).resolves.toEqual({
+      status: "tool error",
+      code: "invalid_answer",
+      message: "Enter an email address like name@example.com.",
+      details: { taskId: "brief", fieldId: "field_email", kind: "email", reason: "invalid" },
+    });
+    expect(stored("revision")).toBe(2);
+    await expect(answer(2, "field_email", "ops@acme.test")).resolves.toBeNull();
+    expect(storedBrief().isCompleted).toBe(false);
+
+    await expect(tick(3)).resolves.toBeNull();
+    expect(storedBrief().isCompleted).toBe(true);
+    expect(storedAnswers()).toEqual(["Acme", "ops@acme.test"]);
+    expect(stored("revision")).toBe(4);
+
+    const audits = formAnswerAudits();
+    expect(audits).toHaveLength(2);
+    for (const { diff } of z.array(z.object({ diff: z.string() })).parse(audits)) {
+      expect(JSON.parse(diff)).toEqual(expect.objectContaining({ operation: "set_form_answer", taskId: "brief", answersChanged: ["brief"] }));
+      expect(diff).not.toMatch(/Acme|ops@acme/);
+    }
+  });
+
+  it("clears an answer with null, required or not, while the task is open", async () => {
+    database.run("UPDATE checklist_runs SET items = ? WHERE id = 'open'", JSON.stringify(sectionsWith({ fields: [nameField({ answer: "Acme" }), emailField()] })));
+
+    await expect(answer(1, "field_name", null)).resolves.toBeNull();
+
+    expect(storedAnswers()).toEqual([undefined, undefined]);
+    expect(storedBrief().isCompleted).toBe(false);
+  });
+
+  it("refuses an answer that is stale or on a completed run, and writes nothing", async () => {
+    database.run("UPDATE checklist_runs SET revision = 2 WHERE id = 'open'");
+    await expect(answer(1, "field_name", "Acme")).resolves.toEqual(expect.objectContaining({ code: "edit_conflict" }));
+
+    database.run("UPDATE checklist_runs SET status = 'completed' WHERE id = 'open'");
+    await expect(answer(2, "field_name", "Acme")).resolves.toEqual(expect.objectContaining({ code: "run_completed" }));
+
+    expect(stored("items")).toBe(STORED_ITEMS);
+    expect(storedValue(database, "SELECT count(*) AS value FROM audit_events WHERE resource_id = ?", "open")).toBe(0);
   });
 });

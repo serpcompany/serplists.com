@@ -24,7 +24,7 @@ import {
   MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../../functions/api/utils/personal-run-key";
 import { optionalRecordIn, recordIn, recordsIn, textIn } from "../support/mcpResponses";
-import { storedSectionsIn } from "../support/storedJson";
+import { jsonRecordIn, storedSectionsIn } from "../support/storedJson";
 import { contentAt, subTaskAt, taskIn } from "../support/elements";
 
 let runId = "";
@@ -251,6 +251,40 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       runId,
     )).toEqual([beforeRun]);
     expect(await auditEventsOfTheRun()).toBe(auditEventsBefore);
+  });
+
+  it("fills a task's form with set_form_answer, refusing an invalid answer, and then ticks the task", async () => {
+    const emailField = { id: "field-email", label: "Release contact", kind: "email", required: true };
+    const [template] = await rows<{ items: string }>("SELECT items FROM templates WHERE id = 'template-a'");
+    const sections = storedSectionsIn(template?.items);
+    const verify = taskIn(sections, 0, 0);
+    verify.contents = [...(verify.contents ?? []), { id: "content-form", type: "form", value: "", fields: [emailField] }];
+    await env.DB.prepare("UPDATE templates SET items = ? WHERE id = 'template-a'").bind(JSON.stringify(sections)).run();
+
+    const formRunId = textIn(recordIn(toolPayload(await bodyOf(await callTool("start_run", { templateId: "template-a" }))).run).id);
+    const update = async (expectedRevision: number, change: Record<string, unknown>) =>
+      bodyOf(await callTool("update_run", { runId: formRunId, expectedRevision, taskId: "task-1", ...change }));
+    const answer = (expectedRevision: number, value: unknown) =>
+      update(expectedRevision, { operation: "set_form_answer", fieldId: "field-email", answer: value });
+
+    expect(toolError(await update(1, { operation: "set_task_completed", completed: true }))).toBe("form_incomplete");
+    const invalid = await answer(1, "release desk");
+    expect(toolPayload(invalid)).toMatchObject({ error: "invalid_answer", message: "Enter an email address like name@example.com." });
+    expect(toolPayload(await answer(1, "release@example.test")).run).toMatchObject({ revision: 2 });
+    expect(toolPayload(await update(2, { operation: "set_task_completed", completed: true })).run).toMatchObject({ revision: 3 });
+
+    const storedRun = onlyElement(await rows("SELECT items, revision FROM checklist_runs WHERE id = ?", formRunId));
+    const storedTask = taskIn(storedSectionsIn(storedRun.items), 0, 0);
+    expect(storedTask.isCompleted).toBe(true);
+    expect(JSON.stringify(storedTask.contents)).toContain('"answer":"release@example.test"');
+    const answerAudits = await rows<{ diff_json: string }>(
+      "SELECT diff_json FROM audit_events WHERE resource_id = ? AND json_extract(diff_json, '$.operation') = 'set_form_answer'",
+      formRunId,
+    );
+    expect(answerAudits.map(({ diff_json }) => jsonRecordIn(diff_json))).toEqual([
+      expect.objectContaining({ taskId: "task-1", fieldId: "field-email", answersChanged: ["task-1"] }),
+    ]);
+    expect(JSON.stringify(answerAudits)).not.toContain("release@example.test");
   });
 
   it("holds a Free owner to the active run limit under concurrent start_run calls", async () => {

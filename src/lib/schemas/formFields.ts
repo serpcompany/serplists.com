@@ -132,10 +132,12 @@ export function withFormOptionIds(options: FormOptionRecord[]): Array<FormOption
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
+export const fitsFormAnswerShape = (kind: FormFieldKind, answer: unknown): boolean =>
+  kind === "number" ? isFiniteNumber(answer) : STORED_ANSWER_SCHEMAS[kind].safeParse(answer).success;
+
 function storedAnswerFor(kind: FormFieldKind, answer: unknown): unknown {
   if (answer === undefined || answer === null) return undefined;
-  if (kind === "number") return isFiniteNumber(answer) ? answer : undefined;
-  return STORED_ANSWER_SCHEMAS[kind].safeParse(answer).success ? answer : undefined;
+  return fitsFormAnswerShape(kind, answer) ? answer : undefined;
 }
 
 function sanitizeStoredOptions(value: unknown): FormOptionRecord[] {

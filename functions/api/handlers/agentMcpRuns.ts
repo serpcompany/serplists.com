@@ -14,19 +14,44 @@ import {
   taskRecordsIn,
   type ChecklistNodeRecord,
   type ContentRecord,
+  type FormFieldRecord,
   type JsonRecord,
   type SectionRecord,
   type TaskRecord,
 } from "../../../src/lib/schemas/jsonRecords";
-import { getTaskSubTasks, isFormBlock, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import {
+  getTaskFormFields,
+  getTaskSubTasks,
+  isFormBlock,
+  isSubTasksBlock,
+  sanitizeStoredSections,
+} from "../../../src/lib/schemas/storedSections";
 import type { RunUpdates } from "../utils/checklist-runs";
 import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload } from "../utils/payloads";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 import { findRunCompletionRefusal } from "../utils/run-completion";
-import { FORM_INCOMPLETE_MESSAGE, formIncompleteDetails, taskFormBlockers } from "../utils/run-form-guard";
-import { FORM_INCOMPLETE_CODE } from "../../../src/lib/schemas/formValidation";
-import { ToolError, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
+import {
+  doneTaskFormBlockers,
+  FORM_INCOMPLETE_MESSAGE,
+  formIncompleteDetails,
+  taskFormBlockers,
+} from "../utils/run-form-guard";
+import {
+  FORM_FIELD_KIND_LABELS,
+  fitsFormAnswerShape,
+  isFormFieldKind,
+  readFormFields,
+  type FormFieldKind,
+} from "../../../src/lib/schemas/formFields";
+import {
+  FORM_INCOMPLETE_CODE,
+  findFormFieldProblem,
+  formFieldProblemMessage,
+  isFormAnswerEmpty,
+} from "../../../src/lib/schemas/formValidation";
+import { boundedText } from "./agentMcpPages";
+import { ToolError, type SectionAndTaskIds, type SetFormAnswerArgs, type UpdateRunArgs } from "./agentMcpTools";
 
 type RunRow = typeof schema.checklistRuns.$inferSelect;
 
@@ -142,24 +167,86 @@ function findTask(sections: SectionRecord[], taskId: string): TaskRecord | null 
   return null;
 }
 
+const FROZEN_ON_A_COMPLETED_RUN = new Set<UpdateRunArgs["operation"]>(["set_task_completed", "set_subtask_completed", "set_form_answer"]);
+
 export function assertRunTasksCanChange(run: Pick<RunRow, "status">, operation: UpdateRunArgs): void {
-  if (run.status !== "completed") return;
-  if (operation.operation !== "set_task_completed" && operation.operation !== "set_subtask_completed") return;
+  if (run.status !== "completed" || !FROZEN_ON_A_COMPLETED_RUN.has(operation.operation)) return;
   throw new ToolError(
-    "Run is completed, so its tasks and subtasks can no longer be changed; set_run_status in_progress reopens it",
+    "Run is completed, so its tasks, subtasks, and form answers can no longer be changed; set_run_status in_progress reopens it",
     "run_completed",
   );
 }
 
-export function applyRunOperation(sections: SectionRecord[], operation: UpdateRunArgs): void {
-  if (operation.operation === "set_run_status") return;
+const ANSWER_TYPES: Record<Exclude<FormFieldKind, "file">, string> = {
+  text: "a string",
+  longText: "a string",
+  url: "a string",
+  email: "a string",
+  number: "a number",
+  date: "a YYYY-MM-DD string",
+  select: "an option id",
+  multiSelect: "an array of option ids",
+  checkbox: "true or false",
+};
+
+const DONE_TASK_FORM_INCOMPLETE_MESSAGE = "The task is done, and this answer would leave its form with a required field "
+  + "without an answer or an answer that is not valid; untick it with set_task_completed first";
+
+function findFormField(task: TaskRecord, fieldId: string): { field: FormFieldRecord; kind: FormFieldKind } {
+  const field = getTaskFormFields(task).find((candidate) => readTextId(candidate.id) === fieldId);
+  const kind = field?.kind;
+  if (!field || !isFormFieldKind(kind)) {
+    throw new ToolError(`Form field not found: the task's form has no field "${boundedText(fieldId)}" (fieldId)`, "field_not_found");
+  }
+  return { field, kind };
+}
+
+function answerToStore(field: FormFieldRecord, kind: FormFieldKind, operation: SetFormAnswerArgs): unknown {
+  const { answer, taskId, fieldId } = operation;
+  const details = { taskId, fieldId, kind };
+  if (answer === null) return undefined;
+  if (kind === "file") {
+    throw new ToolError("A file field can only be cleared over MCP (answer null); upload the file in SERP Lists", "unsupported_field_kind", details);
+  }
+  if (!fitsFormAnswerShape(kind, answer)) {
+    throw new ToolError(`A ${FORM_FIELD_KIND_LABELS[kind]} field takes ${ANSWER_TYPES[kind]}, or null to clear it`, "invalid_answer", details);
+  }
+  if (isFormAnswerEmpty(answer)) return undefined;
+  const value = Array.isArray(answer) ? [...new Set(answer)] : answer;
+  const answered = { ...field, answer: value };
+  if (findFormFieldProblem(answered) === "invalid") {
+    const [checked] = readFormFields([answered], () => fieldId);
+    const message = checked ? formFieldProblemMessage(checked, "invalid") : "The answer is not valid";
+    throw new ToolError(message, "invalid_answer", { ...details, reason: "invalid" });
+  }
+  return value;
+}
+
+function setFormAnswer(task: TaskRecord, operation: SetFormAnswerArgs): boolean {
+  const { field, kind } = findFormField(task, operation.fieldId);
+  const next = answerToStore(field, kind, operation);
+  const before = JSON.stringify(field.answer ?? null);
+  if (next === undefined) delete field.answer;
+  else field.answer = next;
+  const blocked = doneTaskFormBlockers(task);
+  if (blocked.length > 0) throw new ToolError(DONE_TASK_FORM_INCOMPLETE_MESSAGE, FORM_INCOMPLETE_CODE, formIncompleteDetails(blocked));
+  return JSON.stringify(field.answer ?? null) !== before;
+}
+
+export type RunOperationOutcome = { answerChanged: boolean };
+
+export function applyRunOperation(sections: SectionRecord[], operation: UpdateRunArgs): RunOperationOutcome {
+  const answersUnchanged = { answerChanged: false };
+  if (operation.operation === "set_run_status") return answersUnchanged;
 
   const task = findTask(sections, operation.taskId);
   if (!task) throw new ToolError("Task not found", "task_not_found");
 
+  if (operation.operation === "set_form_answer") return { answerChanged: setFormAnswer(task, operation) };
+
   if (operation.operation === "set_task_notes") {
     task.notes = operation.notes;
-    return;
+    return answersUnchanged;
   }
 
   const subtasks = getTaskSubTasks(task);
@@ -168,7 +255,7 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
     if (blocked.length > 0) throw new ToolError(FORM_INCOMPLETE_MESSAGE, FORM_INCOMPLETE_CODE, formIncompleteDetails(blocked));
     task.isCompleted = operation.completed;
     for (const subtask of subtasks) subtask.isCompleted = operation.completed;
-    return;
+    return answersUnchanged;
   }
 
   const subtask = subtasks.find((candidate) => readTextId(candidate.id) === operation.subtaskId);
@@ -177,6 +264,7 @@ export function applyRunOperation(sections: SectionRecord[], operation: UpdateRu
   task.isCompleted = subtasks.length > 0
     && subtasks.every((candidate) => candidate.isCompleted === true)
     && taskFormBlockers(task).length === 0;
+  return answersUnchanged;
 }
 
 const AUDITED_RUN_FIELDS = [
@@ -203,6 +291,8 @@ export function summarizeRunForAudit(run: Partial<RunRow>): JsonRecord {
 interface RunAuditDiff extends JsonRecord {
   notes?: unknown;
   notesLength?: unknown;
+  answer?: unknown;
+  answersChanged?: unknown;
   completedAt?: unknown;
 }
 
@@ -210,6 +300,7 @@ export function updateRunAuditDiff(
   args: UpdateRunArgs,
   existing: Pick<RunRow, "progress" | "revision">,
   updates: RunUpdates,
+  outcome: RunOperationOutcome,
 ): RunAuditDiff {
   const { runId, expectedRevision, ...change } = args;
   const diff: RunAuditDiff = {
@@ -220,6 +311,10 @@ export function updateRunAuditDiff(
   if (change.operation === "set_task_notes") {
     delete diff.notes;
     diff.notesLength = change.notes.length;
+  }
+  if (change.operation === "set_form_answer") {
+    delete diff.answer;
+    if (outcome.answerChanged) diff.answersChanged = [change.taskId];
   }
   if (updates.completed_at !== undefined) diff.completedAt = updates.completed_at;
   return diff;
