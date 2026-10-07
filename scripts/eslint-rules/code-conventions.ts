@@ -23,7 +23,7 @@ const PRIVATE_QUERY_KINDS = [
 
 const PERSONA_EMAILS = ["checklists@serp.co", "admin@test.com", "john@test.com", "jane@test.com", "bob@test.com"];
 
-const escaped = (value: string) => value.replace(/[.]/g, "\\.");
+const escaped = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const PROGRESS_PERCENT: CodeConvention = {
   selector:

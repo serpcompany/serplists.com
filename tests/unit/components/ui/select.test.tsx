@@ -9,6 +9,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+import { markupText } from '../../../support/markupText';
+
 describe('SelectTrigger', () => {
   it("holds no text besides the selected value, not even the ▼ that Base UI's Select.Icon renders without children", () => {
     const markup = renderToStaticMarkup(
@@ -23,6 +25,6 @@ describe('SelectTrigger', () => {
     );
 
     expect(markup).toContain('<svg');
-    expect(markup.replace(/<[^>]*>/g, '')).toBe('Name A-Z');
+    expect(markupText(markup)).toBe('Name A-Z');
   });
 });
