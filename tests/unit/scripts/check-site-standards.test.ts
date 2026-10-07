@@ -1,7 +1,12 @@
 import { loadBuiltRoutes, workerRedirect } from '../../support/builtRoutes';
 import { describe, expect, it } from 'vitest';
 
-import { checkSiteStandards, SMOKE_TEST_HEADER, type SiteRequest } from '../../../scripts/check-site-standards';
+import {
+  checkSiteStandards,
+  checkSiteStandardsUntilItPasses,
+  SMOKE_TEST_HEADER,
+  type SiteRequest,
+} from '../../../scripts/check-site-standards';
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 
 
@@ -68,5 +73,39 @@ describe('check-site-standards', () => {
     });
     expect(stagingAsProduction.failed).toBeGreaterThan(0);
     expect(stagingAsProduction.lines).toContain('FAIL robots.txt allows crawling');
+  });
+});
+
+describe('check-site-standards right after a deploy', () => {
+  const notFoundYet = { status: 404, location: null, headers: {}, body: '' };
+
+  it('checks again after a pause when a brand-new deployment answers 404 at first, and passes once it serves its pages', async () => {
+    const site = await deployedWorkerWithTheBuiltRedirects('production');
+    let warm = false;
+    const retries: number[] = [];
+
+    const result = await checkSiteStandardsUntilItPasses(
+      {
+        baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+        siteEnv: 'production',
+        request: async (url, options) => (warm ? site(url, options) : notFoundYet),
+      },
+      { sleep: async () => { warm = true; }, onRetry: (attempt) => retries.push(attempt) },
+    );
+
+    expect(result.failed).toBe(0);
+    expect(retries).toEqual([2]);
+  });
+
+  it('still fails a site that keeps failing, after its last attempt', async () => {
+    let pauses = 0;
+
+    const result = await checkSiteStandardsUntilItPasses(
+      { baseUrl: 'https://serp-checklists-production.serp.workers.dev', siteEnv: 'production', request: async () => notFoundYet },
+      { attempts: 3, sleep: async () => { pauses += 1; } },
+    );
+
+    expect(result.failed).toBeGreaterThan(0);
+    expect(pauses).toBe(2);
   });
 });

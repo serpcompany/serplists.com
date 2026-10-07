@@ -1,5 +1,6 @@
 import http from "node:http";
 import https from "node:https";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
@@ -192,6 +193,26 @@ export async function checkSiteStandards({
   return site.result();
 }
 
+type RetryOptions = {
+  attempts?: number;
+  retryDelayMs?: number;
+  sleep?: (ms: number) => Promise<unknown>;
+  onRetry?: (attempt: number, failed: number) => void;
+};
+
+export async function checkSiteStandardsUntilItPasses(
+  options: Parameters<typeof checkSiteStandards>[0],
+  { attempts = 3, retryDelayMs = 20_000, sleep = delay, onRetry = () => {} }: RetryOptions = {},
+): Promise<SiteStandardsResult> {
+  let result = await checkSiteStandards(options);
+  for (let attempt = 2; attempt <= attempts && result.failed > 0; attempt += 1) {
+    onRetry(attempt, result.failed);
+    await sleep(retryDelayMs);
+    result = await checkSiteStandards(options);
+  }
+  return result;
+}
+
 async function main() {
   const [baseUrl, siteEnv] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!baseUrl || !siteEnv) {
@@ -200,7 +221,13 @@ async function main() {
   }
   const environment = siteEnvironmentSchema.safeParse(siteEnv);
   if (!environment.success) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
-  const result = await checkSiteStandards({ baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") });
+  const result = await checkSiteStandardsUntilItPasses(
+    { baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") },
+    {
+      onRetry: (attempt, failed) =>
+        console.log(`${failed} check(s) failed; a new deployment can answer 404 for its first seconds, so checking again in 20s (attempt ${attempt} of 3).`),
+    },
+  );
   result.lines.forEach((line) => console.log(line));
   console.log(`${result.passed} passed, ${result.failed} failed`);
   process.exit(result.failed ? 1 : 0);

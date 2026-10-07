@@ -435,12 +435,16 @@ to `staging` that passes the Quality Gate and the schema parity check deploys st
 production Worker, through `.github/workflows/deploy-production.yml`
 (`tests/unit/workflows/deploy-workers.test.ts` checks both).
 
-The production Worker (`--env production`) attaches no route yet, so it serves only its
-`workers.dev` address: `serplists.com` keeps serving the last Pages deployment until the domain
-moves at launch ([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)).
-Before the first production deploy, production D1 needs its pending migrations (the deploy
-blocks on `verify:prod:d1`) and the production Worker its secrets
-([SECURITY.md](SECURITY.md#secrets-and-environment)), or the deploy's checks fail. Staging lives on
+Production lives on `https://serplists.com`, served by the production Worker through zone
+routes (`serplists.com/*` and `www.serplists.com/*`, `[[env.production.routes]]` in
+`wrangler.toml`, so each production deploy keeps them attached); `www` redirects to the apex.
+The domain moved from the Pages project on 2026-10-07: the routes went in first, which answer
+before the hostnames' proxied DNS records (they still name the Pages project), and the domain
+left Pages after the production site standards passed on it, so it never stopped serving. The
+deploy blocks while production D1 has pending migrations (`verify:prod:d1`), and the Worker
+needs its secrets ([SECURITY.md](SECURITY.md#secrets-and-environment)). The deploy's site
+check runs up to three times, 20 seconds apart, because a brand-new Worker answered 404 for
+its pages in its first seconds (`checkSiteStandardsUntilItPasses`). Staging lives on
 `https://staging.serplists.com`, served by its Worker through a zone route
 (`staging.serplists.com/*`, `[[env.preview.routes]]` in `wrangler.toml`, so each deploy keeps
 it attached). The hostname's proxied DNS record still names the retired Pages project, which
