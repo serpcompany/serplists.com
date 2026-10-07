@@ -25,6 +25,9 @@ service = "serp-checklists-production"
 [vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
+[env.preview]
+workers_dev = true
+
 [env.preview.vars]
 SITE_ENV = "staging"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
@@ -34,6 +37,9 @@ CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://serp-checklists-pr
 [[env.preview.routes]]
 pattern = "staging.serplists.com/*"
 zone_name = "serplists.com"
+
+[env.production]
+workers_dev = true
 
 [env.production.vars]
 SITE_ENV = "production"

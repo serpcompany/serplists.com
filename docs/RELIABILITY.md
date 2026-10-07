@@ -442,7 +442,9 @@ a token that can edit DNS. The Worker's `workers.dev` address,
 `https://serp-checklists-preview.serpcompany.workers.dev`, redirects there (308), except for a
 request carrying the smoke-test header (`x-serplists-smoke-test`), which the deploy's checks
 (`scripts/verify-deployment.ts`, `scripts/check-site-standards.ts`) send so they test the new
-deployment before the domain serves it.
+deployment before the domain serves it. Both environments set `workers_dev = true`: wrangler turns the
+`workers.dev` address off for an environment that has routes unless it is set, and the deploy
+then prints no address for those checks and fails.
 
 The staging deploy:
 

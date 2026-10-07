@@ -20,7 +20,7 @@ const d1Database = z
   .passthrough();
 
 const deployedEnvironment = z
-  .object({ vars: deployedVars, d1_databases: z.array(d1Database) })
+  .object({ vars: deployedVars, d1_databases: z.array(d1Database), workers_dev: z.boolean().optional() })
   .passthrough();
 
 const wranglerConfig = z
