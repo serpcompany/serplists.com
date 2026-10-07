@@ -105,8 +105,8 @@ Each of these needs the user's approval, or happens with the domain move:
   push to `staging` ([RELIABILITY.md](../../RELIABILITY.md#deploy-pipeline)).
 - **Production deploy workflow** (phase 4, added 2026-10-06: `.github/workflows/deploy-production.yml`,
   called by CI on a push to `main` after the quality gate and the schema parity check, with
-  `verify:prod:d1` before the build; it deploys `--env production`, which attaches no route, so
-  the Worker serves only its `workers.dev` address until the domain moves): build each
+  `verify:prod:d1` before the build; it deploys `--env production`, and its first run deployed
+  `serp-checklists-production` on 2026-10-07): build each
   environment with its own `SITE_ENV`
   (`SITE_ENV=staging` for `--env preview`, `SITE_ENV=production` for `--env production`), then
   run `node --import tsx scripts/check-site-standards.ts <workers.dev URL> <staging|production>` against
@@ -122,7 +122,8 @@ Each of these needs the user's approval, or happens with the domain move:
     builds, so without it Agent Access stays hidden on the deployed hosts. The server flag
     `PERSONAL_RUN_MCP_ENABLED = "true"` is already set for `preview` and `production` in
     `wrangler.toml`.
-- **Production D1 migrations 0026 and 0027** (a human-approved step): production has not
+- **Production D1 migrations 0026 and 0027** (done: `0026` was already applied, and `0027` went in
+  with `0028` to `0033` on 2026-10-07; what follows is the original note): production had not
   applied `0026_tune_indexes_for_d1_reads.sql` or `0027_add_personal_run_key_permissions.sql`.
   Apply 0027 before the promotion deploy that ships per-key Run Key permissions (staging #257):
   the deploy's pending-migration gate refuses to deploy until it is applied
@@ -132,8 +133,14 @@ Each of these needs the user's approval, or happens with the domain move:
   check:prod:d1-schema`, with `CLOUDFLARE_ACCOUNT_ID` set to SERP's account ([database
   operations](../../design-docs/database-operations.md#applying-migrations)). Check staging's
   database the same way (`pnpm run verify:staging`) before the first Workers deploy there.
-- **Production D1 migrations 0028 to 0032** (each a human-approved step, applied to staging on
-  2026-10-05 and 2026-10-06): `0028` and `0029` (the public handle registry,
+- **Production D1 migrations 0028 to 0033** (done 2026-10-07, with the owner's go-ahead: a backup
+  in `tmp/backups/serp-checklists-db-2026-10-07.sql` and Time Travel bookmarks
+  `00000f74-00000000-000050fd-10db1777e903be1791ec9e642ca0b0f1` before the two Organization slug
+  renames below and `00000f75-00000002-000050fd-247bdf6fe4c453595e5fa259b91d2be5` before the
+  migrations; `check:public-handles:prod` found `serp` and `devinschumacher` each held by a User
+  and an Organization, so those Organizations became `serp-team` and `devinschumacher-team`;
+  `0027` to `0033` then applied and `verify:prod:d1` passes). Applied to staging on
+  2026-10-05 and 2026-10-06: `0028` and `0029` (the public handle registry,
   [public handles plan](../completed/public-handles.md)), `0030` (Organization avatar and
   description, [Organization public profiles](../completed/organization-profiles.md)), `0031`
   (Required tools, [required tools plan](../completed/required-tools.md)) and `0032` (sitemap
@@ -159,10 +166,11 @@ Each of these needs the user's approval, or happens with the domain move:
   `scripts/check-site-standards.ts` and staging's `CORS_ALLOWED_ORIGINS` point at it, and
   `scripts/verify-deployment.ts` sends the smoke-test header so the deploy's probe reaches the
   new Worker on its `workers.dev` address instead of the redirect to the domain.
-- **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
-  `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
-  the move from the Pages project, and `wrangler.jsonc` with the `preview` environment renamed
-  `staging`. The Pages hosts (`serp-checklists.pages.dev`, `staging.serp-checklists.pages.dev`)
+- **Domains:** `serplists.com`, `www.serplists.com` (done 2026-10-07) and
+  `staging.serplists.com` (done 2026-10-06) moved from the Pages project to their Workers
+  through zone routes, which a token that can edit DNS could later replace with custom domains;
+  the Pages project holds no domain now. Left: `wrangler.jsonc` with the `preview` environment
+  renamed `staging`. The Pages hosts (`serp-checklists.pages.dev`, `staging.serp-checklists.pages.dev`)
   retire with the Pages project; the `preview` environment's `CORS_ALLOWED_ORIGINS` still
   lists the staging one.
 - **Stripe:** the live Customer Portal configuration's `default_return_url` still names

@@ -1,5 +1,6 @@
 import http from "node:http";
 import https from "node:https";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
@@ -192,6 +193,44 @@ export async function checkSiteStandards({
   return site.result();
 }
 
+type RetryOptions = {
+  attempts?: number;
+  retryDelayMs?: number;
+  sleep?: (ms: number) => Promise<unknown>;
+  onRetry?: (attempt: number, reason: string) => void;
+};
+
+type AttemptOutcome = { result: SiteStandardsResult } | { error: unknown };
+
+async function attemptSiteStandards(options: Parameters<typeof checkSiteStandards>[0]): Promise<AttemptOutcome> {
+  try {
+    return { result: await checkSiteStandards(options) };
+  } catch (error) {
+    return { error };
+  }
+}
+
+const whyTheAttemptFailed = (outcome: AttemptOutcome): string =>
+  "result" in outcome
+    ? `${outcome.result.failed} check(s) failed`
+    : `the site did not answer (${outcome.error instanceof Error ? outcome.error.message : "unknown error"})`;
+
+export async function checkSiteStandardsUntilItPasses(
+  options: Parameters<typeof checkSiteStandards>[0],
+  { attempts = 3, retryDelayMs = 20_000, sleep = delay, onRetry = () => {} }: RetryOptions = {},
+): Promise<SiteStandardsResult> {
+  for (let attempt = 1; ; attempt += 1) {
+    const outcome = await attemptSiteStandards(options);
+    const passed = "result" in outcome && outcome.result.failed === 0;
+    if (passed || attempt >= attempts) {
+      if ("error" in outcome) throw outcome.error;
+      return outcome.result;
+    }
+    onRetry(attempt + 1, whyTheAttemptFailed(outcome));
+    await sleep(retryDelayMs);
+  }
+}
+
 async function main() {
   const [baseUrl, siteEnv] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!baseUrl || !siteEnv) {
@@ -200,7 +239,13 @@ async function main() {
   }
   const environment = siteEnvironmentSchema.safeParse(siteEnv);
   if (!environment.success) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
-  const result = await checkSiteStandards({ baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") });
+  const result = await checkSiteStandardsUntilItPasses(
+    { baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") },
+    {
+      onRetry: (attempt, reason) =>
+        console.log(`${reason}; a new deployment can answer 404 or not answer at all for its first seconds, so checking again in 20s (attempt ${attempt} of 3).`),
+    },
+  );
   result.lines.forEach((line) => console.log(line));
   console.log(`${result.passed} passed, ${result.failed} failed`);
   process.exit(result.failed ? 1 : 0);

@@ -47,6 +47,14 @@ AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
 PERSONAL_RUN_MCP_ENABLED = "true"
 CORS_ALLOWED_ORIGINS = "https://serplists.com"
 
+[[env.production.routes]]
+pattern = "serplists.com/*"
+zone_name = "serplists.com"
+
+[[env.production.routes]]
+pattern = "www.serplists.com/*"
+zone_name = "serplists.com"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "serp-checklists-db"

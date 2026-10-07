@@ -106,8 +106,14 @@ describe.each(ENVIRONMENTS)('the $name deploy', ({ name, workflow, branch, migra
   });
 });
 
-describe('the production deploy before the domain moves', () => {
-  it('attaches no route, so a deploy never takes over serplists.com before the cutover', () => {
-    expect(readWranglerToml().env.production).not.toHaveProperty('routes');
+describe('the domains each Worker serves', () => {
+  it('keeps serplists.com and www.serplists.com on the production Worker and staging.serplists.com on the staging one, through zone routes every deploy reattaches', () => {
+    const config = readWranglerToml();
+
+    expect(config.env.production['routes']).toEqual([
+      { pattern: 'serplists.com/*', zone_name: 'serplists.com' },
+      { pattern: 'www.serplists.com/*', zone_name: 'serplists.com' },
+    ]);
+    expect(config.env.preview['routes']).toEqual([{ pattern: 'staging.serplists.com/*', zone_name: 'serplists.com' }]);
   });
 });
