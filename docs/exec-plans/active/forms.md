@@ -289,7 +289,8 @@ leaves the site broken until the next one lands):
   answers exist only in the browser. It is offered to a view-only role, who can read the
   answers anyway, and not on the shared run link, whose holders may not be the Run's people.
 - 2026-10-06: The CSV puts a `'` before any cell starting with `=`, `+`, `-`, `@`, a tab or a
-  CR, in every column, so a negative number reads `'-5` there; the JSON keeps the raw answer
+  CR, in every column, except a cell that is only a number (`-5`, `+12`), which a spreadsheet
+  reads as a number and never runs; the JSON keeps the raw answer
   for anyone who needs the number. A file answer's text is its name and full link, resolved
   against the page's origin, so the CSV row leads to the file.
 - 2026-10-06: MCP `set_form_answer` requires `answer`, and `null` is the answer that clears a

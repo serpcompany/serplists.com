@@ -21,6 +21,7 @@ const CSV_COLUMNS = ['Section', 'Task', 'Field', 'Type', 'Required', 'Answer', '
 const CSV_BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
 const CSV_LINE_BREAK = '\r\n';
 const SPREADSHEET_FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 const CSV_QUOTED_CHARACTERS = /[",\r\n]/;
 const FALLBACK_FILE_NAME = 'run-answers';
 
@@ -63,7 +64,7 @@ const exportedAnswerText = (field: ChecklistFormField, origin: string | undefine
 const yesOrNo = (value: boolean): string => (value ? 'Yes' : 'No');
 
 function csvCell(text: string): string {
-  const inert = SPREADSHEET_FORMULA_START.test(text) ? `'${text}` : text;
+  const inert = SPREADSHEET_FORMULA_START.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text;
   return CSV_QUOTED_CHARACTERS.test(inert) ? `"${inert.replace(/"/g, '""')}"` : inert;
 }
 

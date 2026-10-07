@@ -281,8 +281,9 @@ the file once its save landed: leaving the field to open the menu starts that sa
   Excel reads accents.
 - **Formula injection:** answers and titles are user text, and a spreadsheet may run a cell that
   starts with `=`, `+`, `-`, `@`, a tab or a CR as a formula. Every such cell, in any column,
-  gets a leading `'`, which spreadsheets show as text (OWASP's CSV injection advice). A negative
-  number gets one too; the JSON keeps the raw answer.
+  gets a leading `'`, which spreadsheets show as text (OWASP's CSV injection advice), except a
+  cell that is only a number (`-5`, `+12`, `-0.25`, `1e3`), which a spreadsheet reads as that
+  number and never as a formula.
 - **JSON:** `run` (`id`, `title`, `status`, `startedAt`, `completedAt` or `null`, and `template`
   `{ id, title }` when known: the page's Template on a guest run, the Run's recorded source
   otherwise), `exportedAt`, and `answers`, each `{ section, task, field, answer, answerText }`

@@ -63,8 +63,8 @@ describe('the CSV export of a run\'s form answers', () => {
 
   it.each([
     ['=', '=1+2', "'=1+2"],
-    ['+', '+1', "'+1"],
-    ['-', '-1', "'-1"],
+    ['+', '+1+cmd', "'+1+cmd"],
+    ['-', '-1+cmd', "'-1+cmd"],
     ['@', '@SUM(A1:A2)', "'@SUM(A1:A2)"],
     ['a tab', '\tcmd', "'\tcmd"],
     ['a carriage return', '\rcmd', `"'\rcmd"`],
@@ -72,12 +72,16 @@ describe('the CSV export of a run\'s form answers', () => {
     expect(answerCell(textField(answer))).toBe(`Section,Task,Answer,Short text,No,${cell},No`);
   });
 
-  it('guards every column, a negative number and a formula that needs quoting too', () => {
+  it('guards every column and a formula that needs quoting too, but leaves a plain signed number as it is', () => {
     expect(answerCell(
       { id: 'field-formula', label: '-Label', kind: 'text', required: false, answer: '=HYPERLINK("https://evil.example","Open")' },
       { section: '=Section', task: '@Task' },
     )).toBe(`'=Section,'@Task,'-Label,Short text,No,"'=HYPERLINK(""https://evil.example"",""Open"")",No`);
-    expect(answerCell({ id: 'field-number', label: 'Change', kind: 'number', required: false, answer: -5 })).toContain(",'-5,");
+    expect(answerCell({ id: 'field-number', label: 'Change', kind: 'number', required: false, answer: -5 })).toContain(',-5,');
+    expect(answerCell({ id: 'field-number', label: 'Change', kind: 'number', required: false, answer: -0.25 })).toContain(',-0.25,');
+    expect(answerCell(textField('+12'))).toContain(',+12,');
+    expect(answerCell(textField('-1+2'))).toContain(",'-1+2,");
+    expect(answerCell(textField('-2e3*A1'))).toContain(",'-2e3*A1,");
     expect(answerCell(textField('a=b'))).toContain(',a=b,');
   });
 
