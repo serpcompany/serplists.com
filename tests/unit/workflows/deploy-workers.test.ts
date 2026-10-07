@@ -91,6 +91,10 @@ describe.each(ENVIRONMENTS)('the $name deploy', ({ name, workflow, branch, migra
     expect(deployStep?.run).toMatch(/if \[ -z "\$url" \]; then[\s\S]*exit 1/);
   });
 
+  it(`keeps the ${wranglerEnv} environment's workers.dev address on, which wrangler turns off for an environment with routes unless it is set`, () => {
+    expect(readWranglerToml().env[wranglerEnv].workers_dev).toBe(true);
+  });
+
   it('checks the new deployment responds and meets the site standards', () => {
     const deployIndex = steps.findIndex((step) => step.id === 'deploy');
     for (const command of ['node --import tsx scripts/verify-deployment.ts', `node --import tsx scripts/check-site-standards.ts "$DEPLOY_URL" ${name}`]) {
