@@ -96,6 +96,54 @@
               "value": "https://status.example.com"
             }
           ]
+        },
+        {
+          "title": "Record the launch sign-off",
+          "description": "Every run records who approved the launch and how it went.",
+          "contents": [
+            {
+              "type": "form",
+              "value": "",
+              "fields": [
+                {
+                  "label": "Approved by",
+                  "required": true,
+                  "kind": "text"
+                },
+                {
+                  "label": "Approver email",
+                  "required": true,
+                  "kind": "email"
+                },
+                {
+                  "label": "Release channel",
+                  "required": true,
+                  "kind": "select",
+                  "options": [
+                    {
+                      "label": "Stable"
+                    },
+                    {
+                      "label": "Beta"
+                    }
+                  ]
+                },
+                {
+                  "label": "Error rate after one hour (%)",
+                  "required": false,
+                  "description": "Read it from the status dashboard.",
+                  "kind": "number",
+                  "min": 0,
+                  "max": 100
+                },
+                {
+                  "label": "Rollback plan reviewed",
+                  "required": true,
+                  "kind": "checkbox"
+                }
+              ]
+            }
+          ]
         }
       ]
     }
@@ -106,6 +154,18 @@
       "type": "required-field",
       "path": "sections[].items[].title",
       "severity": "error"
+    }
+  ],
+  "requiredTools": [
+    {
+      "name": "Time tracker",
+      "url": "https://example.com/tools/time-tracker",
+      "required": true
+    },
+    {
+      "name": "Slideshow app",
+      "url": "https://example.com/tools/slides",
+      "required": false
     }
   ]
 }

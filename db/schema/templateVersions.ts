@@ -2,7 +2,7 @@ import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm
 import { templates } from "./templates";
 import { users } from "./users";
 
-export const template_versions = sqliteTable("template_versions", {
+export const templateVersions = sqliteTable("template_versions", {
   id: text("id"),
   template_id: text("template_id").notNull().references(() => templates.id, { onDelete: "cascade" }),
   version: integer("version").notNull(),

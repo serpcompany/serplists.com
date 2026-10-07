@@ -12,13 +12,20 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Core beliefs](core-beliefs.md) | current | 2026-09-27 | Operating beliefs and the enforced rules every change follows |
 | [Personal and Organization contexts](personal-and-organization-contexts.md) | accepted | 2026-09-19 | Why ownership is Personal or Organization, and how console routes follow context |
 | [System overview](system-overview.md) | current | 2026-09-19 | Components, request flow, UI and API routes, data model, authorization |
-| [Data persistence](data-persistence.md) | current | 2026-09-19 | D1 tables, JSON columns, resource ownership, caching, import/export |
+| [Data persistence](data-persistence.md) | current | 2026-09-19 | D1 tables, JSON columns, resource ownership, import/export |
+| [Client data](client-data.md) | current | 2026-10-01 | How screens call the API, key and refresh what they cache, load the Template and run lists, handle stale copies, and read API errors |
 | [Database operations](database-operations.md) | current | 2026-09-27 | Environments, migrations, seeds, release checklists, backups, R2 |
-| [D1 cost](d1-cost.md) | current | 2026-09-27 | How D1 bills, how to profile rows read and written, query rules, current hotspots |
+| [D1 cost](d1-cost.md) | current | 2026-10-01 | How D1 bills, how to profile rows read and written, the rows-read budgets CI enforces, query rules, current hotspots |
 | [Authentication and accounts](authentication.md) | current | 2026-09-27 | Better Auth integration, auth contract, verification, troubleshooting |
 | [Organizations](organizations.md) | current | 2026-09-19 | Roles, data model, API routes, invites, audit history |
 | [Billing](billing.md) | current | 2026-09-25 | Stripe setup, portal, webhooks, local and production verification |
+| [Agent access](agent-access.md) | current | 2026-09-30 | Run Keys and the MCP endpoint: transport, tool arguments, permissions, result bounds and paging |
+| [SEO and sitemaps](seo-and-sitemaps.md) | current | 2026-09-30 | XML sitemaps (URLs, what is listed, lastmod, caching and revision triggers) and the lookups behind public pages' metadata |
 | [Template content types](template-content-types.md) | current | 2026-09-27 | Adding a checklist content type or editor tab |
+| [Template editor and detail page](template-editor.md) | current | 2026-09-30 | The editor's models (loading, saving and conflicts, uploads in the form, the leave guard, kept drafts, permissions and plan limits) and the detail page's loading, actions, export and Activity |
+| [Run execution](run-execution.md) | current | 2026-10-05 | The run page's model: loading a Run, the save queue and its order, revisions and stale saves, completing, task notes, moving between tasks, and guest runs kept in the browser |
 | [Development environment](development-environment.md) | current | 2026-09-27 | Setup, running, signing in, UI snapshots, logs, local D1, tests |
-| [Agent workflow](agent-workflow.md) | current | 2026-09-27 | Issue to merge, triage labels, weekly maintenance, admin settings |
+| [Agent workflow](agent-workflow.md) | current | 2026-09-29 | Issue to merge, agent tooling (skills, Chrome, permissions), triage labels, weekly maintenance, admin settings |
+| [UI app map](ui-app-map.md) | current | 2026-09-29 | Every screen, the flows between them, and how each page route is reached (UI runbook phase 1) |
+| [UI screen inventory](ui-screen-inventory.md) | current | 2026-09-29 | Reference patterns and a spec card with its structure for every screen and overlay (UI runbook phases 2 and 3) |
 | [UI-service decoupling audit](ui-service-decoupling-audit.md) | historical | 2026-04-10 | Point-in-time audit; progress lives in the [UI decoupling plan](../exec-plans/active/ui-decoupling.md) |

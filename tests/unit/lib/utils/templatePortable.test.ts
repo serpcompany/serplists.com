@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import {
-  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-  type ChecklistTemplate,
-} from '@/lib/schemas/checklistSchema';
+import { expectThePortableSeoFieldsAndOneRule } from '../../../support/portableTemplateChecks';
+import { describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
+import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from '@/lib/schemas/checklistSchema';
+import type { ChecklistTemplate } from '@/types/checklist';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
-  parseTemplatesFromJSON,
+  parseTemplatesFromFile,
 } from '@/lib/utils/templateBackup';
+import { jsonFile, TITLE_REQUIRED_RULE } from '../../../fixtures/jsonFile';
 
 const createTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
@@ -56,10 +57,8 @@ describe('portable template utilities', () => {
     expect(result.kind).toBe('serplists-template-pack');
     expect(result.schemaVersion).toBe(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION);
     expect(result.templates[0]).not.toHaveProperty('userId');
-    expect(result.templates[0].visibility).toBe('private');
-    expect(result.templates[0].seoTitle).toBe('Portable SEO Title');
-    expect(result.templates[0].seoDescription).toBe('Portable SEO Description');
-    expect(result.templates[0].rules).toHaveLength(1);
+    expect(firstOf(result.templates).visibility).toBe('private');
+    expectThePortableSeoFieldsAndOneRule(firstOf(result.templates));
     expect(result.manifest?.includesRules).toBe(true);
   });
 
@@ -76,15 +75,7 @@ describe('portable template utilities', () => {
           seoDescription: 'Imported SEO Description',
           categories: ['seo'],
           tags: ['content'],
-          rules: [
-            {
-              id: 'rule-1',
-              type: 'required-field',
-              path: 'sections[].items[].title',
-              value: 'Every item needs a title',
-              severity: 'error',
-            },
-          ],
+          rules: [TITLE_REQUIRED_RULE],
           sections: [
             {
               title: 'Prep',
@@ -100,15 +91,15 @@ describe('portable template utilities', () => {
       ],
     };
 
-    const file = new File([JSON.stringify(portablePack)], 'portable.json', { type: 'application/json' });
-    const result = await parseTemplatesFromJSON(file);
+    const file = jsonFile(portablePack, 'portable.json');
+    const result = await parseTemplatesFromFile(file);
 
     expect(result.templates).toHaveLength(1);
-    expect(result.templates[0].title).toBe('Imported Portable Template');
-    expect(result.templates[0].isPublic).toBe(true);
-    expect(result.templates[0].seoTitle).toBe('Imported SEO Title');
-    expect(result.templates[0].seoDescription).toBe('Imported SEO Description');
-    expect(result.templates[0].rules).toHaveLength(1);
+    expect(firstOf(result.templates).title).toBe('Imported Portable Template');
+    expect(firstOf(result.templates).isPublic).toBe(true);
+    expect(firstOf(result.templates).seoTitle).toBe('Imported SEO Title');
+    expect(firstOf(result.templates).seoDescription).toBe('Imported SEO Description');
+    expect(firstOf(result.templates).rules).toHaveLength(1);
     expect(result.warnings).toEqual([]);
   });
 
@@ -130,8 +121,8 @@ describe('portable template utilities', () => {
       ],
     };
 
-    const file = new File([JSON.stringify(portablePack)], 'portable.json', { type: 'application/json' });
-    await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Unsupported portable template schema version');
+    const file = jsonFile(portablePack, 'portable.json');
+    await expect(parseTemplatesFromFile(file)).rejects.toThrow('Unsupported portable template schema version');
   });
 
   it('uses a portable default filename for portable template packs', () => {
@@ -158,7 +149,7 @@ describe('portable template utilities', () => {
       });
 
       const portablePack = exportPortableTemplatesToJSON([createTemplate()], 'john@test.com');
-      downloadBackupFile(portablePack as never);
+      downloadBackupFile(portablePack);
 
       expect(link.download).toMatch(/^serplists-template-pack-\d{4}-\d{2}-\d{2}\.json$/);
       expect(click).toHaveBeenCalledTimes(1);

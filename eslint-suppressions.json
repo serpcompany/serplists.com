@@ -1,7 +1,0 @@
-{
-  "tests/integration/api.test.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 4
-    }
-  }
-}

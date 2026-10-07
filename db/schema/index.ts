@@ -1,22 +1,23 @@
 export { users } from "./users";
 export { account, session, verification } from "./auth";
 export { templates } from "./templates";
-export { checklist_runs } from "./checklistRuns";
-export { template_likes } from "./templateLikes";
-export { usage_analytics } from "./usageAnalytics";
-export { stripe_customers, stripe_subscriptions, stripe_webhook_events } from "./stripeBilling";
-export { entitlement_overrides } from "./entitlementOverrides";
+export { checklistRuns } from "./checklistRuns";
+export { templateLikes } from "./templateLikes";
+export { usageAnalytics } from "./usageAnalytics";
+export { stripeCustomers, stripeSubscriptions, stripeWebhookEvents } from "./stripeBilling";
+export { entitlementOverrides } from "./entitlementOverrides";
 export { teams } from "./teams";
-export { team_members } from "./teamMembers";
-export { team_invites } from "./teamInvites";
-export { team_entitlement_overrides } from "./teamEntitlementOverrides";
-export { audit_events } from "./auditEvents";
-export { template_versions } from "./templateVersions";
-export { personal_run_keys } from "./personalRunKeys";
+export { teamMembers } from "./teamMembers";
+export { teamInvites } from "./teamInvites";
+export { teamEntitlementOverrides } from "./teamEntitlementOverrides";
+export { auditEvents } from "./auditEvents";
+export { templateVersions } from "./templateVersions";
+export { personalRunKeys } from "./personalRunKeys";
+export { publicHandles } from "./publicHandles";
 export {
-  sitemap_revisions,
-  sitemap_profile_revisions,
-  sitemap_owner_revisions,
-  sitemap_category_revisions,
-  sitemap_shard_revisions,
+  sitemapRevisions,
+  sitemapProfileRevisions,
+  sitemapOwnerRevisions,
+  sitemapCategoryRevisions,
+  sitemapShardRevisions,
 } from "./sitemap";

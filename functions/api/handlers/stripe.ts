@@ -1,56 +1,140 @@
+import type { BatchItem } from "drizzle-orm/batch";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
+import { describeErrorForLog, log } from "../utils/logger";
 import { json, jsonError } from "../utils/response";
-import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
-import { eq } from "drizzle-orm";
+import { assertStripeWebhookConfigured, expandableStripeIdSchema, verifyStripeWebhookSignature } from "../utils/stripe";
+import {
+  isTerminalSubscriptionStatus,
+  linkStripeCustomerIfUnmapped,
+  loadCurrentSubscription,
+  parseSubscriptionSnapshot,
+  retrieveSubscription,
+  type SubscriptionSnapshot,
+  upsertStripeCustomer,
+  upsertStripeSubscription,
+} from "../utils/stripe-subscriptions";
+import {
+  isStripeEventHandled,
+  markStripeEventHandled,
+  recordStripeEventFailure,
+  type StripeEventRecord,
+} from "../utils/stripe-webhook-events";
 
-type StripeEvent = {
-  id: string;
-  type: string;
-  created: number;
-  livemode: boolean;
-  data: { object: unknown };
-};
+type Db = ReturnType<typeof createDb>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+const stripeEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  created: z.number().optional(),
+  livemode: z.boolean().optional(),
+  data: z.object({ object: z.unknown() }).optional(),
+});
+type StripeEvent = z.infer<typeof stripeEventSchema>;
+
+const checkoutSessionSchema = z.object({
+  client_reference_id: z.string().nullish(),
+  customer: z.string().nullish(),
+  mode: z.string().nullish(),
+  subscription: expandableStripeIdSchema.nullish(),
+  metadata: z.object({ userId: z.string().nullish() }).passthrough().nullish(),
+});
+type CheckoutSession = z.infer<typeof checkoutSessionSchema>;
+
+const SUBSCRIPTION_EVENT_TYPES = new Set([
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+]);
+
+function checkoutUserId(session: CheckoutSession): string | null {
+  return session.client_reference_id ?? (session.metadata?.userId || null);
 }
 
-function getEventUserIdFallback(obj: Record<string, unknown> | null): string | null {
-  const metadata = obj && isRecord(obj.metadata) ? obj.metadata : null;
-  const fromMetadata = metadata?.userId;
-  if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
-  return null;
+function logSkippedEvent(event: StripeEvent, reason: string): BatchItem<"sqlite">[] {
+  log("info", "stripe_webhook_event_skipped", { eventId: event.id, type: event.type, reason });
+  return [];
 }
 
-function getFirstSubscriptionItem(obj: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!obj) return null;
-  const items = isRecord(obj.items) ? obj.items : null;
-  const data = items && Array.isArray(items.data) ? items.data : null;
-  return data && data.length > 0 && isRecord(data[0]) ? data[0] : null;
+async function userExists(db: Db, userId: string): Promise<boolean> {
+  const { users } = schema;
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+  return row !== undefined;
 }
 
-function getSubscriptionPriceId(obj: Record<string, unknown> | null): string | null {
-  const first = getFirstSubscriptionItem(obj);
-  const price = first && isRecord(first.price) ? first.price : null;
-  const priceId = price?.id;
-  return typeof priceId === "string" ? priceId : null;
+async function subscriptionWrites(
+  db: Db,
+  event: StripeEvent,
+  userId: string,
+  subscription: SubscriptionSnapshot,
+  nowIso: string,
+): Promise<BatchItem<"sqlite">[]> {
+  if (!(await userExists(db, userId))) return logSkippedEvent(event, "user_deleted");
+  const linkCustomer = isTerminalSubscriptionStatus(subscription.status)
+    ? linkStripeCustomerIfUnmapped
+    : upsertStripeCustomer;
+  return [
+    linkCustomer(db, userId, subscription.customerId, nowIso),
+    upsertStripeSubscription(db, userId, subscription, nowIso),
+  ];
 }
 
-function getSubscriptionCurrentPeriodEnd(obj: Record<string, unknown> | null): number | null {
-  const legacyPeriodEnd = obj?.current_period_end;
-  if (typeof legacyPeriodEnd === "number") return legacyPeriodEnd;
+async function loadCheckoutSubscription(
+  env: Env,
+  event: StripeEvent,
+  session: CheckoutSession,
+): Promise<SubscriptionSnapshot | null> {
+  if (session.mode !== "subscription") return null;
+  const subscriptionId = session.subscription;
+  if (!subscriptionId) return null;
+  if (!env.STRIPE_SECRET_KEY) {
+    logSkippedEvent(event, "subscription_read_needs_secret_key");
+    return null;
+  }
+  return retrieveSubscription(env.STRIPE_SECRET_KEY, subscriptionId);
+}
 
-  const itemPeriodEnd = getFirstSubscriptionItem(obj)?.current_period_end;
-  return typeof itemPeriodEnd === "number" ? itemPeriodEnd : null;
+async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: string): Promise<BatchItem<"sqlite">[]> {
+  const object = event.data?.object;
+
+  if (event.type === "checkout.session.completed") {
+    const parsedSession = checkoutSessionSchema.safeParse(object);
+    if (!parsedSession.success) return logSkippedEvent(event, "invalid_checkout_session");
+    const session = parsedSession.data;
+    const userId = checkoutUserId(session);
+    const stripeCustomerId = session.customer ?? null;
+    if (!userId || !stripeCustomerId) return logSkippedEvent(event, "missing_user_or_customer");
+    const subscription = await loadCheckoutSubscription(env, event, session);
+    if (subscription) return subscriptionWrites(db, event, userId, subscription, nowIso);
+    return [upsertStripeCustomer(db, userId, stripeCustomerId, nowIso)];
+  }
+
+  if (!SUBSCRIPTION_EVENT_TYPES.has(event.type)) return [];
+
+  const eventSnapshot = parseSubscriptionSnapshot(object);
+  if (!eventSnapshot) return logSkippedEvent(event, "invalid_subscription");
+
+  const { stripeCustomers } = schema;
+  const [row] = await db
+    .select({ user_id: stripeCustomers.user_id })
+    .from(stripeCustomers)
+    .where(eq(stripeCustomers.stripe_customer_id, eventSnapshot.customerId))
+    .limit(1);
+  const userId = row?.user_id ?? eventSnapshot.metadataUserId;
+  if (!userId) return logSkippedEvent(event, "unknown_user");
+
+  const subscription = await loadCurrentSubscription(env, eventSnapshot);
+  if (!subscription) return [];
+  return subscriptionWrites(db, event, userId, subscription, nowIso);
 }
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const pathParts = url.pathname.split("/").filter(Boolean); // ["api", "stripe", ...]
-  const stripeSubpath = pathParts.slice(2); // after /api/stripe
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  const stripeSubpath = pathParts.slice(2);
 
-  // Webhook: POST /api/stripe/webhook
   if (request.method === "POST" && stripeSubpath[0] === "webhook") {
     const { webhookSecret } = assertStripeWebhookConfigured(env);
     const payload = await request.text();
@@ -65,158 +149,43 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
       return jsonError(`Webhook signature verification failed: ${verification.error}`, 400);
     }
 
-    let event: StripeEvent;
+    let body: unknown;
     try {
-      event = JSON.parse(payload) as StripeEvent;
+      body = JSON.parse(payload);
     } catch {
       return jsonError("Invalid JSON payload", 400);
     }
 
-    if (!event?.id || !event?.type) {
+    const parsedEvent = stripeEventSchema.safeParse(body);
+    if (!parsedEvent.success) {
       return jsonError("Invalid Stripe event payload", 400);
     }
+    const event = parsedEvent.data;
 
     const db = createDb(env);
-    const { stripe_webhook_events, stripe_customers, stripe_subscriptions } = schema;
-    const nowIso = new Date().toISOString();
-    let shouldRefreshProcessedEvent = false;
+    const record: StripeEventRecord = {
+      id: event.id,
+      type: event.type,
+      created: event.created ?? verification.timestamp,
+      livemode: event.livemode ?? false,
+      processedAt: new Date().toISOString(),
+    };
 
-    // Idempotency: insert event id once; ignore duplicates.
     try {
-      await db.insert(stripe_webhook_events).values({
-        id: event.id,
-        type: event.type,
-        created: event.created ?? verification.timestamp,
-        livemode: Boolean(event.livemode),
-        processed_at: nowIso,
-        error: null,
-      });
-    } catch {
-      const [existingEvent] = await db
-        .select({ error: stripe_webhook_events.error })
-        .from(stripe_webhook_events)
-        .where(eq(stripe_webhook_events.id, event.id))
-        .limit(1);
-
-      if (!existingEvent || existingEvent.error === null) {
+      if (await isStripeEventHandled(db, event.id)) {
         return json({ received: true, duplicate: true });
       }
 
-      shouldRefreshProcessedEvent = true;
-    }
-
-    const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
-
-    try {
-      if (event.type === "checkout.session.completed") {
-        const userId = typeof object?.client_reference_id === "string"
-          ? object.client_reference_id
-          : getEventUserIdFallback(object);
-        const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
-        if (userId && stripeCustomerId) {
-          try {
-            await db.insert(stripe_customers).values({
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
-        }
-      }
-
-      if (
-        event.type === "customer.subscription.created" ||
-        event.type === "customer.subscription.updated" ||
-        event.type === "customer.subscription.deleted"
-      ) {
-        const stripeSubscriptionId = typeof object?.id === "string" ? object.id : null;
-        const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
-        const status = typeof object?.status === "string" ? object.status : null;
-        const priceId = getSubscriptionPriceId(object);
-        const currentPeriodEnd = getSubscriptionCurrentPeriodEnd(object);
-        const cancelAtPeriodEnd = Boolean(object?.cancel_at_period_end);
-        const canceledAt = typeof object?.canceled_at === "number" ? object.canceled_at : null;
-        const trialEnd = typeof object?.trial_end === "number" ? object.trial_end : null;
-
-        let userId: string | null = null;
-        if (stripeCustomerId) {
-          const [row] = await db
-            .select({ user_id: stripe_customers.user_id })
-            .from(stripe_customers)
-            .where(eq(stripe_customers.stripe_customer_id, stripeCustomerId))
-            .limit(1);
-          userId = row?.user_id ?? null;
-        }
-        userId = userId ?? getEventUserIdFallback(object);
-
-        if (userId && stripeSubscriptionId && stripeCustomerId && status && priceId) {
-          try {
-            await db.insert(stripe_customers).values({
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
-
-          try {
-            await db.insert(stripe_subscriptions).values({
-              stripe_subscription_id: stripeSubscriptionId,
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              price_id: priceId,
-              status,
-              current_period_end: currentPeriodEnd,
-              cancel_at_period_end: cancelAtPeriodEnd,
-              canceled_at: canceledAt,
-              trial_end: trialEnd,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_subscriptions)
-              .set({
-                user_id: userId,
-                stripe_customer_id: stripeCustomerId,
-                price_id: priceId,
-                status,
-                current_period_end: currentPeriodEnd,
-                cancel_at_period_end: cancelAtPeriodEnd,
-                canceled_at: canceledAt,
-                trial_end: trialEnd,
-                updated_at: nowIso,
-              })
-              .where(eq(stripe_subscriptions.stripe_subscription_id, stripeSubscriptionId));
-          }
-        }
-      }
-
-      if (shouldRefreshProcessedEvent) {
-        await db
-          .update(stripe_webhook_events)
-          .set({ error: null, processed_at: nowIso })
-          .where(eq(stripe_webhook_events.id, event.id));
-      }
-
+      const writes = await buildEventWrites(env, db, event, record.processedAt);
+      await db.batch([markStripeEventHandled(db, record), ...writes]);
       return json({ received: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const described = describeErrorForLog(err);
+      log("error", "stripe_webhook_failed", { eventId: event.id, type: event.type, ...described });
       try {
-        await db.update(stripe_webhook_events).set({ error: message }).where(eq(stripe_webhook_events.id, event.id));
+        await recordStripeEventFailure(db, record, described.errorMessage);
       } catch {
-        // ignore
+        log("warn", "stripe_webhook_failure_not_recorded", { eventId: event.id, type: event.type });
       }
       return jsonError("Stripe webhook processing failed", 500);
     }

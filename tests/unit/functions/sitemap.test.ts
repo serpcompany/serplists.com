@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../support/elements';
 import { validateXML } from 'xmllint-wasm';
 
-import { onRequest as pagesSitemap } from '../../../functions/sitemaps/pages/[page].xml';
-import { onRequest as legacyStaticSitemap } from '../../../functions/sitemaps/static.xml';
-import { onRequest as legacyCategoriesSitemap } from '../../../functions/categories/sitemap.xml';
+import * as legacyCategoriesSitemapRoute from '@/app/(site)/categories/sitemap.xml/route';
+import * as pagesSitemapRoute from '@/app/sitemaps/pages/[page]/route';
+import * as legacyStaticSitemapRoute from '@/app/sitemaps/static.xml/route';
 import {
   SITEMAP_PAGE_SIZE,
-  buildInMemoryShardIndex,
   canonicalUrl,
   categorySlug,
   handlePagedDatabaseSitemap,
@@ -19,6 +19,8 @@ import {
   renderUrlset,
   type SitemapEntry,
 } from '../../../functions/sitemap/shared';
+import { buildCategorySlug } from '@/lib/routes';
+import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
 const sitemapIndexSchema = readFileSync(new URL('../../fixtures/siteindex.xsd', import.meta.url), 'utf8');
@@ -32,23 +34,18 @@ async function expectValidXml(xml: string, schema: string, fileName: string) {
   expect(result.valid, result.rawOutput).toBe(true);
 }
 
-async function request(
-  handler: PagesFunction,
+type SitemapRoute = { GET: (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response> };
+
+async function callTheRouteAsNextJsDoes(
+  route: SitemapRoute,
   path: string,
-  options: { method?: string; params?: Record<string, string> } = {},
+  options: { method?: string; params?: { page?: string } } = {},
 ) {
-  return handler({
-    request: new Request(`https://preview.serplists.pages.dev${path}`, {
-      method: options.method ?? 'GET',
-    }),
-    env: {},
-    params: options.params ?? {},
-    data: {},
-    functionPath: path,
-    waitUntil() {},
-    passThroughOnException() {},
-    next: async () => new Response(null, { status: 404 }),
-  } as never);
+  const page = options.params?.page;
+  return route.GET(
+    new Request(`https://serp-checklists-preview.serp.workers.dev${path}`, { method: options.method ?? 'GET' }),
+    { params: Promise.resolve({ page: page === undefined ? '' : `${page}.xml` }) },
+  );
 }
 
 function shardEntries(count: number): SitemapEntry[] {
@@ -78,14 +75,20 @@ describe('public sitemap behavior', () => {
     await expectValidXml(xml, sitemapIndexSchema, 'sitemap-index.xml');
   });
 
+  it('makes every <loc> canonical: a page with its trailing slash, a sitemap file without one', () => {
+    expect(canonicalUrl('/profile/alice/')).toBe('https://serplists.com/profile/alice/');
+    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice/');
+    expect(canonicalUrl('/sitemaps/pages/1.xml')).toBe('https://serplists.com/sitemaps/pages/1.xml');
+  });
+
   it('escapes canonical URL values and preserves entry order', async () => {
     const xml = renderUrlset([
       { path: '/profile/alice/a&b', lastmod: '2026-01-02 03:04:05' },
       { path: '/profile/bob/second', lastmod: null },
     ]);
 
-    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice');
-    expect(xml).toContain('https://serplists.com/profile/alice/a&amp;b');
+    expect(xml).toContain('<loc>https://serplists.com/profile/alice/a&amp;b/</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/profile/bob/second/</loc>');
     expect(xml.indexOf('/profile/alice')).toBeLessThan(xml.indexOf('/profile/bob'));
     expect(xml).toContain('<lastmod>2026-01-02T03:04:05.000Z</lastmod>');
     await expectValidXml(xml, sitemapSchema, 'escaped-sitemap.xml');
@@ -93,6 +96,7 @@ describe('public sitemap behavior', () => {
 
   it('validates the same public usernames, template slugs, and category values', () => {
     expect(isValidUsername('alice_bob.1')).toBe(true);
+    expect(isValidUsername('jane-doe')).toBe(true);
     expect(isValidUsername('invalid owner')).toBe(false);
     expect(isValidTemplateSlug('technical-seo')).toBe(true);
     expect(isValidTemplateSlug('Technical SEO')).toBe(false);
@@ -101,13 +105,22 @@ describe('public sitemap behavior', () => {
     expect(parseCategories('legacy category')).toEqual(['legacy category']);
   });
 
-  it('builds deterministic numbered shards at the configured page size', () => {
+  it('slugs categories exactly like the category pages do, in every script', () => {
+    CATEGORY_SLUG_FIXTURES.forEach((name) => {
+      expect(categorySlug(name)).toBe(buildCategorySlug(name));
+    });
+    expect(categorySlug('日本語')).toBe('日本語');
+    expect(categorySlug('Русский')).toBe('русский');
+    expect(categorySlug('🚀')).toBe('');
+  });
+
+  it('builds deterministic numbered shards at the configured page size', async () => {
     const entries = Array.from({ length: SITEMAP_PAGE_SIZE + 1 }, (_, index) => ({
       path: `/page/${index + 1}`,
       lastmod: index === SITEMAP_PAGE_SIZE ? '2031-01-02T03:04:05Z' : '2030-01-02T03:04:05Z',
     }));
 
-    expect(buildInMemoryShardIndex('categories', entries)).toEqual([
+    expect((await planDurableShardIndex('categories', entries, [])).shards).toEqual([
       { path: '/sitemaps/categories/1.xml', lastmod: '2030-01-02T03:04:05.000Z' },
       { path: '/sitemaps/categories/2.xml', lastmod: '2031-01-02T03:04:05.000Z' },
     ]);
@@ -130,8 +143,8 @@ describe('public sitemap behavior', () => {
     const updated = await planDurableShardIndex('profiles', changed, initial.upserts, '2031-01-01T00:00:00Z');
 
     expect(updated.upserts.map((row) => row.page)).toEqual([1]);
-    expect(updated.shards[0].lastmod).toBe('2031-01-01T00:00:00.000Z');
-    expect(updated.shards[1].lastmod).toBe(initial.shards[1].lastmod);
+    expect(firstOf(updated.shards).lastmod).toBe('2031-01-01T00:00:00.000Z');
+    expect(elementAt(updated.shards, 1).lastmod).toBe(elementAt(initial.shards, 1).lastmod);
   });
 
   it('reports stale pages when the sitemap shrinks', async () => {
@@ -156,7 +169,7 @@ describe('public sitemap behavior', () => {
     const recreated = await planDurableShardIndex('profiles', entries, currentPage, '2032-01-01T00:00:00Z');
 
     expect(recreated.upserts.map((row) => row.page)).toEqual([2]);
-    expect(recreated.shards[1].lastmod).toBe('2032-01-01T00:00:00.000Z');
+    expect(elementAt(recreated.shards, 1).lastmod).toBe('2032-01-01T00:00:00.000Z');
   });
 
   it('loads typed database rows with the correct limit and offset', async () => {
@@ -185,11 +198,11 @@ describe('public sitemap behavior', () => {
   });
 
   it('accounts for prefix entries before loading database rows', async () => {
-    const loadRows = vi.fn(async () => [{ path: '/profile/alice/database' }]);
+    const loadRows = vi.fn(async () => [{ path: '/profile/alice/database/' }]);
     const response = await handlePagedDatabaseSitemap<{ path: string }>({
       request: new Request('https://serplists.com/sitemaps/templates/1.xml'),
       params: { page: '1' },
-      prefixEntries: [{ path: '/templates' }, { path: '/profile/serp/bundled' }],
+      prefixEntries: [{ path: '/templates/' }, { path: '/profile/serp/bundled/' }],
       loadRows,
       toEntry: (row) => row,
     });
@@ -221,18 +234,18 @@ describe('public sitemap behavior', () => {
   });
 
   it('publishes canonical static pages and supports HEAD without an XML body', async () => {
-    const getResponse = await request(pagesSitemap, '/sitemaps/pages/1.xml', {
+    const getResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       params: { page: '1' },
     });
     const xml = await getResponse.text();
-    const headResponse = await request(pagesSitemap, '/sitemaps/pages/1.xml', {
+    const headResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       method: 'HEAD',
       params: { page: '1' },
     });
 
     expect(getResponse.status).toBe(200);
     expect(xml).toContain('<loc>https://serplists.com/</loc>');
-    expect(xml).toContain('<loc>https://serplists.com/features/template-builder</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/features/template-builder/</loc>');
     expect(xml).not.toContain('/login');
     expect(xml).not.toContain('/profile/');
     expect(headResponse.status).toBe(200);
@@ -241,19 +254,28 @@ describe('public sitemap behavior', () => {
     await expectValidXml(xml, sitemapSchema, 'pages-sitemap.xml');
   });
 
-  it('rejects unsupported methods and permanently redirects obsolete endpoints', async () => {
-    const postResponse = await request(pagesSitemap, '/sitemaps/pages/1.xml', {
+  it('exports only GET, so Next.js answers any other method with 405 before the route runs, and refuses one itself too', async () => {
+    for (const route of [pagesSitemapRoute, legacyStaticSitemapRoute, legacyCategoriesSitemapRoute]) {
+      expect(Object.keys(route)).toEqual(['GET']);
+    }
+    const postResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       method: 'POST',
       params: { page: '1' },
     });
-    const staticResponse = await request(legacyStaticSitemap, '/sitemaps/static.xml?page=2');
-    const categoryResponse = await request(legacyCategoriesSitemap, '/categories/sitemap.xml?page=2');
 
     expect(postResponse.status).toBe(405);
     expect(postResponse.headers.get('allow')).toBe('GET, HEAD');
+  });
+
+  it('permanently redirects obsolete endpoints', async () => {
+    const staticResponse = await callTheRouteAsNextJsDoes(legacyStaticSitemapRoute, '/sitemaps/static.xml?page=2');
+    const categoryResponse = await callTheRouteAsNextJsDoes(legacyCategoriesSitemapRoute, '/categories/sitemap.xml?page=2');
+    const firstCategoryResponse = await callTheRouteAsNextJsDoes(legacyCategoriesSitemapRoute, '/categories/sitemap.xml');
+
     expect(staticResponse.status).toBe(308);
     expect(staticResponse.headers.get('location')).toBe('https://serplists.com/sitemaps/pages/2.xml');
     expect(categoryResponse.status).toBe(308);
     expect(categoryResponse.headers.get('location')).toBe('https://serplists.com/sitemaps/categories/2.xml');
+    expect(firstCategoryResponse.headers.get('location')).toBe('https://serplists.com/sitemaps/categories/1.xml');
   });
 });

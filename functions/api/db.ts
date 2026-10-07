@@ -4,8 +4,6 @@ import * as schema from "../../db/schema/index";
 import { withD1Profiling } from "./utils/d1-profiler";
 import { log } from "./utils/logger";
 
-// D1_PROFILE=true logs rows read/written per statement (local profiling only; see
-// docs/design-docs/d1-cost.md).
 const binding = (env: Env) =>
   env.D1_PROFILE === "true" ? withD1Profiling(env.DB, (record) => log("info", "d1_query", record)) : env.DB;
 

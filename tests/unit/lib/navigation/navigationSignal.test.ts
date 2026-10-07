@@ -1,0 +1,59 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { reportNavigation, subscribeToNavigations } from '@/lib/navigation/navigationSignal';
+
+const unsubscribes: Array<() => void> = [];
+const subscribe = (listener: () => void) => {
+  const unsubscribe = subscribeToNavigations(listener);
+  unsubscribes.push(unsubscribe);
+  return unsubscribe;
+};
+
+beforeEach(() => {
+  vi.stubGlobal('window', new EventTarget());
+});
+
+afterEach(() => {
+  unsubscribes.splice(0).forEach((unsubscribe) => unsubscribe());
+  vi.unstubAllGlobals();
+});
+
+describe('navigation signal, which ends a page visit on every navigation since Next.js has no location key', () => {
+  it('tells every listener about a navigation the app starts', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    subscribe(first);
+    subscribe(second);
+
+    reportNavigation();
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts browser Back and Forward as navigations', () => {
+    const listener = vi.fn();
+    subscribe(listener);
+
+    window.dispatchEvent(new Event('popstate'));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops telling a listener once it unsubscribes, for both kinds', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribe(listener);
+
+    unsubscribe();
+    reportNavigation();
+    window.dispatchEvent(new Event('popstate'));
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op with no listeners, as on the server', () => {
+    vi.unstubAllGlobals();
+
+    expect(() => reportNavigation()).not.toThrow();
+  });
+});

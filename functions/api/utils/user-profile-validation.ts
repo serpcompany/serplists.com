@@ -1,0 +1,86 @@
+import { APIError } from 'better-auth/api';
+import type { ZodError } from 'zod';
+import type { JsonRecord } from '../../../src/lib/schemas/jsonRecords';
+import type { Env } from '../types';
+import {
+  USER_IMAGE_URL_MAX_LENGTH,
+  displayUsernameSchema,
+  userNameSchema,
+} from '../../../src/lib/schemas/userProfileSchema';
+
+type UserWrite = JsonRecord;
+
+interface UserProfileFields extends UserWrite {
+  name?: unknown;
+  image?: unknown;
+  displayUsername?: unknown;
+}
+
+export type UserProfileWritePolicy = {
+  avatarUrlPrefixes: string[];
+};
+
+export function buildUserProfileWritePolicy(env: Env, trustedOrigins: Iterable<string>): UserProfileWritePolicy {
+  const bases = new Set<string>(trustedOrigins);
+  if (env.R2_PUBLIC_BASE_URL) {
+    bases.add(env.R2_PUBLIC_BASE_URL);
+    bases.add(env.R2_PUBLIC_BASE_URL.replace(/\/+$/, ''));
+  }
+  return { avatarUrlPrefixes: Array.from(bases, (base) => `${base}/api/uploads/`) };
+}
+
+function reject(message: string): never {
+  throw new APIError('BAD_REQUEST', { message });
+}
+
+function firstIssue(error: ZodError): string {
+  return error.issues[0]?.message ?? 'Invalid value.';
+}
+
+export function uploadedAvatarUrlError(value: string, policy: UserProfileWritePolicy): string | null {
+  if (value.length > USER_IMAGE_URL_MAX_LENGTH) {
+    return `Avatar image URL must be ${USER_IMAGE_URL_MAX_LENGTH} characters or fewer.`;
+  }
+
+  let href: string;
+  try {
+    href = new URL(value).href;
+  } catch {
+    return 'Avatar image must be a URL.';
+  }
+  return policy.avatarUrlPrefixes.some((prefix) => href.startsWith(prefix)) ? null : 'Upload the avatar image to SERP Lists.';
+}
+
+function parseAvatarUrl(value: unknown, policy: UserProfileWritePolicy): string | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string') reject('Avatar image must be a URL.');
+  const error = uploadedAvatarUrlError(value, policy);
+  if (error) reject(error);
+  return value;
+}
+
+export function validateUserProfileWrite(
+  data: UserWrite,
+  action: 'create' | 'update',
+  policy: UserProfileWritePolicy,
+): UserWrite {
+  const fields: UserProfileFields = data;
+  const sanitized: UserProfileFields = { ...data };
+
+  if (action === 'create' || fields.name !== undefined) {
+    const name = userNameSchema.safeParse(fields.name);
+    if (!name.success) reject(firstIssue(name.error));
+    sanitized.name = name.data;
+  }
+
+  if (fields.image !== undefined) {
+    sanitized.image = parseAvatarUrl(fields.image, policy);
+  }
+
+  if (fields.displayUsername !== undefined) {
+    const displayUsername = displayUsernameSchema.safeParse(fields.displayUsername);
+    if (!displayUsername.success) reject(firstIssue(displayUsername.error));
+  }
+
+  return sanitized;
+}

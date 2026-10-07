@@ -1,7 +1,3 @@
--- Ensure Better Auth inserts succeed by providing a default for users.created_at.
--- SQLite doesn't support altering a default directly, so rebuild the users table.
--- D1 remote migrations reject explicit BEGIN/COMMIT statements in this path.
-
 PRAGMA foreign_keys=OFF;
 
 DROP TABLE IF EXISTS users_new;

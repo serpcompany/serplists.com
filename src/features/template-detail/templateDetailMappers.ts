@@ -1,11 +1,14 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import { resolveTemplateDestinationTeamId } from '@/lib/templateDestination';
+import { readApiTemplateOwner, readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
+import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
 import {
   isSectionsShape,
   normalizeSections as normalizeChecklistSections,
 } from '@/lib/utils/checklistSections';
+import type { PublicProfile } from '@/lib/schemas/accountResponses';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
-
-type ApiRecord = Record<string, unknown>;
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
@@ -13,7 +16,7 @@ const asString = (value: unknown): string | undefined =>
 const asStringArray = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : undefined;
 
-const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] => {
+const normalizeTemplateSections = (rawTemplate: ApiTemplate): ChecklistSection[] => {
   if (Array.isArray(rawTemplate.sections)) {
     return normalizeChecklistSections(rawTemplate.sections);
   }
@@ -23,7 +26,7 @@ const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] =
   }
 
   try {
-    const rawItems =
+    const rawItems: unknown =
       typeof rawTemplate.items === 'string'
         ? JSON.parse(rawTemplate.items)
         : rawTemplate.items;
@@ -49,7 +52,7 @@ const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] =
 };
 
 export const mapApiTemplateToChecklistTemplate = (
-  foundTemplate: ApiRecord,
+  foundTemplate: ApiTemplate,
   fallbackSlug: string,
 ): ChecklistTemplate => {
   const categories =
@@ -69,18 +72,22 @@ export const mapApiTemplateToChecklistTemplate = (
     seoTitle: asString(foundTemplate.seoTitle) ?? '',
     seoDescription: asString(foundTemplate.seoDescription) ?? '',
     seoUrl: asString(foundTemplate.seoUrl),
-    rules: Array.isArray(foundTemplate.rules)
-      ? (foundTemplate.rules as ChecklistTemplate['rules'])
-      : undefined,
+    rules: foundTemplate.rules ?? undefined,
+    requiredTools: foundTemplate.requiredTools,
     sections: normalizeTemplateSections(foundTemplate),
     categories,
     tags: asStringArray(foundTemplate.tags) ?? [],
     userId: String(foundTemplate.user_id || ''),
+    teamId: readApiTemplateTeamId(foundTemplate),
     createdAt: String(foundTemplate.created_at || ''),
     updatedAt: String(foundTemplate.updated_at || foundTemplate.created_at || ''),
     isPublic: Boolean(foundTemplate.is_public),
     slug: asString(foundTemplate.slug) ?? fallbackSlug,
     version: typeof foundTemplate.version === 'number' ? foundTemplate.version : 1,
+    ownerType:
+      foundTemplate.owner_type === 'team' || foundTemplate.owner_type === 'user'
+        ? foundTemplate.owner_type
+        : undefined,
     ownerProfile:
       typeof foundTemplate.owner_username === 'string' ||
       typeof foundTemplate.owner_full_name === 'string'
@@ -89,12 +96,13 @@ export const mapApiTemplateToChecklistTemplate = (
             full_name: asString(foundTemplate.owner_full_name),
           }
         : undefined,
+    owner: readApiTemplateOwner(foundTemplate),
   };
 };
 
 export const resolveTemplateOwnerProfile = (
   template: ChecklistTemplate,
-  profile?: ApiRecord | null,
+  profile?: Pick<PublicProfile, 'username' | 'full_name'> | null,
 ): {
   ownerSlug: string | null;
   template: ChecklistTemplate;
@@ -119,5 +127,21 @@ export const resolveTemplateOwnerProfile = (
   };
 };
 
-export const countTemplateItems = (template: ChecklistTemplate): number =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
+export const buildTemplateCopyPayload = (
+  template: ChecklistTemplate,
+  activeTeamId: string | undefined,
+): Omit<ChecklistTemplate, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'slug'> => ({
+  categories: template.categories ?? [],
+  description: template.description,
+  isPublic: template.isPublic,
+  rules: template.rules,
+  requiredTools: template.requiredTools,
+  sections: template.sections,
+  seoDescription: template.seoDescription,
+  seoTitle: template.seoTitle,
+  seoUrl: '',
+  tags: template.tags ?? [],
+  teamId: resolveTemplateDestinationTeamId(template, activeTeamId),
+  title: buildDuplicateTemplateTitle(template.title),
+  type: template.type ?? 'checklist',
+});

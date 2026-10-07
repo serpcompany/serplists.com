@@ -1,0 +1,176 @@
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import { shownConsole } from '../../support/mockedConsoleContext';
+import React, { act, useEffect } from 'react';
+import { createEvent, fireEvent, screen } from '@testing-library/react';
+import { useSearchParams } from 'next/navigation';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
+
+import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+
+let authUser: { id: string } | null = null;
+
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: authUser }),
+}));
+
+theInMemoryBrowserAsTheWindow();
+
+let pageThrowsOnABadRow = false;
+const pageRendered = vi.fn();
+let pageMounts = 0;
+
+function PageReadingItsQueryLikeTheLibrary() {
+  pageRendered();
+  useSearchParams();
+  useEffect(() => {
+    pageMounts += 1;
+  }, []);
+  if (pageThrowsOnABadRow) throw new Error('bad template row');
+  return <main>Page ok</main>;
+}
+
+const boundaryAroundRoutedPagesAsInLayout = (
+  <RouteErrorBoundary>
+    <RoutedPages
+      pages={{ '/': <PageReadingItsQueryLikeTheLibrary />, '/dashboard/templates': <PageReadingItsQueryLikeTheLibrary /> }}
+    />
+  </RouteErrorBoundary>
+);
+
+async function renderAt(entry: string) {
+  navigation.reset(entry);
+  const { container } = await renderSettled(boundaryAroundRoutedPagesAsInLayout);
+  return {
+    text: () => container.textContent,
+    hasAlert: () => screen.queryAllByRole('alert').length > 0,
+    link: (name: string) => screen.getByRole('link', { name }),
+  };
+}
+
+const clickTheLink = (link: HTMLElement) => {
+  const event = createEvent.click(link);
+  fireEvent(link, event);
+  return event;
+};
+
+const finishNavigation = () =>
+  act(async () => {
+    await navigation.settle();
+  });
+
+describe('RouteErrorBoundary', () => {
+  afterEach(() => {
+    authUser = null;
+    pageThrowsOnABadRow = false;
+    pageRendered.mockClear();
+    pageMounts = 0;
+    vi.restoreAllMocks();
+  });
+
+  const silenceCaughtErrors = () => vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  it('recovers when a signed-in user clicks Go to My Templates on My Templates itself', async () => {
+    silenceCaughtErrors();
+    authUser = { id: 'user-1' };
+    pageThrowsOnABadRow = true;
+    const page = await renderAt('/dashboard/templates/');
+    expect(page.hasAlert()).toBe(true);
+
+    pageThrowsOnABadRow = false;
+    await act(async () => {
+      const event = clickTheLink(page.link('Go to My Templates'));
+      expect(event.defaultPrevented).toBe(true);
+    });
+    await finishNavigation();
+
+    expect(navigation.pathname()).toBe('/dashboard/templates/');
+    expect(page.hasAlert()).toBe(false);
+    expect(page.text()).toContain('Page ok');
+  });
+
+  it('links Go to My Templates to the Templates of the Organization the tab is in', async () => {
+    silenceCaughtErrors();
+    authUser = { id: 'user-1' };
+    pageThrowsOnABadRow = true;
+    shownConsole.context = organizationConsole('team-1');
+    try {
+      const page = await renderAt('/dashboard/templates/');
+
+      expect(page.link('Go to My Templates').getAttribute('href')).toBe('/dashboard/organization/team-1/templates/');
+    } finally {
+      shownConsole.context = PERSONAL_CONSOLE;
+    }
+  });
+
+  it('recovers when a visitor clicks Go to home on the home page itself', async () => {
+    silenceCaughtErrors();
+    pageThrowsOnABadRow = true;
+    const page = await renderAt('/');
+    expect(page.hasAlert()).toBe(true);
+
+    pageThrowsOnABadRow = false;
+    await act(async () => {
+      fireEvent.click(page.link('Go to home'));
+    });
+    await finishNavigation();
+
+    expect(page.hasAlert()).toBe(false);
+    expect(page.text()).toContain('Page ok');
+  });
+
+  it('recovers when the home link differs from the crashed page only by its query', async () => {
+    silenceCaughtErrors();
+    authUser = { id: 'user-1' };
+    pageThrowsOnABadRow = true;
+    const page = await renderAt('/dashboard/templates/?scope=team');
+    expect(page.hasAlert()).toBe(true);
+
+    pageThrowsOnABadRow = false;
+    await act(async () => {
+      fireEvent.click(page.link('Go to My Templates'));
+    });
+    await finishNavigation();
+
+    expect(navigation.search()).toBe('');
+    expect(page.hasAlert()).toBe(false);
+    expect(page.text()).toContain('Page ok');
+  });
+
+  it('shows the card again, once, when the page still crashes after the click', async () => {
+    silenceCaughtErrors();
+    authUser = { id: 'user-1' };
+    pageThrowsOnABadRow = true;
+    const page = await renderAt('/dashboard/templates/');
+
+    await act(async () => {
+      fireEvent.click(page.link('Go to My Templates'));
+    });
+    await finishNavigation();
+    const rendersAfterRetry = pageRendered.mock.calls.length;
+    await finishNavigation();
+
+    expect(page.hasAlert()).toBe(true);
+    expect(pageRendered).toHaveBeenCalledTimes(rendersAfterRetry);
+  });
+
+  it('never remounts a healthy page when it navigates to itself or changes its query', async () => {
+    const page = await renderAt('/dashboard/templates/');
+    expect(page.text()).toContain('Page ok');
+    expect(pageMounts).toBe(1);
+
+    await act(async () => {
+      navigation.router.replace('/dashboard/templates/');
+    });
+    await act(async () => {
+      navigation.router.replace('/dashboard/templates/?scope=team');
+    });
+    await finishNavigation();
+
+    expect(navigation.search()).toBe('?scope=team');
+    expect(pageMounts).toBe(1);
+    expect(page.text()).toContain('Page ok');
+  });
+});

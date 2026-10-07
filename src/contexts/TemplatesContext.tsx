@@ -1,74 +1,53 @@
-import React, { createContext, useContext, useMemo } from "react";
-import { useAuth } from "./CloudflareAuthContext";
-import { useWorkspace } from "./WorkspaceContext";
-import { toast } from "sonner";
-import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
-import { 
-  ChecklistTemplate, 
-  ChecklistRun, 
-  ChecklistSection,
-  TemplateSavePayload,
-  TemplateImportOptions,
-  TemplateImportSummary,
-  TemplatesContextProps 
-} from "@/types/checklist";
+import { createContext, useContext } from "react";
+import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
+import { resolveTemplateDestinationTeamId } from "@/lib/templateDestination";
+import { isRepoTemplate } from "@/lib/repoTemplateCatalog";
+import { RUN_TITLE_MAX } from "@/lib/schemas/templateLimits";
+import { resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import type { ChecklistRun, ChecklistSection, ChecklistTemplate, TemplatesContextProps } from "@/types/checklist";
 
-// Re-export types for backwards compatibility
-export type {
-  ChecklistSubItem,
-  ChecklistItemContent,
-  ChecklistItem,
-  ChecklistSection,
-  ChecklistTemplate,
-  ChecklistRun
-} from "@/types/checklist";
-
-import { generateSlug } from "@/utils/urlHelpers";
-import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { CATALOG_QUERY_KEY, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 import {
-  isRepoTemplate,
-  mergeAccountTemplateCollections,
-  mergePublicTemplateCollections,
-  repoTemplates,
-} from "@/lib/repoTemplateCatalog";
+  listLoadError,
+  resolveTemplateListObservers,
+  type TemplateListOptions,
+  type TemplateListReadiness,
+} from "./templateListObservers";
 
-
-const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+export const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
 
 type TemplateListQuery = UseQueryOptions<ChecklistTemplate[]>;
-type TemplateListRequest = { teamId?: string; scope?: 'public' | 'personal' };
-type TemplateListQueries = { catalog: TemplateListQuery; workspace: TemplateListQuery; ready: boolean };
-const TemplateListQueriesContext = createContext<
+export type TemplateListQueries = TemplateListReadiness & { catalog: TemplateListQuery; workspace: TemplateListQuery };
+export const TemplateListQueriesContext = createContext<
   (TemplateListQueries & { runs: UseQueryOptions<ChecklistRun[]> }) | undefined
 >(undefined);
 
-// Lists load only on pages that call useTemplateLists(), because a catalog miss reads every
-// public Template from D1. The catalog (?scope=public) is identical for everyone and
-// edge-cached, so its key has no user. The workspace list is the user's own Personal
-// templates (?scope=personal) or the active Organization's. Nothing loads until the session
-// and active workspace are known, or a page would also fetch a list it does not need.
-export const buildTemplateListQueries = (params: {
-  ready: boolean;
-  userId?: string;
-  activeTeamId?: string;
+export const buildTemplateListQueries = (params: TemplateListReadiness & {
+  userId?: string | undefined;
+  activeTeamId?: string | undefined;
   workspaceScopeId: string;
   fetchList: (request: TemplateListRequest) => () => Promise<ChecklistTemplate[]>;
 }): TemplateListQueries => ({
-  catalog: { queryKey: ['templates', 'catalog'], queryFn: params.fetchList({ scope: 'public' }), staleTime: 5 * 60 * 1000 },
+  catalog: {
+    queryKey: CATALOG_QUERY_KEY,
+    queryFn: params.fetchList({ scope: 'public' }),
+    staleTime: 5 * 60 * 1000,
+    retry: shouldRetryListFetch,
+  },
   workspace: {
     queryKey: ['templates', params.userId ?? 'visitor', params.workspaceScopeId],
     queryFn: params.fetchList(params.activeTeamId ? { teamId: params.activeTeamId } : { scope: 'personal' }),
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryListFetch,
     enabled: params.ready && Boolean(params.userId),
   },
   ready: params.ready,
+  catalogReady: params.catalogReady,
 });
 
 type CreateRunRequest = {
   apiPayload: {
-    teamId?: string;
+    teamId?: string | undefined;
     template_id?: string;
     title: string;
     sections?: ChecklistSection[];
@@ -79,18 +58,19 @@ type CreateRunRequest = {
 };
 
 export function buildCreateRunRequest(params: {
-  activeTeamId?: string;
-  runName?: string;
+  activeTeamId?: string | undefined;
+  runName?: string | undefined;
   template: ChecklistTemplate;
   templateId: string;
 }): CreateRunRequest {
   const runSections = resetSectionsCompletion(params.template.sections);
-  const title = params.runName || params.template.title;
+  const title = (params.runName || params.template.title).slice(0, RUN_TITLE_MAX).trimEnd();
+  const teamId = resolveTemplateDestinationTeamId(params.template, params.activeTeamId);
 
   if (isRepoTemplate(params.template)) {
     return {
       apiPayload: {
-        teamId: params.activeTeamId,
+        teamId,
         title,
         sections: runSections,
         status: "in_progress",
@@ -103,7 +83,7 @@ export function buildCreateRunRequest(params: {
   return {
     apiPayload: {
       template_id: params.templateId,
-      teamId: params.activeTeamId,
+      teamId,
       title,
       status: "in_progress",
     },
@@ -111,8 +91,6 @@ export function buildCreateRunRequest(params: {
     title,
   };
 }
-
-// calculateSectionsProgress is imported from lib/utils/checklistSections
 
 export const useTemplates = () => {
   const context = useContext(TemplatesContext);
@@ -122,478 +100,27 @@ export const useTemplates = () => {
   return context;
 };
 
-// Loads data for pages that read `templates` (the catalog), `allTemplates` (the active
-// workspace, merged with the catalog in Personal), or `runs`. See buildTemplateListQueries.
-export const useTemplateLists = (options: { catalog?: boolean; workspace?: boolean; runs?: boolean } = {}) => {
+export const useTemplateLists = (options: TemplateListOptions = {}) => {
   const queries = useContext(TemplateListQueriesContext);
   if (!queries) {
     throw new Error("useTemplateLists must be used within a TemplatesProvider");
   }
-  const catalog = useQuery({ ...queries.catalog, enabled: queries.ready && options.catalog === true });
-  const workspace = useQuery({ ...queries.workspace, enabled: queries.workspace.enabled !== false && options.workspace !== false });
-  const runs = useQuery({ ...queries.runs, enabled: queries.runs.enabled !== false && options.runs === true });
-  // Use this page's queries for loading: the provider's observers hear of fetches a tick late.
+  const { catalogEnabled, workspaceEnabled, runsEnabled, templatesWaiting, runsWaiting } =
+    resolveTemplateListObservers(queries, options);
+  const catalog = useQuery({ ...queries.catalog, enabled: catalogEnabled });
+  const workspace = useQuery({ ...queries.workspace, enabled: workspaceEnabled });
+  const runs = useQuery({ ...queries.runs, enabled: runsEnabled });
   const context = useTemplates();
   return {
     ...context,
-    templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
-    runsLoading: !queries.ready || runs.isLoading,
+    templatesLoading: templatesWaiting || catalog.isLoading || workspace.isLoading,
+    runsLoading: runsWaiting || runs.isLoading,
+    templatesError: listLoadError(workspaceEnabled, workspace) ?? listLoadError(catalogEnabled, catalog),
+    runsError: listLoadError(runsEnabled, runs),
+    refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
+    refetchRuns: () => (runsEnabled ? runs.refetch() : Promise.resolve()),
+    catalogPending: options.catalog === true && catalog.isPending,
+    catalogError: options.catalog === true && listLoadError(catalogEnabled, catalog) !== null,
+    refetchCatalog: catalog.refetch,
   };
-};
-
-export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const { activeTeamId, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
-  const queryClient = useQueryClient();
-
-  const mapApiTemplate = (template: Record<string, unknown>): ChecklistTemplate => ({
-    id: String(template.id),
-    title: String(template.title || ''),
-    description: typeof template.description === 'string' ? template.description : '',
-    type: typeof template.type === 'string' ? template.type as "checklist" | "recipe" : 'checklist',
-    seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
-    seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
-    rules: Array.isArray(template.rules) ? template.rules as ChecklistTemplate["rules"] : undefined,
-    seoUrl: typeof template.slug === 'string' ? template.slug : '',
-    sections: normalizeSections((() => {
-      if (template.sections) return template.sections;
-      if (template.items) {
-        const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
-        if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
-          return parsedItems;
-        }
-        return [{
-          id: '1',
-          title: 'Checklist',
-          items: parsedItems
-        }];
-      }
-      return [];
-    })()),
-    categories: Array.isArray(template.categories)
-      ? template.categories as string[]
-      : (template.category ? [String(template.category)] : []),
-    tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (Array.isArray(template.tags) ? template.tags as string[] : []),
-    userId: typeof template.user_id === 'string' ? template.user_id : '',
-    createdAt: typeof template.created_at === 'string' ? template.created_at : '',
-    updatedAt: typeof template.updated_at === 'string' ? template.updated_at : '',
-    isPublic: Boolean(template.is_public),
-    slug: typeof template.slug === 'string' ? template.slug : '',
-    version: typeof template.version === 'number' ? template.version : 1,
-    teamId:
-      typeof template.team_id === 'string'
-        ? template.team_id
-        : typeof template.teamId === 'string'
-          ? template.teamId
-          : undefined,
-    ownerProfile:
-      typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
-        ? {
-            username: typeof template.owner_username === "string" ? template.owner_username : undefined,
-            full_name: typeof template.owner_full_name === "string" ? template.owner_full_name : undefined,
-          }
-        : undefined,
-  });
-
-  const fetchTemplateList = (request: TemplateListRequest) => async (): Promise<ChecklistTemplate[]> => {
-    try {
-      const templatesData = await api.getTemplates(request);
-      return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-      return [];
-    }
-  };
-
-  // These observers read whatever useTemplateLists() has loaded, without fetching.
-  const listQueries = buildTemplateListQueries({ ready: !isWorkspaceLoading, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
-  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({ ...listQueries.catalog, enabled: false });
-  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
-
-  // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
-  const runsQuery: UseQueryOptions<ChecklistRun[]> = {
-    queryKey: ['runs', user?.id, workspaceScopeId],
-    queryFn: async (): Promise<ChecklistRun[]> => {
-      if (!user) return [];
-      
-      try {
-        const checklistsData = await api.getChecklists(
-          activeTeamId ? { teamId: activeTeamId } : undefined,
-        );
-        // Transform to run format
-        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
-          const sections = (() => {
-            const raw = typeof checklist.items === 'string' ? JSON.parse(checklist.items) : (checklist.items || []);
-            if (isSectionsShape(raw)) return raw as ChecklistSection[];
-            return [{ id: '1', title: 'Checklist', items: raw }];
-          })();
-
-          return ({
-          id: checklist.id,
-          templateId: checklist.template_id || '',
-          title: checklist.title,
-          status: (checklist.status || 'in_progress') as "in_progress" | "completed",
-          sections: normalizeSections(sections),
-          startedAt: checklist.started_at || checklist.created_at,
-          completedAt: checklist.completed_at || undefined,
-          userId: checklist.user_id || '',
-          teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-          revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
-          isStale: checklist.is_stale === true,
-          isPublic: checklist.is_public === true || checklist.is_public === 1,
-        });
-        });
-
-        return transformedRuns.map((r: ChecklistRun) => ({
-          ...r,
-          progress: calculateSectionsProgress(r.sections),
-        }));
-      } catch (error) {
-        console.error('Error fetching runs:', error);
-        return [];
-      }
-    },
-    enabled: listQueries.ready && !!user,
-    staleTime: 5 * 60 * 1000,
-  };
-  const { data: runs = [], isLoading: runsLoading } = useQuery({ ...runsQuery, enabled: false });
-
-  const publicTemplates = useMemo(
-    () => mergePublicTemplateCollections(repoTemplates, catalogApiTemplates),
-    [catalogApiTemplates],
-  );
-
-  // Combine public templates with user's own templates (both public and private)
-  const allTemplates = useMemo(
-    () =>
-      activeTeamId
-        ? workspaceTemplates
-        : mergeAccountTemplateCollections(publicTemplates, workspaceTemplates, user?.id),
-    [activeTeamId, publicTemplates, workspaceTemplates, user?.id],
-  );
-  const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
-
-  // Mutations
-  const createTemplateMutation = useMutation({
-    mutationFn: async (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => {
-      if (!user) throw new Error("User must be logged in to create a template");
-      
-      const finalIsPublic = templateData.isPublic ?? true;
-
-      const teamId = templateData.teamId ?? activeTeamId;
-      const result = await api.createTemplate({
-        title: templateData.title,
-        teamId,
-        description: templateData.description,
-        type: templateData.type,
-        seoTitle: templateData.seoTitle,
-        seoDescription: templateData.seoDescription,
-        rules: templateData.rules,
-        slug: templateData.seoUrl?.trim() || undefined,
-        sections: templateData.sections,
-        is_public: finalIsPublic,
-        categories: templateData.categories || [],
-        tags: templateData.tags || []
-      });
-      
-      return {
-        id: result.id,
-        title: templateData.title,
-        description: templateData.description || '',
-        type: templateData.type,
-        seoTitle: templateData.seoTitle || '',
-        seoDescription: templateData.seoDescription || '',
-        rules: templateData.rules,
-        seoUrl: result.slug || templateData.seoUrl || generateSlug(templateData.title),
-        sections: templateData.sections,
-        categories: templateData.categories || [],
-        tags: templateData.tags || [],
-        userId: user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isPublic: finalIsPublic,
-        slug: result.slug || generateSlug(templateData.title),
-        version: 1,
-        teamId,
-      };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast.success("Template created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
-  });
-
-  const updateTemplateMutation = useMutation({
-    mutationFn: async (template: TemplateSavePayload) => {
-      if (!user) throw new Error("User must be logged in to update a template");
-
-      const result = await api.updateTemplate(template.id, {
-        title: template.title,
-        description: template.description,
-        type: template.type,
-        seoTitle: template.seoTitle,
-        seoDescription: template.seoDescription,
-        rules: template.rules,
-        sections: template.sections,
-        categories: template.categories,
-        tags: template.tags,
-        is_public: template.isPublic,
-        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
-        expected_version: template.version,
-      });
-      
-      if (!result) throw new Error('Failed to update template');
-      return undefined;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template updated. Checklist changes were reconciled into active private runs.");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
-  });
-
-  const deleteTemplateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error("User must be logged in to delete a template");
-      
-      await api.deleteTemplate(id);
-      return true;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
-  });
-
-  const createRunMutation = useMutation({
-    mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string; template?: ChecklistTemplate }) => {
-      if (!user) throw new Error("User must be logged in to create a run");
-      
-      // Pages that loaded the template pass it, since lists load only on demand.
-      const template = loadedTemplate ??
-        allTemplates.find((t: { id: unknown }) => t.id === templateId) ??
-        publicTemplates.find((t: { id: unknown }) => t.id === templateId);
-      if (!template) throw new Error("Template not found");
-
-      const { apiPayload, runSections, title } = buildCreateRunRequest({
-        activeTeamId,
-        runName,
-        template,
-        templateId,
-      });
-
-      const result = await api.createChecklist(apiPayload);
-      
-      if (!result) throw new Error("Failed to create checklist run");
-      
-      return {
-        id: result.id,
-        templateId: templateId,
-        title,
-        status: "in_progress" as const,
-        progress: 0,
-        sections: runSections,
-        startedAt: new Date().toISOString(),
-        completedAt: undefined,
-        userId: user.id,
-        teamId: activeTeamId,
-        templateVersion: template.version || 1,
-        revision: 1,
-        isPublic: false,
-      };
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      await queryClient.refetchQueries({ queryKey: ['runs'] });
-      toast.success("Checklist run created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
-  });
-
-  const updateRunMutation = useMutation({
-    mutationFn: async (run: ChecklistRun) => {
-      if (!user) throw new Error("User must be logged in to update a run");
-      
-      // Calculate progress
-      let completed = 0;
-      let total = 0;
-      
-      run.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          total++;
-          if (item.isCompleted) {
-            completed++;
-          }
-          // Count sub-items if they exist
-          item.contents?.forEach((content) => {
-            if (content.type === "subItems" && content.subItems) {
-              content.subItems.forEach((subItem) => {
-                total++;
-                if (subItem.isCompleted) {
-                  completed++;
-                }
-              });
-            }
-          });
-        });
-      });
-      
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const runWithProgress = { ...run, progress };
-      
-      const result = await api.updateChecklist(runWithProgress.id, {
-        title: runWithProgress.title,
-        status: runWithProgress.status,
-        progress: runWithProgress.progress,
-        sections: runWithProgress.sections,
-        completed_at: runWithProgress.completedAt,
-        expected_revision: runWithProgress.revision,
-      });
-      
-      return {
-        ...runWithProgress,
-        revision: typeof result?.revision === 'number' ? result.revision : runWithProgress.revision,
-      };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
-  });
-
-  const deleteRunMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error("User must be logged in to delete a run");
-      
-      await api.deleteChecklist(id);
-      return true;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
-  });
-
-  const revalidateRunMutation = useMutation({
-    mutationFn: async (run: ChecklistRun) => {
-      if (!user) throw new Error('User must be logged in to revalidate a run');
-      await api.revalidateChecklist(run.id, run.revision);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      await queryClient.refetchQueries({ queryKey: ['runs'] });
-    },
-  });
-
-  const importTemplatesMutation = useMutation({
-    mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
-      if (!user) throw new Error("User must be logged in to import templates");
-
-      const MAX_TEMPLATES_PER_IMPORT = 5;
-      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
-
-      const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
-        let count = 0;
-        templates.forEach((template) => {
-          template.sections.forEach((section) => {
-            section.items.forEach((item) => {
-              item.contents?.forEach((content) => {
-                if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
-                if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
-                  count += 1;
-                }
-              });
-            });
-          });
-        });
-        return count;
-      };
-
-      if (templatesData.length > MAX_TEMPLATES_PER_IMPORT) {
-        throw new Error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
-      }
-
-      const oversizeAssets = countOversizedAssets(templatesData);
-      if (oversizeAssets > 0) {
-        throw new Error("Import blocked: one or more assets are over 5MB");
-      }
-      
-      const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
-      return api.importTemplateBackup({
-        teamId: activeTeamId,
-        templates: templatesToImport,
-        options: { visibility: options?.visibility ?? "preserve" },
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-    }
-  });
-
-  // Helper functions
-  const getTemplate = (id: string): ChecklistTemplate | undefined => {
-    return allTemplates.find((template: { id: unknown }) => template.id === id);
-  };
-
-  const getRun = (id: string): ChecklistRun | undefined => {
-    return runs.find((run: { id: unknown }) => run.id === id);
-  };
-
-  const getRunsForTemplate = (templateId: string): ChecklistRun[] => {
-    return runs.filter(run => run.templateId === templateId);
-  };
-
-  const getAllPublicTemplates = (): ChecklistTemplate[] => {
-    return publicTemplates;
-  };
-
-  const getTemplateBySlug = (slug: string): ChecklistTemplate | undefined => {
-    return allTemplates.find(template => template.slug === slug);
-  };
-
-  const importTemplatesWrapper = async (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> => {
-    return importTemplatesMutation.mutateAsync({ templatesData, options });
-  };
-
-  const value: TemplatesContextProps = {
-    templates: publicTemplates,
-    allTemplates,
-    templatesLoading,
-    runs,
-    runsLoading,
-    getTemplate,
-    getTemplateBySlug,
-    getRun,
-    getRunsForTemplate,
-    getAllPublicTemplates,
-    createTemplate: createTemplateMutation.mutateAsync,
-    updateTemplate: updateTemplateMutation.mutateAsync,
-    deleteTemplate: async (id: string) => {
-      await deleteTemplateMutation.mutateAsync(id);
-    },
-    createRun: createRunMutation.mutateAsync,
-    updateRun: updateRunMutation.mutateAsync,
-    revalidateRun: async (run: ChecklistRun) => {
-      await revalidateRunMutation.mutateAsync(run);
-    },
-    deleteRun: async (id: string) => {
-      await deleteRunMutation.mutateAsync(id);
-    },
-    importTemplates: importTemplatesWrapper,
-  };
-
-  return (
-    <TemplatesContext.Provider value={value}>
-      <TemplateListQueriesContext.Provider value={{ ...listQueries, runs: runsQuery }}>
-        {children}
-      </TemplateListQueriesContext.Provider>
-    </TemplatesContext.Provider>
-  );
 };

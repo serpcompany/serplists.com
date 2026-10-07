@@ -2,7 +2,7 @@ import { index, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/s
 import { teams } from "./teams";
 import { users } from "./users";
 
-export const team_invites = sqliteTable(
+export const teamInvites = sqliteTable(
   "team_invites",
   {
     id: text("id"),

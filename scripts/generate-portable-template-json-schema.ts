@@ -3,7 +3,8 @@ import path from "node:path";
 import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
-} from "../src/lib/schemas/portableTemplateJsonSchema";
+} from "./lib/portableTemplateJsonSchema";
+import { matchesGeneratedText } from "./lib/line-endings";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);
 const nextJson = `${JSON.stringify(buildPortableTemplatePackJsonSchema(), null, 2)}\n`;
@@ -15,13 +16,14 @@ const run = async () => {
   try {
     currentJson = await readFile(outputPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    const fileIsMissing = typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+    if (!fileIsMissing) {
       throw error;
     }
   }
 
   if (checkOnly) {
-    if (currentJson !== nextJson) {
+    if (!matchesGeneratedText(currentJson, nextJson)) {
       throw new Error(`Portable template JSON Schema artifact is out of date: ${PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH}`);
     }
 

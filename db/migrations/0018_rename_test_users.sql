@@ -1,4 +1,3 @@
--- Rename seeded test users to make dev/test role labels explicit.
 UPDATE users
 SET name = CASE id
   WHEN 'user-1' THEN 'Admin (Pro)'

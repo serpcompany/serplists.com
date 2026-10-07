@@ -1,15 +1,15 @@
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
+import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
+import { mergeAccountTemplateCollections } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
   buildDashboardTemplatesState,
-  createDashboardTemplateRun,
   deleteDashboardTemplate,
   getDashboardSelectedTemplate,
   getInitialDashboardTemplateId,
@@ -34,27 +34,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => authState,
 }));
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: undefined,
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { inThePersonalWorkspace } = await import('../../../fixtures/workspaces');
+  return { useWorkspace: () => inThePersonalWorkspace({ activeTeamId: undefined, canEditTemplates: true }) };
+});
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -96,36 +79,51 @@ describe('signed-in layout navigation', () => {
       username: 'alice',
     };
 
+    navigation.reset('/dashboard/templates/');
     const html = renderToStaticMarkup(
-      React.createElement(
-        StaticRouter,
-        { location: '/dashboard/templates' },
-        React.createElement(
-          Routes,
-          null,
-          React.createElement(Route, {
-            path: '*',
-            element: React.createElement(
-              Layout,
-              null,
-              React.createElement('div', null, 'Authenticated page'),
-            ),
-          }),
-        ),
-      ),
+      React.createElement(Layout, null, React.createElement('div', null, 'Authenticated page')),
     );
 
-    expect(html).toContain('href="/dashboard/templates"');
-    expect(html).toContain('href="/dashboard/runs"');
-    expect(html).toContain('href="/dashboard/settings"');
-    expect(html).not.toContain('href="/dashboard/profile"');
-    expect(html).not.toContain('href="/console"');
-    expect(html).not.toContain('href="/console/templates"');
-    expect(html).not.toContain('href="/console/runs"');
+    expect(html).toContain('href="/dashboard/templates/"');
+    expect(html).toContain('href="/dashboard/runs/"');
+    expect(html).toContain('href="/dashboard/settings/"');
+    expect(html).not.toContain('href="/dashboard/profile');
+    expect(html).not.toContain('href="/console');
   });
 });
 
 describe('buildDashboardTemplatesState', () => {
+  it('follows the Organization role instead of always offering to create', () => {
+    const allTemplates = [buildTemplate({ teamId: 'team-1', userId: 'someone-else' })];
+    const stateFor = (role?: 'viewer' | 'runner' | 'editor') =>
+      buildDashboardTemplatesState({ allTemplates, role, teamId: 'team-1', userId: 'user-1' });
+
+    expect(stateFor('viewer')).toMatchObject({
+      canCreateRun: false,
+      canCreateTemplate: false,
+      canEditTemplate: false,
+      canRunTemplate: false,
+    });
+    expect(stateFor('runner')).toMatchObject({
+      canCreateRun: true,
+      canCreateTemplate: false,
+      canEditTemplate: false,
+      canRunTemplate: true,
+    });
+    expect(stateFor('editor')).toMatchObject({
+      canCreateTemplate: true,
+      canEditTemplate: true,
+      canRunTemplate: true,
+    });
+    expect(stateFor(undefined).canRunTemplate).toBe(false);
+  });
+
+  it('keeps full rights in the Personal context', () => {
+    const state = buildDashboardTemplatesState({ allTemplates: [buildTemplate()], userId: 'user-1' });
+
+    expect(state).toMatchObject({ canCreateTemplate: true, canEditTemplate: true, canRunTemplate: true });
+  });
+
   it('returns only owned templates and dashboard CTA state', () => {
     const state = buildDashboardTemplatesState({
       allTemplates: [
@@ -193,6 +191,19 @@ describe('buildDashboardTemplatesState', () => {
     expect(state.totalTemplateItems).toBe(0);
   });
 
+  it('drops a deleted public template that is still in the cached public catalog', () => {
+    const deleted = buildTemplate({ id: 'deleted-public', title: 'Deleted Public', isPublic: true });
+    const kept = buildTemplate({ id: 'kept', title: 'Kept' });
+    const state = buildDashboardTemplatesState({
+      allTemplates: mergeAccountTemplateCollections([deleted], [kept], 'user-1'),
+      templatesLoading: false,
+      userId: 'user-1',
+    });
+
+    expect(state.templates.map((template) => template.id)).toEqual(['kept']);
+    expect(state.canCreateRun).toBe(true);
+  });
+
   it('keeps loading true while the source data is still resolving', () => {
     const state = buildDashboardTemplatesState({
       allTemplates: [],
@@ -204,20 +215,48 @@ describe('buildDashboardTemplatesState', () => {
     expect(state.isEmpty).toBe(false);
     expect(state.canCreateRun).toBe(false);
   });
+
+  it('leaves an Organization template from the public catalog, whose rows have no team_id, out of Personal by its owner type', () => {
+    const state = buildDashboardTemplatesState({
+      allTemplates: [
+        buildTemplate({ id: 'personal', ownerType: 'user' }),
+        buildTemplate({ id: 'org-from-catalog', ownerType: 'team', isPublic: true }),
+        buildTemplate({ id: 'org-from-workspace', teamId: 'org-1' }),
+      ],
+      userId: 'user-1',
+    });
+
+    expect(state.templates.map((template) => template.id)).toEqual(['personal']);
+  });
 });
 
 describe('dashboard template lane actions', () => {
   it('opens canonical dashboard and public-library destinations', () => {
     const navigate = vi.fn();
 
-    openDashboardTemplate(navigate, 'template-9');
-    openDashboardCreateTemplate(navigate);
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-9' }), PERSONAL_CONSOLE);
+    openDashboardCreateTemplate(navigate, PERSONAL_CONSOLE);
     openDashboardPublicLibrary(navigate);
 
     expect(navigate.mock.calls).toEqual([
-      ['/dashboard/templates/template-9/edit'],
-      ['/dashboard/templates/new'],
-      ['/templates'],
+      ['/dashboard/templates/template-9/edit/'],
+      ['/dashboard/templates/new/'],
+      ['/templates/'],
+    ]);
+  });
+
+  it("opens the editor and New Template inside the Organization the page shows, and a private Organization Template in its own Organization", () => {
+    const navigate = vi.fn();
+    const acme = organizationConsole('team-1');
+
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-9', isPublic: true, teamId: 'team-2' }), acme);
+    openDashboardTemplate(navigate, buildTemplate({ id: 'template-8', teamId: 'team-2' }), PERSONAL_CONSOLE);
+    openDashboardCreateTemplate(navigate, acme);
+
+    expect(navigate.mock.calls).toEqual([
+      ['/dashboard/organization/team-1/templates/template-9/edit/'],
+      ['/dashboard/organization/team-2/templates/template-8/edit/'],
+      ['/dashboard/organization/team-1/templates/new/'],
     ]);
   });
 
@@ -267,60 +306,5 @@ describe('dashboard template lane actions', () => {
     expect(deleteTemplate).toHaveBeenNthCalledWith(2, 'template-1');
     expect(unchangedSelection).toBe('template-2');
     expect(nextSelection).toBe('template-2');
-  });
-});
-
-describe('createDashboardTemplateRun', () => {
-  it('creates a run from the requested template and returns its run id', async () => {
-    const createRun = vi.fn().mockResolvedValue({ id: 'run-9' });
-
-    const result = await createDashboardTemplateRun(
-      {
-        runName: 'Audit sprint',
-        templateId: 'template-1',
-      },
-      { createRun },
-    );
-
-    expect(createRun).toHaveBeenCalledWith({
-      templateId: 'template-1',
-      runName: 'Audit sprint',
-    });
-    expect(result).toEqual({
-      kind: 'ok',
-      runId: 'run-9',
-    });
-  });
-
-  it('returns an error when the run mutation resolves without an id', async () => {
-    const createRun = vi.fn().mockResolvedValue(null);
-
-    const result = await createDashboardTemplateRun(
-      {
-        templateId: 'template-1',
-      },
-      { createRun },
-    );
-
-    expect(result).toEqual({
-      kind: 'error',
-      message: 'Failed to create checklist run.',
-    });
-  });
-
-  it('normalizes thrown mutation errors into a user-facing error result', async () => {
-    const createRun = vi.fn().mockRejectedValue(new Error('Mutation failed'));
-
-    const result = await createDashboardTemplateRun(
-      {
-        templateId: 'template-1',
-      },
-      { createRun },
-    );
-
-    expect(result).toEqual({
-      kind: 'error',
-      message: 'Mutation failed',
-    });
   });
 });

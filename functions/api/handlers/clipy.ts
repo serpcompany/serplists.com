@@ -1,7 +1,9 @@
+import { z } from 'zod';
 import type { Env } from '../types';
+import { readBodyWithinLimit } from '../utils/body';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
-import { withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
+import { clipyVideoId, withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
 
 const CLIPY_ORIGIN = 'https://clipy.online';
 const CLIPY_CDN_ORIGIN = 'https://cdn.clipy.online';
@@ -19,32 +21,30 @@ type ClipyMoment = {
   tMs: number;
 };
 
-type ClipyContext = {
-  readiness?: {
-    state?: string;
-    summary?: string;
-    transcript?: string;
-    video?: string;
-    keyMoments?: string;
-  };
-  clip?: {
-    accessMode?: string;
-    publicId?: string;
-    title?: string;
-  };
-  summary?: {
-    keyPoints?: unknown;
-    tldr?: unknown;
-  };
-  transcript?: {
-    plaintext?: unknown;
-  };
-  keyMoments?: {
-    moments?: unknown;
-  };
-};
+const optionalPart = <Shape extends z.ZodRawShape>(shape: Shape) =>
+  z.object(shape).passthrough().optional().catch(undefined);
 
-export type ClipyTemplateDraft = {
+const clipyContextSchema = z.object({
+  readiness: optionalPart({
+    state: z.unknown(),
+    summary: z.unknown(),
+    transcript: z.unknown(),
+    video: z.unknown(),
+    keyMoments: z.unknown(),
+  }),
+  clip: optionalPart({ accessMode: z.unknown(), publicId: z.unknown(), title: z.unknown() }),
+  summary: optionalPart({ keyPoints: z.unknown(), tldr: z.unknown() }),
+  transcript: optionalPart({ plaintext: z.unknown() }),
+  keyMoments: optionalPart({ moments: z.unknown() }),
+}).passthrough();
+
+type ClipyContext = z.infer<typeof clipyContextSchema>;
+
+const clipyMomentSchema = z.object({ caption: z.unknown(), frameUrl: z.unknown(), tMs: z.unknown() }).passthrough();
+
+const clipyRequestSchema = z.object({ url: z.unknown() }).passthrough();
+
+type ClipyTemplateDraft = {
   title: string;
   description: string;
   templateType: 'checklist';
@@ -109,34 +109,46 @@ function buildSeoDescription(tldr: string, stepCount: number): string {
 
 const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'GitHub', pattern: /\bgithub\b/i },
-  { label: 'Issue Tracking', pattern: /\b(issue|issues|bug|bugs|ticket|tickets)\b/i },
-  { label: 'Software Development', pattern: /\b(code|developer|development|git|repository|repositories|pull request)\b/i },
-  { label: 'Project Management', pattern: /\b(project|task|tasks|workflow|planning)\b/i },
+  {
+    label: 'Issue Tracking',
+    pattern: /\b(issue[- ]track(er|ers|ing)|bug[- ]track(er|ers|ing)|bug reports?|bug fix(es|ing)?|bug triage|triag(e|ing) (bugs|issues|tickets)|(github|gitlab) (issues?|bugs?|tickets?)|(issues?|bugs?|tickets?) (in|on) (github|gitlab)|jira|support tickets?|help ?desk tickets?|ticketing (system|tool)s?)\b/i,
+  },
+  { label: 'Software Development', pattern: /\b(source code|code review|coding|developer|developers|software development|git|repository|repositories|pull request)\b/i },
+  { label: 'Project Management', pattern: /\b(project management|project plan|project planning|sprint planning|kanban|milestones?)\b/i },
   { label: 'Tutorial', pattern: /\b(guide|tutorial|walkthrough|how to)\b/i },
-  { label: 'Productivity', pattern: /\b(productivity|organize|organizing|routine|process)\b/i },
+  { label: 'Productivity', pattern: /\b(productivity|time management|daily routine|habits)\b/i },
 ];
 
 const CATEGORY_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'wedding', pattern: /\bwedding\b/i },
-  { label: 'moving', pattern: /\b(moving|relocation|relocate)\b/i },
+  {
+    label: 'moving',
+    pattern: /\b(moving (house|home|day|checklist)|move-(in|out)|(move|moving) (in|out) (day|date|checklist|inspection|cleaning)|house move|relocation checklist|relocating to a new (city|country|state|home|house))\b/i,
+  },
   { label: 'camping', pattern: /\b(camping|campsite|campground)\b/i },
-  { label: 'packing', pattern: /\b(packing|pack|luggage)\b/i },
+  {
+    label: 'packing',
+    pattern: /\b(packing (list|checklist|boxes|tips)|luggage|suitcase|pack(ing)? for (a |an |your |the )?(trip|vacation|holiday|travel|move|flight))\b/i,
+  },
   { label: 'morning routine', pattern: /\b(morning routine|morning habits)\b/i },
   { label: 'home inspection', pattern: /\b(home inspection|property inspection)\b/i },
 ];
 
-function suggestTags(searchableText: string): string[] {
-  return [
-    'Clipy',
-    ...TAG_RULES.filter(({ pattern }) => pattern.test(searchableText)).map(({ label }) => label),
-  ].slice(0, 6);
-}
-
-function suggestCategories(searchableText: string): string[] {
-  return CATEGORY_RULES
-    .filter(({ pattern }) => pattern.test(searchableText))
-    .map(({ label }) => label)
-    .slice(0, 2);
+export function classifyClipySummary(summary: { title: string; tldr: string }): {
+  categories: string[];
+  tags: string[];
+} {
+  const text = `${summary.title} ${summary.tldr}`;
+  return {
+    categories: CATEGORY_RULES
+      .filter(({ pattern }) => pattern.test(text))
+      .map(({ label }) => label)
+      .slice(0, 2),
+    tags: [
+      'Clipy',
+      ...TAG_RULES.filter(({ pattern }) => pattern.test(text)).map(({ label }) => label),
+    ].slice(0, 6),
+  };
 }
 
 export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: string } | null {
@@ -149,24 +161,16 @@ export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: stri
     return null;
   }
 
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.hostname !== 'clipy.online' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.port ||
-    parsed.search ||
-    parsed.hash
-  ) {
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
     return null;
   }
 
-  const match = parsed.pathname.match(/^\/video\/([a-zA-Z0-9_-]{6,64})\/?$/);
-  if (!match?.[1] || !CLIPY_ID_PATTERN.test(match[1])) return null;
+  const id = clipyVideoId(parsed);
+  if (!id || !CLIPY_ID_PATTERN.test(id)) return null;
 
   return {
-    id: match[1],
-    watchUrl: `${CLIPY_ORIGIN}/video/${match[1]}`,
+    id,
+    watchUrl: `${CLIPY_ORIGIN}/video/${id}`,
   };
 }
 
@@ -194,8 +198,9 @@ function normalizeMoments(value: unknown): ClipyMoment[] {
   if (!Array.isArray(value)) return [];
 
   return value.flatMap((entry): ClipyMoment[] => {
-    if (!entry || typeof entry !== 'object') return [];
-    const record = entry as Record<string, unknown>;
+    const parsedEntry = clipyMomentSchema.safeParse(entry);
+    if (!parsedEntry.success) return [];
+    const record = parsedEntry.data;
     const caption = boundedString(record.caption, 1_000);
     const frameUrl = boundedString(record.frameUrl, 2_000);
     const tMs = typeof record.tMs === 'number' && Number.isFinite(record.tMs)
@@ -260,7 +265,7 @@ function selectImages(keyPoints: string[], moments: ClipyMoment[]): Map<number, 
   return selected;
 }
 
-export function buildClipyTemplateDraft(
+function buildClipyTemplateDraft(
   context: ClipyContext,
   source: { id: string; watchUrl: string },
 ): ClipyTemplateDraft {
@@ -289,14 +294,14 @@ export function buildClipyTemplateDraft(
     `### Recording summary\n${tldr}`,
     transcript ? `### Transcript\n${transcript}` : '',
   ].filter(Boolean).join('\n\n');
-  const searchableText = [title, tldr, ...keyPoints, transcript].join(' ');
+  const { categories, tags } = classifyClipySummary({ title, tldr });
 
   return {
     title,
     description: tldr,
     templateType: 'checklist',
-    categories: suggestCategories(searchableText),
-    tags: suggestTags(searchableText),
+    categories,
+    tags,
     isPublic: false,
     seoTitle: buildSeoTitle(title),
     seoDescription: buildSeoDescription(tldr, keyPoints.length),
@@ -355,27 +360,8 @@ async function readJsonWithinLimit(response: Response): Promise<unknown> {
   }
 
   if (!response.body) throw new Error('Clipy returned an empty response');
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error('Clipy response is too large');
-    }
-    chunks.push(value);
-  }
-
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  chunks.forEach((chunk) => {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  });
+  const bytes = await readBodyWithinLimit(response.body, MAX_RESPONSE_BYTES);
+  if (!bytes) throw new Error('Clipy response is too large');
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
@@ -396,9 +382,7 @@ export async function handleGenerateTemplateFromClipy(
     return jsonError('Invalid JSON payload', 400, { code: 'invalid_json' });
   }
 
-  const source = parseClipyWatchUrl(
-    body && typeof body === 'object' ? (body as Record<string, unknown>).url : undefined,
-  );
+  const source = parseClipyWatchUrl(clipyRequestSchema.safeParse(body).data?.url);
   if (!source) {
     return jsonError('Enter a public Clipy watch link like https://clipy.online/video/abc123', 400, {
       code: 'invalid_clipy_url',
@@ -436,9 +420,9 @@ export async function handleGenerateTemplateFromClipy(
     });
   }
 
-  let context: ClipyContext;
+  let context: unknown;
   try {
-    context = (await readJsonWithinLimit(response)) as ClipyContext;
+    context = await readJsonWithinLimit(response);
   } catch {
     clearTimeout(timeout);
     return jsonError('Clipy returned an invalid or oversized response.', 502, {
@@ -447,31 +431,33 @@ export async function handleGenerateTemplateFromClipy(
   }
   clearTimeout(timeout);
 
-  if (!context || typeof context !== 'object') {
+  const parsedContext = clipyContextSchema.safeParse(context);
+  if (!parsedContext.success) {
     return jsonError('Clipy returned an invalid or oversized response.', 502, {
       code: 'clipy_invalid_response',
     });
   }
+  const { readiness, clip } = parsedContext.data;
 
   if (
-    context.readiness?.state !== 'complete' ||
-    context.readiness?.video !== 'ready' ||
-    context.readiness?.transcript !== 'ready' ||
-    context.readiness?.summary !== 'ready' ||
-    context.readiness?.keyMoments !== 'ready'
+    readiness?.state !== 'complete' ||
+    readiness.video !== 'ready' ||
+    readiness.transcript !== 'ready' ||
+    readiness.summary !== 'ready' ||
+    readiness.keyMoments !== 'ready'
   ) {
     return jsonError('This Clipy recording is still processing. Try again when it is ready.', 409, {
       code: 'clipy_not_ready',
     });
   }
-  if (context.clip?.accessMode !== 'public' || context.clip?.publicId !== source.id) {
+  if (clip?.accessMode !== 'public' || clip.publicId !== source.id) {
     return jsonError('Clipy recording was not found or is not public.', 404, {
       code: 'clipy_not_found',
     });
   }
 
   try {
-    return json({ draft: buildClipyTemplateDraft(context, source) });
+    return json({ draft: buildClipyTemplateDraft(parsedContext.data, source) });
   } catch {
     return jsonError('This Clipy recording does not contain enough information to create a checklist.', 422, {
       code: 'clipy_missing_content',

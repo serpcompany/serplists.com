@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-09-27
+- **Last updated:** 2026-10-02
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -57,6 +57,10 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   for 200 templates) instead of "public OR mine" (19,219). The UI merges the two as
   before; the user's own copy now wins over a cached catalog copy. The no-scope request
   stays for old tabs (TD-15).
+- [x] **Stop template export reading the public catalog.** With "Include public
+  community templates" on, `GET /api/templates/backup` OR-ed every public template into
+  the owned query, uncached, on each click. It now reads only the active context's own
+  templates; the page adds public ones from its edge-cached catalog.
 - [ ] **Paginate the public catalog** once it is large enough that cache misses or the
   response size matter. Cursor pagination on `created_at` using
   `idx_templates_public_created_at` (never `OFFSET`), FTS5 for search, an indexed
@@ -67,7 +71,13 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   composite indexes that cover the filter and sort, for example
   `(team_id, deleted_at, created_at)` and a partial index for archived rows. Replace
   the per-run template subquery with one lookup for the page. Target: Organization runs
-  12k to about the page size.
+  12k to about the page size. The Run Key lists (`list_templates`, `list_runs` in
+  `functions/api/handlers/agentMcpLists.ts`) already page with a keyset cursor, but each
+  page still reads and sorts all the owner's Personal rows through `idx_templates_owner`
+  or `idx_checklist_runs_user_id`; indexes on the owner and the sort (`coalesce(updated_at,
+  created_at), id` for templates, `created_at, id` for runs) would bound them too. Those
+  indexes are pending: they need a migration, and the user left them for later (decision
+  log, 2026-09-30).
 
 ### 3. Writes
 
@@ -80,8 +90,14 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
 
 - [ ] Re-test `PRAGMA optimize` (statistics made the pre-step-1 sitemap plans worse) and
   run it after migrations if it no longer regresses any request.
-- [ ] Add a rows-read budget to `d1:profile` (fail when a request exceeds its budget)
-  and run it in the weekly maintenance workflow.
+- [x] **Rows-read budgets in CI** (2026-10-01): `tests/integration/rows-read-budgets-local-d1.test.ts`
+  holds a budget for each hot request, bounded or unbounded by design, on the synthetic
+  dataset at a small scale, and fails when one reads more. It runs in `pnpm run test:local-d1`,
+  so CI's D1 integration step enforces it ([measuring](../../design-docs/d1-cost.md#measuring)).
+- [ ] Rows-read budgets at full scale: fail `d1:profile` when a request exceeds a budget at
+  20k templates, and run it in the weekly maintenance workflow. The CI budgets read a few
+  hundred rows per table, so a cost that only shows at scale (a planner choice that changes
+  with table size) still needs this run.
 - [ ] Add production `wrangler d1 insights` output to the weekly maintenance report
   (needs a Cloudflare token with analytics read in CI).
 
@@ -130,6 +146,11 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   what the no-parameter request returns. Browser tabs opened before a deploy keep the
   old client, which reads the Personal list from the no-parameter request; changing it
   would hide their private templates until a reload. The old branch is TD-15.
+- 2026-09-28: Build the public part of a template export in the page, from the catalog
+  it already loaded, rather than splitting the API query or reading the edge cache in the
+  export handler. The export page loads the catalog anyway, so this reads nothing extra.
+  The API ignores `includePublic=1`: an old tab gets only its own templates until a
+  reload, which is acceptable for an opt-in switch on a paid-only page.
 - 2026-09-27: Share the edge-cached catalog between anonymous and signed-in requests
   (same key, since both are public only), and let the user's own templates override the
   catalog copy when merging, because the cached copy can be 5 minutes old. The smoke
@@ -140,3 +161,35 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   `createRun` now takes the page's loaded template, and the run page always loads its
   own run by id. `tests/e2e/on-demand-lists.spec.ts` covers both; list pages take their
   loading state from their own queries; edge-cache keys name the resource, not the path.
+- 2026-09-28: The public catalog waits only for the session, not `isWorkspaceLoading`.
+  Its key is the same for visitors and users, so it cannot be fetched twice, and once
+  `isWorkspaceLoading` also covered an unconfirmed stored Organization, a failed teams
+  request kept the public library on the bundled starters. The workspace and run lists
+  still wait for the active context (`src/contexts/templateListObservers.ts`).
+- 2026-09-28: Refuse sitemap shard pages the index never published before reading the
+  cache. The cache key includes the page number, so each new out-of-range number was a
+  miss that scanned every public row to return 404. Pages above 1 now need a
+  `sitemap_shard_revisions` row (the index writes one for every page it lists before
+  responding), checked by primary key; the 404 is `no-store` so a page added later is
+  served at once. Page 1 is always built because a new database has no shard rows yet.
+- 2026-09-28: Key each sitemap by only the `sitemap_revisions` kinds it lists. One key
+  over all three kinds meant every sign-up or avatar change (which bump only
+  `profiles`) rebuilt the templates and categories shards, about 19k rows each at 20k
+  templates, for identical output. Shards now depend on their own kind and the index on
+  all three; builds receive only the kinds in their key. Every family still keys on the
+  bundled catalog, so deploys miss. The trade-off is that a trigger that changes a
+  shard's input without bumping its kind now serves that shard stale for up to the
+  1-day `s-maxage`, where an unrelated bump used to hide it, so the migration test pins
+  which kinds each trigger bumps.
+- 2026-09-30: Leave the Run Key lists' row reads for later. `list_templates` and `list_runs`
+  return a page at a time within the MCP result bound, but each page still reads and sorts
+  all the owner's Personal rows, as the unpaged lists did. Bounding the rows read needs the
+  owner-and-sort indexes in step 2, which take a migration; the user chose to leave them
+  pending, so that item stays open.
+- 2026-10-02: Name each Template's owning Organization with a `LEFT JOIN teams` on
+  `owner_type = 'team'` and the primary key, not with a second query. The join reads one
+  row per Organization Template and none for a Personal one. A lookup of the distinct
+  Organizations would read one row per list instead, but every caller of
+  `selectTemplatesWithOwner` would have to run it and merge the rows. The Organization
+  template list's budget moved from 3 to 4 rows per Template (67 to 88 rows on the
+  budget dataset); every other hot request reads what it did.

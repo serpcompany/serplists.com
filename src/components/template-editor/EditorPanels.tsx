@@ -1,13 +1,17 @@
+import type { JSX } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
+import { EDITOR_PANEL_HEADING_ID, EDITOR_PANEL_ID } from "@/components/template-editor/editorPanelIds";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
 import { SEOMetaEditor } from "@/components/template-editor/SEOMetaEditor";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { TemplateBasicInfo } from "@/components/template-editor/TemplateBasicInfo";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 interface EditorPanelsProps {
+  publicOwnerIsOrganization: boolean;
+  publicOwnerSlug: string | null;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
   showingSEO: boolean;
@@ -57,6 +61,8 @@ function getPanelDescription(
 }
 
 export function EditorPanels({
+  publicOwnerIsOrganization,
+  publicOwnerSlug,
   selectedSectionIndex,
   selectedItemIndex,
   showingSEO,
@@ -83,48 +89,54 @@ export function EditorPanels({
   });
 
   return (
-    <ScrollArea className="flex-1 bg-background">
-      <div className="mx-auto max-w-2xl p-8">
-        <div className="space-y-8">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-foreground">{panelTitle}</h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {panelDescription}
-            </p>
-          </div>
-
-          {showingTemplateInfo ? (
-            <TemplateBasicInfo showIntro={false} />
-          ) : showingSEO ? (
-            <SEOMetaEditor showIntro={false} />
-          ) : selectedSection ? (
-            <div className="space-y-6">
-              {selectedItemIndex === null ? (
-                <SectionEditor sectionIndex={selectedSectionIndex} showIntro={false} />
-              ) : selectedItem ? (
-                <ItemEditor
-                  itemIndex={selectedItemIndex}
-                  key={`${selectedSection.id}:${selectedItem.id}`}
-                  sectionIndex={selectedSectionIndex}
-                  showIntro={false}
-                />
-              ) : (
-                <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/20 px-6 text-center">
-                  <p className="max-w-md text-sm leading-6 text-muted-foreground">
-                    Select a task from the outline to edit its instructions and attached content.
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/20 px-6 text-center">
-              <p className="max-w-md text-sm leading-6 text-muted-foreground">
-                Add a section from the outline to start building this template.
-              </p>
-            </div>
-          )}
-        </div>
+    <section
+      aria-labelledby={EDITOR_PANEL_HEADING_ID}
+      className="flex min-w-0 flex-col gap-6 scroll-mt-32"
+      id={EDITOR_PANEL_ID}
+    >
+      <div className="flex flex-col gap-1">
+        <h2
+          className="text-lg font-semibold tracking-tight"
+          id={EDITOR_PANEL_HEADING_ID}
+          tabIndex={-1}
+        >
+          {panelTitle}
+        </h2>
+        <p className="text-sm text-muted-foreground">{panelDescription}</p>
       </div>
-    </ScrollArea>
+
+      {showingTemplateInfo ? (
+        <TemplateBasicInfo showIntro={false} />
+      ) : showingSEO ? (
+        <SEOMetaEditor ownerIsOrganization={publicOwnerIsOrganization} ownerSlug={publicOwnerSlug} showIntro={false} />
+      ) : selectedSection ? (
+        selectedItemIndex === null ? (
+          <SectionEditor sectionIndex={selectedSectionIndex} showIntro={false} />
+        ) : selectedItem ? (
+          <ItemEditor
+            itemIndex={selectedItemIndex}
+            key={`${selectedSection.id}:${selectedItem.id}`}
+            sectionIndex={selectedSectionIndex}
+            showIntro={false}
+          />
+        ) : (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyDescription>
+                Select a task from the outline to edit its instructions and attached content.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )
+      ) : (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyDescription>
+              Add a section from the outline to start building this template.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+    </section>
   );
 }

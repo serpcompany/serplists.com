@@ -1,7 +1,9 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
-import { Badge } from '@/components/ui/badge';
+import { SectionHeader } from '@/components/layout/SectionHeader';
+import { Link } from '@/components/navigation/Link';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 interface CategoryNavigationProps {
   categories: Array<{
@@ -26,17 +28,16 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
   }
 
   return (
-    <section className="mt-12">
-      <h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>
+    <section aria-labelledby="related-categories" className="mt-12">
+      <SectionHeader id="related-categories" title={title} />
       <div className="flex flex-wrap gap-2">
         {relatedCategories.slice(0, 5).map((category) => (
-          <Link key={category.slug} to={`/categories/${category.slug}`}>
-            <Badge
-              className="border-border px-3 py-1.5 hover:bg-muted"
-              variant="outline"
-            >
-              {category.name}
-            </Badge>
+          <Link
+            key={category.slug}
+            className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+            href={buildPublicCategoryPathForSlug(category.slug)}
+          >
+            {category.name}
           </Link>
         ))}
       </div>

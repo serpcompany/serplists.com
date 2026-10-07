@@ -1,196 +1,42 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { onlyElement } from "../support/elements";
+import {
+  applyMigration,
+  bodyOf,
+  callTool,
+  env,
+  keyId,
+  mcpRequest,
+  migration25,
+  migration27,
+  rawKey,
+  rows,
+  startLocalD1BeforeTheRunKeyMigrations,
+  stopLocalD1,
+  toolError,
+  toolPayload,
+  sendRequestsWithRunKey,
+} from "../support/personalRunMcpLocalD1";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import {
   createPersonalRunKeySecret,
   insertPersonalRunKeyWithinCap,
+  MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../../functions/api/utils/personal-run-key";
+import { optionalRecordIn, recordIn, recordsIn, textIn } from "../support/mcpResponses";
+import { jsonRecordIn, storedSectionsIn } from "../support/storedJson";
+import { contentAt, subTaskAt, taskIn } from "../support/elements";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const migrationsDir = path.join(repoRoot, "db/migrations");
-const migration25 = "0025_add_personal_run_keys.sql";
-const protocolVersion = "2025-06-18";
-
-type TestEnv = {
-  DB: D1Database;
-  PERSONAL_RUN_MCP_ENABLED?: "true" | "false";
-};
-
-type JsonRecord = Record<string, unknown>;
-
-let platform: PlatformProxy<TestEnv>;
-let env: TestEnv;
-let persistPath = "";
-let rawKey = "";
-const keyId = "key-user-a";
 let runId = "";
 
-function migrationNamesThrough24(): string[] {
-  return readdirSync(migrationsDir)
-    .filter((name) => name.endsWith(".sql") && name !== migration25)
-    .sort((left, right) => left.localeCompare(right));
-}
-
-async function applyMigration(name: string): Promise<void> {
-  const statements = readFileSync(path.join(migrationsDir, name), "utf8")
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter(Boolean);
-  for (const statement of statements) await env.DB.prepare(statement).run();
-}
-
-async function rows<T extends JsonRecord>(sql: string, ...bindings: unknown[]): Promise<T[]> {
-  const result = await env.DB.prepare(sql).bind(...bindings).all<T>();
-  return result.results;
-}
-
-function mcpRequest(method: string, params?: unknown, id: number | undefined = 1, path = "/api/mcp"): Request {
-  return new Request(`http://localhost${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${rawKey}`,
-      Accept: "application/json, text/event-stream",
-      "Content-Type": "application/json; charset=utf-8",
-      "MCP-Protocol-Version": protocolVersion,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      ...(id === undefined ? {} : { id }),
-      method,
-      ...(params === undefined ? {} : { params }),
-    }),
-  });
-}
-
-async function callTool(name: string, args: JsonRecord = {}, id = 1): Promise<Response> {
-  return handleAgentMcp(mcpRequest("tools/call", { name, arguments: args }, id), env as never);
-}
-
-async function bodyOf(response: Response): Promise<JsonRecord> {
-  return response.json() as Promise<JsonRecord>;
-}
-
-function toolPayload(body: JsonRecord): JsonRecord {
-  return ((body.result as JsonRecord).structuredContent ?? {}) as JsonRecord;
-}
-
-function toolError(body: JsonRecord): string | undefined {
-  return (toolPayload(body).error as string | undefined);
-}
-
-async function seedPreMigrationData(): Promise<void> {
-  const userSql = `
-    INSERT INTO users (id, email, name, email_verified, created_at)
-    VALUES (?, ?, ?, 1, ?)
-  `;
-  const createdAt = "2026-09-19T00:00:00.000Z";
-  await env.DB.batch([
-    env.DB.prepare(userSql).bind("user-a", "user-a@example.test", "User A", createdAt),
-    env.DB.prepare(userSql).bind("user-b", "user-b@example.test", "User B", createdAt),
-    env.DB.prepare(`
-      INSERT INTO teams (id, name, slug, billing_owner_user_id, created_by_user_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind("team-a", "Team A", "team-a", "user-a", "user-a", createdAt, createdAt),
-    env.DB.prepare(`
-      INSERT INTO templates (
-        id, user_id, title, description, items, is_public, category, tags, created_at,
-        version, type, owner_type, team_id, created_by_user_id, content_version
-      ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 'checklist', ?, ?, ?, 1)
-    `).bind(
-      "template-a",
-      "user-a",
-      "Personal Release SOP",
-      "A personal SOP",
-      JSON.stringify([{
-        id: "section-1",
-        title: "Release",
-        items: [{
-          id: "task-1",
-          title: "Verify release",
-          notes: "",
-          isCompleted: false,
-          contents: [{
-            type: "subItems",
-            subItems: [
-              { id: "sub-1", title: "Tests pass", isCompleted: false },
-              { id: "sub-2", title: "Preview checked", isCompleted: false },
-            ],
-          }],
-        }],
-      }]),
-      "release",
-      "[]",
-      createdAt,
-      "user",
-      null,
-      "user-a",
-    ),
-    env.DB.prepare(`
-      INSERT INTO templates (
-        id, user_id, title, items, is_public, created_at, version, type, owner_type,
-        team_id, created_by_user_id, content_version
-      ) VALUES (?, ?, ?, '[]', 0, ?, 1, 'checklist', 'user', NULL, ?, 1)
-    `).bind("template-b", "user-b", "Other user's SOP", createdAt, "user-b"),
-    env.DB.prepare(`
-      INSERT INTO templates (
-        id, user_id, title, items, is_public, created_at, version, type, owner_type,
-        team_id, created_by_user_id, content_version
-      ) VALUES (?, ?, ?, '[]', 0, ?, 1, 'checklist', 'team', ?, ?, 1)
-    `).bind("template-team", "user-a", "Team SOP", createdAt, "team-a", "user-a"),
-    env.DB.prepare(`
-      INSERT INTO checklist_runs (
-        id, user_id, title, items, status, started_at, created_at, progress,
-        team_id, created_by_user_id, started_by_user_id, template_version, revision, retired_items
-      ) VALUES (?, ?, ?, '[]', 'in_progress', ?, ?, 0, NULL, ?, ?, 1, 1, '[]')
-    `).bind("sentinel-run", "user-b", "Existing run", createdAt, createdAt, "user-b", "user-b"),
-  ]);
-}
+const auditEventsOfTheRun = async () => onlyElement(await rows<{ count: number }>(
+  "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
+  runId,
+)).count;
 
 describe.sequential("Personal Run Key MCP against real local D1", () => {
-  beforeAll(async () => {
-    persistPath = mkdtempSync(path.join(tmpdir(), "serplists-personal-run-mcp-"));
-    const pre25SqlPath = path.join(persistPath, "migrations-through-0024.sql");
-    writeFileSync(
-      pre25SqlPath,
-      migrationNamesThrough24()
-        .map((name) => readFileSync(path.join(migrationsDir, name), "utf8"))
-        .join("\n"),
-    );
-    execFileSync("pnpm", [
-      "exec",
-      "wrangler",
-      "d1",
-      "execute",
-      "serp-checklists-db",
-      "--local",
-      "--persist-to",
-      persistPath,
-      "--file",
-      pre25SqlPath,
-    ], {
-      cwd: repoRoot,
-      env: { ...process.env, CI: "1" },
-      stdio: "pipe",
-    });
-    platform = await getPlatformProxy<TestEnv>({
-      configPath: path.join(repoRoot, "wrangler.toml"),
-      envFiles: [".local-d1-env-disabled"],
-      persist: { path: path.resolve(repoRoot, persistPath, "v3") },
-      remoteBindings: false,
-    });
-    env = { DB: platform.env.DB, PERSONAL_RUN_MCP_ENABLED: "true" };
-    await seedPreMigrationData();
-  }, 60_000);
-
-  afterAll(async () => {
-    await platform?.dispose();
-    if (persistPath) rmSync(persistPath, { recursive: true, force: true });
-  });
+  beforeAll(startLocalD1BeforeTheRunKeyMigrations, 60_000);
+  afterAll(stopLocalD1);
 
   it("applies an additive migration and enforces its actual D1 constraints", async () => {
     const beforeObjects = await rows<{ name: string }>(
@@ -243,13 +89,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
 
   it("stores only a hash and limits a key to its owner's personal workspace", async () => {
     const secret = await createPersonalRunKeySecret();
-    rawKey = secret.key;
+    sendRequestsWithRunKey(secret.key);
     await env.DB.prepare(`
       INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at)
       VALUES (?, 'user-a', 'Codex local D1', ?, ?, ?)
     `).bind(keyId, secret.keyPrefix, secret.keyHash, "2026-09-19T02:00:00.000Z").run();
+    await applyMigration(migration27);
 
-    const stored = await rows<JsonRecord>("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
+    const stored = await rows("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
     expect(JSON.stringify(stored)).not.toContain(rawKey);
     expect(stored[0]).toMatchObject({
       id: keyId,
@@ -257,10 +104,21 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       key_prefix: secret.keyPrefix,
       key_hash: secret.keyHash,
       revoked_at: null,
+      permissions: '["templates:read","runs:read","runs:write"]',
     });
 
+    const toolsBody = await bodyOf(await handleAgentMcp(mcpRequest("tools/list"), env));
+    expect(recordsIn(recordIn(toolsBody.result).tools).map(({ name }) => name)).toEqual([
+      "list_templates",
+      "get_template",
+      "start_run",
+      "list_runs",
+      "get_run",
+      "update_run",
+    ]);
+
     const listBody = await bodyOf(await callTool("list_templates"));
-    expect((toolPayload(listBody).templates as JsonRecord[]).map(({ id }) => id)).toEqual(["template-a"]);
+    expect(recordsIn(toolPayload(listBody).templates).map(({ id }) => id)).toEqual(["template-a"]);
 
     const foreignTemplate = await bodyOf(await callTool("start_run", { templateId: "template-b" }));
     expect(toolError(foreignTemplate)).toBe("template_not_found");
@@ -268,14 +126,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(toolError(teamTemplate)).toBe("template_not_found");
   });
 
-  it("persists a run, notes, task state, and audit attribution", async () => {
+  it("persists a run, notes, task state, and audit attribution, in audit rows that describe each change without copying the run's content", async () => {
     const startBody = await bodyOf(await callTool("start_run", {
       templateId: "template-a",
       title: "Local D1 MCP Trial",
     }));
-    const startedRun = toolPayload(startBody).run as JsonRecord;
+    const startedRun = recordIn(toolPayload(startBody).run);
     expect(startedRun).toMatchObject({ title: "Local D1 MCP Trial", revision: 1, progress: 0 });
-    runId = startedRun.id as string;
+    runId = textIn(startedRun.id);
 
     const noteBody = await bodyOf(await callTool("update_run", {
       runId,
@@ -296,7 +154,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     }));
     expect(toolPayload(completeBody).run).toMatchObject({ revision: 3, progress: 33 });
 
-    const [storedRun] = await rows<JsonRecord>("SELECT * FROM checklist_runs WHERE id = ?", runId);
+    const storedRun = onlyElement(await rows("SELECT * FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun).toMatchObject({
       user_id: "user-a",
       team_id: null,
@@ -304,27 +162,34 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       revision: 3,
       progress: 33,
     });
-    const sections = JSON.parse(storedRun.items as string);
-    expect(sections[0].items[0]).toMatchObject({
+    const sections = storedSectionsIn(storedRun.items);
+    expect(taskIn(sections, 0, 0)).toMatchObject({
       notes: "Verified against the disposable local D1 database.",
       isCompleted: false,
     });
-    expect(sections[0].items[0].contents[0].subItems[0].isCompleted).toBe(true);
+    expect(subTaskAt(contentAt(taskIn(sections, 0, 0), 0), 0).isCompleted).toBe(true);
 
-    const history = await rows<JsonRecord>(
+    const history = await rows(
       "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? ORDER BY created_at",
       runId,
     );
     expect(history).toHaveLength(3);
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
+
+    const itemsCopiesAndSizeOfEachAuditRow = await rows(`
+      SELECT
+        coalesce(json_extract(before_json, '$.items'), json_extract(after_json, '$.items'),
+          json_extract(diff_json, '$.items'), json_extract(after_json, '$.retired_items')) AS stored_items,
+        length(coalesce(before_json, '')) + length(coalesce(after_json, '')) + length(coalesce(diff_json, '')) AS bytes
+      FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?
+    `, runId);
+    expect(itemsCopiesAndSizeOfEachAuditRow.map(({ stored_items }) => stored_items)).toEqual([null, null, null]);
+    expect(Math.max(...itemsCopiesAndSizeOfEachAuditRow.map(({ bytes }) => Number(bytes)))).toBeLessThan(2_048);
   });
 
   it("allows exactly one same-revision update and writes exactly one audit event", async () => {
-    const beforeAudit = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
+    const auditEventsBefore = await auditEventsOfTheRun();
 
     const updates = await Promise.all([
       callTool("update_run", {
@@ -346,24 +211,17 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(bodies.filter((body) => toolError(body) === undefined)).toHaveLength(1);
     expect(bodies.filter((body) => toolError(body) === "edit_conflict")).toHaveLength(1);
 
-    const [storedRun] = await rows<JsonRecord>("SELECT revision FROM checklist_runs WHERE id = ?", runId);
+    const storedRun = onlyElement(await rows("SELECT revision FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun.revision).toBe(4);
-    const afterAudit = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
-    expect(afterAudit[0].count).toBe(beforeAudit[0].count + 1);
+    expect(await auditEventsOfTheRun()).toBe(auditEventsBefore + 1);
   });
 
   it("rolls a run mutation back when its audit insert fails", async () => {
-    const [beforeRun] = await rows<JsonRecord>(
+    const [beforeRun] = await rows(
       "SELECT items, progress, revision, updated_at FROM checklist_runs WHERE id = ?",
       runId,
     );
-    const [beforeAudit] = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
+    const auditEventsBefore = await auditEventsOfTheRun();
     await env.DB.prepare(`
       CREATE TRIGGER reject_test_mcp_audit
       BEFORE INSERT ON audit_events
@@ -377,12 +235,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       const response = await callTool("update_run", {
         runId,
         expectedRevision: 4,
-        operation: "set_run_status",
-        status: "completed",
+        operation: "set_task_completed",
+        taskId: "task-1",
+        completed: true,
       });
       const body = await bodyOf(response);
       expect(response.status).toBe(200);
-      expect((body.error as JsonRecord | undefined)?.code).toBe(-32603);
+      expect(optionalRecordIn(body.error)?.code).toBe(-32603);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_test_mcp_audit").run();
     }
@@ -391,159 +250,71 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       "SELECT items, progress, revision, updated_at FROM checklist_runs WHERE id = ?",
       runId,
     )).toEqual([beforeRun]);
-    const [afterAudit] = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
-    expect(afterAudit.count).toBe(beforeAudit.count);
+    expect(await auditEventsOfTheRun()).toBe(auditEventsBefore);
   });
 
-  it("creates and edits a private personal template and syncs its in-progress runs", async () => {
-    const sections = [{
-      title: "Boot",
-      items: [{
-        title: "Install",
-        contents: [{ type: "subItems", subItems: [{ title: "pnpm install" }] }],
-      }],
-    }];
+  it("fills a task's form with set_form_answer, refusing an invalid answer, and then ticks the task", async () => {
+    const emailField = { id: "field-email", label: "Release contact", kind: "email", required: true };
+    const [template] = await rows<{ items: string }>("SELECT items FROM templates WHERE id = 'template-a'");
+    const sections = storedSectionsIn(template?.items);
+    const verify = taskIn(sections, 0, 0);
+    verify.contents = [...(verify.contents ?? []), { id: "content-form", type: "form", value: "", fields: [emailField] }];
+    await env.DB.prepare("UPDATE templates SET items = ? WHERE id = 'template-a'").bind(JSON.stringify(sections)).run();
 
-    const limited = await bodyOf(await callTool("create_template", { title: "Agent Harness Setup", sections }));
-    expect(toolError(limited)).toBe("limit_reached");
+    const formRunId = textIn(recordIn(toolPayload(await bodyOf(await callTool("start_run", { templateId: "template-a" }))).run).id);
+    const update = async (expectedRevision: number, change: Record<string, unknown>) =>
+      bodyOf(await callTool("update_run", { runId: formRunId, expectedRevision, taskId: "task-1", ...change }));
+    const answer = (expectedRevision: number, value: unknown) =>
+      update(expectedRevision, { operation: "set_form_answer", fieldId: "field-email", answer: value });
 
-    await env.DB.prepare(`
-      INSERT INTO entitlement_overrides (user_id, plan, created_at) VALUES ('user-a', 'pro', ?)
-    `).bind("2026-09-19T02:30:00.000Z").run();
+    expect(toolError(await update(1, { operation: "set_task_completed", completed: true }))).toBe("form_incomplete");
+    const invalid = await answer(1, "release desk");
+    expect(toolPayload(invalid)).toMatchObject({ error: "invalid_answer", message: "Enter an email address like name@example.com." });
+    expect(toolPayload(await answer(1, "release@example.test")).run).toMatchObject({ revision: 2 });
+    expect(toolPayload(await update(2, { operation: "set_task_completed", completed: true })).run).toMatchObject({ revision: 3 });
 
-    const createBody = await bodyOf(await callTool("create_template", {
-      title: "Agent Harness Setup",
-      description: "Per-project harness checklist",
-      sections,
-      tags: ["harness"],
-    }));
-    const created = toolPayload(createBody).template as JsonRecord;
-    expect(created).toMatchObject({ title: "Agent Harness Setup", version: 1, tags: ["harness"] });
-    const templateId = created.id as string;
-    const [storedTemplate] = await rows<JsonRecord>(
-      "SELECT user_id, owner_type, team_id, is_public FROM templates WHERE id = ?",
-      templateId,
+    const storedRun = onlyElement(await rows("SELECT items, revision FROM checklist_runs WHERE id = ?", formRunId));
+    const storedTask = taskIn(storedSectionsIn(storedRun.items), 0, 0);
+    expect(storedTask.isCompleted).toBe(true);
+    expect(JSON.stringify(storedTask.contents)).toContain('"answer":"release@example.test"');
+    const answerAudits = await rows<{ diff_json: string }>(
+      "SELECT diff_json FROM audit_events WHERE resource_id = ? AND json_extract(diff_json, '$.operation') = 'set_form_answer'",
+      formRunId,
     );
-    expect(storedTemplate).toEqual({ user_id: "user-a", owner_type: "user", team_id: null, is_public: 0 });
-
-    const createdSection = (created.sections as JsonRecord[])[0];
-    const createdTask = (createdSection.items as JsonRecord[])[0];
-    expect(typeof createdSection.id).toBe("string");
-    expect(typeof createdTask.id).toBe("string");
-
-    const startBody = await bodyOf(await callTool("start_run", { templateId }));
-    const templateRunId = (toolPayload(startBody).run as JsonRecord).id as string;
-    await callTool("update_run", {
-      runId: templateRunId,
-      expectedRevision: 1,
-      operation: "set_task_completed",
-      taskId: createdTask.id as string,
-      completed: true,
-    });
-
-    const updateBody = await bodyOf(await callTool("update_template", {
-      templateId,
-      expectedVersion: 1,
-      sections: [{ ...createdSection, items: [createdTask, { title: "Verify" }] }],
-    }));
-    const updated = toolPayload(updateBody).template as JsonRecord;
-    expect(updated.version).toBe(2);
-    expect(((updated.sections as JsonRecord[])[0].items as JsonRecord[]).map(({ title }) => title))
-      .toEqual(["Install", "Verify"]);
-
-    const runBody = await bodyOf(await callTool("get_run", { runId: templateRunId }));
-    const runTasks = ((toolPayload(runBody).run as JsonRecord).sections as JsonRecord[])[0].items as JsonRecord[];
-    expect(runTasks.map(({ title, isCompleted }) => ({ title, isCompleted: isCompleted === true }))).toEqual([
-      { title: "Install", isCompleted: true },
-      { title: "Verify", isCompleted: false },
+    expect(answerAudits.map(({ diff_json }) => jsonRecordIn(diff_json))).toEqual([
+      expect.objectContaining({ taskId: "task-1", fieldId: "field-email", answersChanged: ["task-1"] }),
     ]);
-
-    const stale = await bodyOf(await callTool("update_template", { templateId, expectedVersion: 1, title: "Stale" }));
-    expect(toolError(stale)).toBe("edit_conflict");
-
-    const history = await rows<JsonRecord>(
-      "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? ORDER BY created_at",
-      templateId,
-    );
-    expect(history.map(({ action }) => action)).toEqual(["template.created", "template.updated"]);
-    expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
-    expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
+    expect(JSON.stringify(answerAudits)).not.toContain("release@example.test");
   });
 
-  it("keeps template writes inside the key owner's private personal templates", async () => {
-    const sections = [{ title: "Section", items: [{ title: "Task" }] }];
-    await env.DB.batch([
-      env.DB.prepare(`
-        INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at)
-        VALUES ('member-a', 'team-a', 'user-a', 'owner', 'active', ?, ?)
-      `).bind("2026-09-19T02:40:00.000Z", "2026-09-19T02:40:00.000Z"),
-      env.DB.prepare(`
-        INSERT INTO templates (
-          id, user_id, title, items, is_public, created_at, version, type, owner_type,
-          team_id, created_by_user_id, content_version
-        ) VALUES ('template-public', 'user-a', 'Published SOP', ?, 1, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
-      `).bind(JSON.stringify(sections), "2026-09-19T02:40:00.000Z"),
-    ]);
+  it("holds a Free owner to the active run limit under concurrent start_run calls", async () => {
+    const freeLimit = 3;
+    const activeRuns = async () => onlyElement(await rows<{ count: number }>(`
+      SELECT count(*) AS count FROM checklist_runs
+      WHERE user_id = 'user-a' AND team_id IS NULL AND status = 'in_progress' AND deleted_at IS NULL
+    `)).count;
+    const createdAudits = async () => onlyElement(await rows<{ count: number }>(
+      "SELECT count(*) AS count FROM audit_events WHERE action = 'checklist_run.created' AND actor_user_id = 'user-a'",
+    )).count;
+    const activeBefore = await activeRuns();
+    const auditsBefore = await createdAudits();
+    expect(activeBefore).toBeLessThan(freeLimit);
 
-    const publicRead = await bodyOf(await callTool("get_template", { templateId: "template-public" }));
-    expect((toolPayload(publicRead).template as JsonRecord).title).toBe("Published SOP");
-    const publicWrite = await bodyOf(await callTool("update_template", {
-      templateId: "template-public",
-      expectedVersion: 1,
-      title: "Defaced public SOP",
-    }));
-    expect(toolError(publicWrite)).toBe("template_is_public");
+    const bodies = await Promise.all([61, 62, 63, 64, 65].map(async (id) =>
+      bodyOf(await callTool("start_run", { templateId: "template-a" }, id))));
 
-    const viaQuery = await bodyOf(await handleAgentMcp(mcpRequest("tools/call", {
-      name: "create_template",
-      arguments: { title: "Created with teamId query", sections },
-    }, 1, "/api/mcp?teamId=team-a"), env as never));
-    const viaQueryId = (toolPayload(viaQuery).template as JsonRecord).id;
-    expect(await rows("SELECT owner_type, team_id, is_public FROM templates WHERE id = ?", viaQueryId)).toEqual([
-      { owner_type: "user", team_id: null, is_public: 0 },
-    ]);
-
-    for (const templateId of ["template-b", "template-team"]) {
-      const read = await bodyOf(await callTool("get_template", { templateId }));
-      expect(toolError(read)).toBe("template_not_found");
-      const write = await bodyOf(await callTool("update_template", { templateId, expectedVersion: 1, title: "Taken" }));
-      expect(toolError(write)).toBe("template_not_found");
-    }
-
-    for (const extra of [{ is_public: true }, { teamId: "team-a" }, { visibility: "public" }]) {
-      const body = await bodyOf(await callTool("create_template", { title: "Escalation", sections, ...extra }));
-      expect(((body.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
-    }
-
-    expect(await rows(
-      "SELECT title FROM templates WHERE id IN ('template-b', 'template-public', 'template-team') ORDER BY id",
-    )).toEqual([
-      { title: "Other user's SOP" },
-      { title: "Published SOP" },
-      { title: "Team SOP" },
-    ]);
-    expect(await rows("SELECT id FROM templates WHERE title = 'Escalation'")).toEqual([]);
-  });
-
-  it("reports a committed oversized create as success without its sections", async () => {
-    const body = await bodyOf(await callTool("create_template", {
-      title: "Oversized SOP",
-      sections: [{ title: "Long", items: [{ title: "Read", contents: [{ type: "text", value: "x".repeat(300_000) }] }] }],
-    }));
-    expect(toolError(body)).toBeUndefined();
-    expect(toolPayload(body).sectionsOmitted).toBe(true);
-    expect(toolPayload(body).template).not.toHaveProperty("sections");
-    expect(await rows("SELECT id FROM templates WHERE title = 'Oversized SOP'")).toHaveLength(1);
+    const started = bodies.filter((body) => toolError(body) === undefined);
+    expect(started).toHaveLength(freeLimit - activeBefore);
+    expect(bodies.filter((body) => toolError(body) === "limit_reached")).toHaveLength(bodies.length - started.length);
+    expect(await activeRuns()).toBe(freeLimit);
+    expect(await createdAudits()).toBe(auditsBefore + started.length);
   });
 
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)
       .run();
-    const denied = await handleAgentMcp(mcpRequest("tools/list"), env as never);
+    const denied = await handleAgentMcp(mcpRequest("tools/list"), env);
     expect(denied.status).toBe(401);
 
     await env.DB.prepare(`
@@ -574,20 +345,23 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       key_prefix: "slrk_cap",
       key_hash: `cap-hash-${index}`,
       created_at: "2026-09-19T04:00:00.000Z",
+      permissions: ["runs:read"] as const,
     });
 
-    // Twelve parallel creates: exactly ten may succeed.
+    const parallelCreatesPastTheCap = MAX_ACTIVE_PERSONAL_RUN_KEYS + 2;
     const results = await Promise.all(
-      Array.from({ length: 12 }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
+      Array.from({ length: parallelCreatesPastTheCap }, (_, index) => insertPersonalRunKeyWithinCap(env, record(index))),
     );
-    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(results.filter(Boolean)).toHaveLength(MAX_ACTIVE_PERSONAL_RUN_KEYS);
     expect(await rows("SELECT id FROM personal_run_keys WHERE user_id = 'cap-user' AND revoked_at IS NULL"))
-      .toHaveLength(10);
+      .toHaveLength(MAX_ACTIVE_PERSONAL_RUN_KEYS);
 
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T05:00:00.000Z", "cap-key-0")
       .run();
-    expect(await insertPersonalRunKeyWithinCap(env as never, record(20))).toBe(true);
-    expect(await insertPersonalRunKeyWithinCap(env as never, record(21))).toBe(false);
+    expect(await insertPersonalRunKeyWithinCap(env, record(20))).toBe(true);
+    expect(await insertPersonalRunKeyWithinCap(env, record(21))).toBe(false);
+    expect(await rows("SELECT permissions FROM personal_run_keys WHERE id = 'cap-key-20'"))
+      .toEqual([{ permissions: '["runs:read"]' }]);
   });
 });

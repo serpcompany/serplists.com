@@ -3,6 +3,8 @@ export type ViewModePreferenceSurface =
   | 'category-templates'
   | 'dashboard-templates';
 
+import { succeedsWithoutThrowing } from '@/lib/browserStorage';
+
 type ViewModeStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 const VIEW_MODE_PREFERENCE_VERSION = 1;
@@ -38,10 +40,5 @@ export const writeViewModePreference = (
   value: ViewMode,
 ): void => {
   if (!storage) return;
-
-  try {
-    storage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable in private or restricted browser contexts.
-  }
+  succeedsWithoutThrowing(() => storage.setItem(key, value));
 };

@@ -1,7 +1,3 @@
-/**
- * Predefined categories for templates
- */
-
 export const PREDEFINED_CATEGORIES = [
   "wedding",
   "moving", 
@@ -12,7 +8,3 @@ export const PREDEFINED_CATEGORIES = [
 ] as const;
 
 export const getPredefinedCategories = () => PREDEFINED_CATEGORIES;
-
-export const isPredefinedCategory = (category: string): boolean => {
-  return PREDEFINED_CATEGORIES.some((predefined) => predefined === category);
-};

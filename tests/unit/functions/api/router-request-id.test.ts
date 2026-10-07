@@ -1,16 +1,54 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
+import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import { logLineIn } from '../../../support/storedJson';
+import type { Env } from '@functions/api/types';
 
-function buildEnv(overrides?: Record<string, unknown>) {
-  return {
+const requestIdBody = z.object({ requestId: z.string() }).passthrough();
+
+function buildEnv(overrides: Partial<Env> = {}) {
+  return apiEnv({
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
-  } as any;
+  });
 }
 
-describe('API router request id propagation', () => {
+const aRouterWithTheMcpHandlerMocked = async () => {
+  const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
+  vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
+  return { apiWorker: await freshApiWorker(), handleAgentMcp };
+};
+
+describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/handlers/templates');
     vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it("tags what a handler logs with the request's id, the one the response carries", async () => {
+    vi.doMock('../../../../functions/api/handlers/templates', async () => {
+      const { log } = await import('../../../../functions/api/utils/logger');
+      return {
+        handleTemplates: vi.fn(async () => {
+          await Promise.resolve();
+          log('info', 'handler_line');
+          return Response.json({});
+        }),
+      };
+    });
+    const lines: string[] = [];
+    vi.spyOn(console, 'info').mockImplementation((line: unknown) => {
+      lines.push(String(line));
+    });
+    const apiWorker = await freshApiWorker();
+
+    const response = await apiWorker.fetch(new Request('http://localhost/api/templates'), buildEnv());
+
+    const logged = lines.map((line) => logLineIn(line));
+    expect(logged.find((entry) => entry.message === 'handler_line')?.requestId).toBe(response.headers.get('X-Request-Id'));
   });
 
   it('passes the generated request id through to routed handlers', async () => {
@@ -22,7 +60,7 @@ describe('API router request id propagation', () => {
       ),
     }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
 
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/templates', {
@@ -34,7 +72,7 @@ describe('API router request id propagation', () => {
     );
 
     const responseRequestId = response.headers.get('X-Request-Id');
-    const data = await response.json();
+    const data = await readJson(response, requestIdBody);
 
     expect(response.status).toBe(200);
     expect(responseRequestId).toBeTruthy();
@@ -42,14 +80,32 @@ describe('API router request id propagation', () => {
     expect(data.requestId).not.toBe('client-provided-request-id');
   });
 
-  it('keeps personal run MCP routes off on remote hosts unless explicitly enabled', async () => {
-    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
-    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
+  it('drops a client X-Forwarded-Host so no handler builds URLs from it, but keeps X-Forwarded-For for local rate limits', async () => {
+    vi.doMock('../../../../functions/api/handlers/templates', () => ({
+      handleTemplates: vi.fn((request: Request) =>
+        Response.json({
+          forwardedHost: request.headers.get('X-Forwarded-Host'),
+          forwardedFor: request.headers.get('X-Forwarded-For'),
+        }),
+      ),
+    }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/templates', {
+        headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-For': '203.0.113.7' },
+      }),
+      buildEnv(),
+    );
+
+    expect(await response.json()).toEqual({ forwardedHost: null, forwardedFor: '203.0.113.7' });
+  });
+
+  it('keeps personal run MCP routes off on remote hosts unless explicitly enabled', async () => {
+    const { apiWorker, handleAgentMcp } = await aRouterWithTheMcpHandlerMocked();
     const response = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
-      {} as any,
+      apiEnv(),
     );
 
     expect(response.status).toBe(404);
@@ -57,10 +113,7 @@ describe('API router request id propagation', () => {
   });
 
   it('allows explicit remote enablement and explicit local disablement', async () => {
-    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
-    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
-
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const { apiWorker, handleAgentMcp } = await aRouterWithTheMcpHandlerMocked();
     const enabledResponse = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
       buildEnv({ PERSONAL_RUN_MCP_ENABLED: 'true' }),

@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+import { useId } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -14,13 +16,14 @@ export function SectionEditor({
   showIntro = true,
 }: SectionEditorProps): JSX.Element {
   const { control, setValue } = useFormContext<TemplateEditorFormValues>();
+  const titleInputId = useId();
   const section = useWatch({
     control,
     name: `sections.${sectionIndex}` as const,
   });
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       {showIntro ? (
         <div>
           <h2 className="text-lg font-semibold text-foreground">
@@ -34,8 +37,9 @@ export function SectionEditor({
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Section Title</FieldLabel>
+          <FieldLabel htmlFor={titleInputId}>Section Title</FieldLabel>
           <Input
+            id={titleInputId}
             value={section?.title ?? ""}
             onChange={(event) =>
               setValue(`sections.${sectionIndex}.title`, event.target.value, {
@@ -43,18 +47,13 @@ export function SectionEditor({
               })
             }
             placeholder="Enter section title..."
-            className="bg-input"
           />
         </Field>
       </FieldGroup>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Tasks in section</span>
-          <span className="text-sm font-medium text-foreground">
-            {section?.items.length ?? 0}
-          </span>
-        </div>
+      <div className="flex items-center justify-between rounded-lg border p-4 text-sm">
+        <span className="text-muted-foreground">Tasks in section</span>
+        <span className="font-medium">{section?.items.length ?? 0}</span>
       </div>
     </div>
   );

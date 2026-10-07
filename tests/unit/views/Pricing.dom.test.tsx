@@ -1,0 +1,178 @@
+import { navigation } from '../../support/mockedNextNavigation';
+import React from 'react';
+import { QueryClient, QueryClientProvider, type UseQueryOptions } from '@tanstack/react-query';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+import { api } from '@/lib/api';
+import { PLAN_UNKNOWN_MESSAGE, shouldRetryBillingStatus, type BillingStatus } from '@/lib/billing';
+import Pricing from '@/views/Pricing';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
+import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+import { expectOneCallOnlyAfterABackForwardRestore } from '../../support/pageRestore';
+
+const queryOptionsSeen = vi.fn<(options: UseQueryOptions) => void>();
+
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  return {
+    ...actual,
+    useQuery: (options: UseQueryOptions, client?: QueryClient) => {
+      queryOptionsSeen(options);
+      return actual.useQuery(options, client);
+    },
+  };
+});
+
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: { email: 'john@example.com', id: 'user-1' } }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    createBillingCheckout: vi.fn(),
+    getBillingStatus: vi.fn(),
+  },
+}));
+
+const BILLING_STATUS_KEY = ['billing', 'status', 'user-1', 'personal'];
+
+const renderWithClient = (queryClient: QueryClient) => {
+  navigation.reset('/pricing/');
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <Pricing />
+    </QueryClientProvider>,
+  );
+};
+
+const renderPricing = (billingData: Record<string, unknown>) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(BILLING_STATUS_KEY, billingData);
+
+  navigation.reset('/pricing/');
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <Pricing />
+    </QueryClientProvider>,
+  );
+};
+
+describe('Pricing', () => {
+  it('offers the upgrade to a Free user with no subscription', () => {
+    const html = renderPricing({ plan: 'free', billingEnabled: true, subscriptionStatus: null });
+
+    expect(html).toContain('Upgrade — $9/month');
+  });
+
+  it('sends a past-due subscriber to manage the subscription instead of upgrading again', () => {
+    const html = renderPricing({
+      plan: 'free',
+      billingEnabled: true,
+      subscriptionStatus: 'past_due',
+      canManageBilling: true,
+    });
+
+    expect(html).not.toContain('Upgrade — $9/month');
+    expect(html).toContain('Manage subscription');
+  });
+
+  it('links a Pro user to manage Pro', () => {
+    const html = renderPricing({ plan: 'pro', billingEnabled: true, subscriptionStatus: 'active' });
+
+    expect(html).toContain('Manage Pro');
+    expect(html).toContain('href="/dashboard/settings/"');
+    expect(html).not.toContain('Upgrade — $9/month');
+  });
+
+  it('does not link Pro granted by support to a portal that cannot open', () => {
+    const html = renderPricing({
+      plan: 'pro',
+      billingEnabled: true,
+      subscriptionStatus: null,
+      canManageBilling: false,
+      managedBySupport: true,
+    });
+
+    expect(html).not.toContain('Manage Pro');
+    expect(html).not.toContain('Upgrade — $9/month');
+    expect(html).toContain('Your plan is managed by support.');
+  });
+
+  it('does not offer the upgrade when support manages the plan', () => {
+    const html = renderPricing({
+      plan: 'free',
+      billingEnabled: true,
+      subscriptionStatus: null,
+      managedBySupport: true,
+    });
+
+    expect(html).not.toContain('Upgrade — $9/month');
+    expect(html).toContain('Your plan is managed by support.');
+  });
+
+  it('offers a retry, not the upgrade, when the plan could not be checked, since a failed status is unknown, not Free', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, BILLING_STATUS_KEY);
+
+    const html = renderWithClient(queryClient);
+
+    expect(html).not.toContain('Upgrade');
+    expect(html).not.toContain('Manage Pro');
+    expect(html).not.toContain('Manage subscription');
+    expect(html).toContain(PLAN_UNKNOWN_MESSAGE.replaceAll("'", '&#x27;'));
+    expect(html).toContain('Retry');
+    expect(html).toContain('role="alert"');
+  });
+
+  it('keeps the known action when only a background refresh of the plan failed', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, BILLING_STATUS_KEY, {
+      plan: 'pro',
+      billingEnabled: true,
+      subscriptionStatus: 'active',
+    });
+
+    const html = renderWithClient(queryClient);
+
+    expect(html).toContain('Manage Pro');
+    expect(html).not.toContain('Upgrade — $9/month');
+    expect(html).not.toContain(PLAN_UNKNOWN_MESSAGE.replaceAll("'", '&#x27;'));
+  });
+
+  it('shows the plan check, not the upgrade, while the status loads', () => {
+    const html = renderWithClient(createTestQueryClient());
+
+    expect(html).toContain('Checking plan...');
+    expect(html).not.toContain('Upgrade — $9/month');
+  });
+
+  it('retries a transient billing status failure before calling the plan unknown', () => {
+    queryOptionsSeen.mockClear();
+    renderPricing({ plan: 'free', billingEnabled: true, subscriptionStatus: null });
+
+    const billingQuery = queryOptionsSeen.mock.calls
+      .map(([options]) => options)
+      .find((options) => JSON.stringify(options.queryKey) === JSON.stringify(BILLING_STATUS_KEY));
+    expect(billingQuery?.retry).toBe(shouldRetryBillingStatus);
+  });
+});
+
+describe('Pricing after Back restores it from the back/forward cache', () => {
+  theInMemoryBrowserAsTheWindow();
+
+  it('refetches billing status, since the plan may have changed at Stripe or in another tab', async () => {
+    const freePlan: BillingStatus = { plan: 'free', billingEnabled: true, subscriptionStatus: null };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(BILLING_STATUS_KEY, freePlan);
+    vi.mocked(api.getBillingStatus).mockResolvedValue(freePlan);
+    navigation.reset('/pricing/');
+    await renderSettled(
+      <QueryClientProvider client={queryClient}>
+        <Pricing />
+      </QueryClientProvider>,
+    );
+
+    await expectOneCallOnlyAfterABackForwardRestore(navigation.window, vi.mocked(api.getBillingStatus));
+  });
+});

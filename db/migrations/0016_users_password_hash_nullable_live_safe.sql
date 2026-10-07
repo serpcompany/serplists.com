@@ -1,10 +1,3 @@
--- Live-safe rebuild for users table:
--- - make password_hash nullable for Better Auth credential table usage
--- - preserve canonical repo users columns (0001-0015 chain)
--- - add created_at default for compatibility
--- NOTE: This migration intentionally avoids explicit BEGIN/COMMIT because
--- remote D1 execute rejects SQL transaction statements in this path.
-
 PRAGMA foreign_keys=OFF;
 
 DROP TABLE IF EXISTS users_new;

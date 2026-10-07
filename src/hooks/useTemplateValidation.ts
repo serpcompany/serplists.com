@@ -1,69 +1,122 @@
-import { ChecklistSection } from "@/types/checklist";
+import type { ChecklistFormField, ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { isFormChoiceKind } from "@/lib/schemas/formFields";
+import { DEFAULT_TEMPLATE_TITLE } from "@/lib/schemas/templateFields";
+import { sectionFallbackTitle } from "@/lib/utils/checklistSections";
 
 export interface ValidationError {
   type: string;
   message: string;
 }
 
-export const useTemplateValidation = () => {
-  const validate = (
-    _title: string,
-    _sections: ChecklistSection[]
-  ): ValidationError[] => {
-    // No longer return validation errors - instead we'll provide defaults
-    return [];
-  };
+const placeholderItemId = (sectionId: string, usedItemIds: Set<string>): string => {
+  const base = `${sectionId}-first-task`;
+  let id = base;
+  for (let suffix = 2; usedItemIds.has(id); suffix += 1) {
+    id = `${base}-${suffix}`;
+  }
+  usedItemIds.add(id);
+  return id;
+};
 
-  // New function to apply defaults instead of validation
-  const applyDefaults = (
-    title: string,
-    sections: ChecklistSection[]
-  ): { title: string; sections: ChecklistSection[] } => {
-    // Default title if empty
-    const defaultTitle = title.trim() || "Untitled Template";
-    
-    // Ensure at least one section with at least one item
-    let defaultSections = [...sections];
-    
-    if (defaultSections.length === 0) {
-      defaultSections = [{
-        id: `section-${Date.now()}`,
-        title: "Getting Started",
-        items: [{
-          id: `item-${Date.now()}`,
-          title: "First task",
-          description: "",
-          isCompleted: false
-        }]
-      }];
-    } else {
-      // Ensure each section has at least one item
-      defaultSections = defaultSections.map((section, sectionIndex: number) => {
-        if (section.items.length === 0) {
-          return {
-            ...section,
-            items: [{
-              id: `item-${Date.now()}-${sectionIndex}`,
-              title: "New task",
-              description: "",
-              isCompleted: false
-            }]
-          };
-        }
-        
-        // Auto-generate titles for items without titles
-        return {
-          ...section,
-          items: section.items.map((item, itemIndex: number) => ({
-            ...item,
-            title: item.title.trim() || `Task ${itemIndex + 1}`
-          }))
-        };
-      });
+const trimmedTitle = (title: unknown): string => (typeof title === "string" ? title.trim() : "");
+
+const savedFormField = (field: ChecklistFormField): ChecklistFormField[] => {
+  const label = trimmedTitle(field.label);
+  const options = (field.options ?? []).flatMap((option) => {
+    const optionLabel = trimmedTitle(option.label);
+    return optionLabel ? [{ ...option, label: optionLabel }] : [];
+  });
+  if (!label || (isFormChoiceKind(field.kind) && options.length === 0)) {
+    return [];
+  }
+
+  const { answer, description, max, min, options: editedOptions, ...rest } = field;
+  const helpText = trimmedTitle(description);
+  return [{
+    ...rest,
+    label,
+    ...(helpText ? { description: helpText } : {}),
+    ...(isFormChoiceKind(field.kind) ? { options } : {}),
+    ...(field.kind === "number" && min !== undefined ? { min } : {}),
+    ...(field.kind === "number" && max !== undefined ? { max } : {}),
+  }];
+};
+
+const withoutBlankEntries = (contents: ChecklistItemContent[]): ChecklistItemContent[] =>
+  contents.flatMap((content) => {
+    if (content.type === "form") {
+      const fields = (content.fields ?? []).flatMap(savedFormField);
+      return fields.length > 0 ? [{ ...content, fields }] : [];
     }
 
-    return { title: defaultTitle, sections: defaultSections };
-  };
+    if (content.type !== "subItems") {
+      return [content];
+    }
 
-  return { validate, applyDefaults };
+    const subItems = (content.subItems ?? []).flatMap((subItem) => {
+      const title = trimmedTitle(subItem.title);
+      return title ? [{ ...subItem, title }] : [];
+    });
+    return subItems.length > 0 ? [{ ...content, subItems }] : [];
+  });
+
+const withItemDefaults = (item: ChecklistItem, itemIndex: number): ChecklistItem => ({
+  ...item,
+  title: trimmedTitle(item.title) || `Task ${itemIndex + 1}`,
+  ...(item.contents ? { contents: withoutBlankEntries(item.contents) } : {}),
+});
+
+export const applyTemplateSaveDefaults = (
+  title: string,
+  sections: ChecklistSection[],
+): { title: string; sections: ChecklistSection[] } => {
+  const defaultTitle = title.trim() || DEFAULT_TEMPLATE_TITLE;
+
+  if (sections.length === 0) {
+    return {
+      title: defaultTitle,
+      sections: [{
+        id: "getting-started",
+        title: "Getting Started",
+        items: [{
+          id: "getting-started-first-task",
+          title: "First task",
+          description: "",
+          isCompleted: false,
+        }],
+      }],
+    };
+  }
+
+  const usedItemIds = new Set(
+    sections.flatMap((section) => section.items.map((item) => item.id)),
+  );
+
+  return {
+    title: defaultTitle,
+    sections: sections.map((section, sectionIndex) => {
+      const sectionTitle = trimmedTitle(section.title) || sectionFallbackTitle(sectionIndex);
+
+      if (section.items.length === 0) {
+        return {
+          ...section,
+          title: sectionTitle,
+          items: [{
+            id: placeholderItemId(section.id, usedItemIds),
+            title: "New task",
+            description: "",
+            isCompleted: false,
+          }],
+        };
+      }
+
+      return {
+        ...section,
+        title: sectionTitle,
+        items: section.items.map(withItemDefaults),
+      };
+    }),
+  };
 };
+
+export const useTemplateValidation = () => ({ applyDefaults: applyTemplateSaveDefaults });

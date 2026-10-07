@@ -1,12 +1,19 @@
-import { schema } from "../db";
+import type { AuditAction, TemplateVersionAction } from "../../../src/lib/schemas/auditActions";
+import type { schema } from "../db";
 import { sha256Hex } from "./crypto";
+import {
+  capAuditColumn,
+  compactAuditDiff,
+  compactAuditSnapshot,
+  MAX_AUDIT_USER_AGENT_LENGTH,
+} from "./audit-compaction";
 
 export type AuditSubject = {
   type: "user" | "team";
   id: string;
 };
 
-export type AuditResource = {
+type AuditResource = {
   type: "template" | "checklist_run" | "team" | "team_member" | "team_invite";
   id: string;
 };
@@ -17,11 +24,11 @@ export type AuditEventInput = {
   actorUserId: string | null;
   subject: AuditSubject;
   resource: AuditResource;
-  action: string;
+  action: AuditAction;
   before?: JsonValue;
   after?: JsonValue;
   diff?: JsonValue;
-  metadata?: JsonValue;
+  metadata?: JsonValue | undefined;
   request?: Request;
   createdAt?: string;
 };
@@ -32,7 +39,7 @@ export type TemplateVersionInput = {
   changedByUserId: string;
   subject: AuditSubject;
   snapshot: JsonValue;
-  changeSummary?: string;
+  changeSummary?: TemplateVersionAction;
   createdAt?: string;
 };
 
@@ -64,7 +71,7 @@ async function getRequestAuditMetadata(request?: Request): Promise<{
   };
 }
 
-export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.audit_events.$inferInsert> {
+export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.auditEvents.$inferInsert> {
   const requestMetadata = await getRequestAuditMetadata(input.request);
 
   return {
@@ -75,20 +82,20 @@ export async function buildAuditEventValues(input: AuditEventInput): Promise<typ
     resource_type: input.resource.type,
     resource_id: input.resource.id,
     action: input.action,
-    before_json: serializeJson(input.before),
-    after_json: serializeJson(input.after),
-    diff_json: serializeJson(input.diff),
-    metadata_json: serializeJson(input.metadata),
+    before_json: await capAuditColumn(serializeJson(compactAuditSnapshot(input.before))),
+    after_json: await capAuditColumn(serializeJson(compactAuditSnapshot(input.after))),
+    diff_json: await capAuditColumn(serializeJson(compactAuditDiff(input.diff, input.before))),
+    metadata_json: await capAuditColumn(serializeJson(input.metadata)),
     request_id: requestMetadata.requestId,
     ip_hash: requestMetadata.ipHash,
-    user_agent: requestMetadata.userAgent,
+    user_agent: requestMetadata.userAgent?.slice(0, MAX_AUDIT_USER_AGENT_LENGTH) ?? null,
     created_at: input.createdAt ?? new Date().toISOString(),
   };
 }
 
 export async function buildTemplateVersionValues(
   input: TemplateVersionInput,
-): Promise<typeof schema.template_versions.$inferInsert> {
+): Promise<typeof schema.templateVersions.$inferInsert> {
   const snapshotJson = serializeJson(input.snapshot) ?? "{}";
 
   return {

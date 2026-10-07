@@ -1,9 +1,3 @@
-// Opt-in D1 query profiler (set D1_PROFILE=true; never enable in production).
-// D1 bills by rows read (scanned) and rows written, reported in each result's `meta`.
-// Drizzle runs most selects through `.raw()`, which returns no meta, so profiled
-// `.raw()` and `.first()` calls are measured with an extra `.all()` of the same
-// statement. That doubles their cost, which is fine for local profiling only.
-
 export type D1QueryRecord = {
   sql: string;
   rowsRead: number;
@@ -27,6 +21,28 @@ function toRecord(sql: string, result: D1Result<unknown>, startedAt: number): D1
     rowsReturned: result.results?.length ?? 0,
     durationMs: Date.now() - startedAt,
   };
+}
+
+type RawOptions = { columnNames?: boolean };
+
+async function rawReadMeasuredBySeparateAll(
+  target: D1PreparedStatement,
+  sql: string,
+  record: Recorder,
+  options?: RawOptions,
+) {
+  const startedAt = Date.now();
+  record(toRecord(sql, await target.all(), startedAt));
+  return options?.columnNames ? target.raw({ columnNames: true }) : target.raw();
+}
+
+async function rawRowsOfSingleWrite(target: D1PreparedStatement, sql: string, record: Recorder, options?: RawOptions) {
+  const startedAt = Date.now();
+  const result = await target.all<Record<string, unknown>>();
+  record(toRecord(sql, result, startedAt));
+  const rows = result.results.map((row) => Object.values(row));
+  const columns = result.results[0] ? Object.keys(result.results[0]) : [];
+  return options?.columnNames ? [columns, ...rows] : rows;
 }
 
 function profileStatement(statement: D1PreparedStatement, sql: string, record: Recorder): D1PreparedStatement {
@@ -54,22 +70,13 @@ function profileStatement(statement: D1PreparedStatement, sql: string, record: R
         };
       }
       if (prop === "raw") {
-        return async (options?: { columnNames?: boolean }) => {
-          const startedAt = Date.now();
-          if (isReadOnly(sql)) {
-            // Measure with a separate read; `.raw()` keeps duplicate column names that `.all()` merges.
-            record(toRecord(sql, await target.all(), startedAt));
-            return options?.columnNames ? target.raw({ columnNames: true }) : target.raw();
-          }
-          // Never execute a write twice: run it once and convert the rows (e.g. INSERT ... RETURNING).
-          const result = await target.all<Record<string, unknown>>();
-          record(toRecord(sql, result, startedAt));
-          const rows = result.results.map((row) => Object.values(row));
-          const columns = result.results[0] ? Object.keys(result.results[0]) : [];
-          return options?.columnNames ? [columns, ...rows] : rows;
-        };
+        return (options?: RawOptions) =>
+          isReadOnly(sql)
+            ? rawReadMeasuredBySeparateAll(target, sql, record, options)
+            : rawRowsOfSingleWrite(target, sql, record, options);
       }
-      return Reflect.get(target, prop, receiver);
+      const value: unknown = Reflect.get(target, prop, receiver);
+      return value;
     },
   });
   statementSql.set(profiled, sql);
@@ -88,13 +95,17 @@ export function withD1Profiling(db: D1Database, record: Recorder): D1Database {
           const startedAt = Date.now();
           const results = await target.batch(statements.map((statement) => statementTarget.get(statement) ?? statement));
           results.forEach((result, index) => {
-            record(toRecord(statementSql.get(statements[index]) ?? "(unknown batch statement)", result, startedAt));
+            const statement = statements[index];
+            const sql = statement === undefined ? undefined : statementSql.get(statement);
+            record(toRecord(sql ?? "(unknown batch statement)", result, startedAt));
           });
           return results;
         };
       }
-      const value = Reflect.get(target, prop, target);
-      return typeof value === "function" ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, prop, target);
+      if (typeof value !== "function") return value;
+      const bound: unknown = value.bind(target);
+      return bound;
     },
   });
 }

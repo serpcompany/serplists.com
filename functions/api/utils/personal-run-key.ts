@@ -1,4 +1,5 @@
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { parseStoredRunKeyPermissions, type RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { sha256Hex } from "./crypto";
@@ -10,6 +11,7 @@ export interface PersonalRunKeyIdentity {
   keyId: string;
   userId: string;
   name: string;
+  permissions: readonly RunKeyPermission[];
   lastUsedAt?: string | null;
 }
 
@@ -24,6 +26,7 @@ export interface PersonalRunKeyRecord {
   key_prefix: string;
   key_hash: string;
   created_at: string;
+  permissions: readonly RunKeyPermission[];
 }
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -60,15 +63,13 @@ function readBearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-// One statement, so parallel requests cannot push a user past the cap. Returns false when
-// the user already has the maximum number of active keys.
 export async function insertPersonalRunKeyWithinCap(
   env: Env,
   record: PersonalRunKeyRecord,
 ): Promise<boolean> {
   const result: unknown = await createDb(env).run(sql`
-    insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at)
-    select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}
+    insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
+    select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}, ${JSON.stringify(record.permissions)}
     where (
       select count(*) from personal_run_keys
       where user_id = ${record.user_id} and revoked_at is null
@@ -89,16 +90,17 @@ export async function authenticatePersonalRunKey(
   if (!keyHash) return null;
 
   const db = createDb(env);
-  const { personal_run_keys } = schema;
+  const { personalRunKeys } = schema;
   const [record] = await db
     .select({
-      id: personal_run_keys.id,
-      userId: personal_run_keys.user_id,
-      name: personal_run_keys.name,
-      lastUsedAt: personal_run_keys.last_used_at,
+      id: personalRunKeys.id,
+      userId: personalRunKeys.user_id,
+      name: personalRunKeys.name,
+      permissions: personalRunKeys.permissions,
+      lastUsedAt: personalRunKeys.last_used_at,
     })
-    .from(personal_run_keys)
-    .where(and(eq(personal_run_keys.key_hash, keyHash), isNull(personal_run_keys.revoked_at)))
+    .from(personalRunKeys)
+    .where(and(eq(personalRunKeys.key_hash, keyHash), isNull(personalRunKeys.revoked_at)))
     .limit(1);
 
   if (!record?.id || !record.userId) return null;
@@ -107,6 +109,7 @@ export async function authenticatePersonalRunKey(
     keyId: record.id,
     userId: record.userId,
     name: record.name,
+    permissions: parseStoredRunKeyPermissions(record.permissions),
     lastUsedAt: record.lastUsedAt,
   };
 }
@@ -120,14 +123,14 @@ export async function markPersonalRunKeyUsed(
   if (Number.isFinite(previousUse) && now.getTime() - previousUse < LAST_USED_WRITE_INTERVAL_MS) return;
 
   const cutoff = new Date(now.getTime() - LAST_USED_WRITE_INTERVAL_MS).toISOString();
-  const { personal_run_keys } = schema;
+  const { personalRunKeys } = schema;
   await createDb(env)
-    .update(personal_run_keys)
+    .update(personalRunKeys)
     .set({ last_used_at: now.toISOString() })
     .where(and(
-      eq(personal_run_keys.id, identity.keyId),
-      eq(personal_run_keys.user_id, identity.userId),
-      isNull(personal_run_keys.revoked_at),
-      or(isNull(personal_run_keys.last_used_at), lt(personal_run_keys.last_used_at, cutoff)),
+      eq(personalRunKeys.id, identity.keyId),
+      eq(personalRunKeys.user_id, identity.userId),
+      isNull(personalRunKeys.revoked_at),
+      or(isNull(personalRunKeys.last_used_at), lt(personalRunKeys.last_used_at, cutoff)),
     ));
 }

@@ -1,24 +1,52 @@
 name = "serp-checklists"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+main = ".open-next/worker.js"
+compatibility_date = "2026-09-28"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[assets]
+binding = "ASSETS"
+directory = ".open-next/assets"
+
+[observability]
+enabled = true
+
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists"
+
+[[env.preview.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists-preview"
+
+[[env.production.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists-production"
 
 [vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
+[env.preview]
+workers_dev = true
+
 [env.preview.vars]
+SITE_ENV = "staging"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 PERSONAL_RUN_MCP_ENABLED = "true"
-CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://staging.serp-checklists.pages.dev"
+CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://serp-checklists-preview.serpcompany.workers.dev"
+
+[[env.preview.routes]]
+pattern = "staging.serplists.com/*"
+zone_name = "serplists.com"
+
+[env.production]
+workers_dev = true
 
 [env.production.vars]
+SITE_ENV = "production"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
 PERSONAL_RUN_MCP_ENABLED = "true"
 CORS_ALLOWED_ORIGINS = "https://serplists.com"
 
-# Local development and production D1 binding. Preview deployments must not use
-# this database. After creating the staging D1 database, paste its UUID into
-# `preview_database_id` below before enabling preview deployments.
 [[d1_databases]]
 binding = "DB"
 database_name = "serp-checklists-db"
@@ -41,7 +69,6 @@ database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
 migrations_table = "d1_migrations"
 migrations_dir = "db/migrations"
 
-# R2 bucket binding (create bucket + set name to match)
 [[r2_buckets]]
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
@@ -53,5 +80,3 @@ bucket_name = "serp-checklists-uploads"
 [[env.production.r2_buckets]]
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
-
-# Production secrets should be set via Pages Secrets (e.g. `wrangler pages secret put JWT_SECRET`).

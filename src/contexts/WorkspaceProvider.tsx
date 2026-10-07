@@ -1,0 +1,347 @@
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
+
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { patchTeamSummary } from '@/features/teams/teamSummaries';
+import { api, type TeamSummary } from '@/lib/api';
+import { safeLocalStorage } from '@/lib/browserStorage';
+import { parseConsoleRoute } from '@/lib/consoleRoutes';
+import { getOrganizationPermissions, getResourcePermissions } from '@/lib/organizationPermissions';
+
+import { SESSION_RECHECK_INTERVAL_MS } from './sessionSync';
+import {
+  WorkspaceContext,
+  type CreateTeamInput,
+  type Workspace,
+  type WorkspaceContextValue,
+} from './WorkspaceContext';
+import { markListsStaleForWorkspaceSwitch } from './templateListCache';
+import { useContextSwitch } from './useContextSwitch';
+import {
+  PERSONAL_WORKSPACE_ID,
+  createWorkspaceSelectionMemory,
+  describeTeamsQuery,
+  getRouteContextId,
+  getRouteOrganizationStatus,
+  getWorkspaceStatus,
+  isConfirmedSignOut,
+  reconcileWorkspaceSelection,
+  recordWorkspaceSelection,
+  resetWorkspaceSelection,
+  toConsoleContext,
+} from './workspaceSelection';
+
+const ACTIVE_WORKSPACE_STORAGE_KEY = 'serplists.activeWorkspaceId';
+
+const personalWorkspace: Workspace = {
+  id: PERSONAL_WORKSPACE_ID,
+  name: 'Personal',
+  role: 'owner',
+  type: 'personal',
+};
+
+const readStoredWorkspaceId = (): string =>
+  safeLocalStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) || PERSONAL_WORKSPACE_ID;
+
+const writeStoredWorkspaceId = (workspaceId: string): void => {
+  safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
+};
+
+function useRememberedTeams(
+  userId: string | undefined,
+  teamsList: { dataUpdatedAt: number; isSuccess: boolean },
+) {
+  const [rememberedTeams, setRememberedTeams] = useState<TeamSummary[]>([]);
+  const { dataUpdatedAt: teamsUpdatedAt, isSuccess: teamsSucceeded } = teamsList;
+  const [seenTeamsList, setSeenTeamsList] = useState({ userId, teamsUpdatedAt, teamsSucceeded });
+  if (
+    seenTeamsList.userId !== userId ||
+    seenTeamsList.teamsUpdatedAt !== teamsUpdatedAt ||
+    seenTeamsList.teamsSucceeded !== teamsSucceeded
+  ) {
+    setSeenTeamsList({ userId, teamsUpdatedAt, teamsSucceeded });
+    if (seenTeamsList.userId !== userId || teamsSucceeded) {
+      setRememberedTeams((currentTeams) =>
+        currentTeams.length === 0 ? currentTeams : [],
+      );
+    }
+  }
+  return [rememberedTeams, setRememberedTeams] as const;
+}
+
+export function WorkspaceProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { isLoading: isAuthLoading, sessionStatus, user } = useAuth();
+  const userId = user?.id;
+  const queryClient = useQueryClient();
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(
+    readStoredWorkspaceId,
+  );
+  const selectionMemoryRef = useRef(createWorkspaceSelectionMemory());
+
+  const teamsQuery = useQuery({
+    queryKey: ['teams', userId],
+    queryFn: () => api.getTeams(),
+    enabled: Boolean(user),
+    staleTime: SESSION_RECHECK_INTERVAL_MS,
+  });
+  const [rememberedTeams, setRememberedTeams] = useRememberedTeams(userId, teamsQuery);
+
+  const queriedTeams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const { teamsFailed, teamsLoaded, teamsSettled } = describeTeamsQuery(teamsQuery);
+  const teamsUnavailable = teamsFailed && !teamsLoaded;
+
+  const teams = useMemo(() => {
+    const mergedTeams = new Map<string, TeamSummary>();
+
+    for (const team of rememberedTeams) {
+      mergedTeams.set(team.id, team);
+    }
+
+    for (const team of queriedTeams) {
+      mergedTeams.set(team.id, team);
+    }
+
+    return Array.from(mergedTeams.values());
+  }, [rememberedTeams, queriedTeams]);
+
+  const workspaces = useMemo<Workspace[]>(
+    () => [
+      personalWorkspace,
+      ...teams.map((team) => ({
+        id: team.id,
+        memberId: team.memberId,
+        name: team.name,
+        role: team.role,
+        slug: team.slug,
+        avatarUrl: team.avatar_url,
+        description: team.description,
+        teamId: team.id,
+        type: 'team' as const,
+      })),
+    ],
+    [teams],
+  );
+
+  const pathname = usePathname();
+  const teamIds = useMemo(() => teams.map((team) => team.id), [teams]);
+  const routeContext = parseConsoleRoute(pathname)?.context ?? null;
+  const routeOrganizationStatus =
+    routeContext?.type === 'organization'
+      ? getRouteOrganizationStatus({ organizationId: routeContext.organizationId, teamIds, teamsLoaded, teamsSettled, teamsFailed })
+      : null;
+  const routeContextId = getRouteContextId(routeContext, routeOrganizationStatus);
+  const followedRouteContextId = routeOrganizationStatus === 'pending' ? null : routeContextId;
+  const [lastFollowedRouteContextId, setLastFollowedRouteContextId] = useState<string | null>(null);
+  if (lastFollowedRouteContextId !== followedRouteContextId) {
+    setLastFollowedRouteContextId(followedRouteContextId);
+    if (followedRouteContextId !== null) {
+      setSelectedWorkspaceId(followedRouteContextId);
+    }
+  }
+
+  useEffect(() => {
+    if (followedRouteContextId !== null) {
+      writeStoredWorkspaceId(followedRouteContextId);
+    }
+  }, [followedRouteContextId]);
+
+  const contextWorkspaceId = routeContextId ?? selectedWorkspaceId;
+
+  const signedOut = !isAuthLoading && !user && isConfirmedSignOut(sessionStatus);
+  const [seenSignedOut, setSeenSignedOut] = useState(false);
+  if (seenSignedOut !== signedOut) {
+    setSeenSignedOut(signedOut);
+    if (signedOut) {
+      setSelectedWorkspaceId(PERSONAL_WORKSPACE_ID);
+    }
+  }
+
+  useEffect(() => {
+    if (!signedOut) {
+      return;
+    }
+    resetWorkspaceSelection(selectionMemoryRef.current);
+    writeStoredWorkspaceId(PERSONAL_WORKSPACE_ID);
+  }, [signedOut]);
+
+  useEffect(() => {
+    if (isAuthLoading || !user) {
+      return;
+    }
+
+    const nextWorkspaceId = reconcileWorkspaceSelection(selectionMemoryRef.current, {
+      activeWorkspaceId: selectedWorkspaceId,
+      readStoredWorkspaceId,
+      userId: user.id,
+      teamIds,
+      teamsSettled,
+      teamsLoaded,
+      teamsFailed,
+    });
+    if (nextWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(nextWorkspaceId);
+    }
+  }, [
+    isAuthLoading,
+    selectedWorkspaceId,
+    teamIds,
+    teamsFailed,
+    teamsLoaded,
+    teamsSettled,
+    user,
+  ]);
+
+  const activeWorkspace = useMemo(
+    () =>
+      workspaces.find((workspace) => workspace.id === contextWorkspaceId) ??
+      personalWorkspace,
+    [contextWorkspaceId, workspaces],
+  );
+
+  const selectInPlace = useCallback(
+    (workspaceId: string) => {
+      const nextWorkspaceId = workspaceId || PERSONAL_WORKSPACE_ID;
+
+      recordWorkspaceSelection(selectionMemoryRef.current, nextWorkspaceId);
+      setSelectedWorkspaceId(nextWorkspaceId);
+      writeStoredWorkspaceId(nextWorkspaceId);
+      markListsStaleForWorkspaceSwitch(queryClient, {
+        fromWorkspaceId: contextWorkspaceId,
+        toWorkspaceId: nextWorkspaceId,
+      });
+    },
+    [contextWorkspaceId, queryClient],
+  );
+
+  const selectWorkspace = useContextSwitch({
+    isShownContext: (workspaceId) => workspaceId === contextWorkspaceId && routeOrganizationStatus !== 'missing',
+    selectInPlace,
+    beforeLeavingFor: (workspaceId) =>
+      markListsStaleForWorkspaceSwitch(queryClient, { fromWorkspaceId: contextWorkspaceId, toWorkspaceId: workspaceId }),
+  });
+
+  const rememberTeam = useCallback(
+    (team: TeamSummary) => {
+      setRememberedTeams((currentTeams) => [
+        team,
+        ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id),
+      ]);
+
+      if (userId) {
+        void queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
+        queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
+          currentTeams
+            ? [team, ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id)]
+            : currentTeams,
+        );
+      }
+    },
+    [queryClient, setRememberedTeams, userId],
+  );
+
+  const patchTeam = useCallback(
+    (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => {
+      setRememberedTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
+
+      if (userId) {
+        queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
+          currentTeams ? patchTeamSummary(currentTeams, teamId, patch) : currentTeams,
+        );
+      }
+    },
+    [queryClient, setRememberedTeams, userId],
+  );
+
+  const refreshTeams = useCallback(async () => {
+    if (!userId) {
+      return [];
+    }
+
+    await queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
+    return queryClient.fetchQuery({
+      queryKey: ['teams', userId],
+      queryFn: () => api.getTeams(),
+      staleTime: 0,
+    });
+  }, [queryClient, userId]);
+
+  const createTeam = useCallback(
+    async (input: CreateTeamInput) => {
+      const createdTeam = await api.createTeam(input);
+      rememberTeam(createdTeam);
+      selectWorkspace(createdTeam.id);
+      void refreshTeams().catch(() => undefined);
+    },
+    [rememberTeam, refreshTeams, selectWorkspace],
+  );
+
+  const workspaceStatus = getWorkspaceStatus({
+    hasUser: Boolean(user),
+    activeWorkspaceId: contextWorkspaceId,
+    teamIds,
+    teamsFailed,
+  });
+  const isWorkspaceLoading = isAuthLoading || teamsQuery.isLoading || workspaceStatus !== 'ready';
+  const { refetch: refetchTeams } = teamsQuery;
+  const retryWorkspace = useCallback(() => {
+    void refetchTeams();
+  }, [refetchTeams]);
+  const getPermissions = useCallback(
+    (teamId?: string) =>
+      getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role),
+    [teams],
+  );
+
+  const shownContextId = routeContextId ?? activeWorkspace.id;
+
+  const value = useMemo<WorkspaceContextValue>(() => {
+    const isTeamWorkspace = activeWorkspace.type === 'team';
+    const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
+    const activePermissions = getOrganizationPermissions(teamRole);
+    return {
+      activeTeamId: isTeamWorkspace ? activeWorkspace.teamId : undefined,
+      activeWorkspace,
+      activeWorkspaceId: activeWorkspace.id,
+      canEditTemplates: teamRole ? activePermissions.canEditTemplates : true,
+      canManageTeam: teamRole ? activePermissions.canManage : false,
+      canRunTemplates: teamRole ? activePermissions.canRun : true,
+      consoleContext: toConsoleContext(shownContextId),
+      createTeam,
+      getPermissions,
+      isTeamWorkspace,
+      isWorkspaceLoading,
+      patchTeam,
+      refreshTeams,
+      rememberTeam,
+      retryWorkspace,
+      routeOrganizationStatus,
+      selectWorkspace,
+      teams,
+      teamsUnavailable,
+      workspaces,
+      workspaceScopeId: activeWorkspace.id,
+      workspaceStatus,
+    };
+  }, [
+    activeWorkspace, createTeam, getPermissions, isWorkspaceLoading, patchTeam, refreshTeams,
+    rememberTeam, retryWorkspace, routeOrganizationStatus, selectWorkspace, shownContextId, teams, teamsUnavailable,
+    workspaces, workspaceStatus,
+  ]);
+
+  return (
+    <WorkspaceContext.Provider value={value}>
+      {children}
+    </WorkspaceContext.Provider>
+  );
+}

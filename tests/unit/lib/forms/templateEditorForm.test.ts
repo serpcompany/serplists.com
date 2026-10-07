@@ -7,6 +7,7 @@ import {
   createTemplateEditorItem,
   createTemplateEditorSection,
   createTemplateEditorSubItem,
+  findTemplateEditorContentPath,
   normalizeTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
 
@@ -91,6 +92,7 @@ describe("templateEditorForm", () => {
       seoTitle: "  SEO Audit Template ",
       seoDescription: "  Repeatable audit ",
       seoUrl: "  technical-seo-audit  ",
+      requiredTools: [],
       sections: [
         {
           id: "section-1",
@@ -110,5 +112,36 @@ describe("templateEditorForm", () => {
       seoUrl: "technical-seo-audit",
       sections: [{ id: "section-1", title: "", items: [] }],
     });
+  });
+});
+
+describe("findTemplateEditorContentPath", () => {
+  const sections = [
+    { id: "s1", title: "One", items: [{ id: "i1", title: "A", contents: [] }] },
+    {
+      id: "s2",
+      title: "Two",
+      items: [
+        { id: "i2", title: "B" },
+        {
+          id: "i3",
+          title: "C",
+          contents: [
+            { id: "c1", type: "text" as const, value: "" },
+            { id: "c2", type: "image" as const, value: "" },
+          ],
+        },
+      ],
+    },
+  ];
+
+  it("finds a content block by id wherever it now sits", () => {
+    expect(findTemplateEditorContentPath(sections, "c2")).toBe(
+      "sections.1.items.1.contents.1",
+    );
+  });
+
+  it("returns null for a block that no longer exists", () => {
+    expect(findTemplateEditorContentPath(sections, "missing")).toBeNull();
   });
 });
