@@ -12,6 +12,7 @@ import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { GuestRunHeader } from '@/components/run-execution/GuestRunHeader';
 import { SaveToAccountButton, SignInToSaveLinks } from '@/components/run-execution/GuestRunSaveActions';
 import { CompleteRunButton } from '@/components/run-execution/CompleteRunButton';
+import { RunAnswersExportMenu } from '@/components/run-execution/RunAnswersExportMenu';
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunWorkspace } from '@/components/run-execution/RunWorkspace';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -101,6 +102,7 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
               />
             ) : null
           }
+          answersExport={<RunAnswersExportMenu run={run} template={template} />}
           description={describeRunTaskCounts(counts)}
           finishRunButton={canFinishRun(run) ? <CompleteRunButton onClick={actions.openCompleteDialog} /> : null}
           isCompleted={run.status === 'completed'}

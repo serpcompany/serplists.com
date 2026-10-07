@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 
 type GuestRunHeaderProps = {
   accountAction: ReactNode;
+  answersExport: ReactNode;
   description: string;
   finishRunButton: ReactNode;
   isCompleted: boolean;
@@ -18,6 +19,7 @@ type GuestRunHeaderProps = {
 
 export function GuestRunHeader({
   accountAction,
+  answersExport,
   description,
   finishRunButton,
   isCompleted,
@@ -42,6 +44,7 @@ export function GuestRunHeader({
         <>
           {accountAction}
           {finishRunButton}
+          {answersExport}
           <Button variant="outline" onClick={onDelete}>
             <Trash2 data-icon="inline-start" />
             Delete run

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { expect, test, type Page } from '@playwright/test';
 
 import { expectNoSidewaysScroll } from './support/phone';
@@ -88,6 +90,18 @@ test("a Template's form is filled in on its run, and the task completes only onc
   await expect(page.getByRole('textbox', { name: 'Client name' })).toHaveValue('Acme');
   await expect(page.getByRole('textbox', { name: 'Website' })).toHaveValue('https://acme.example');
   await expect(page.getByRole('combobox', { name: 'Plan' })).toContainText('Growth');
+
+  await page.getByRole('button', { name: 'Export answers' }).click();
+  const downloadStarted = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: 'Download CSV' }).click();
+  const download = await downloadStarted;
+  expect(download.suggestedFilename()).toMatch(/-answers\.csv$/);
+  const csv = await readFile(await download.path(), 'utf8');
+  expect(csv.charCodeAt(0)).toBe(0xfeff);
+  expect(csv.slice(1).startsWith('Section,Task,Field,Type,Required,Answer,Task done\r\n')).toBe(true);
+  expect(csv).toContain(',Collect client details,Client name,Short text,Yes,Acme,Yes\r\n');
+  expect(csv).toContain(',Collect client details,Website,URL,No,https://acme.example,Yes\r\n');
+  expect(csv).toContain(',Collect client details,Plan,Dropdown,No,Growth,Yes\r\n');
 
   await deleteRun(page, runId);
   await deleteTheSavedTemplate(page, savedTemplate);

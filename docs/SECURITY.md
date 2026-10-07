@@ -150,6 +150,11 @@
   file pickers filter on extensions. Files are served as attachments, and every download
   is sent with `X-Content-Type-Options: nosniff`. There is no per-account storage
   quota yet (TD-18).
+- **CSV exports never hand a spreadsheet a formula.** A Run's answers CSV is built in the
+  browser from user text (answers, titles, labels), so any cell starting with `=`, `+`,
+  `-`, `@`, a tab or a CR gets a leading `'` (`src/features/run-execution/runAnswersExport.ts`,
+  [exporting answers](design-docs/run-execution.md#exporting-answers)). Any new CSV export
+  needs the same guard.
 - **Invites** store only a token hash, never the raw token.
 - **Public responses are allowlisted, not spread from a row.** Public Template
   responses use the fields in `functions/api/utils/template-public.ts`, so they

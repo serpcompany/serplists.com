@@ -217,6 +217,10 @@ leaves the site broken until the next one lands):
     `tests/e2e/template-forms.spec.ts`.
 - [ ] **PR 2, answers outside the run page:**
   - a CSV and JSON export of a run's answers;
+    - [x] "Export answers" ("Download CSV", "Download JSON") in the header of the run page
+      and the guest run when the Run has a form field, built in the browser
+      (`runAnswersExport.ts`, `RunAnswersExportMenu`, `downloadFile`), with the formula
+      guard, unit and DOM tests and a CSV step in `tests/e2e/template-forms.spec.ts`;
   - an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
     runs, its text kept out of the audit diff).
 
@@ -276,3 +280,11 @@ leaves the site broken until the next one lands):
   task (`findFormFieldProblem`). The editor drops it on save and the pack schema refuses it,
   but the stored schema is lenient like every stored shape, so a raw Template save could keep
   one and leave its task unable to be ticked in every run.
+- 2026-10-06: The answers export is built in the browser from the Run the page holds, with no
+  API route: the private page already has every answer the viewer may read, and a guest run's
+  answers exist only in the browser. It is offered to a view-only role, who can read the
+  answers anyway, and not on the shared run link, whose holders may not be the Run's people.
+- 2026-10-06: The CSV puts a `'` before any cell starting with `=`, `+`, `-`, `@`, a tab or a
+  CR, in every column, so a negative number reads `'-5` there; the JSON keeps the raw answer
+  for anyone who needs the number. A file answer's text is its name and full link, resolved
+  against the page's origin, so the CSV row leads to the file.

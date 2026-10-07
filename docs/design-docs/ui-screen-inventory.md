@@ -779,7 +779,8 @@ existing content, invent nothing):
     sign up to save it to your account.", both links back to this page), a "Completed" or "In
     Progress" badge, from `xl` a progress bar with "N%"; actions (under the text on phones):
     "Save to account" (signed in, for a role that can start runs), "Complete run" when every
-    task is done, "Delete run" (outline).
+    task is done, "Export answers" (outline, when the run has a form field: a menu with
+    "Download CSV" and "Download JSON"), "Delete run" (outline).
   - The Template's Required tools as a compact card, as on the Run page (when it has tools).
   - The rest is the [Run page](#run-page)'s workspace (`RunWorkspace`): below `xl` the progress
     block with "Tasks"; the task panel with its sticky footer; from `xl` the task column. There
@@ -789,7 +790,8 @@ existing content, invent nothing):
     to this run); signed in, it uploads.
 - **PRIMARY ACTION:** "Mark Complete".
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Complete run" and "Finish
-  Run" → [Run complete dialog](#run-complete-dialog); "Delete run" → [Delete
+  Run" → [Run complete dialog](#run-complete-dialog); "Export answers" → "Download CSV" or
+  "Download JSON" (a file of the answers this browser holds); "Delete run" → [Delete
   confirmations](#delete-confirmations) → the public template page; "Log in" and "sign up" →
   [Log in](#log-in) or [Register](#register), then back here; "Save to account" → [Run
   page](#run-page) ("Run saved to your account"), or Stripe Checkout at the Personal plan's
@@ -808,15 +810,16 @@ existing content, invent nothing):
 - **STRUCTURE (built):**
   - LAYOUT ZONES: breadcrumb; page header; progress block (below `xl`); task panel with its
     sticky footer; task column (from `xl`, sticky).
-  - COMPONENT TYPES: breadcrumb; heading; badges; outline and primary buttons; shadcn
-    Progress; checkbox; content blocks; notes Field; task list; Sheet; AlertDialog; Dialog.
+  - COMPONENT TYPES: breadcrumb; heading; badges; outline and primary buttons; DropdownMenu;
+    shadcn Progress; checkbox; content blocks; notes Field; task list; Sheet; AlertDialog;
+    Dialog.
   - DATA FIELDS: the guest run from localStorage (title, status, progress, task counts,
     sections, tasks, Sub-tasks, notes); the Template (title, page path).
 - **PROOF PASS:** Pending: the lead runs `pnpm run ui:snap` on this page at desktop and phone
   width before the PR.
-- **NOTES:** Code: `src/views/GuestRun.tsx`, with `GuestRunHeader` and `RunWorkspace` in
-  `src/components/run-execution/`, the model in `src/features/guest-runs/` and the page's
-  metadata in `src/app/(site)/profile/[username]/[templateSlug]/run/page.tsx`. It can't be
+- **NOTES:** Code: `src/views/GuestRun.tsx`, with `GuestRunHeader`, `RunAnswersExportMenu` and
+  `RunWorkspace` in `src/components/run-execution/`, the model in `src/features/guest-runs/` and
+  the page's metadata in `src/app/(site)/profile/[username]/[templateSlug]/run/page.tsx`. It can't be
   shared: every visitor of the address sees the run their own browser holds. An Organization
   Template's guest run at its Creator's old URL redirects (308) to the Organization's `…/run/`,
   as the Template page does.
@@ -1799,7 +1802,8 @@ existing content, invent nothing):
     finished"; a "Completed" or "In Progress" badge, a "View only" badge, and from `xl` a
     progress bar with "N%"; actions (under the text on phones): "Runs" (back), "Rename" (or
     "Save title" and "Cancel"), "Complete run" when every task is done, a "Shared" badge,
-    "Share", "Stop sharing".
+    "Share", "Stop sharing", "Export answers" (outline, when the Run has a form field, also for
+    a view-only role: a menu with "Download CSV" and "Download JSON").
   - Under the header, the Run's provenance: "Started by <name> via Web", or "Started by <Run
     Key> via MCP · authorized by <name>" (no origin when it is unknown), "Started <date and
     time> · Updated <date and time>", and "Show Details" ("Hide Details"), which opens a list:
@@ -1843,7 +1847,9 @@ existing content, invent nothing):
 - **PRIMARY ACTION:** "Mark Complete".
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Rename"; "Share" →
   [Share link dialog](#share-link-dialog); "Stop sharing"; "Complete run" and "Finish Run" →
-  [Run complete dialog](#run-complete-dialog); "Runs".
+  [Run complete dialog](#run-complete-dialog); "Export answers" → "Download CSV" or "Download
+  JSON" (a file of the Run's saved answers, [run execution](run-execution.md#exporting-answers));
+  "Runs".
 - **STATES:** loading (spinner, also while a Run opened at another context's URL moves to its
   own); not found (toast "Run not found", then My Templates); a load
   error ("Unable to load run", the message, "Back"); in progress; every task done (the
@@ -1863,9 +1869,9 @@ existing content, invent nothing):
     progress Card (below `xl`); main column (the task
     panel Card with its header, content, notes and sticky footer; retired work; the Activity
     Card); right column (from `xl`, sticky).
-  - COMPONENT TYPES: labelled title field; badges; buttons; shadcn Progress; checkbox;
-    content blocks; notes Field (textarea, button, saved indicator); disclosure; `Item`
-    history rows; task list (nav with current-task marker); Sheet.
+  - COMPONENT TYPES: labelled title field; badges; buttons; DropdownMenu; shadcn Progress;
+    checkbox; content blocks; notes Field (textarea, button, saved indicator); disclosure;
+    `Item` history rows; task list (nav with current-task marker); Sheet.
   - DATA FIELDS: Run (title, status, progress, task counts, shared, sections, tasks, notes,
     retired work, history; the source Template's Required tools); selected task (section,
     position, title, description, content, form answers, done); permissions.
@@ -1875,9 +1881,10 @@ existing content, invent nothing):
   pattern-detail-2.png and pattern-detail-3.png. Present: a header row with actions; a
   two-column body with a nav column that stays in view (on the right here, as before) and
   the content; below `xl` one column. The reference has no action bar or checkboxes.
-- **NOTES:** Code: `src/views/ChecklistRun.tsx`, with `RunPageHeader`, `TaskExecutionPanel`,
-  `MobileRunProgress` and `RunProgressSidebar` in `src/components/run-execution/`. The same
-  view renders the shared run.
+- **NOTES:** Code: `src/views/ChecklistRun.tsx`, with `RunPageHeader`, `RunAnswersExportMenu`,
+  `TaskExecutionPanel`, `MobileRunProgress` and `RunProgressSidebar` in
+  `src/components/run-execution/`. The same view renders the shared run, which offers no
+  "Export answers".
 
 ### Import Templates
 
