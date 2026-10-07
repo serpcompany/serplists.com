@@ -9,6 +9,7 @@ import type { PrimaryTaskAction } from '@/features/run-execution/primaryTaskActi
 import type { ChecklistItem } from '@/types/checklist';
 
 import { findAllElements, findElementOf, handlerOf, isElement } from '../../../support/elementTree';
+import { markupText } from '../../../support/markupText';
 
 const textOf = (node: unknown): string => {
   if (typeof node === 'string') return node;
@@ -156,7 +157,7 @@ describe('TaskExecutionPanel task checkbox, the only control that unticks a comp
   const toggleOf = (tree: unknown) => findAllElements(tree, (element) => element.props.role === 'checkbox');
   const namelessButtons = (html: string) =>
     (html.match(/<button[^>]*>(?:(?!<\/button>).)*<\/button>/gs) ?? []).filter(
-      (button) => !/aria-label="[^"]+"/.test(button) && !/aria-labelledby="[^"]+"/.test(button) && button.replace(/<[^>]*>/g, '').trim() === '',
+      (button) => !/aria-label="[^"]+"/.test(button) && !/aria-labelledby="[^"]+"/.test(button) && markupText(button).trim() === '',
     );
 
   it('is a checkbox named after the task that shows it is not done', () => {

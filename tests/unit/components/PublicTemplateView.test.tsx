@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { markupText } from '../../support/markupText';
+
 type ViewProps = React.ComponentProps<typeof PublicTemplateView>;
 
 const renderView = (overrides: Partial<ViewProps> = {}) => {
@@ -35,18 +37,8 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
   );
 };
 
-const textOf = (markup: string): string => {
-  let text = markup;
-  let previous;
-  do {
-    previous = text;
-    text = text.replace(/<[^>]*>/g, '');
-  } while (text !== previous);
-  return text;
-};
-
 const buttonsLabelled = (html: string, label: RegExp): string[] =>
-  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) => label.test(textOf(button)));
+  (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) => label.test(markupText(button)));
 
 const template: ChecklistTemplate = {
   id: 'template-1',
@@ -211,7 +203,7 @@ describe('PublicTemplateView', () => {
     });
 
     expect(buttonsLabelled(html, /^Start Run$/)).toEqual([]);
-    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => textOf(link) === 'Continue Run') ?? [];
+    const links = html.match(/<a\s[^>]*>[\s\S]*?<\/a>/g)?.filter((link) => markupText(link) === 'Continue Run') ?? [];
     expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link).toContain('href="/profile/devinschumacher/complete-wedding-planning-checklist/run/"');
