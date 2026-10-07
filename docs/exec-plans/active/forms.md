@@ -122,7 +122,8 @@ completion rules in step (`subTaskRuleParity.test.ts`, `run-completion-rule.test
 - **Shared PUT:** answers stay read-only. `mergeSharedRunState` ignores submitted answers, and
   ticking a task whose stored form blocks it is refused the same way.
 - **MCP:** `set_task_completed` is refused with `form_incomplete`, and `set_subtask_completed`
-  doesn't tick the task automatically. PR 2 adds an operation that fills answers.
+  doesn't tick the task automatically. `update_run` `set_form_answer` fills answers, one field
+  at a time.
 - **Completed runs:**
   - Answers freeze, like ticks (`completed-run-freeze.ts`). Reopening the run makes them
     editable again.
@@ -217,8 +218,11 @@ leaves the site broken until the next one lands):
     `tests/e2e/template-forms.spec.ts`.
 - [ ] **PR 2, answers outside the run page:**
   - a CSV and JSON export of a run's answers;
-  - an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
-    runs, its text kept out of the audit diff).
+  - [x] an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
+    runs, its text kept out of the audit diff): `set_form_answer` with `taskId`, `fieldId` and
+    `answer`, MCP 0.6.0, whose release notes also cover PR 1's MCP changes; documented in
+    [agent access](../../design-docs/agent-access.md) and tested in
+    `agent-mcp-handler.form-answers.test.ts` and on SQLite in `run-form-guard-d1.test.ts`.
 
 ## Decision log
 
@@ -276,3 +280,25 @@ leaves the site broken until the next one lands):
   task (`findFormFieldProblem`). The editor drops it on save and the pack schema refuses it,
   but the stored schema is lenient like every stored shape, so a raw Template save could keep
   one and leave its task unable to be ticked in every run.
+- 2026-10-06: MCP `set_form_answer` requires `answer`, and `null` is the answer that clears a
+  field. Every other MCP argument treats `null` as absent, so `parseUpdateRunArguments` keeps a
+  `null` `answer` for this operation only: an agent that leaves `answer` out gets
+  `answer: Required` instead of silently clearing the field.
+- 2026-10-06: An MCP answer is checked for its kind's type before the one rule, and only `null`
+  clears every kind. `''`, `[]` and `false` clear the kinds they are a value of (text kinds and
+  dates, multiple choice, checkbox), so `''` for a Number field is refused as the wrong type, not
+  read as clearing it. A wrong type is `invalid_answer`, not `invalid_arguments`: which type is
+  right depends on the field's kind, which only the stored run knows. Values no kind takes (an
+  object, an array of numbers) are refused by the argument schema at the boundary.
+- 2026-10-06: MCP cannot set a File answer (`unsupported_field_kind`), only clear one. A file answer
+  must point at an upload, and agents have no upload path; the message sends them to the web app.
+- 2026-10-06: Clearing a required answer through MCP is allowed while the task is open, but on a
+  ticked task an answer that leaves its form blocking is refused with `form_incomplete`, as
+  `PUT /api/checklists/:id` refuses the same save. Answering never ticks or unticks the task, so
+  the alternative, a ticked task with a blocking form, is what every other save path prevents.
+- 2026-10-06: MCP stores each Multiple choice option once, in the order sent: the one rule accepts
+  repeated ids, but the run page never makes them and `formatFormAnswer` would list an option
+  twice.
+- 2026-10-06: The `set_form_answer` audit diff names the `taskId` and `fieldId` and lists the task
+  in `answersChanged` only when the stored answer changed, so an answer sent again records no
+  change; the answer itself is never in the diff, as notes are recorded only by length.

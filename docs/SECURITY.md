@@ -425,7 +425,9 @@ time, `list_templates` and `list_runs` return a page at a time with a cursor to 
 whole large template or run, and no edit needs one sent back. MCP run writes keep the same
 content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
-agent writes come back in one result.
+agent writes come back in one result. A form answer it sets keeps its field's limit (10,000
+characters at most, a Long text answer), and it cannot set a File answer, which only an upload
+in the web app makes.
 The cap uses `Content-Length`, or, when it is missing or malformed, reads the body once,
 stopping as soon as it passes the cap, so it buffers at most the cap, and hands the
 handler a request built from those bytes (`readBodyWithinLimit` in
