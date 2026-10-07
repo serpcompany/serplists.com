@@ -46,7 +46,7 @@
     },
     {
       "path": "/profiles/",
-      "lastmod": "2026-10-05T22:26:40.000Z"
+      "lastmod": "2026-10-06T00:33:42.000Z"
     }
   ],
   "templates": [
@@ -86,6 +86,6 @@
     "templatesLastmod": "2026-07-10T15:24:46.000Z",
     "categoriesHash": "ba8c928bfa2fd88e4f8fff12f40abab5576e4970c77711d8198e3b18708923ad",
     "categoriesLastmod": "2026-10-02T07:34:00.000Z",
-    "implementationLastmod": "2026-10-05T22:52:43.000Z"
+    "implementationLastmod": "2026-10-06T00:33:42.000Z"
   }
 }

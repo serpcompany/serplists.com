@@ -1,6 +1,6 @@
 # Forms
 
-- **Status:** active
+- **Status:** completed
 - **Last updated:** 2026-10-06
 - **Goal:** A task can hold a Form block whose fields the Template defines and every Run fills
   in, and a task whose form has a missing or invalid required answer cannot be marked done
@@ -216,7 +216,7 @@ leaves the site broken until the next one lands):
     ticked once its form is answered.").
   - [x] Docs (screen inventory, app map, features, FRONTEND, run execution, content types) and
     `tests/e2e/template-forms.spec.ts`.
-- [ ] **PR 2, answers outside the run page:**
+- [x] **PR 2, answers outside the run page** (this plan's last PR):
   - a CSV and JSON export of a run's answers;
     - [x] "Export answers" ("Download CSV", "Download JSON") in the header of the run page
       and the guest run when the Run has a form field, built in the browser

@@ -66,7 +66,7 @@ which would drop focus and the caret as someone types past `https://`.
 ## Form blocks
 
 A form block (`type: 'form'`) holds fields that the Template defines and every run fills
-in. The plan and its decisions are in [forms](../exec-plans/active/forms.md); the shapes,
+in. The plan and its decisions are in [forms](../exec-plans/completed/forms.md); the shapes,
 kinds and limits live in `src/lib/schemas/formFields.ts`.
 
 - **Stored shape:** `{ id, type: 'form', value: '', fields }`. Each field has an `id`
