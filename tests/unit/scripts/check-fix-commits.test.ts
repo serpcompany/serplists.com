@@ -135,7 +135,7 @@ describe('where the rule runs', () => {
     );
   });
 
-  it("checks every commit of a pull request in CI's Quality Gate, with the history it needs", () => {
+  it("checks every commit of a pull request that staging does not hold yet in CI's Quality Gate, with the history it needs, so a promotion to main does not re-check commits staging already accepted", () => {
     const quality = z
       .object({ jobs: z.object({ quality: z.object({ steps: z.array(workflowStepSchema) }) }) })
       .parse(readWorkflowFile(path.join(REPO_ROOT, '.github/workflows/ci.yml'))).jobs.quality;
@@ -144,6 +144,6 @@ describe('where the rule runs', () => {
 
     expect(checkout?.with?.['fetch-depth']).toBe(0);
     expect(fixCheck?.if).toBe("github.event_name == 'pull_request'");
-    expect(fixCheck?.env?.['FIX_COMMIT_RANGE']).toBe('origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}');
+    expect(fixCheck?.env?.['FIX_COMMIT_RANGE']).toBe('origin/staging..${{ github.event.pull_request.head.sha }}');
   });
 });
