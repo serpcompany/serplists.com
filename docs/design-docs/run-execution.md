@@ -244,8 +244,16 @@ every route that ticks a task applies it:
 - **MCP** `set_task_completed` with `completed: true` fails with the tool error `form_incomplete`
   and the same `details`, and `set_subtask_completed` completes its task only when the form is
   complete ([agent access](agent-access.md)).
+- **MCP fills answers** with `update_run` `set_form_answer`, one field at a time, on the stored
+  Run's field definitions: an answer of the wrong type for its kind, or a non-empty one the rule
+  calls invalid, fails with `invalid_answer` and the field's `formFieldProblemMessage`, as the
+  run page shows it. `null` or an empty answer clears the field, even a required one, and
+  answering never ticks or unticks the task; on a ticked task, an answer that leaves its form
+  blocking fails with `form_incomplete`, as `PUT /api/checklists/<id>` refuses it. A File field
+  can only be cleared (`unsupported_field_kind`), because an agent has no upload.
 - **A completed Run's answers are frozen** like its ticks (`completed-run-freeze.ts`): a save that
-  changes one fails with `409 run_completed` unless it reopens the Run. Notes stay editable.
+  changes one fails with `409 run_completed` unless it reopens the Run, and MCP `set_form_answer`
+  fails with `run_completed`. Notes stay editable.
 - **Template changes** carry answers by field id while the kind is unchanged. A field whose kind
   changed starts empty. The answers of removed and kind-changed fields join the retired work as
   `formAnswer` entries, which "Removed from Template" shows as "label: answer" under their task's

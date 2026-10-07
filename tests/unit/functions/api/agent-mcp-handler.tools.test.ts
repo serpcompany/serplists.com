@@ -1,4 +1,5 @@
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import Ajv from "ajv";
 import { valueAt } from "../../../support/elements";
 import {
   dbMocks,
@@ -55,6 +56,7 @@ describe("personal run MCP handler", () => {
       "set_subtask_completed",
       "set_task_notes",
       "set_run_status",
+      "set_form_answer",
     ]);
     expect(body.result.tools.map((tool) => tool.annotations)).toEqual([
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -100,19 +102,41 @@ describe("personal run MCP handler", () => {
     }
 
     function problemsAClientFindsAgainstTheAdvertisedSchema(schema: McpToolInputSchema, args: JsonRecord): string[] {
-      const problems = (schema.required ?? []).filter((name) => !(name in args)).map((name) => `missing ${name}`);
-      for (const [name, value] of Object.entries(args)) {
-        const property = schema.properties[name];
-        if (!property) {
-          problems.push(`unknown ${name}`);
-          continue;
-        }
-        const typeMatches = property.type === "integer" ? Number.isInteger(value) : typeof value === property.type;
-        if (!typeMatches) problems.push(`type ${name}`);
-        if (property.enum && !property.enum.includes(value)) problems.push(`enum ${name}`);
-      }
-      return problems;
+      const ajv = new Ajv({ strict: false, allErrors: true });
+      if (ajv.validate(schema, args)) return [];
+      return (ajv.errors ?? []).map((error) => `${error.instancePath} ${error.message ?? "is invalid"}`);
     }
+
+    const aRunWithAForm = () => personalRun({
+      items: JSON.stringify([{
+        id: "section-1",
+        title: "Release",
+        items: [{
+          id: "task-1",
+          title: "Verify",
+          isCompleted: false,
+          contents: [{ id: "c-form", type: "form", value: "", fields: [
+            { id: "field-owner", label: "Owner", kind: "text", required: true },
+            { id: "field-seats", label: "Seats", kind: "number", required: false },
+            { id: "field-plans", label: "Plans", kind: "multiSelect", required: false, options: [{ id: "opt-basic", label: "Basic" }] },
+            { id: "field-signed", label: "Signed", kind: "checkbox", required: false },
+          ] }],
+        }],
+      }]),
+    });
+
+    const formAnswer = (fieldId: string, answer: unknown): [string, JsonRecord, () => JsonRecord] =>
+      ["set_form_answer", { taskId: "task-1", fieldId, answer }, aRunWithAForm];
+
+    const updateRunCalls: Array<[string, JsonRecord, () => JsonRecord]> = [
+      ...everyUpdateRunOperation({ taskId: "task-1", notes: "Checked" })
+        .map(([operation, fields]): [string, JsonRecord, () => JsonRecord] => [operation, fields, operation === "set_run_status" ? finishedRun : personalRun]),
+      formAnswer("field-owner", "Acme"),
+      formAnswer("field-seats", 12),
+      formAnswer("field-signed", true),
+      formAnswer("field-plans", ["opt-basic"]),
+      formAnswer("field-owner", null),
+    ];
 
     it("advertises a plain object schema with top-level properties for every tool", async () => {
       for (const tool of await listTools()) {
@@ -136,19 +160,33 @@ describe("personal run MCP handler", () => {
       for (const operation of operations) expect(updateRun.description).toContain(operation);
     });
 
-    it.each(everyUpdateRunOperation({ taskId: "task-1", notes: "Checked" }))("accepts %s arguments that match the advertised schema, with unused fields sent as null", async (operation, fields) => {
+    it.each(updateRunCalls)("accepts %s arguments %j that match the advertised schema, with unused fields sent as null", async (operation, fields, run) => {
       const updateRun = await updateRunTool();
       const args = { runId: "run-1", expectedRevision: 1, operation, ...fields };
       expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, args)).toEqual([]);
 
-      const unused = Object.fromEntries(["taskId", "subtaskId", "completed", "notes", "status"]
+      const unused = Object.fromEntries(["taskId", "subtaskId", "completed", "notes", "status", "fieldId", "answer"]
         .filter((name) => !(name in fields))
         .map((name) => [name, null]));
-      dbMocks.selectChain.limit.mockResolvedValueOnce([operation === "set_run_status" ? finishedRun() : personalRun()]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
       const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", { ...args, ...unused }), env));
 
       expect(body.result.isError).toBeUndefined();
       expect(mcpRunResult.parse(body.result.structuredContent).run.revision).toBe(2);
+    });
+
+    it("advertises the answer types set_form_answer takes, and its validator refuses the same others", async () => {
+      const updateRun = await updateRunTool();
+      const call = (answer: unknown) => ({ runId: "run-1", expectedRevision: 1, operation: "set_form_answer", taskId: "task-1", fieldId: "field-owner", answer });
+
+      for (const answer of ["Acme", 12, true, ["opt-basic"], [], null]) {
+        expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, call(answer)), JSON.stringify(answer)).toEqual([]);
+        expect(updateRunArgs.safeParse(call(answer)).success, JSON.stringify(answer)).toBe(true);
+      }
+      for (const answer of [{ url: "https://serplists.com/api/uploads/file?key=a" }, [1], [null]]) {
+        expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, call(answer)), JSON.stringify(answer)).not.toEqual([]);
+        expect(updateRunArgs.safeParse(call(answer)).success, JSON.stringify(answer)).toBe(false);
+      }
     });
 
     it("names the offending field when update_run arguments do not fit the operation", async () => {

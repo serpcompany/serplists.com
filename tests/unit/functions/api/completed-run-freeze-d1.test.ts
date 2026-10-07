@@ -11,6 +11,7 @@ import { buildRunUpdatePayload } from "@/contexts/runUpdatePayload";
 import { mapChecklistToRun } from "@/features/run-execution/runExecutionMappers";
 import type { ChecklistSection } from "@/types/checklist";
 import { COMPLETED_RUN_FROZEN_MESSAGE } from "@functions/api/utils/completed-run-freeze";
+import { getTaskFormFields } from "@/lib/schemas/storedSections";
 import { apiRequest } from "../../../support/apiRequest";
 import { objectContaining } from "../../../support/asymmetricMatchers";
 import { taskIn } from "../../../support/elements";
@@ -73,7 +74,7 @@ const httpRefusal = { status: 409, code: "run_completed", message: COMPLETED_RUN
 const mcpRefusal = {
   status: "tool error",
   code: "run_completed",
-  message: "Run is completed, so its tasks and subtasks can no longer be changed; set_run_status in_progress reopens it",
+  message: "Run is completed, so its tasks, subtasks, and form answers can no longer be changed; set_run_status in_progress reopens it",
 };
 
 const routes = [
@@ -246,5 +247,21 @@ describe("a completed run's form answers are frozen like its ticks", () => {
     await expect(put("form-done", { status: "in_progress", sections: withAnswer("Other"), expected_revision: 1 })).resolves.toBeNull();
 
     expect(stored("status", "form-done")).toBe("in_progress");
+  });
+
+  it("refuses MCP set_form_answer until set_run_status reopens the run", async () => {
+    const setAnswer = (expectedRevision: number) => updateRunRefusal(database, {
+      runId: "form-done", expectedRevision, operation: "set_form_answer", taskId: "brief", fieldId: "field_name", answer: "Other",
+    });
+
+    await expect(setAnswer(1)).resolves.toEqual(mcpRefusal);
+    expect(stored("revision", "form-done")).toBe(1);
+
+    await expect(updateRunRefusal(database, { runId: "form-done", expectedRevision: 1, operation: "set_run_status", status: "in_progress" }))
+      .resolves.toBeNull();
+    await expect(setAnswer(2)).resolves.toBeNull();
+    const brief = taskIn(storedSectionsIn(stored("items", "form-done")), 0, 0);
+    expect(getTaskFormFields(brief).map((field) => field.answer)).toEqual(["Other"]);
+    expect(brief.isCompleted).toBe(true);
   });
 });

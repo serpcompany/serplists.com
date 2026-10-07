@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_FORM_TEXT_ANSWER_LENGTH } from "../../../src/lib/schemas/formFields";
 import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcpTemplateTools";
@@ -76,22 +77,34 @@ export const updateRunArgs = z.discriminatedUnion("operation", [
     operation: z.literal("set_run_status"),
     status: z.enum(["in_progress", "completed"]),
   }).strict(),
+  runAtRevision.extend({
+    operation: z.literal("set_form_answer"),
+    taskId: z.string().trim().min(1),
+    fieldId: z.string().trim().min(1),
+    answer: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]).nullable(),
+  }).strict(),
 ]);
 
 export type UpdateRunArgs = z.infer<typeof updateRunArgs>;
+export type SetFormAnswerArgs = Extract<UpdateRunArgs, { operation: "set_form_answer" }>;
 
 const MAX_REPORTED_ISSUES = 5;
 
-function dropNullFields(rawArguments: unknown): unknown {
+type NullIsAValue = (args: JsonRecord, name: string) => boolean;
+
+const nullIsNeverAValue: NullIsAValue = () => false;
+
+function dropNullFields(rawArguments: unknown, nullIsAValue: NullIsAValue): unknown {
   if (!isRecord(rawArguments)) return rawArguments ?? {};
-  return Object.fromEntries(Object.entries(rawArguments).filter(([, value]) => value !== null));
+  return Object.fromEntries(Object.entries(rawArguments).filter(([name, value]) => value !== null || nullIsAValue(rawArguments, name)));
 }
 
 export function parseToolArguments<Arguments>(
   schema: z.ZodType<Arguments, z.ZodTypeDef, unknown>,
   rawArguments: unknown,
+  nullIsAValue: NullIsAValue = nullIsNeverAValue,
 ): Arguments {
-  const parsed = schema.safeParse(dropNullFields(rawArguments));
+  const parsed = schema.safeParse(dropNullFields(rawArguments, nullIsAValue));
   if (parsed.success) return parsed.data;
   const issues = parsed.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
     path: issue.path.join("."),
@@ -100,6 +113,15 @@ export function parseToolArguments<Arguments>(
   const message = issues.map(({ path, message: text }) => (path ? `${path}: ${text}` : text)).join("; ");
   throw new ToolError(message || "Invalid arguments", "invalid_arguments", { issues });
 }
+
+const nullClearsAFormAnswer: NullIsAValue = (args, name) => name === "answer" && args["operation"] === "set_form_answer";
+
+export const parseUpdateRunArguments = (rawArguments: unknown): UpdateRunArgs =>
+  parseToolArguments(updateRunArgs, rawArguments, nullClearsAFormAnswer);
+
+const TEXT_ANSWER_LIMITS = Object.entries(MAX_FORM_TEXT_ANSWER_LENGTH)
+  .map(([kind, maxLength]) => `${kind} ${formatNumber(maxLength)}`)
+  .join(", ");
 
 export const toolDefinitions = [
   ...templateToolDefinitions,
@@ -179,11 +201,21 @@ export const toolDefinitions = [
       + "set_task_completed with completed true fails with form_incomplete while the task's form has a required "
       + "field without an answer or an answer that is not valid (details.fields names each taskId and fieldId), and "
       + "ticking a task's last subtask completes the task only when its form is complete; "
+      + "set_form_answer needs taskId, fieldId (a field of the task's form, from get_run), and answer, the field's "
+      + "answer for its kind: a string for text, longText, url, and email, a YYYY-MM-DD string for date, a number "
+      + "for number, an option id for select, an array of option ids for multiSelect, true or false for checkbox; "
+      + "null clears any field, and '' (text kinds, date, select), [] (multiSelect), and false (checkbox) clear "
+      + "the fields they fit, even a required one. A file field can only be cleared "
+      + "(unsupported_field_kind: files are uploaded in SERP Lists). An answer of the wrong type, or one that breaks "
+      + "the field's rule (an http(s) URL, an email address, a real date, a number within the field's min and max, "
+      + `listed option ids, text within its kind's length: ${TEXT_ANSWER_LIMITS} characters), fails with invalid_answer and the `
+      + "field's message. Answering never ticks or unticks the task, and on a ticked task an answer that leaves its "
+      + "form incomplete fails with form_incomplete; "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
-      + "(it fails with run_incomplete, naming open taskIds, otherwise). A completed run's tasks and subtasks are "
-      + "frozen: set_task_completed and set_subtask_completed fail with run_completed until set_run_status "
-      + "in_progress reopens it (on the Free plan a reopen counts toward the active-run limit and can fail with "
-      + "limit_reached); notes stay editable. Leave out fields the operation does not use. "
+      + "(it fails with run_incomplete, naming open taskIds, otherwise). A completed run's tasks, subtasks, and form "
+      + "answers are frozen: set_task_completed, set_subtask_completed, and set_form_answer fail with run_completed "
+      + "until set_run_status in_progress reopens it (on the Free plan a reopen counts toward the active-run limit "
+      + "and can fail with limit_reached); notes stay editable. Leave out fields the operation does not use. "
       + "Returns the run's fields with its new revision and, after a task operation, the changed task (sectionId "
       + "and taskId name it) when it fits in one result (32KB); taskOmitted otherwise, so read it with get_run and "
       + "taskId.",
@@ -198,11 +230,11 @@ export const toolDefinitions = [
         },
         operation: {
           type: "string",
-          enum: ["set_task_completed", "set_subtask_completed", "set_task_notes", "set_run_status"],
+          enum: ["set_task_completed", "set_subtask_completed", "set_task_notes", "set_run_status", "set_form_answer"],
         },
         taskId: {
           type: "string",
-          description: "Required for set_task_completed, set_subtask_completed, and set_task_notes.",
+          description: "Required for set_task_completed, set_subtask_completed, set_task_notes, and set_form_answer.",
         },
         subtaskId: { type: "string", description: "Required for set_subtask_completed." },
         completed: { type: "boolean", description: "Required for set_task_completed and set_subtask_completed." },
@@ -215,6 +247,18 @@ export const toolDefinitions = [
           type: "string",
           enum: ["in_progress", "completed"],
           description: "Required for set_run_status. completed needs every task and Sub-task done.",
+        },
+        fieldId: { type: "string", description: "Required for set_form_answer: the id of a field in the task's form." },
+        answer: {
+          anyOf: [
+            { type: "string" },
+            { type: "number" },
+            { type: "boolean" },
+            { type: "array", items: { type: "string" } },
+            { type: "null" },
+          ],
+          description: "Required for set_form_answer: the field's answer for its kind (a string, a number, an option id, "
+            + "an array of option ids, or true or false), or null to clear it.",
         },
       },
       required: ["runId", "expectedRevision", "operation"],
