@@ -103,7 +103,11 @@ Each of these needs the user's approval, or happens with the domain move:
 - **Staging deploys** (done 2026-10-01): `.github/workflows/deploy-staging.yml` deploys the
   staging Worker to `https://serp-checklists-preview.serpcompany.workers.dev` after CI passes on a
   push to `staging` ([RELIABILITY.md](../../RELIABILITY.md#deploy-pipeline)).
-- **Production deploy workflow** (phase 4): build each environment with its own `SITE_ENV`
+- **Production deploy workflow** (phase 4, added 2026-10-06: `.github/workflows/deploy-production.yml`,
+  called by CI on a push to `main` after the quality gate and the schema parity check, with
+  `verify:prod:d1` before the build; it deploys `--env production`, which attaches no route, so
+  the Worker serves only its `workers.dev` address until the domain moves): build each
+  environment with its own `SITE_ENV`
   (`SITE_ENV=staging` for `--env preview`, `SITE_ENV=production` for `--env production`), then
   run `node --import tsx scripts/check-site-standards.ts <workers.dev URL> <staging|production>` against
   the deployment (it sends the smoke-test header), and against the canonical host after the
@@ -136,9 +140,8 @@ Each of these needs the user's approval, or happens with the domain move:
   triggers for Organizations, [profiles directory](../completed/profiles-directory.md)).
   - Before `0028`, check production's usernames and Organization slugs for collisions and values
     outside the handle rule, read-only. `0028`'s backfill stops on a collision, and nothing is
-    renamed automatically. `scripts/check-public-handles.ts` reads only local D1 and staging
-    (`check:public-handles:local`, `check:public-handles:staging`), so it needs a production
-    variant first ([database operations](../../design-docs/database-operations.md)).
+    renamed automatically: `pnpm run check:public-handles:prod` (read-only, added 2026-10-06;
+    [database operations](../../design-docs/database-operations.md)).
   - Back up and note a Time Travel bookmark, then apply them with `0026` and `0027` as above:
     `pnpm run db:migrate:d1:prod` applies every pending migration in order, and
     `check:prod:d1-schema` then requires the registry, the new columns and the trigger text.

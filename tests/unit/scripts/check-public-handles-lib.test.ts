@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { findHandleProblems, formatHandleReport, type HandleOwner } from '../../../scripts/check-public-handles-lib';
+import {
+  findHandleProblems,
+  formatHandleReport,
+  handleCheckTarget,
+  HANDLE_OWNERS_QUERY,
+  type HandleOwner,
+} from '../../../scripts/check-public-handles-lib';
 
 const user = (ownerId: string, value: string): HandleOwner => ({ owner_type: 'user', owner_id: ownerId, value });
 const organization = (ownerId: string, value: string): HandleOwner => ({ owner_type: 'team', owner_id: ownerId, value });
@@ -38,5 +44,18 @@ describe('the public handle collision check', () => {
       'Collision on "acme": User u-1 ("Acme"), Organization t-1 ("acme"). Rename all but one by hand before applying 0028.',
       'Outside the handle rule: User u-2 ("ab"): Use at least 3 characters. It is kept and registered as it is.',
     ]);
+  });
+});
+
+describe('where the public handle collision check reads', () => {
+  it('reads local D1 by default, staging with --staging and production D1 with --production', () => {
+    expect(handleCheckTarget(['node', 'check'])).toEqual({ label: 'local', database: ['serp-checklists-db', '--local'] });
+    expect(handleCheckTarget(['node', 'check', '--staging'])).toEqual({ label: 'staging', database: ['DB', '--remote', '--preview'] });
+    expect(handleCheckTarget(['node', 'check', '--production'])).toEqual({ label: 'production', database: ['serp-checklists-db', '--remote'] });
+  });
+
+  it('only reads: its one query is a SELECT', () => {
+    expect(HANDLE_OWNERS_QUERY.trim()).toMatch(/^SELECT /);
+    expect(HANDLE_OWNERS_QUERY).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE)\b/i);
   });
 });

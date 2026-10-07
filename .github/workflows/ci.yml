@@ -96,3 +96,10 @@ jobs:
     if: github.event_name == 'push' && github.ref_name == 'staging'
     uses: ./.github/workflows/deploy-staging.yml
     secrets: inherit
+
+  deploy-production:
+    name: Deploy production
+    needs: [quality, db-parity]
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    uses: ./.github/workflows/deploy-production.yml
+    secrets: inherit

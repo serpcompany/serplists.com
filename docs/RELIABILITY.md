@@ -424,11 +424,16 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 `.github/workflows/browser-tests.yml` builds and runs the browser tests on pull requests only
 (`tests/unit/workflows/browser-tests.test.ts`). A push
 to `staging` that passes the Quality Gate and the schema parity check deploys staging, through
-`.github/workflows/deploy-staging.yml` (`tests/unit/workflows/deploy-staging.test.ts`).
+`.github/workflows/deploy-staging.yml`, and a push to `main` that passes them deploys the
+production Worker, through `.github/workflows/deploy-production.yml`
+(`tests/unit/workflows/deploy-workers.test.ts` checks both).
 
-Nothing deploys production yet. Production moves to Workers at launch
-([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)); until then
-`serplists.com` keeps serving the last Pages deployment. Staging lives on
+The production Worker (`--env production`) attaches no route yet, so it serves only its
+`workers.dev` address: `serplists.com` keeps serving the last Pages deployment until the domain
+moves at launch ([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)).
+Before the first production deploy, production D1 needs its pending migrations (the deploy
+blocks on `verify:prod:d1`) and the production Worker its secrets
+([SECURITY.md](SECURITY.md#secrets-and-environment)), or the deploy's checks fail. Staging lives on
 `https://staging.serplists.com`, served by its Worker through a zone route
 (`staging.serplists.com/*`, `[[env.preview.routes]]` in `wrangler.toml`, so each deploy keeps
 it attached). The hostname's proxied DNS record still names the retired Pages project, which

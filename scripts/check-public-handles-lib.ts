@@ -6,6 +6,14 @@ export const HANDLE_OWNERS_QUERY =
   "SELECT 'user' AS owner_type, id AS owner_id, username AS value FROM users WHERE username IS NOT NULL AND trim(username) <> '' " +
   "UNION ALL SELECT 'team' AS owner_type, id AS owner_id, slug AS value FROM teams WHERE slug IS NOT NULL AND trim(slug) <> '';";
 
+export type HandleCheckTarget = { label: "local" | "staging" | "production"; database: string[] };
+
+export function handleCheckTarget(argv: readonly string[]): HandleCheckTarget {
+  if (argv.includes("--production")) return { label: "production", database: ["serp-checklists-db", "--remote"] };
+  if (argv.includes("--staging")) return { label: "staging", database: ["DB", "--remote", "--preview"] };
+  return { label: "local", database: ["serp-checklists-db", "--local"] };
+}
+
 export const handleOwnerSchema = z.object({
   owner_type: z.enum(["user", "team"]),
   owner_id: z.string(),

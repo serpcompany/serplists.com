@@ -302,7 +302,7 @@ its owner (`user` or `team`, and the id).
 Rollout, one database at a time:
 
 1. `pnpm run check:public-handles:staging` (read-only; `check:public-handles:local` for local
-   D1) lists collisions and values outside the rule. `0028`'s backfill stops on a collision, so
+   D1, `check:public-handles:prod` for production) lists collisions and values outside the rule. `0028`'s backfill stops on a collision, so
    rename each one by hand first; nothing is renamed automatically.
 2. Back up ([below](#backup-and-restore)). Staging, whose database `--env preview` names:
 
