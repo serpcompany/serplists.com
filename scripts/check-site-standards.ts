@@ -197,20 +197,38 @@ type RetryOptions = {
   attempts?: number;
   retryDelayMs?: number;
   sleep?: (ms: number) => Promise<unknown>;
-  onRetry?: (attempt: number, failed: number) => void;
+  onRetry?: (attempt: number, reason: string) => void;
 };
+
+type AttemptOutcome = { result: SiteStandardsResult } | { error: unknown };
+
+async function attemptSiteStandards(options: Parameters<typeof checkSiteStandards>[0]): Promise<AttemptOutcome> {
+  try {
+    return { result: await checkSiteStandards(options) };
+  } catch (error) {
+    return { error };
+  }
+}
+
+const whyTheAttemptFailed = (outcome: AttemptOutcome): string =>
+  "result" in outcome
+    ? `${outcome.result.failed} check(s) failed`
+    : `the site did not answer (${outcome.error instanceof Error ? outcome.error.message : "unknown error"})`;
 
 export async function checkSiteStandardsUntilItPasses(
   options: Parameters<typeof checkSiteStandards>[0],
   { attempts = 3, retryDelayMs = 20_000, sleep = delay, onRetry = () => {} }: RetryOptions = {},
 ): Promise<SiteStandardsResult> {
-  let result = await checkSiteStandards(options);
-  for (let attempt = 2; attempt <= attempts && result.failed > 0; attempt += 1) {
-    onRetry(attempt, result.failed);
+  for (let attempt = 1; ; attempt += 1) {
+    const outcome = await attemptSiteStandards(options);
+    const passed = "result" in outcome && outcome.result.failed === 0;
+    if (passed || attempt >= attempts) {
+      if ("error" in outcome) throw outcome.error;
+      return outcome.result;
+    }
+    onRetry(attempt + 1, whyTheAttemptFailed(outcome));
     await sleep(retryDelayMs);
-    result = await checkSiteStandards(options);
   }
-  return result;
 }
 
 async function main() {
@@ -224,8 +242,8 @@ async function main() {
   const result = await checkSiteStandardsUntilItPasses(
     { baseUrl, siteEnv: environment.data, local: process.argv.includes("--local") },
     {
-      onRetry: (attempt, failed) =>
-        console.log(`${failed} check(s) failed; a new deployment can answer 404 for its first seconds, so checking again in 20s (attempt ${attempt} of 3).`),
+      onRetry: (attempt, reason) =>
+        console.log(`${reason}; a new deployment can answer 404 or not answer at all for its first seconds, so checking again in 20s (attempt ${attempt} of 3).`),
     },
   );
   result.lines.forEach((line) => console.log(line));

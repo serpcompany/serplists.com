@@ -108,4 +108,41 @@ describe('check-site-standards right after a deploy', () => {
     expect(result.failed).toBeGreaterThan(0);
     expect(pauses).toBe(2);
   });
+
+  it('checks again when a request to a brand-new deployment throws at first, as a DNS or connection error does, and passes once it answers', async () => {
+    const site = await deployedWorkerWithTheBuiltRedirects('production');
+    let warm = false;
+    const reasons: string[] = [];
+
+    const result = await checkSiteStandardsUntilItPasses(
+      {
+        baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+        siteEnv: 'production',
+        request: async (url, options) => {
+          if (!warm) throw new Error('getaddrinfo ENOTFOUND serp-checklists-production.serp.workers.dev');
+          return site(url, options);
+        },
+      },
+      { sleep: async () => { warm = true; }, onRetry: (_attempt, reason) => reasons.push(reason) },
+    );
+
+    expect(result.failed).toBe(0);
+    expect(reasons).toEqual(['the site did not answer (getaddrinfo ENOTFOUND serp-checklists-production.serp.workers.dev)']);
+  });
+
+  it('rethrows after its last attempt when the site never answers', async () => {
+    let pauses = 0;
+
+    await expect(
+      checkSiteStandardsUntilItPasses(
+        {
+          baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+          siteEnv: 'production',
+          request: async () => { throw new Error('connect ETIMEDOUT'); },
+        },
+        { attempts: 3, sleep: async () => { pauses += 1; } },
+      ),
+    ).rejects.toThrow('connect ETIMEDOUT');
+    expect(pauses).toBe(2);
+  });
 });
