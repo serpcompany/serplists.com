@@ -189,9 +189,12 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `.spec.` file beside the code.
   - It runs twice:
     - in the Lefthook commit-msg hook (`--commit-msg`), on the staged files;
-    - in CI's Quality Gate on a pull request (`--range origin/<base>..<head>`), on every
-      commit but merges. That step needs the full history, so the Quality Gate checks out
-      with `fetch-depth: 0`.
+    - in CI's Quality Gate on a pull request (`--range origin/staging..<head>`), on every
+      commit but merges that `staging` does not hold yet. For a pull request into `staging`
+      that is the whole pull request; a promotion into `main` adds only its merge commit, since
+      `staging` already accepted every commit it carries (some of them, such as two from before
+      this rule, would fail it). That step needs the full history, so the Quality Gate checks
+      out with `fetch-depth: 0`.
   - A commit that fixes no behavior takes another type: `refactor:`, `build:`, `docs:`,
     `test:` or `chore:`.
 - **Docs** (`pnpm run docs:check`, part of `check:repo`) reads `AGENTS.md`, `ARCHITECTURE.md`,

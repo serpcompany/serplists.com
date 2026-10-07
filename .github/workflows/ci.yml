@@ -47,7 +47,7 @@ jobs:
       - name: Every fix commit adds a regression test
         if: github.event_name == 'pull_request'
         env:
-          FIX_COMMIT_RANGE: origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+          FIX_COMMIT_RANGE: origin/staging..${{ github.event.pull_request.head.sha }}
         run: node --import tsx scripts/check-fix-commits.ts --range "$FIX_COMMIT_RANGE"
 
       - name: Validate environment contract
