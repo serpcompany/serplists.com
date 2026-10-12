@@ -2,38 +2,64 @@ name: Deploy staging to Cloudflare Workers
 
 on:
   workflow_call:
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_EMAIL:
+        required: true
+      CLOUDFLARE_API_KEY:
+        required: true
 
-concurrency:
-  group: deploy-staging
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
     env:
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
       COREPACK_ENABLE_AUTO_PIN: "0"
       SITE_ENV: staging
       NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED: "true"
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-      CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+      NEXT_PUBLIC_RELEASE_COMMIT: ${{ github.sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse to deploy from an old run started again
+        uses: ./.github/actions/latest-run
+        with:
+          workflow: ci.yml
+          job: Deploy staging / deploy
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          package_json_file: package.json
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Restore the Next.js build cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: .next/cache
+          key: next-build-staging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-build-staging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -42,6 +68,10 @@ jobs:
         run: pnpm run typecheck:env
 
       - name: Block the deploy while staging D1 has pending migrations
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
         run: pnpm run verify:staging
 
       - name: Build the Worker for staging
@@ -49,6 +79,10 @@ jobs:
 
       - name: Deploy the staging Worker
         id: deploy
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
         run: |
           set -o pipefail
           pnpm exec opennextjs-cloudflare deploy --env preview | tee deploy.log
@@ -59,9 +93,10 @@ jobs:
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify the new deployment responds
+      - name: Smoke-test the new deployment
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: node --import tsx scripts/verify-deployment.ts
 
       - name: Check the deployment against the site standards

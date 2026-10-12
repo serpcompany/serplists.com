@@ -37,6 +37,7 @@ const CANONICAL_ORIGINS: Record<SiteEnvironment, string> = {
 const ONE_SEEDED_PAGE_OF_EACH_KIND = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];
 const FILES = ["/robots.txt", "/sitemap.xml", "/sitemaps/pages/1.xml"];
 const API = ["/api/health", "/api/auth/get-session", "/api/mcp", "/api/stripe/webhook"];
+const API_THAT_ANSWERS = ["/api/health", "/api/templates"];
 const LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST = "serp-checklists-check.serp.workers.dev";
 
 export function getWithoutFollowingRedirects(
@@ -183,7 +184,7 @@ export async function checkSiteStandards({
   const canonicalOrigin = CANONICAL_ORIGINS[siteEnv];
   const site = siteUnderCheck(base, request);
 
-  for (const path of [...ONE_SEEDED_PAGE_OF_EACH_KIND, ...FILES]) await site.expectStatus(path, 200);
+  for (const path of [...ONE_SEEDED_PAGE_OF_EACH_KIND, ...FILES, ...API_THAT_ANSWERS]) await site.expectStatus(path, 200);
   await checkTheOtherFormRedirectsInOneHop(site);
   await checkTheApiIsNeverRedirected(site);
   await checkSitemapsListOnlyCanonicalUrls(site);

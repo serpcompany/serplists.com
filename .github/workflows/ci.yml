@@ -2,9 +2,8 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - staging
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
   push:
     branches:
       - main
@@ -12,8 +11,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -26,20 +25,25 @@ jobs:
   quality:
     name: Quality Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
 
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -53,14 +57,14 @@ jobs:
       - name: Validate environment contract
         run: pnpm run typecheck:env
 
+      - name: Repository checks (comments, docs, sizes, secrets, duplicates, dead code, dependencies, linters, generated files)
+        run: pnpm run verify
+
       - name: Lint
         run: pnpm run lint
 
       - name: Typecheck
         run: pnpm run typecheck
-
-      - name: Repository checks (secrets, docs, comments, architecture, duplicates, dead code, generated artifacts)
-        run: pnpm run check:repo
 
       - name: Unit tests
         run: pnpm run test:run
@@ -71,18 +75,24 @@ jobs:
   db-parity:
     name: Drizzle schema parity
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
 
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -90,16 +100,60 @@ jobs:
       - name: Compare migrations with the Drizzle schema
         run: pnpm run check:db:drizzle-parity
 
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [quality, db-parity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed, or had nothing to check
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
   deploy-staging:
     name: Deploy staging
     needs: [quality, db-parity]
     if: github.event_name == 'push' && github.ref_name == 'staging'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/deploy-staging.yml
-    secrets: inherit
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+      CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
 
   deploy-production:
     name: Deploy production
     needs: [quality, db-parity]
     if: github.event_name == 'push' && github.ref_name == 'main'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/deploy-production.yml
-    secrets: inherit
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+      CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+
+  deploy-failed:
+    name: Report a failed deploy
+    needs: [deploy-staging, deploy-production]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout the repository's actions
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      - name: Open or update the issue for the environment whose deploy failed
+        uses: ./.github/actions/deploy-failed
+        with:
+          environment: ${{ needs.deploy-staging.result == 'failure' && 'staging' || 'production' }}
