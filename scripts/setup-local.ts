@@ -73,5 +73,5 @@ Setup complete.
   Start:        pnpm run dev:all   (the URL is printed; logs go to tmp/logs/dev-all.log)
   Sign in:      john@test.com / password123 (see docs/agents/development-environment.md)
   Screenshot:   pnpm run ui:snap -- dashboard --login john@test.com
-  Verify:       pnpm run verify
+  Finish gate:  pnpm run check
 `);

@@ -3,10 +3,10 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPort } from "../../scripts/dev-auto-lib";
+import { checkoutPorts } from "../../tools/checks/ports.mjs";
 import { buildScriptInvocation, buildToolInvocation, type Invocation, spawnTool } from "../../scripts/lib/run-tool";
 import {
   assertSmokePersistPath,
-  DEFAULT_E2E_PORT,
   describeBuiltSiteEnv,
   E2E_SITE_ENV,
   needsOpenPort,
@@ -70,7 +70,7 @@ const smokeTestsOnly = !process.argv.includes("--all");
 const skipBuild = process.argv.includes("--skip-build");
 const playwrightArgs = process.argv.slice(2).filter((arg) => !RUNNER_FLAGS.has(arg));
 
-const openPort = needsOpenPort(process.env) ? await findOpenPort({ preferredPort: DEFAULT_E2E_PORT }) : null;
+const openPort = needsOpenPort(process.env) ? await findOpenPort({ preferredPort: checkoutPorts().e2e }) : null;
 const { env, seedPath, notes } = resolveSmokeEnv(process.env, { openPort, repoRoot });
 notes.forEach((note) => console.log(note));
 

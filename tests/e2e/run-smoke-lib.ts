@@ -1,7 +1,7 @@
 import path from "node:path";
 import { buildCorsAllowedOrigins } from "../../scripts/dev-auto-lib";
 
-export const DEFAULT_E2E_PORT = 4173;
+const DEFAULT_E2E_PORT = 4173;
 export const SMOKE_PERSIST_PATH = ".wrangler/smoke-state";
 export const E2E_AUTH_SECRET = "playwright-local-better-auth-secret-32-chars";
 export const E2E_SITE_ENV = "production";
