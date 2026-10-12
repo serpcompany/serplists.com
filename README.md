@@ -6,6 +6,6 @@ This README is intentionally a pointer file:
 
 - Start here (humans and agents): [AGENTS.md](AGENTS.md), the map of the repository
 - Architecture, layers, and stack: [ARCHITECTURE.md](ARCHITECTURE.md)
-- Product principles and vocabulary: [docs/PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md)
-- Local setup: [docs/design-docs/development-environment.md](docs/design-docs/development-environment.md)
-- Deploys and operations: [docs/RELIABILITY.md](docs/RELIABILITY.md)
+- Product principles and vocabulary: [CONTEXT.md](CONTEXT.md)
+- Local setup: [docs/agents/development-environment.md](docs/agents/development-environment.md)
+- Deploys and operations: [docs/agents/ci-deploys.md](docs/agents/ci-deploys.md)

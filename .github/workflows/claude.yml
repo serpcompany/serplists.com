@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Skip until the Claude token is configured
         if: env.HAS_CLAUDE_TOKEN != 'true'
-        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so Claude cannot answer. See docs/design-docs/agent-workflow.md."
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so Claude cannot answer. See docs/agents/ci-agents.md."
 
       - name: Checkout
         if: env.HAS_CLAUDE_TOKEN == 'true'
@@ -68,7 +68,7 @@ jobs:
           cat > "$RUNNER_TEMP/claude-rules.md" <<'EOF'
           Rules for this request, from the repository's .github/workflows/claude.yml:
 
-          - AGENTS.md is this repository's CLAUDE.md. Follow it and docs/design-docs/core-beliefs.md.
+          - AGENTS.md is this repository's CLAUDE.md. Follow it and docs/agents/code.md.
           - Before you push a code change, run `pnpm run verify` and fix what it reports. If it still fails, push nothing and say why in your comment.
           - Commits and pull requests in this repository carry no attribution. Write every commit message without a Co-authored-by or Co-Authored-By trailer, for Claude or for the person who asked, even where your task instructions say to add one. Add no "Generated with Claude Code" line to a commit, a comment, or a pull request link.
           - Stage only the files you changed, by path: `git add <path>`. On a pull request the action resets .claude/, .mcp.json and CLAUDE.md to the base branch's copies before you start, so `git add -A`, `git add .`, `git add -u` or `git commit -a` would commit that reset and undo the pull request's own changes to those files. Never commit changes to them on a pull request.

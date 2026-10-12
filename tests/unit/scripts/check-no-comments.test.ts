@@ -50,7 +50,7 @@ describe('checkedLanguage', () => {
   });
 
   it('checks Markdown for HTML comments', () => {
-    expect(['README.md', 'docs/RELIABILITY.md', '.github/pull_request_template.md'].map(checkedLanguage)).toEqual([
+    expect(['README.md', 'docs/agents/ci-deploys.md', '.github/pull_request_template.md'].map(checkedLanguage)).toEqual([
       'markdown',
       'markdown',
       'markdown',

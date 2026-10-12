@@ -98,7 +98,7 @@ describe("bootstrap price documentation", () => {
     expect(bootstrapUsage()).toContain(`--monthly ${PRO_MONTHLY_CENTS}`);
     expect(bootstrapUsage()).not.toMatch(/--(monthly|yearly) (?!900\b)\d+/);
 
-    const billingDoc = readFileSync(new URL("../../../docs/design-docs/billing.md", import.meta.url), "utf8");
+    const billingDoc = readFileSync(new URL("../../../docs/agents/billing.md", import.meta.url), "utf8");
     const documented = [...billingDoc.matchAll(/--monthly (\d+)/g)].map((match) => Number(match[1]));
     expect(documented.length).toBeGreaterThan(0);
     expect(new Set(documented)).toEqual(new Set([PRO_MONTHLY_CENTS]));

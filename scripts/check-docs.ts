@@ -7,14 +7,13 @@ import { z } from "zod";
 import { directoriesAFreshCheckoutLacks } from "./lib/repo-files";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ROOT_DOCS = ["AGENTS.md", "ARCHITECTURE.md", "README.md"];
+const ROOT_DOCS = ["AGENTS.md", "ARCHITECTURE.md", "CONTEXT.md", "README.md"];
 const SKILLS_DIR = ".claude/skills";
-const SKILLS_CATALOG = "docs/design-docs/agent-workflow.md";
+const SKILLS_CATALOG = "docs/agents/agent-tooling.md";
 const AGENT_SKILLS_DESCRIPTION_LIMIT = 1024;
 const ENTRY_POINTS = ["AGENTS.md", "README.md"];
 const DOCS_TOP_LEVEL_ENTRIES = [
-  "design-docs", "exec-plans", "generated", "product-specs", "references",
-  "DESIGN.md", "FRONTEND.md", "PLANS.md", "PRODUCT_SENSE.md", "QUALITY_SCORE.md", "RELIABILITY.md", "SECURITY.md",
+  "adr", "agents", "api", "exec-plans", "product", "references", "quality.md", "tech-debt.md",
 ];
 const DESIGN_DOC_STATUSES = new Set(["current", "accepted", "historical", "draft"]);
 const AGENTS_MAX_LINES = 120;
@@ -124,7 +123,9 @@ for (const file of files) {
     }
     if (resolved.endsWith(".md")) targets.add(resolved);
     if (statSync(path.join(repoRoot, resolved)).isDirectory()) {
-      for (const index of ["README.md", "index.md"]) targets.add(path.posix.join(resolved, index));
+      for (const entry of readdirSync(path.join(repoRoot, resolved))) {
+        if (entry.endsWith(".md")) targets.add(path.posix.join(resolved, entry));
+      }
     }
     if (anchor && resolved.endsWith(".md") && !anchorsFor(resolved).has(anchor.toLowerCase())) {
       errors.push(`${where} links to "#${anchor}", but ${resolved} has no heading with that anchor. Link to an existing heading.`);
@@ -180,12 +181,12 @@ function checkLayout() {
   const ignoredRoot = gitIgnored(rootMarkdown);
   for (const name of rootMarkdown) {
     if (!ROOT_DOCS.includes(name) && !ignoredRoot.has(name)) {
-      errors.push(`${name} is not an allowed root document (${ROOT_DOCS.join(", ")}). Move its content into docs/ (for example docs/PRODUCT_SENSE.md or a design doc) and link it from AGENTS.md.`);
+      errors.push(`${name} is not an allowed root document (${ROOT_DOCS.join(", ")}). Move its content into docs/ (for example CONTEXT.md or a design doc) and link it from AGENTS.md.`);
     }
   }
   for (const name of readdirSync(path.join(repoRoot, "docs"))) {
     if (!DOCS_TOP_LEVEL_ENTRIES.includes(name)) {
-      errors.push(`docs/${name} is outside the docs layout. Allowed entries: ${DOCS_TOP_LEVEL_ENTRIES.join(", ")}. Put design and runbook material in docs/design-docs/, user-facing behavior in docs/product-specs/, and third-party docs in docs/references/.`);
+      errors.push(`docs/${name} is outside the docs layout. Allowed entries: ${DOCS_TOP_LEVEL_ENTRIES.join(", ")}. Put design and runbook material in docs/agents/, user-facing behavior in docs/product/, and third-party docs in docs/references/.`);
     }
   }
 }
@@ -213,8 +214,7 @@ function checkIndexListsEveryDoc(dir: string, { requireStatus }: { requireStatus
     }
   }
 }
-checkIndexListsEveryDoc("docs/design-docs", { requireStatus: true });
-checkIndexListsEveryDoc("docs/product-specs", { requireStatus: false });
+checkIndexListsEveryDoc("docs/product", { requireStatus: false });
 
 function checkSkills() {
   if (!existsSync(path.join(repoRoot, SKILLS_DIR))) return;

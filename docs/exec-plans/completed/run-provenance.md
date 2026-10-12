@@ -43,7 +43,7 @@
   provenance columns its table shows; one Run's read carries everything (owner, Template
   title and version, created, started, assigned and completed by, the Run Key's name and who
   authorized it). The list is unbounded by design today, so every extra join per Run
-  multiplies its rows read ([D1 cost](../../design-docs/d1-cost.md)); one Run's read pays them
+  multiplies its rows read ([D1 cost](../../agents/d1-cost.md)); one Run's read pays them
   once.
 - 2026-10-04: The origin comes from the Run's first audit event, read through
   `idx_audit_events_resource` in created order, so it costs one index entry per Run. A

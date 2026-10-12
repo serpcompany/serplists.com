@@ -17,7 +17,7 @@ Stop without posting anything if the pull request is closed or a draft.
 ## 2. Gather what the review needs
 
 - **The change:** `gh pr diff <number> --repo <owner>/<repo>`.
-- **The rules:** AGENTS.md and docs/design-docs/core-beliefs.md. In CI they are already in
+- **The rules:** AGENTS.md and docs/agents/code.md. In CI they are already in
   your instructions; otherwise read them.
 - **Earlier findings:** in CI, your instructions list what Claude already posted on this pull
   request (file, line and text) and name your summary comment. Otherwise read them with

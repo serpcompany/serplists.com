@@ -50,7 +50,7 @@ sections.push(
     : staleDocs.map(({ doc, changed }) => `- \`${doc}\`: ${changed.slice(0, 5).map((ref) => `\`${ref}\``).join(", ")}${changed.length > 5 ? `, +${changed.length - 5} more` : ""}`).join("\n"),
 );
 
-const scoreFile = "docs/QUALITY_SCORE.md";
+const scoreFile = "docs/quality.md";
 const staleScores = staleScoreRows(read(scoreFile), lastCommitTime, (ref) => existsSync(path.join(repoRoot, ref)));
 const dayOf = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
 sections.push(
@@ -61,7 +61,7 @@ sections.push(
     : staleScores.map(({ name, graded, changed }) => `- ${name} (graded ${graded}): ${changed.map(({ ref, time }) => `\`${ref}\` changed ${dayOf(time)}`).join(", ")}`).join("\n"),
 );
 
-const debt = summarizeDebt(read("docs/exec-plans/tech-debt-tracker.md"));
+const debt = summarizeDebt(read("docs/tech-debt.md"));
 sections.push(
   "## Tech debt",
   [
@@ -88,13 +88,7 @@ const activePlans = walk("docs/exec-plans/active", (file) => file.endsWith(".md"
   const age = updated ? Math.floor((now - Date.parse(updated) / 1000) / DAY) : null;
   return { file, updated, age };
 });
-const graded = read("docs/QUALITY_SCORE.md").match(/\*\*Last graded:\*\*\s*(\d{4}-\d{2}-\d{2})/)?.[1] ?? "unknown";
-const STALE_DESIGN_DOC_DAYS = 90;
-const staleDesignDocs = read("docs/design-docs/index.md").split("\n")
-  .map((line) => line.split("|").map((cell) => cell.trim()))
-  .filter((cells) => /^\d{4}-\d{2}-\d{2}$/.test(cells[3] ?? "") && cells[2] !== "historical")
-  .map((cells) => ({ doc: cells[1], age: Math.floor((now - Date.parse(cells[3] ?? "") / 1000) / DAY) }))
-  .filter(({ age }) => age > STALE_DESIGN_DOC_DAYS);
+const graded = read("docs/quality.md").match(/\*\*Last graded:\*\*\s*(\d{4}-\d{2}-\d{2})/)?.[1] ?? "unknown";
 sections.push(
   "## Plans and scores",
   [
@@ -102,7 +96,6 @@ sections.push(
     ...activePlans.map(({ file, updated, age }) =>
       `- \`${file}\`: last updated ${updated ?? "unknown"}${age !== null && age > STALE_PLAN_DAYS ? ` (**${age} days; update or close it**)` : ""}`),
     `- Quality score last graded: ${graded}`,
-    ...staleDesignDocs.map(({ doc, age }) => `- Design doc ${doc} last verified ${age} days ago; re-verify it against the code`),
   ].join("\n"),
 );
 
@@ -112,10 +105,10 @@ sections.push(
     "- [ ] Fix any docs-check failures and re-verify the docs listed above against the code.",
     "- [ ] Pay down one tech debt item, or split one file near the size limit, in a small PR (the code gardener takes the oldest small item).",
     "- [ ] Update or close stale active plans; move finished plans to `docs/exec-plans/completed/`.",
-    "- [ ] Re-grade `docs/QUALITY_SCORE.md` if the code in a domain changed materially.",
-    "- [ ] If a new failure pattern appeared in recent PRs, add it to `docs/design-docs/core-beliefs.md` and, where possible, a lint or check.",
+    "- [ ] Re-grade `docs/quality.md` if the code in a domain changed materially.",
+    "- [ ] If a new failure pattern appeared in recent PRs, add it to `docs/agents/code.md` and, where possible, a lint or check.",
   ].join("\n"),
-  "See [agent workflow](docs/design-docs/agent-workflow.md#weekly-maintenance) for how to work this issue.",
+  "See [agent workflow](docs/agents/ci-agents.md#weekly-maintenance) for how to work this issue.",
 );
 
 console.log(`# Repository maintenance report\n\nGenerated ${new Date().toISOString().slice(0, 10)} by \`pnpm run maintenance:report\`.\n\n${sections.join("\n\n")}\n`);

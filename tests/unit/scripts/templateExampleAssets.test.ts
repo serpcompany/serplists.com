@@ -6,7 +6,7 @@ import { lintSingleTemplateSource, lintYamlTemplateBundle } from '@/../scripts/l
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 const issuesInTheExampleBundle = async (name: string) => {
-  const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples', name);
+  const baseDir = path.join(repoRoot, 'docs/product/portable-templates/examples', name);
   return [
     ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
       jsonPath: path.join(baseDir, 'template.json'),
@@ -27,7 +27,7 @@ describe('template example assets', () => {
   });
 
   it('keeps standalone yaml example source valid', async () => {
-    const issues = await lintSingleTemplateSource(path.join(repoRoot, 'docs/product-specs/portable-templates/examples/full/template.yaml'));
+    const issues = await lintSingleTemplateSource(path.join(repoRoot, 'docs/product/portable-templates/examples/full/template.yaml'));
     expect(issues).toEqual([]);
   });
 });

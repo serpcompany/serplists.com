@@ -122,12 +122,12 @@ const STORAGE_MESSAGE =
   "Use safeLocalStorage or getLocalStorage() from src/lib/browserStorage.ts, the only module allowed to touch it.";
 
 const VOCABULARY_MESSAGE =
-  "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
+  "User-visible text must use CONTEXT.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
   "(not 'Personal workspace'). Legacy code identifiers are fine; this rule only checks visible copy.";
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
 const WORKSPACE_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
 const LIBRARY_MESSAGE =
-  "The /templates/ page is the Template Library (docs/PRODUCT_SENSE.md): label it 'Template Library' and " +
+  "The /templates/ page is the Template Library (CONTEXT.md): label it 'Template Library' and " +
   "its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
 const LIBRARY_OLD_NAME = "/^\\s*Discover\\s*$|\\bDiscover Templates\\b|\\bBrowse (?:Public )?Templates\\b|\\bBrowse templates\\b/";
 

@@ -144,7 +144,7 @@ describe('Claude code review workflow', () => {
     const rules = elementAt(steps, rulesStep);
     expect(rules.env?.['BASE_REF'], 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
     expect(rules.run).toContain('git show FETCH_HEAD:AGENTS.md');
-    expect(rules.run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
+    expect(rules.run).toContain('git show FETCH_HEAD:docs/agents/code.md');
     expect(rules.run).not.toMatch(/\bcat AGENTS\.md/);
     expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md');

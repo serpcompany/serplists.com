@@ -455,7 +455,7 @@ describe.sequential("rows read per hot request on local D1, with the synthetic d
     expect(
       measurement?.rowsRead,
       `${route.name} read ${measurement?.rowsRead} rows, over its budget of ${limit}: ${route.reason}. ` +
-        "If it is meant to read more, update its budget in this table (docs/design-docs/d1-cost.md#measuring).",
+        "If it is meant to read more, update its budget in this table (docs/agents/d1-cost.md#measuring).",
     ).toBeLessThanOrEqual(limit);
   });
 });

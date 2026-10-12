@@ -82,7 +82,7 @@ describe('pnpm run typecheck', () => {
       'These tsconfigs turn off a setting every project keeps on. Set it back to true, or remove the override so the ' +
         'project inherits it, and fix the errors it reports: narrow the value, give it a default that is right for ' +
         'that case, or throw an error that names what is missing; type a value read by known keys with the shape it ' +
-        'has and index only a real dictionary; never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
+        'has and index only a real dictionary; never a ! or a cast (docs/agents/checks.md#quality-gates).',
     ).toEqual([]);
   });
 
@@ -106,7 +106,7 @@ describe('pnpm run typecheck', () => {
         'pnpm run typecheck never checks their code. Write them in TypeScript: every script runs with tsx\'s loader ' +
         '(node --import tsx), and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. Only a module ' +
         `that a root config read without a TypeScript loader imports (${configsOnlyJavaScriptLoads.join(', ')}) may be ` +
-        'JavaScript (docs/design-docs/development-environment.md#writing-scripts).',
+        'JavaScript (docs/agents/development-environment.md#writing-scripts).',
     ).toEqual([]);
   });
 

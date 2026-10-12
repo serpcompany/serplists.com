@@ -225,7 +225,7 @@ leaves the site broken until the next one lands):
   - [x] an MCP `update_run` operation that sets an answer (validated by kind, frozen on completed
     runs, its text kept out of the audit diff): `set_form_answer` with `taskId`, `fieldId` and
     `answer`, MCP 0.6.0, whose release notes also cover PR 1's MCP changes; documented in
-    [agent access](../../design-docs/agent-access.md) and tested in
+    [agent access](../../agents/agent-access.md) and tested in
     `agent-mcp-handler.form-answers.test.ts` and on SQLite in `run-form-guard-d1.test.ts`.
 
 ## Decision log

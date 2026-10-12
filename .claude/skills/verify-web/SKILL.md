@@ -27,13 +27,13 @@ Open `localhost`, not `127.0.0.1`: mixing the two drops the session cookie. A ne
 `pnpm install && pnpm run setup` first. Run one app at a time on this machine. Stop `dev:all`
 with `pnpm run dev:stop` (killing it leaves Next.js and workerd holding the port on Windows), and
 stop a preview you started by ending its whole process tree. More in the Run section of
-`docs/design-docs/development-environment.md`.
+`docs/agents/development-environment.md`.
 
 ## 2. Sign in
 
 Seeded users share the password `password123`: `admin@test.com` is Pro, and `john@test.com` is
 Free and a member of the seeded Organizations. The Sign in section of
-`docs/design-docs/development-environment.md` lists the rest. Under `pnpm run dev:all`,
+`docs/agents/development-environment.md` lists the rest. Under `pnpm run dev:all`,
 `/login/` has quick-fill buttons; the preview has none, so `fill_form` the email and password and
 click **Sign in**.
 
@@ -71,7 +71,7 @@ For each page the change touches:
    `window`, the time, or storage while rendering (`src/hooks/useIsClient.ts` defers that).
 6. `list_network_requests`: no failed requests. `get_network_request` on an API call shows its
    `x-request-id` header; the `debug-api` skill finds that request's lines in the server log.
-7. Compare what you see with the behavior's entry in `docs/product-specs/index.md`. A
+7. Compare what you see with the behavior's entry in `docs/product/index.md`. A
    difference with no decision on file is a bug.
 
 In the preview, also check what only the production build does, with `get_network_request` on

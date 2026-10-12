@@ -24,7 +24,7 @@ self-contained PRs at most, never one stacked on another). It was built in the t
 - [x] `pnpm run ui:snap` of the guest run page (2026-10-06): signed out at desktop and 390px,
   with "This run is saved in this browser only. Log in or sign up to save it to your account.";
   signed in with no guest run in the browser, the address opens the public template page, as
-  the [screen inventory](../../design-docs/ui-screen-inventory.md#guest-run) says. The signed-in
+  the [screen inventory](../../agents/ui-screen-inventory.md#guest-run) says. The signed-in
   "Save to account" state needs a guest run made before signing in, which
   `tests/e2e/guest-run-save.spec.ts` covers.
 

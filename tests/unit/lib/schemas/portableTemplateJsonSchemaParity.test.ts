@@ -16,8 +16,8 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import foundationalChecklists from '@/data/public-template-packs/foundational-checklists.json';
 
 import { portableTemplatePackJsonSchema } from '../../../support/portableTemplateChecks';
-import fullExample from '../../../../docs/product-specs/portable-templates/examples/full/template.json';
-import minimalExample from '../../../../docs/product-specs/portable-templates/examples/minimal/template.json';
+import fullExample from '../../../../docs/product/portable-templates/examples/full/template.json';
+import minimalExample from '../../../../docs/product/portable-templates/examples/minimal/template.json';
 import { z } from 'zod';
 import { storedSections } from '../../../support/storedJson';
 

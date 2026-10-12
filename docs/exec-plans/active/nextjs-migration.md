@@ -45,10 +45,10 @@ The same as the approved reference:
   without running the Worker; each build writes it for its environment
   (`scripts/generate-static-headers.ts`).
 - **URLs** follow the SERP URL standard: pages end in `/`, files and the API never do, and
-  the other form answers one 308 ([FRONTEND.md](../../FRONTEND.md#urls)).
+  the other form answers one 308 ([FRONTEND.md](../../agents/frontend.md#urls)).
 - **Environments** follow the SERP environment configuration standard: `SITE_ENV` marks
   production in each environment's Worker vars and build, and each environment answers on one
-  host ([RELIABILITY.md](../../RELIABILITY.md#environments-and-hosts)).
+  host ([RELIABILITY.md](../../agents/environments.md#environments-and-hosts)).
 - **Unsaved-changes guard:** React Router's blocker is replaced by a navigation guard that
   covers links, router calls, Back/Forward, and reload or close.
 
@@ -87,7 +87,7 @@ The same as the approved reference:
    - A domain-move checklist.
    - ARCHITECTURE, FRONTEND, RELIABILITY and AGENTS updates.
    - The promotion PR includes the release notes for agents in
-     [MCP Changes For Agents](../../product-specs/features.md#mcp-changes-for-agents): MCP 0.3.0
+     [MCP Changes For Agents](../../product/mcp.md): MCP 0.3.0
      changes what the tools return for agents using the deployed 0.2.0.
 
 ## Open questions
@@ -102,7 +102,7 @@ Each of these needs the user's approval, or happens with the domain move:
 
 - **Staging deploys** (done 2026-10-01): `.github/workflows/deploy-staging.yml` deploys the
   staging Worker to `https://serp-checklists-preview.serpcompany.workers.dev` after CI passes on a
-  push to `staging` ([RELIABILITY.md](../../RELIABILITY.md#deploy-pipeline)).
+  push to `staging` ([RELIABILITY.md](../../agents/ci-deploys.md#deploy-pipeline)).
 - **Production deploy workflow** (phase 4, added 2026-10-06: `.github/workflows/deploy-production.yml`,
   called by CI on a push to `main` after the quality gate and the schema parity check, with
   `verify:prod:d1` before the build; it deploys `--env production`, and its first run deployed
@@ -131,7 +131,7 @@ Each of these needs the user's approval, or happens with the domain move:
   column fails the Run Key list and every MCP request with `no such column: permissions`. Back
   up, then `pnpm run verify:prod:d1`, `pnpm run db:migrate:d1:prod` and `pnpm run
   check:prod:d1-schema`, with `CLOUDFLARE_ACCOUNT_ID` set to SERP's account ([database
-  operations](../../design-docs/database-operations.md#applying-migrations)). Check staging's
+  operations](../../agents/database-operations.md#applying-migrations)). Check staging's
   database the same way (`pnpm run verify:staging`) before the first Workers deploy there.
 - **Production D1 migrations 0028 to 0033** (done 2026-10-07, with the owner's go-ahead: a backup
   in `tmp/backups/serp-checklists-db-2026-10-07.sql` and Time Travel bookmarks
@@ -148,15 +148,15 @@ Each of these needs the user's approval, or happens with the domain move:
   - Before `0028`, check production's usernames and Organization slugs for collisions and values
     outside the handle rule, read-only. `0028`'s backfill stops on a collision, and nothing is
     renamed automatically: `pnpm run check:public-handles:prod` (read-only, added 2026-10-06;
-    [database operations](../../design-docs/database-operations.md)).
+    [database operations](../../agents/database-operations.md)).
   - Back up and note a Time Travel bookmark, then apply them with `0026` and `0027` as above:
     `pnpm run db:migrate:d1:prod` applies every pending migration in order, and
     `check:prod:d1-schema` then requires the registry, the new columns and the trigger text.
   - All are additive, and code that predates them never names the new table or columns, so
     they go in before the deploy that ships the code, which the pending-migration gate requires
     anyway. Two follow-ups wait a release after that deploy: TD-15 and TD-84
-    ([tech debt tracker](../tech-debt-tracker.md)).
-- **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../SECURITY.md#rate-limits))
+    ([tech debt tracker](../../tech-debt.md)).
+- **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../agents/security.md#rate-limits))
   matches requests by host and path, so it should keep applying once `serplists.com` points at
   the Worker; confirm it after the domain move.
 - **Staging's domain** (done 2026-10-06): `staging.serplists.com` left the Pages project and the
@@ -242,13 +242,13 @@ Each of these needs the user's approval, or happens with the domain move:
     name dialog rebuilt on them; 19 unused components removed with their packages (every
     `@radix-ui/*`, `clsx`, `tailwind-merge`, `next-themes`, `vaul`, `recharts` and others)
     (`7c113bd0`).
-  - [x] Layout blocks in `src/components/layout/` ([DESIGN.md](../../DESIGN.md#shells-and-layout-blocks)),
+  - [x] Layout blocks in `src/components/layout/` ([DESIGN.md](../../agents/design.md#shells-and-layout-blocks)),
     the public shell (header on a `NavigationMenu`, a menu sheet on phones, footer) and the
     console shell on shadcn's Sidebar block (`6ec8bf6c`).
   - [x] Home, the template library and the public template page rebuilt from the blocks,
     with the same behavior, states, links and wording (`47b56087`).
-  - [x] SERP's UI runbook: the [UI app map](../../design-docs/ui-app-map.md) and the [screen
-    inventory](../../design-docs/ui-screen-inventory.md), with a proof pass for every step 1
+  - [x] SERP's UI runbook: the [UI app map](../../agents/ui-app-map.md) and the [screen
+    inventory](../../agents/ui-screen-inventory.md), with a proof pass for every step 1
     screen on screenshots at 1440x900 and 390x844, light and dark, signed out and in
     (kept locally in `tmp/design-review/step1/`) (`92a7f0e4`).
   - [x] Card and empty-state titles are headings again, and the browser specs follow the
@@ -279,7 +279,7 @@ Each of these needs the user's approval, or happens with the domain move:
       brief's fixes: counts in the singular everywhere through one helper (TD-24,
       `757bec35`), a 404 that logs no error (`945435a0`), and no empty navigation landmark
       while a header menu is open (`c2811960`). Every step 2a card in the [screen
-      inventory](../../design-docs/ui-screen-inventory.md) has its proof pass, on screenshots
+      inventory](../../agents/ui-screen-inventory.md) has its proof pass, on screenshots
       at 1440x900 and 390x844, light and dark, of each screen's states (filled, empty,
       loading) and overlays, kept locally in `tmp/design-review/step2-console/`. Gates on the
       final code: `pnpm run verify` (5,244 unit tests); the 45 browser specs the changes
@@ -298,7 +298,7 @@ Each of these needs the user's approval, or happens with the domain move:
       template page's loading and missing states shared (`44c2a7e0`); Features and the feature
       pages (`5e2c8746`), Pricing (`e3e2fbb5`), About (`6a5659ca`), Contact (`049cd5a7`) and
       the 404 page (`7aa1752a`); the Template Library's search labelled (`48c9aaef`). Every
-      step 2b card in the [screen inventory](../../design-docs/ui-screen-inventory.md) has its
+      step 2b card in the [screen inventory](../../agents/ui-screen-inventory.md) has its
       proof pass, on screenshots at 1440x900 and 390x844, light and dark, signed out and
       signed in where the page differs, of each screen's states (form errors and successes,
       loading, errors, empty) kept locally in `tmp/design-review/step2-public/`.
@@ -496,7 +496,7 @@ Each of these needs the user's approval, or happens with the domain move:
 - 2026-09-29: **Base UI, not Radix.** `asChild` became `render`; a link that looks like a
   button is a `Link` with `buttonVariants` (Base UI's `Button` gives what it renders button
   semantics); menu items render the `Link` and keep their menuitem role. The props that
-  changed meaning are in [DESIGN.md](../../DESIGN.md#conventions): `Select` labels,
+  changed meaning are in [DESIGN.md](../../agents/design.md#conventions): `Select` labels,
   `DropdownMenuLabel` inside a group, `AlertDialogAction` that does not close, and a
   `Switch` or `Checkbox` named by a sibling label. A dialog's outside press comes with a
   reason, which the Run complete dialog's repeat-click guard reads.
@@ -604,7 +604,7 @@ Each of these needs the user's approval, or happens with the domain move:
 - 2026-09-29: **Kept as they are, by the user's choice:** icon tiles stay neutral (no custom
   colors); the phone context switcher stays in the sidebar sheet; the Template editor's phone
   layout comes with step 2, with every other screen's. The questions these changes raised are
-  in the screen inventory's [open questions](../../design-docs/ui-screen-inventory.md#open-questions),
+  in the screen inventory's [open questions](../../agents/ui-screen-inventory.md#open-questions),
   and counts that still say "1 templates" are TD-24.
 - 2026-09-29: **The Template editor on phones.** Below `lg` the editor is one column, and the
   outline opens in a bottom sheet from an "Outline" button in the editor's top bar. Picking or
@@ -756,7 +756,7 @@ Each of these needs the user's approval, or happens with the domain move:
 - 2026-09-30: **MCP server 0.3.0, with release notes for agents.** Agents already use the
   deployed MCP, 0.2.0 on staging and production, and this branch changes what its tools return,
   so `initialize` reports 0.3.0, the next minor version (0.2.0 came with the template tools),
-  and [MCP Changes For Agents](../../product-specs/features.md#mcp-changes-for-agents) lists
+  and [MCP Changes For Agents](../../product/mcp.md) lists
   the changes for the promotion PR to quote. They are written against what 0.2.0 returns, not
   against this branch's earlier states: its `get_run` took only `runId`, returned no retired
   work and failed with a bare `result_too_large` over 512KB, its `update_run` returned the

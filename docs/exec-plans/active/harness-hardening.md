@@ -163,7 +163,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
 ## Exceptions allowed
 
 - **Generated files:** `cloudflare-env.d.ts`, `next-env.d.ts`, `pnpm-lock.yaml`,
-  `docs/generated/` and the rest of `GENERATED_FILES` in `scripts/check-no-comments-lib.ts`.
+  `docs/api/` and the rest of `GENERATED_FILES` in `scripts/check-no-comments-lib.ts`.
   They are not authored code: a generator rewrites them, so the checks skip them.
 - **`db/migrations`** is left out of the duplicate check.
   - Applied migrations are append-only history and cannot be edited to share code.
@@ -198,7 +198,7 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
     ba69768b). Every source file in `src/` and `functions/` is held to 500 lines,
     `src/components/ui/` and tests beside the code included (91cb6e0a).
   - Guards: `tests/unit/config/no-exceptions.test.ts` and ESLint rules on test files
-    (8ecb8a20), described in the [core beliefs](../../design-docs/core-beliefs.md#no-exceptions).
+    (8ecb8a20), described in the [core beliefs](../../agents/code.md#no-exceptions).
 - 2026-09-30: phase 2 done. The no-comments ESLint rule (18e4dcd2) and the check for YAML,
   TOML, SQL, CSS, JSON and patches (64516b84) have 34 tests. The sizing is above.
 - 2026-09-30: phase 5 proven in the sandbox repository (PRs #9 to #12 there).
@@ -210,11 +210,11 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - The port into this repository waits for the owner's approval of the workflow changes.
 - 2026-10-01: phase 3, pairs 1 and 2 done; `pnpm run verify` passed at 47d31be4.
   - `functions/api/handlers` and the top-level API files: 554 comments (39ba09e5..93ac5f6f).
-    New doc: [agent access](../../design-docs/agent-access.md).
+    New doc: [agent access](../../agents/agent-access.md).
   - `tests/unit/components`: 351 comments (ce4ab433..47d31be4). Shared test helpers moved
     to `tests/support/`.
   - `functions/api/utils`, `functions/sitemap`, `functions/seo`: 588 comments (4f885527..d2745713).
-    New doc: [SEO and sitemaps](../../design-docs/seo-and-sitemaps.md). Two docs that
+    New doc: [SEO and sitemaps](../../agents/seo-and-sitemaps.md). Two docs that
     described the code wrongly were corrected. Its auth commit landed inside 29af3457,
     under that commit's test message.
   - `tests/unit/features`, `tests/unit/hooks`: 326 comments (d70122d8..cefac098).
@@ -223,9 +223,9 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - The no-comments rule is enforced on `src/` and `functions/` (9eb2ea39) and on the
     cleaned test folders (45fbd5ce), with `noInlineConfig`.
   - New design docs:
-    - [client data](../../design-docs/client-data.md);
-    - [template editor](../../design-docs/template-editor.md);
-    - [run execution](../../design-docs/run-execution.md).
+    - [client data](../../agents/client-data.md);
+    - [template editor](../../agents/template-editor.md);
+    - [run execution](../../agents/run-execution.md).
   - Agents also added tests, in most cases checking each one fails when the code it guards
     is broken.
   - They replaced copied test helpers with shared ones in `tests/support/`.

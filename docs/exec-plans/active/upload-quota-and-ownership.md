@@ -5,7 +5,7 @@
 - **Goal:** record every stored upload in D1 with its uploader, owner and references,
   so storage is capped per account, Organization editors can delete Organization
   media, and files nothing references can be cleaned up. Closes TD-18 and TD-19 in
-  the [tech debt tracker](../tech-debt-tracker.md).
+  the [tech debt tracker](../../tech-debt.md).
 
 ## Progress
 
@@ -98,7 +98,7 @@ below still matches.
 
 A new schema module (`uploads.ts`), exported from `db/schema/index.ts` with
 `export { uploads, userUploadUsage, uploadReferences } from "./uploads";` (camelCase exports,
-SQL names as the first argument, per [database operations](../../design-docs/database-operations.md#schema-ownership)).
+SQL names as the first argument, per [database operations](../../agents/database-operations.md#schema-ownership)).
 Leave out `owner_type`, `team_id`, `idx_uploads_team_id`, `uploads_owner_type_check` and
 `uploadReferences` until migration B lands.
 

@@ -1,0 +1,19 @@
+# Personal and Organization contexts
+
+- Users always have a Personal context and can belong to Organizations.
+- Organization-owned templates and runs are shared with active Organization members.
+- Context switching is available from the dashboard shell and persists locally. On a console page, switching opens the same section in the chosen context (a Template or Run page opens the other context's list), after the page's unsaved-changes question. The URL decides the context: a Personal URL always shows Personal and an Organization URL that Organization, and every link names the context it means. The remembered context is the last one a tab opened; it chooses only where `/dashboard` lands and the context of pages outside the console, and switching in one tab does not switch tabs that are already open. If the Organization list fails to load, the app shows an error with Retry (or Continue in Personal) instead of switching to Personal. Console pages show it in place of the page; the public template page keeps the template readable and shows it above the template, with Start Run and Save disabled until the list loads or the user continues in Personal. Personal keeps working when the list fails, but the context switcher and Settings say the Organizations couldn't load and offer Retry instead of showing no Organizations, and an Organization's run or private Template opened at a Personal URL moves to its Organization's URL, which shows the error until the list loads.
+- Organization roles:
+  - `owner`: full Organization management and ownership transfer.
+  - `admin`: manage Organization settings, members, and invites.
+  - `editor`: edit Organization templates and start runs.
+  - `runner`: start and execute runs.
+  - `viewer`: read-only access.
+- The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../agents/organizations.md#ui-flow)).
+- Organization management lives only on the Organization's own settings, `/dashboard/organization/:organizationId/settings`, which the switcher's Settings opens in that Organization; the account menu's Settings opens Personal settings.
+- Organization names are limited to 120 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Organization name fields stop at the limit, and a longer name gets a clear message instead of the API's schema error.
+- Owners and admins give an Organization an avatar and a description (plain text, at most 500 characters) on its settings page. The avatar saves as soon as it is uploaded or removed, as the account avatar does; the description saves with the name and slug, and clearing it removes it. Other members see the avatar there without the controls.
+- Usernames and Organization slugs follow one rule, 3 to 30 letters, digits, `_`, `.` and `-`, and share one namespace compared without regard to case: a username can't be another User's in a different case or an Organization's slug, and an Organization slug can't be a username ([public handle registry](../agents/database-operations.md#public-handle-registry)). Usernames are stored lowercase; Organization slugs keep the case they are typed in. A taken one reads "Username is already taken. Please try another." or "Organization slug is already in use".
+- Organization invites are link-based today. A link is shown once; managers can replace a lost one with **New link** on the pending invite, which stops the previous link from working. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance. The link page shows the Organization, inviter, and role and waits for **Accept invite** or **Decline**; accepting does not switch the active context.
+- Members other than the owner can leave an Organization from its settings, which then opens Personal settings.
+- Organization and Template changes are recorded in D1-backed audit/history tables.

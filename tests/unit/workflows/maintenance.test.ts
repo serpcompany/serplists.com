@@ -239,7 +239,7 @@ describe('weekly code gardening workflow', () => {
   it('fixes the oldest small tracker row, or splits a file near the size limit, passing over anything a person decides', () => {
     const prompt = String(codeGarden?.with?.['prompt'] ?? '');
 
-    expect(prompt).toContain('the oldest open row of docs/exec-plans/tech-debt-tracker.md whose Size is');
+    expect(prompt).toContain('the oldest open row of docs/tech-debt.md whose Size is');
     expect(prompt).toContain('"Files near the size limit"');
     expect(prompt).toContain('Pass over an item that needs a migration, production data, billing, product');
     expect(prompt).toContain('Run `pnpm run verify`');

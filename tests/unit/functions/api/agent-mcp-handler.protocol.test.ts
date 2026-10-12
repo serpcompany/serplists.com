@@ -94,10 +94,9 @@ describe("personal run MCP handler", () => {
     const body = await readJson(response, mcpResultResponse);
     expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.6.0" });
 
-    const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
-    expect(spec).toContain("\n## MCP Changes For Agents\n");
-    const notes = spec.slice(spec.indexOf("\n## MCP Changes For Agents\n"));
-    expect(notes).toContain(`\n### ${MCP_SERVER_VERSION} `);
+    const spec = readFileSync(new URL("../../../../docs/product/mcp.md", import.meta.url), "utf8");
+    expect(spec.startsWith("# MCP changes for agents\n")).toBe(true);
+    expect(spec).toContain(`\n## ${MCP_SERVER_VERSION} `);
   });
 
   it("rejects invalid request ids and incomplete initialize parameters", async () => {

@@ -4,7 +4,7 @@
 - **Last updated:** 2026-10-05
 - **Goal:** an edit to a public Organization Template, or to its Creator, refreshes the
   cached sitemaps the same way a Personal Template edit does. Closes TD-23 in the
-  [tech debt tracker](../tech-debt-tracker.md).
+  [tech debt tracker](../../tech-debt.md).
 
 ## Progress
 
@@ -132,13 +132,13 @@ UPDATE sitemap_revisions SET revised_at=strftime('%Y-%m-%d %H:%M:%f','now') WHER
   replay in `pnpm run check:db:drizzle-parity` reports any difference).
 - `db/schema.sql`: no change. It holds tables and indexes only, and the migration
   changes neither.
-- `docs/generated/db-schema.md`: `pnpm run db:schema:generate`.
+- `docs/api/db-schema.md`: `pnpm run db:schema:generate`.
 - `tests/unit/functions/sitemap-migrations.test.ts`: apply the new migration after
   0023 in both tests, and add the Organization cases above.
 - `functions/sitemap/shared.ts` and `functions/sitemap/cache.ts`: drop the comment
   that the triggers fire only for Personal rows, and name the new migration beside
   0023.
-- `docs/exec-plans/tech-debt-tracker.md`: delete the TD-23 row.
+- `docs/tech-debt.md`: delete the TD-23 row.
 
 ## Decision log
 

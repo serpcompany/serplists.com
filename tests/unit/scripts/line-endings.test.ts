@@ -15,14 +15,14 @@ const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
 const git = (args: string[]) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
 
 const GENERATED_FILES = [
-  'docs/generated/db-schema.md',
-  'docs/generated/portable-template-pack.schema.json',
+  'docs/api/db-schema.md',
+  'docs/api/portable-template-pack.schema.json',
   'db/sql-only-schema.json',
   'functions/sitemap/bundled-catalog.generated.json',
-  'docs/product-specs/portable-templates/examples/full/template.json',
-  'docs/product-specs/portable-templates/examples/full/template.md',
-  'docs/product-specs/portable-templates/examples/full/README.md',
-  'docs/product-specs/portable-templates/examples/full/preview.html',
+  'docs/product/portable-templates/examples/full/template.json',
+  'docs/product/portable-templates/examples/full/template.md',
+  'docs/product/portable-templates/examples/full/README.md',
+  'docs/product/portable-templates/examples/full/preview.html',
 ];
 
 describe('normalizeEol', () => {
@@ -101,8 +101,8 @@ describe('generated artifact checks on a CRLF checkout', () => {
     }
   };
 
-  it('accepts a CRLF copy of docs/generated/db-schema.md and still flags drift', () => {
-    const files = ['docs/generated/db-schema.md', 'db/sql-only-schema.json'];
+  it('accepts a CRLF copy of docs/api/db-schema.md and still flags drift', () => {
+    const files = ['docs/api/db-schema.md', 'db/sql-only-schema.json'];
     expect(runCheckOnACrlfCopy('scripts/generate-db-schema-doc.ts', files)).toEqual({ ok: true, output: '' });
 
     const drifted = runCheckOnACrlfCopy('scripts/generate-db-schema-doc.ts', files, (file, text) =>
@@ -113,7 +113,7 @@ describe('generated artifact checks on a CRLF checkout', () => {
   }, 60_000);
 
   it('accepts a CRLF copy of the portable template JSON Schema and still flags drift', () => {
-    const files = ['docs/generated/portable-template-pack.schema.json'];
+    const files = ['docs/api/portable-template-pack.schema.json'];
     expect(runCheckOnACrlfCopy('scripts/generate-portable-template-json-schema.ts', files)).toEqual({ ok: true, output: '' });
 
     const drifted = runCheckOnACrlfCopy('scripts/generate-portable-template-json-schema.ts', files, (_, text) =>

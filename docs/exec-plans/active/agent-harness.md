@@ -39,7 +39,7 @@
   GitHub Action with the `code-review` plugin on every non-draft PR.
 - [ ] Admin settings: required status checks, auto-merge, the Claude GitHub App, and the
   `CLAUDE_CODE_OAUTH_TOKEN` secret
-  (see [agent workflow](../../design-docs/agent-workflow.md#repository-settings-admin-only)).
+  (see [agent workflow](../../agents/ci-agents.md#repository-settings-admin-only)).
 - [x] Burn down the tracked debt: TD-1 (tests `strict`) and TD-2 (parse client
   responses) first.
 
@@ -82,20 +82,20 @@
   switcher is "Switch context" (the ADR calls these ownership contexts), the paid
   Organization plan label is "Paid" (plans.md calls it a paid Organization), and
   Personal and Organization are capitalized as context names. Recorded in the glossary
-  (now `docs/PRODUCT_SENSE.md`).
+  (now `CONTEXT.md`).
 - 2026-09-27: The two `fixme` e2e tests were investigated with the harness and are
   valid: both pass when run on their own and in the serial full suite. They failed
   only under parallel load, so `fixme` was removed. The earlier guess that the view
   toggle lacked an accessible name was wrong; `ui:snap` showed the name is present.
 - 2026-09-27: Restructured `docs/` to the guide's layout exactly. The root glossary
-  (`CONTEXT.md`) became `docs/PRODUCT_SENSE.md`; 62 scattered docs (getting-started,
+  (`CONTEXT.md`) became `CONTEXT.md`; 62 scattered docs (getting-started,
   knowledge, modules, operations, patterns, recipes, reference, schema, adr, agents)
   were merged into 36, with runbooks folded into RELIABILITY/SECURITY and subsystem
   docs into design-docs. `docs:check` now rejects files outside the layout,
   uncatalogued design docs, and extra root documents, so the sprawl cannot return.
 - 2026-09-27: Hand-maintained inventories (file inventory, tech stack, schema snapshot
   notes) were replaced by the ARCHITECTURE.md map and a generated
-  `docs/generated/db-schema.md`, checked in CI. Third-party docs are vendored in
+  `docs/api/db-schema.md`, checked in CI. Third-party docs are vendored in
   `docs/references/` (refresh with `pnpm run docs:references`); Zod's site is not,
   because it documents v4 and we pin v3.
 - 2026-09-27: Agent code review uses the Claude Code GitHub Action with the

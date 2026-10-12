@@ -49,12 +49,12 @@ type HunkLine = { text: string; added: boolean; patchLine: number };
 export const GENERATED_FILES: readonly string[] = [
   "pnpm-lock.yaml",
   "cloudflare-env.d.ts",
-  "docs/generated/portable-template-pack.schema.json",
+  "docs/api/portable-template-pack.schema.json",
   "functions/sitemap/bundled-catalog.generated.json",
-  "docs/product-specs/portable-templates/examples/full/template.json",
-  "docs/product-specs/portable-templates/examples/full/preview.html",
-  "docs/product-specs/portable-templates/examples/minimal/template.json",
-  "docs/product-specs/portable-templates/examples/minimal/preview.html",
+  "docs/product/portable-templates/examples/full/template.json",
+  "docs/product/portable-templates/examples/full/preview.html",
+  "docs/product/portable-templates/examples/minimal/template.json",
+  "docs/product/portable-templates/examples/minimal/preview.html",
 ];
 
 const FORMATS_WITHOUT_COMMENTS: readonly string[] = [

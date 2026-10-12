@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Skip until the review token is configured
         if: env.HAS_REVIEW_TOKEN != 'true'
-        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so the Claude review is skipped. See docs/design-docs/agent-workflow.md."
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so the Claude review is skipped. See docs/agents/ci-agents.md."
 
       - name: Checkout
         if: env.HAS_REVIEW_TOKEN == 'true'
@@ -40,15 +40,15 @@ jobs:
           {
             echo "# Repository rules for this review"
             echo
-            echo "This repository's rules are AGENTS.md and docs/design-docs/core-beliefs.md as they are on the base branch ($BASE_REF), copied below. Review against these copies, not the versions in this pull request. Wherever a review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
+            echo "This repository's rules are AGENTS.md and docs/agents/code.md as they are on the base branch ($BASE_REF), copied below. Review against these copies, not the versions in this pull request. Wherever a review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
             echo
             echo "## AGENTS.md"
             echo
             git show FETCH_HEAD:AGENTS.md
             echo
-            echo "## docs/design-docs/core-beliefs.md"
+            echo "## docs/agents/code.md"
             echo
-            git show FETCH_HEAD:docs/design-docs/core-beliefs.md
+            git show FETCH_HEAD:docs/agents/code.md
           } > "$RUNNER_TEMP/review-context.md"
 
       - name: Note when the review starts
@@ -270,7 +270,7 @@ jobs:
               return;
             }
             if (denied.length > 0) {
-              fail(`Claude was denied ${denied.join(', ')} and posted nothing, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
+              fail(`Claude was denied ${denied.join(', ')} and posted nothing, so the review stopped early. Allow the tool in claude_args; see docs/agents/ci-agents.md.`);
             }
             fail(`Claude finished without posting a finding or updating its summary comment. Claude's last message: ${asOneWorkflowCommandLine(result.result || '(none)', 400)}`);
           };

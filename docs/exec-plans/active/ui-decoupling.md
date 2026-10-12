@@ -13,7 +13,7 @@ any more, and the rule has no baseline.
 
 - [x] Task 1: legacy `api/client.ts` removed (2026-09-27). It was imported only by
   its own test, so the 401-redirect behavior added to it never reached the app;
-  see the [tech debt tracker](../tech-debt-tracker.md).
+  see the [tech debt tracker](../../tech-debt.md).
 - [x] Task 5: `PublicTemplate`, `TemplateDetail`, and `ChecklistRun` no longer call
   `api` at runtime (type-only imports remain). Verified by `deps:check`.
 - [x] Remove the remaining direct `api` calls from 8 components and pages.
@@ -48,7 +48,7 @@ It answers two practical questions:
 
 Related audit:
 
-- [ui-service-decoupling-audit.md](../../design-docs/ui-service-decoupling-audit.md)
+- [ui-service-decoupling-audit.md](../ui-service-decoupling-audit.md)
 
 ## Start Now vs Wait
 

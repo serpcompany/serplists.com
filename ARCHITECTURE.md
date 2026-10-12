@@ -4,10 +4,10 @@ SERP Lists is a Next.js app (`src/`) that runs on Cloudflare Workers through Ope
 The same Worker serves the pages and the API (`functions/api/`, run by the route handler
 `src/app/api/[[...route]]/route.ts`), backed by D1 (SQL) and R2 (files). This page is the
 top-level map. Request flow, routes, and the data model are in the
-[system overview](docs/design-docs/system-overview.md); how the app calls the API and caches
-what it reads is in [client data](docs/design-docs/client-data.md); product terms are defined in
-[PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md); the current tables are in
-[generated/db-schema.md](docs/generated/db-schema.md).
+[system overview](docs/agents/system-overview.md); how the app calls the API and caches
+what it reads is in [client data](docs/agents/client-data.md); product terms are defined in
+[PRODUCT_SENSE.md](CONTEXT.md); the current tables are in
+[generated/db-schema.md](docs/api/db-schema.md).
 
 ## Business domains
 
@@ -19,11 +19,11 @@ what it reads is in [client data](docs/design-docs/client-data.md); product term
 | Runs | `handlers/checklists.ts` (the router), `handlers/checklists-reads.ts`, `handlers/checklists-create.ts`, `handlers/checklists-update.ts`, `handlers/checklists-revalidate.ts`, `handlers/checklists-share-link.ts`, `handlers/checklists-archive.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/`, `features/guest-runs/` (runs kept in a signed-out visitor's browser) |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `views/Pricing.tsx` |
 | Agent access (Run Keys, MCP) | `handlers/agent-keys.ts`, `handlers/agentMcp.ts`, `handlers/agentMcpRunTools.ts`, `handlers/agentMcpTools.ts`, `handlers/agentMcpTemplateTools.ts`, `handlers/agentMcpRuns.ts`, `handlers/agentMcpRunPages.ts`, `handlers/agentMcpPages.ts`, `handlers/agentMcpLists.ts`, `handlers/agentMcpTemplates.ts`, `handlers/agentMcpTemplatePages.ts`, `handlers/agentMcpTemplateEdits.ts`, `utils/agent-mcp-host.ts`, `utils/mcp-limits.ts`, `utils/personal-run-key.ts` | `components/account/AgentAccessSection.tsx`, `lib/schemas/runKeyPermissions.ts` |
-| Public discovery and SEO | `functions/sitemap/` (served by the route handlers in `src/app/sitemap.xml` and `src/app/sitemaps`; `listedOwners.ts` decides which Profile Owners are listed), `functions/seo/` (lookups for page metadata), `handlers/profile-directory.ts` and `utils/profile-directory.ts` (the Profiles directory) | public `views/`, `data/`, `lib/publicPageMeta.ts`, `lib/seo/`, `server/pageMeta/` (each page's metadata, rendered on the server; see docs/FRONTEND.md), `app/robots.ts`, `lib/http/urlStandard.ts` (the canonical URL form and the redirects `next.config.ts` builds from it) |
+| Public discovery and SEO | `functions/sitemap/` (served by the route handlers in `src/app/sitemap.xml` and `src/app/sitemaps`; `listedOwners.ts` decides which Profile Owners are listed), `functions/seo/` (lookups for page metadata), `handlers/profile-directory.ts` and `utils/profile-directory.ts` (the Profiles directory) | public `views/`, `data/`, `lib/publicPageMeta.ts`, `lib/seo/`, `server/pageMeta/` (each page's metadata, rendered on the server; see docs/agents/frontend.md), `app/robots.ts`, `lib/http/urlStandard.ts` (the canonical URL form and the redirects `next.config.ts` builds from it) |
 | Imports and uploads | `handlers/clipy.ts`, `handlers/uploads.ts` | `lib/schemas/portableTemplate*`, `components/TemplateBackup.tsx` |
 
 Legacy `team`/`workspace` identifiers in code mean Organization; see
-the [Personal and Organization contexts decision](docs/design-docs/personal-and-organization-contexts.md).
+the [Personal and Organization contexts decision](docs/adr/0001-use-personal-and-organization-ownership-contexts.md).
 
 ## Layers
 
@@ -73,11 +73,11 @@ the code rather than the rule.
 knip (`pnpm run deadcode:check`) covers the rest of the repository from the entry points its
 tools load (scripts, tests and configs as well as the route files): unused files, exports
 and packages, and packages used without being listed
-([repository checks](docs/RELIABILITY.md#repository-checks)).
+([repository checks](docs/agents/checks.md#repository-checks)).
 
 Other invariants (Zod at API boundaries, structured logging, product vocabulary,
 file size) are listed with their enforcement in
-[core beliefs](docs/design-docs/core-beliefs.md).
+[core beliefs](docs/agents/code.md).
 
 ## Stack
 
@@ -92,8 +92,8 @@ versioned links below rather than relying on memory.
 | Validation | Zod 3 (not 4), `@t3-oss/env-core` | [v3.zod.dev](https://v3.zod.dev/) |
 | Runtime | Cloudflare Workers through OpenNext (`@opennextjs/cloudflare`), Wrangler 4; the API runs in the same Worker | [OpenNext for Cloudflare](https://opennext.js.org/cloudflare) |
 | Data | Cloudflare D1 with Drizzle ORM 0.45 / Kit 0.31; R2 for uploads | [cloudflare-d1-llms.txt](docs/references/cloudflare-d1-llms.txt), [drizzle-llms.txt](docs/references/drizzle-llms.txt) |
-| Auth | Better Auth 1.3.4 (exact pin; current docs describe newer releases) | [authentication](docs/design-docs/authentication.md) |
-| Billing | Stripe REST API via `fetch` (no SDK) | [stripe-llms.txt](docs/references/stripe-llms.txt), [billing](docs/design-docs/billing.md) |
+| Auth | Better Auth 1.3.4 (exact pin; current docs describe newer releases) | [authentication](docs/agents/authentication.md) |
+| Billing | Stripe REST API via `fetch` (no SDK) | [stripe-llms.txt](docs/references/stripe-llms.txt), [billing](docs/agents/billing.md) |
 | SEO | Page metadata from the Next.js Metadata API, XML sitemaps from route handlers; SERP's URL standard (pages end in `/`, files and the API never do) and environment configuration standard (`SITE_ENV`, one host per environment) | [xml-sitemap-standards.md](docs/references/xml-sitemap-standards.md), [URL trailing slash](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/url-trailing-slash.md), [environment configuration](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/environment-configuration.md) |
 | Tests | Vitest 3, Playwright | [vitest-llms.txt](docs/references/vitest-llms.txt) |
 | Tooling | pnpm 9, ESLint 9, dependency-cruiser, Lefthook | |

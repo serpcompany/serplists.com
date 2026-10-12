@@ -86,18 +86,18 @@ jobs:
             2. For each doc, read it and the code it describes. Fix statements that are no
                longer true, remove references to things that no longer exist, and keep the
                doc's structure and tone. If a doc is still accurate, change nothing in it.
-            3. Re-grade each row listed under "Scores to re-grade" in docs/QUALITY_SCORE.md.
+            3. Re-grade each row listed under "Scores to re-grade" in docs/quality.md.
                Read the code in its Code column, with its tests and docs, and grade it again
                on the scale at the top of that file. Rewrite the row's gap or notes to match
                the code as it is now, and link each gap to the row of
-               docs/exec-plans/tech-debt-tracker.md that covers it (add a row there with the
+               docs/tech-debt.md that covers it (add a row there with the
                next free ID and a Size when none does). Set the row's Graded date to today
                (UTC), even when its grades stay the same. Change no other row.
-            4. Update the "Last verified" date in docs/design-docs/index.md for each design
+            4. Update the "Last verified" date in docs/agents for each design
                doc you checked against the code (even if it needed no edits), and the
                "Last updated" line of any exec plan you edit. Use today's date (UTC).
             5. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
-               tests, workflows, baselines, or generated files in docs/generated/.
+               tests, workflows, baselines, or generated files in docs/api/.
             6. Run `pnpm run docs:check`; it must pass.
             7. If you changed nothing, stop and say "No doc drift found". Otherwise create
                branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with
@@ -273,7 +273,7 @@ jobs:
             Goal: one small piece of known debt is paid down in one small PR into staging.
 
             1. Pick ONE item:
-               a. the oldest open row of docs/exec-plans/tech-debt-tracker.md whose Size is
+               a. the oldest open row of docs/tech-debt.md whose Size is
                   `small` (the lowest TD number; tmp/maintenance-report.md names it under
                   "Tech debt"); or, when there is none or you must pass over it,
                b. one file under "Files near the size limit" in tmp/maintenance-report.md,

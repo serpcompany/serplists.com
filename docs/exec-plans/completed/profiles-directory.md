@@ -13,16 +13,16 @@ Organization profile" link): #284, merged into `staging` on 2026-10-06.
 
 - [x] Migration `0032`: the sitemap triggers fire for public Organization Templates and on
   `teams`, so cached sitemaps refresh when an Organization's Templates, slug or archive
-  change (TD-23, the [sitemap plan](../completed/sitemap-organization-templates.md)). Applied
+  change (TD-23, the [sitemap plan](sitemap-organization-templates.md)). Applied
   to local D1 only.
 - [x] The profiles sitemap lists every active Organization with a valid handle after the
   Users, and the pages sitemap lists `/profiles/`
-  ([SEO and sitemaps](../../design-docs/seo-and-sitemaps.md#profiles-directory)).
+  ([SEO and sitemaps](../../agents/seo-and-sitemaps.md#profiles-directory)).
 - [x] `GET /api/profiles?collection=people|organizations&after=|before=`: keyset pages of 24
   on the handle indexes, one grouped public Template count per page, edge-cached for
   5 minutes.
 - [x] `/profiles/`: People and Organizations tabs, cards linking to `/profile/:handle/`, and
-  the footer's "Profiles" link ([features](../../product-specs/features.md#auth-and-account)).
+  the footer's "Profiles" link ([features](../../product/account.md)).
 - [x] The lead's serial checks (2026-10-06): `pnpm run verify`; `test:local-d1` with the
   directory's budgets set from the measured rows (the first People page reads 280 rows at the
   small seed scale: its count reads every Personal Template of the Users it lists); `d1:profile`
@@ -46,7 +46,7 @@ Organization profile" link): #284, merged into `staging` on 2026-10-06.
   change to it moves the sitemaps' implementation date (`SITEMAP_IMPLEMENTATION_SOURCES`
   leaves `functions/api/` out).
 - 2026-10-05: pages use a cursor on the stored handle (`after` and `before`), not a page
-  number with `OFFSET`, which reads every row it skips ([D1 cost](../../design-docs/d1-cost.md#rules-for-d1-queries),
+  number with `OFFSET`, which reads every row it skips ([D1 cost](../../agents/d1-cost.md#rules-for-d1-queries),
   rule 1). The order is the handle index's (binary, so `Acme-Launch` comes before `alpha`),
   and no total is counted, since a `COUNT(*)` reads every eligible row.
 - 2026-10-05: one page shows one collection, in tabs, rather than both in sections: on a phone

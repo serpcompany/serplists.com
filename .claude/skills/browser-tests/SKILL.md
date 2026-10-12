@@ -49,7 +49,7 @@ caps the build and the browsers to a quarter of the CPU threads. When a run fail
 
 ## 3. Write specs the repository's way
 
-The Testing conventions section of `docs/RELIABILITY.md` has the full list. The rules specs most
+`docs/agents/testing.md` has the full list. The rules specs most
 often miss:
 
 - Open pages at their canonical URLs (`/dashboard/templates/`, `/login/`). A URL without its

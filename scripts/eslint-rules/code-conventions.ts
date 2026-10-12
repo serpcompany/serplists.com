@@ -75,7 +75,7 @@ export const APP_CONVENTIONS: CodeConvention[] = [
     selector: "CallExpression[callee.name='useTemplateLists'] > ObjectExpression > Property[key.name='catalog'][value.value=true]",
     message:
       "Only the pages that show the public catalog load it, through useTemplateLibrary() (and the dashboard): an " +
-      "edge-cache miss reads every public Template from D1 (docs/design-docs/d1-cost.md).",
+      "edge-cache miss reads every public Template from D1 (docs/agents/d1-cost.md).",
     owners: ["src/hooks/useTemplateLibrary.ts", "src/views/Dashboard.tsx"],
   },
   {
