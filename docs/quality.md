@@ -1,37 +1,159 @@
-# Quality Score
+# Quality
 
-- **Last graded:** 2026-10-01
+A grade for each product area and layer, from what the repository holds: its automated tests,
+whether CI runs them before a pull request merges, whether docs describe its behavior, and what is
+still checked by hand. Each row names the code its grade covers (Code) and the day it was last
+graded (Graded, in UTC). The line under each table gives the evidence for each grade and the main
+gap, which is what would raise it. Known debt, each item with its issue, is in
+[`tech-debt.md`](tech-debt.md) and [`harness-debt.md`](harness-debt.md).
 
-Grades show where the next hour of cleanup pays off most. Re-grade a row when its
-code changes materially. Each row names the code it grades (Code) and the day it was last
-graded (Graded): the weekly [maintenance report](agents/ci-agents.md#weekly-maintenance)
-lists every row whose code changed since then under "Scores to re-grade", and the weekly doc
-gardener re-grades them. Link each gap to the [tech debt tracker](tech-debt.md).
+The weekly maintenance report lists every row whose code changed after the day it was graded,
+under "Scores to re-grade", and doc gardening re-grades those rows
+([`ci-agents.md`](agents/ci-agents.md), Weekly maintenance). A folder in Code counts as changed
+when any file in it changes.
 
-**Scale:** A = solid, change freely. B = sound, with known gaps. C = works, but
-changes are risky or slow. D = needs attention before building on it.
+| Grade | Means |
+| --- | --- |
+| A | Tests cover the behavior, CI runs them on every pull request that changes it, and docs describe it. What's left is small and tracked. |
+| B | Tests, CI and docs cover the main behavior, but a notable part is checked only by hand, or not at all. |
+| C | Tests and docs exist, but one leg is missing: no CI runs the tests before merge, or no doc describes the behavior. |
+| D | Almost nothing is tested, run before merge, or written down. |
 
-## Product domains
+"By hand" means a person or an agent checking the running site, with the `verify-web` skill or
+`pnpm run ui:snap`. On every pull request, and in the merge queue once it's on, CI runs the unit
+and local D1 tests and every browser spec on the production build ([`ci.md`](agents/ci.md)), so
+the browser specs guard a change before it reaches Staging.
 
-| Domain | Code | Tests | Boundaries | Structure | Docs | Biggest gap | Graded |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Identity and sessions | `functions/api/better-auth.ts`, `functions/api/utils/session.ts`, `src/contexts/CloudflareAuthContext.tsx` | B | B | B | A | Session checks read D1 (no Better Auth cookie cache), so re-checks must stay throttled | 2026-10-01 |
-| Personal and Organization ownership | `functions/api/handlers/teams.ts`, `functions/api/utils/team-access.ts`, `src/contexts/WorkspaceProvider.tsx`, `src/lib/consoleRoutes.ts` | B | B | B | B | Legacy team/workspace naming in code identifiers (TD-5) | 2026-10-01 |
-| Templates | `functions/api/handlers/templates.ts`, `src/views/TemplateDetail.tsx`, `src/views/TemplateEditor.tsx` | A | B | B | A | `TemplateDetail.tsx` (474 lines) is close to the 500-line limit | 2026-10-01 |
-| Runs | `functions/api/handlers/checklists.ts`, `functions/api/utils/run-provenance.ts`, `src/views/ChecklistRun.tsx`, `src/components/dashboard/RunsDashboardView.tsx` | B | B | B | B | The web app has no Reopen action, so a completed run reopens only through the API, a share link or a Run Key | 2026-10-05 |
-| Billing and entitlements | `functions/api/handlers/billing.ts`, `functions/api/handlers/stripe.ts`, `src/components/account/BillingSection.tsx` | B | B | B | A | Only 3 e2e specs exercise paid flows | 2026-10-01 |
-| Agent access (Run Keys, MCP) | `functions/api/handlers/agentMcp.ts`, `src/components/account/AgentAccessSection.tsx` | B | B | B | D | No module doc for Run Keys and MCP | 2026-10-01 |
-| Public discovery and SEO | `functions/sitemap/shared.ts`, `functions/seo/public-template-lookup.ts`, `src/views/ChecklistLibrary.tsx` | B | B | B | B | Sitemap `lastmod` depends on full git history in CI (now configured) | 2026-10-01 |
-| Imports and uploads | `functions/api/handlers/template-backup.ts`, `functions/api/handlers/uploads.ts`, `functions/api/handlers/clipy.ts` | B | C | C | B | Clipy input parsed by hand; `clipy.ts` is close to the 500-line limit | 2026-10-01 |
+## Product areas
 
-## Layers and cross-cutting concerns
+| Area | Grade | Code | Graded |
+| --- | --- | --- | --- |
+| Accounts and sessions | B | `functions/api/better-auth.ts`, `functions/api/utils/session.ts`, `functions/api/utils/auth-email.ts`, `functions/api/utils/auth-request-guard.ts`, `src/contexts/CloudflareAuthContext.tsx`, `src/contexts/sessionSync.ts`, `src/lib/auth/` | 2026-10-12 |
+| Personal and Organization contexts | B | `functions/api/handlers/teams.ts`, `functions/api/utils/team-access.ts`, `src/contexts/WorkspaceProvider.tsx`, `src/lib/consoleRoutes.ts`, `src/lib/organizationPermissions.ts` | 2026-10-12 |
+| Templates | B | `functions/api/handlers/template-create.ts`, `functions/api/handlers/template-update.ts`, `functions/api/handlers/template-reads.ts`, `src/views/TemplateDetail.tsx`, `src/views/TemplateEditor.tsx`, `src/components/template-editor/`, `src/features/template-editor/` | 2026-10-12 |
+| Runs | B | `functions/api/handlers/checklists-update.ts`, `functions/api/handlers/checklists-shared.ts`, `functions/api/utils/run-provenance.ts`, `src/views/ChecklistRun.tsx`, `src/views/GuestRun.tsx`, `src/features/run-execution/`, `src/features/guest-runs/` | 2026-10-12 |
+| Billing and plans | B | `functions/api/handlers/billing.ts`, `functions/api/handlers/stripe.ts`, `functions/api/utils/entitlements.ts`, `src/components/account/BillingSection.tsx`, `src/views/Pricing.tsx` | 2026-10-12 |
+| Run Keys and MCP | A | `functions/api/handlers/agentMcp.ts`, `functions/api/handlers/agentMcpTools.ts`, `functions/api/handlers/agentMcpPages.ts`, `functions/api/handlers/agentMcpTemplates.ts`, `functions/api/handlers/agentMcpRuns.ts`, `functions/api/handlers/agent-keys.ts`, `src/components/account/AgentAccessSection.tsx` | 2026-10-12 |
+| Public pages and SEO | A | `functions/sitemap/`, `functions/seo/`, `functions/api/handlers/profile-directory.ts`, `src/views/PublicTemplate.tsx`, `src/views/PublicProfile.tsx`, `src/views/ChecklistLibrary.tsx`, `src/lib/http/urlStandard.ts` | 2026-10-12 |
+| Imports, exports and uploads | B | `functions/api/handlers/template-backup.ts`, `functions/api/handlers/uploads.ts`, `functions/api/handlers/clipy.ts`, `src/components/TemplateBackup.tsx`, `src/features/template-backup/` | 2026-10-12 |
+| Design and phone layout | B | `src/components/ui/`, `src/components/layout/`, `src/app/globals.css` | 2026-10-12 |
 
-| Area | Code | Grade | Notes | Graded |
-| --- | --- | --- | --- | --- |
-| Type safety | `tsconfig.json`, `scripts/lint.ts` | A | `strict` plus `noImplicitOverride`, `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` and `noPropertyAccessFromIndexSignature` across app, API, scripts and tests, all in `pnpm run typecheck`, with a guard against turning any off; ESLint refuses `!` and unsafe type assertions everywhere. Every script is TypeScript, and the repository's own declaration files are checked with `skipLibCheck` off, apart from the generated `cloudflare-env.d.ts` | 2026-10-01 |
-| Boundary parsing | `src/lib/schemas/`, `src/lib/api/request.ts` | A | Every API response, Stripe reply, webhook body, stored JSON column and browser storage read is parsed with Zod, and the client's types derive from the schemas. ESLint refuses casts of external data, `as unknown as` and `as never`, `any`, and, type-aware, unsafe values and assertions in app, API, scripts and tests | 2026-10-01 |
-| D1 cost efficiency | `functions/api/utils/d1-profiler.ts`, `scripts/d1-profile.ts`, `tests/integration/rows-read-budgets-local-d1.test.ts` | B | Run lists (Organization runs 12k at 40k runs, on the runs page only) and catalog cache misses (13k) still read in proportion to table size; the catalog and sitemaps are edge-cached, lists load on demand, and hot paths are indexed. See the [D1 cost plan](exec-plans/active/d1-cost.md) | 2026-10-01 |
-| Architecture enforcement | `.dependency-cruiser.cjs`, `knip.json` | A | `deps:check` rules with no known violations and no baseline, now including npm packages; `deadcode:check` (knip) fails on unused files, exports, types and dependencies, with only the two recorded ignores | 2026-10-01 |
-| Observability | `functions/api/utils/logger.ts`, `scripts/logs-query.ts` | C | Structured JSON logs with request IDs in the API and in `tmp/logs/` locally; no metrics, traces, or production log sink; frontend errors go to the console only | 2026-10-01 |
-| Delivery | `.github/workflows/ci.yml`, `.github/workflows/deploy-staging.yml` | B | CI gates deploys and probes each new deployment; Claude reviews every PR once the app and token are set up; required status checks and that setup need a repository admin (see [agent workflow](agents/ci-agents.md#repository-settings-admin-only)) | 2026-10-01 |
-| Documentation | `scripts/check-docs.ts`, `scripts/maintenance-report.ts` | B | Fixed layout, links, paths, and catalogs are checked in CI; the database schema doc is generated; a weekly Claude doc-gardening agent re-verifies drifted docs and opens fix-up PRs | 2026-10-01 |
+- **Accounts and sessions, B.** Better Auth's setup, the request guard, rate limits, sessions and
+  their sync across tabs are unit-tested (`tests/unit/functions/api/better-auth-config.test.ts`,
+  `tests/unit/contexts/sessionSync.tabs.test.ts`), and ten browser specs drive signing up, in and
+  out, verification and expiry, `smoke-sign-in.spec.ts` on every pull request. Documented in
+  [`authentication.md`](agents/authentication.md) and the [account](product/account.md) product
+  doc. Main gap: email delivery is checked only by hand, and the other sign-in specs run before
+  merge only on a promotion or when changed.
+- **Personal and Organization contexts, B.** A unit test keeps the UI's role matrix equal to the
+  API's, the console routes and their parser are unit-tested, and browser specs walk an
+  Organization's routes, roles, invites and settings (`organization-routes.spec.ts`;
+  `team-invite-flow.spec.ts` and `team-workspace.spec.ts` as smoke tests). Documented in
+  [`organizations.md`](agents/organizations.md) and the [contexts](product/contexts.md) and
+  [dashboard](product/dashboard.md) product docs. Main gap: the route and role specs run before
+  merge only on a promotion or when changed, and the code still says team and workspace (TD-5).
+- **Templates, B.** Saves, versions, conflicts, visibility, transfer, Required tools and forms are
+  unit-tested, transfer on local D1 too (`tests/integration/template-transfer-local-d1.test.ts`),
+  the editor's components run in a real DOM, and 28 browser specs drive the editor, the detail
+  page and the library, two editor tests as smoke tests. Documented in
+  [`template-editor.md`](agents/template-editor.md),
+  [`template-content-types.md`](agents/template-content-types.md) and the
+  [Templates](product/templates.md) product doc. Main gap: the editor's specs run before merge only
+  on a promotion or when changed, and its phone layout is checked by hand.
+- **Runs, B.** Reconciliation, saves and their revisions, sharing, provenance, form answers and
+  guest runs are unit-tested, sharing, provenance and source access on local D1 too
+  (`tests/integration/run-sharing-local-d1.test.ts`), and 18 browser specs drive the Run page,
+  guest runs and shared runs. Documented in [`run-execution.md`](agents/run-execution.md) and the
+  [Runs](product/runs.md) product doc. Main gap: a typed form answer still focused when the page
+  closes is lost (TD-87), and the Run page's specs run before merge only on a promotion or when
+  changed.
+- **Billing and plans, B.** Checkout, the portal, the webhook's ordering and guards, entitlements
+  and plan limits are unit-tested against stand-ins for Stripe
+  (`tests/unit/functions/api/stripe-webhook-ordering.test.ts`), and plan limits are raced on local
+  D1 (`tests/integration/plan-limits-concurrency-local-d1.test.ts`). Documented in
+  [`billing.md`](agents/billing.md) and
+  [pricing and entitlements](product/pricing-and-entitlements.md). Main gap: nothing runs against Stripe itself, so a real Checkout, the portal and webhook delivery
+  are checked by hand ([`billing.md`](agents/billing.md), Production verification), and only three
+  browser specs touch paid flows.
+- **Run Keys and MCP, A.** Every tool's arguments, permissions, result bound and pages are
+  unit-tested (`tests/unit/functions/api/agent-mcp-result-bounds.test.ts`), local D1 tests drive
+  Templates and Runs through a Run Key (`tests/integration/personal-run-mcp-local-d1.test.ts`), and
+  `personal-run-mcp.spec.ts` drives a Run with a Run Key as a smoke test. Documented in
+  [`agent-access.md`](agents/agent-access.md) and the [MCP release notes](product/mcp.md). Main
+  gap: keys never expire, and nothing limits one key across isolates (TD-25).
+- **Public pages and SEO, A.** Sitemaps, their cache and triggers, page metadata, the URL standard
+  and the Profiles directory are unit-tested (`tests/unit/config/urlStandard.test.ts`),
+  `smoke-sitemaps.spec.ts` and `site-standards.spec.ts` run on every pull request, and each deploy
+  checks the new deployment against the site standards. Documented in
+  [`seo-and-sitemaps.md`](agents/seo-and-sitemaps.md) and [`frontend.md`](agents/frontend.md),
+  URLs. Main gap: how search engines read the site is checked by hand in Search Console, and
+  `sitemap:check` runs nowhere, since squash merges rewrite the dates it compares.
+- **Imports, exports and uploads, B.** Portable packs are generated from and checked against their
+  schema, uploads' limits and byte ranges are tested, and browser specs drive import, export and
+  uploads (`template-export.spec.ts`, `uploads-range.spec.ts`; `account-avatar.spec.ts` as a smoke
+  test). Documented in [portable templates](product/portable-templates.md) and
+  [`database-operations.md`](agents/database-operations.md), R2 uploads. Main gap: uploads have no
+  per-account quota, no delete by their owner and no cleanup of orphans (TD-18 to TD-20).
+- **Design and phone layout, B.** The shadcn components and layout blocks have DOM tests,
+  `heading-outline.spec.ts` reads every page's headings, and three specs check phone layouts (the
+  public menu, the Run's task list and the editor). Documented in [`design.md`](agents/design.md)
+  and [`ui-screen-inventory.md`](agents/ui-screen-inventory.md). Main gap: most screens are checked
+  at phone widths, and in light and dark, only by hand, with screenshots.
+
+## Layers
+
+| Area | Grade | Code | Graded |
+| --- | --- | --- | --- |
+| Type safety | A | `tsconfig.json`, `tsconfig.node.json`, `functions/tsconfig.json`, `tests/tsconfig.json`, `tsconfig.declarations.json`, `scripts/lint.ts` | 2026-10-12 |
+| Boundary parsing | A | `src/lib/schemas/`, `src/lib/api/request.ts`, `functions/api/utils/payloads.ts`, `scripts/eslint-rules/no-external-data-casts.ts` | 2026-10-12 |
+| D1 cost | B | `functions/api/utils/d1-profiler.ts`, `scripts/d1-profile.ts`, `tests/integration/rows-read-budgets-local-d1.test.ts` | 2026-10-12 |
+| Layers and dead code | B | `.dependency-cruiser.cjs`, `knip.json`, `.jscpd.json` | 2026-10-12 |
+| Observability | B | `functions/api/utils/logger.ts`, `scripts/logs-query.ts` | 2026-10-12 |
+| Delivery | B | `.github/workflows/ci.yml`, `.github/workflows/browser-tests.yml`, `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-production.yml`, `scripts/verify-deployment.ts`, `scripts/check-site-standards.ts`, `scripts/promote-prepare.ts` | 2026-10-12 |
+| Repository checks and agent workflows | B | `scripts/checks/`, `tools/checks/`, `lefthook.yml`, `.claude/`, `.github/workflows/pull-request.yml`, `.github/workflows/code-review.yml`, `.github/workflows/claude.yml`, `.github/workflows/maintenance.yml`, `scripts/maintenance-report.ts` | 2026-10-12 |
+
+- **Type safety, A.** `strict` and five stricter flags in every project, tests included, all in
+  `pnpm run typecheck`; `tests/unit/config/typecheck-coverage.test.ts` fails when a project turns
+  one off or a file escapes every project, and ESLint refuses `!` and unsafe assertions.
+  Documented in [`code.md`](agents/code.md). Main gap: the generated `cloudflare-env.d.ts` is
+  regenerated and compared (`pnpm run verify generated`) but type-checked only under
+  `skipLibCheck`.
+- **Boundary parsing, A.** Every API answer, Stripe reply, webhook body, stored JSON column and
+  browser storage read is parsed with Zod, and `serplists/no-external-data-casts` and the
+  type-aware `no-unsafe-*` rules refuse casts of outside data everywhere, tests included
+  (`tests/unit/config/external-data-boundaries.test.ts`). Main gap: none known.
+- **D1 cost, B.** Rows-read budgets for the hot requests run on local D1 on every pull request,
+  and [`d1-cost.md`](agents/d1-cost.md) holds the query rules and the measurements. Main gap:
+  `pnpm run d1:profile`, at full scale, runs only by hand, and Organization run lists and catalog
+  misses still read in proportion to their tables (the D1 cost issue to come).
+- **Layers and dead code, B.** dependency-cruiser holds a rule for every arrow `ARCHITECTURE.md`
+  draws, with no baseline, and prints each rule's fix (`tests/unit/config/layer-rules.test.ts`);
+  knip fails on unused files, exports and packages; each runs in `pnpm run verify`. Main gap:
+  jscpd never compares `.tsx` files, and comparing them finds 6 clones
+  ([`harness-debt.md`](harness-debt.md)).
+- **Observability, B.** The API logs structured JSON with request ids, and
+  `pnpm run logs:query` answers errors, routes, latency and one request's timeline from the local
+  and browser-test logs, with tests. Documented in [`observability.md`](agents/observability.md).
+  `/api/health` and every page name the release, and the browser reports its errors to Workers
+  Logs (ADR 0006). Main gap: reading Staging's or Production's logs (`pnpm run logs:deployed`)
+  needs a read-only token an owner makes, and the browser's stacks are minified.
+- **Delivery, C.** CI gates each deploy, which refuses pending migrations, probes the new
+  deployment and checks it against the site standards, and the workflow tests hold the deploys to
+  that (`tests/unit/workflows/deploy-workers.test.ts`). Documented in
+  [`ci-deploys.md`](agents/ci-deploys.md). The smoke test checks the deployed commit and a refused
+  sign-in, Production waits for a verified Staging deploy of the same files, a re-run of an old run
+  deploys nothing, and a failed deploy opens an issue. Main gaps: these guards first run on GitHub
+  after this merges, only `Quality Gate` is required until an admin requires the gate jobs and
+  turns the merge queue on, and CI deploys with the account's global API key.
+- **Repository checks and agent workflows, B.** `pnpm run verify` runs the comment, docs, size,
+  secret, duplicate, dead-code, dependency, linter and generated-file checks, on all files or some, the git hooks run the fast ones, and the checks' own
+  tests run in CI (`tests/unit/config/`, `tests/unit/scripts/`); the review, `@claude` and weekly
+  maintenance workflows have outcome guards with tests (`tests/unit/workflows/`). Documented in
+  [`code.md`](agents/code.md), [`checks.md`](agents/checks.md) and
+  [`ci-agents.md`](agents/ci-agents.md). The edit and stop hooks check an agent's files as it
+  writes them and before its turn ends. Main gap: the rewritten review, `@claude` and gardening
+  workflows haven't run on GitHub yet, and the review is skipped on pull requests into `staging`
+  until its workflow reaches `main`.
+
+Re-grade an area, and set its Graded date to that day, in the same pull request that changes its
+tests, CI or docs, even when its grade stays the same.

@@ -2,14 +2,14 @@
 
 Personal Pro subscriptions run on Stripe. What each plan includes is specified in
 [pricing and entitlements](../product/pricing-and-entitlements.md); manual
-plan overrides without Stripe are in [SECURITY.md](security.md#admin-entitlement-override).
+plan overrides without Stripe are in [`security.md`](security.md#admin-entitlement-override).
 Plans resolve in `functions/api/utils/entitlements.ts`.
 
 ## URLs
-- Pages domain: `https://serplists.com`
+- Production: `https://serplists.com`
 - Webhook: `https://serplists.com/api/stripe/webhook`
 
-## Required secrets (Cloudflare Pages)
+## Required secrets (the production Worker)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRO_PRICE_ID`
@@ -38,7 +38,8 @@ node --import tsx scripts/stripe/bootstrap.ts --mode test --currency usd --month
 node --import tsx scripts/stripe/bootstrap.ts --mode live --currency usd --monthly 900
 ```
 
-After creating prices, set `STRIPE_PRO_PRICE_ID` in Cloudflare Pages to the **live** monthly `price_...` id.
+After creating prices, set `STRIPE_PRO_PRICE_ID` on the production Worker to the **live** monthly
+`price_...` id: `wrangler secret put STRIPE_PRO_PRICE_ID --env production`.
 
 The launch price is **$9 USD per month**.
 
@@ -350,8 +351,8 @@ else its first item's.
 
 ## Production verification
 
-1. Run `pnpm exec wrangler pages secret list --project-name serplists-com` and
-   confirm all four Stripe variable names are present. Values remain encrypted.
+1. Run `pnpm exec wrangler secret list --env production` and confirm all four Stripe
+   variable names are present. Values remain encrypted.
 2. Run `pnpm run db:migrations:check:prod`.
 3. Sign in as a Free production user and complete a real $9 Checkout payment.
 4. Confirm Account shows Pro, then open the Customer Portal and cancel at the

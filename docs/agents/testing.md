@@ -16,7 +16,7 @@
     `scripts/eslint-rules/code-conventions.ts`, with a sample in
     `tests/unit/config/code-conventions.test.ts`.
 - **Look for shared setup before writing any.** A mock, fixture or browser step that a second
-  test needs lives in one of three folders, and `pnpm run duplicates:check` fails on a second
+  test needs lives in one of three folders, and `pnpm run verify duplicates` fails on a second
   copy of 5 lines and 50 tokens:
   - `tests/fixtures/`: data and fake objects with the types the code under test receives:
     handler rows (`handlerRows.ts`), Templates and runs (`dashboardTemplate.ts`,
@@ -81,7 +81,7 @@
   file under `tests/` (unit and integration tests, browser specs, support and fixtures) with
   `next-env.d.ts`, `cloudflare-env.d.ts`, `src/js-yaml.d.ts` and `src/next-public-env.d.ts`, and
   runs in `pnpm run typecheck`. It holds the tests to `strict` and the five settings the app's
-  config adds, which it inherits ([quality gates](checks.md#quality-gates)).
+  config adds, which it inherits ([types](checks.md#types)).
   `tests/unit/config/typecheck-coverage.test.ts` fails when `pnpm run typecheck` runs no
   tsconfig that includes a TypeScript file the repository holds, skips a tsconfig, or runs one
   that turns off any of the five settings. A

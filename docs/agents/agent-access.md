@@ -2,9 +2,9 @@
 
 Agents (Claude Code, Codex and other MCP clients) work with a User's Personal Templates and
 Runs through Run Keys, over the MCP endpoint `POST /api/mcp`. What an agent can do is
-specified in [features](../product/index.md) (the Run Keys bullet, and the release
-notes in [MCP Changes For Agents](../product/mcp.md)). The
-security rules are in [SECURITY.md](security.md#model): Run Key permissions, the host
+specified in [Run Keys](../product/run-keys.md) (and the release notes in
+[MCP Changes For Agents](../product/mcp.md)). The
+security rules are in [`security.md`](security.md#model): Run Key permissions, the host
 check and logging under Model, and the MCP limits under
 [rate limits](security.md#rate-limits). This page is how it is built, and why.
 
@@ -23,7 +23,7 @@ check and logging under Model, and the MCP limits under
 | `utils/personal-run-key.ts`, `utils/mcp-limits.ts`, `utils/agent-mcp-host.ts` | Key secrets and authentication, the MCP rate limits, the host and origin checks |
 
 `agentMcpTemplateTools.ts` imports no MCP handler, so every other module can import its
-schemas without a circular import (`pnpm run deps:check` refuses one).
+schemas without a circular import (`pnpm run verify dependencies` refuses one).
 
 ## Run Keys
 
@@ -39,7 +39,7 @@ management routes need a browser session:
   answer with the time it was first revoked, which stays stored; a missing key or another
   user's key gets `404`.
 - `GET /api/agent-keys/connection` names the MCP endpoint Agent Access shows, which can
-  differ from the page's own origin ([SECURITY.md](security.md#model)): `mcpEndpoint` is
+  differ from the page's own origin ([`security.md`](security.md#model)): `mcpEndpoint` is
   null when no host the MCP host check accepts is configured, and `hostMismatch` says the
   page's own host is not one of them (a per-deployment URL, say), so the endpoint is on a
   configured host. Until it loads, the page shows `/api/mcp` on its own origin
@@ -56,8 +56,8 @@ Each tool needs one permission, and the key holds a fixed set of them
 | `runs:read` | `list_runs`, `get_run` |
 | `runs:write` | `start_run`, `update_run` |
 
-`tools/list` advertises only the tools a key's permissions cover, and a call to any other
-tool is refused with `permission_denied` before the tool reads anything.
+A `{"method": "tools/list"}` request lists only the tools a key's permissions cover, and a call
+to any other tool is refused with `permission_denied` before the tool reads anything.
 
 Every authenticated request logs `mcp_request` with the key id, even one that turns out
 malformed, so an abused key can be found and revoked. After a tool call succeeds, the key's
@@ -143,7 +143,7 @@ before it writes. A template write reads the template back, and when that read f
 of three-byte text (Chinese, Japanese) is about 60KB, more than one result holds; 30KB leaves
 room for the task and run around the notes, so an agent reads back what it wrote in one call.
 
-Run writes keep the web app's run content limit ([SECURITY.md](security.md#request-size-limits)),
+Run writes keep the web app's run content limit ([`security.md`](security.md#request-size-limits)),
 checked before the write so an oversized one never commits. The limit counts every task and
 Sub-task as unticked, so of `update_run`'s operations only `set_task_notes` and
 `set_form_answer` can change the size, and content no larger than what it replaces is allowed:

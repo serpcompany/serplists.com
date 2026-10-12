@@ -8,7 +8,7 @@ https://aiuxplayground.com/.
 Paths are canonical: a page ends in a slash ([URL standard](frontend.md#urls)). `<handle>`
 (a username or an Organization's slug), `<user>`, `<template>`, `<id>`, `<slug>` and `<token>`
 stand for route parameters. Quoted words are
-the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../../CONTEXT.md).
+the labels the app shows. Product terms follow [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Shells
 

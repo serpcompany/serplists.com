@@ -8,7 +8,7 @@ are kept outside the repository.
 
 Step 1 restyled the public shell, the signed-in shell, Home, the Template Library and the
 public template page with the shared blocks (listed in
-[DESIGN.md](design.md#shells-and-layout-blocks)). Step 2 restyled the rest: step 2a the
+[`design.md`](design.md#shells-and-layout-blocks)). Step 2 restyled the rest: step 2a the
 signed-in console, the shared run and their overlays, step 2b the other public pages, the
 sign-in pages, the Organization invite and the 404 page.
 

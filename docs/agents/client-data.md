@@ -2,7 +2,7 @@
 
 How the app's screens call the API, cache what they read, and refresh it after a write. The
 rules every screen follows (which lists a page loads, list states, feedback after a write) are
-in [FRONTEND.md](frontend.md#data-and-state); the API's base URL and the tables behind it
+in [`frontend.md`](frontend.md#data-and-state); the API's base URL and the tables behind it
 are in [data persistence](data-persistence.md#api-access).
 
 ## The API client
@@ -45,7 +45,7 @@ Every mapper from an API template row to a `ChecklistTemplate` reads its Organiz
 rule (a row is the Organization's only with a `team_id`, and with `owner_type` `team` when the
 row has an owner type), so permission checks that compare `teamId` agree wherever a template
 was loaded from. Public catalog rows never carry an Organization's id
-([SECURITY.md](security.md#model)), so `isPersonalTemplateOf`
+([`security.md`](security.md#model)), so `isPersonalTemplateOf`
 (`src/lib/templates/templateOwnership.ts`) also checks the owner type to tell a user's
 Organization template apart from their Personal ones.
 
@@ -136,7 +136,7 @@ mark them stale, so they load when a page next shows them.
 ## Template and run lists
 
 Which page loads which list, and how pages read them, is in
-[FRONTEND.md](frontend.md#data-and-state). `TemplatesProvider`
+[`frontend.md`](frontend.md#data-and-state). `TemplatesProvider`
 (`src/contexts/TemplatesProvider.tsx`) builds the list queries (`buildTemplateListQueries` in
 `src/contexts/TemplatesContext.tsx`, beside the hooks) and
 watches them without fetching; a page's `useTemplateLists` turns on the lists it asked for.

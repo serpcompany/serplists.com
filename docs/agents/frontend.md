@@ -2,9 +2,9 @@
 
 A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`, with
 `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride` and
-`noFallthroughCasesInSwitch`; see [quality gates](checks.md#quality-gates)), running on
+`noFallthroughCasesInSwitch`; see [types](checks.md#types)), running on
 Cloudflare Workers through OpenNext ([ARCHITECTURE.md](../../ARCHITECTURE.md)). Server state
-goes through TanStack Query and UI through shadcn/ui on Tailwind ([DESIGN.md](design.md)).
+goes through TanStack Query and UI through shadcn/ui on Tailwind ([`design.md`](design.md)).
 Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
 
 ## Structure
@@ -21,13 +21,14 @@ Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
 | `src/lib/api.ts`, `src/lib/api/` | The only HTTP client (transport): `api.ts` joins the endpoint groups in `src/lib/api/` (templates, runs, teams, account) into one `api` object |
 | `src/lib/schemas/`, `src/types/` | Zod schemas and domain types, shared with the API |
 
-Enforced by `pnpm run deps:check` ([ARCHITECTURE.md](../../ARCHITECTURE.md)): pages and
+Enforced by `pnpm run verify dependencies` ([ARCHITECTURE.md](../../ARCHITECTURE.md)): pages and
 components never call `src/lib/api.ts` or `src/lib/api/` at runtime (put the call in a feature model
 or context), `components/ui/` stays presentational, only the route files in `src/app`
 and `src/server` import `functions/`, client code never imports `src/server`, and every
 module must be reachable from a route file in `src/app` or from `next.config.ts`, unused
-primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. Remaining legacy call sites are
-tracked in the [UI decoupling plan](../exec-plans/active/ui-decoupling.md).
+primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. What is
+left of that work, toasts and navigation inside feature code, is tracked in the UI decoupling
+issue (issue to come: UI decoupling).
 
 A TSX module in `src/` that exports a component exports nothing else. Next.js treats a
 module as a Fast Refresh boundary only when every export is a component, so an edit to a
@@ -146,7 +147,7 @@ and agents (MCP) call them directly and do not follow redirects.
   action, the page opens what it made (a Run, a copy) in the context that owns it, from the
   created record's `teamId`. The account's own pages name Personal: the account menu's
   Settings, Pricing's "Manage" and the invite page's "Open settings"
-  ([Organization console routes](../exec-plans/completed/organization-console-routes.md)).
+  (#212, [ADR 0001](../adr/0001-use-personal-and-organization-ownership-contexts.md)).
 - A record opened under another context's URL moves to its owner's: the Template page, the
   editor and the Run page call `useOwnerContextRedirect` (`src/lib/navigation/`) with the
   owner's context once the record loads, and it replaces the URL with the same page in that
@@ -195,7 +196,7 @@ and agents (MCP) call them directly and do not follow redirects.
   ([SEO and sitemaps](seo-and-sitemaps.md#lookups-for-page-metadata)). A redirect
   thrown after the page started streaming would only be a client-side refresh.
 - Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL
-  redirect there in one hop (see [RELIABILITY.md](environments.md#environments-and-hosts)).
+  redirect there in one hop (see [`environments.md`](environments.md#environments-and-hosts)).
 
 ## Unsaved changes
 
@@ -628,14 +629,14 @@ A site is not production unless `SITE_ENV=production` marks it (`isProductionSit
 `src/lib/seo/siteOrigin.ts`, the SERP environment configuration standard); nothing is inferred
 from the host. The value is read where it is used, never at module load, when a Worker's vars
 are not set yet: at build time for the static pages (`/robots.txt` among them), the
-`next.config.ts` headers and redirects and `public/_headers`, and from the Worker's vars for
-what renders on request, so each environment sets it in both (`wrangler.toml`,
-[RELIABILITY.md](environments.md#environments-and-hosts)). Anything but production (staging, a
+`next.config.ts` headers and redirects and the static files' `_headers`, and from the
+Worker's vars for what renders on request, so each environment sets it in both (`wrangler.toml`,
+[`environments.md`](environments.md#environments-and-hosts)). Anything but production (staging, a
 local build or `next dev`):
 
 - sends `X-Robots-Tag: noindex, nofollow` with every page and API response (`next.config.ts`)
-  and every static file (`public/_headers`, which `scripts/generate-static-headers.ts` writes
-  for each build from `src/lib/http/securityHeaders.ts`, so git ignores it);
+  and every static file (the `_headers` file `scripts/generate-static-headers.ts` writes into
+  `public/` for each build from `src/lib/http/securityHeaders.ts`, so git ignores it);
 - answers `/robots.txt` with `Disallow: /` and no sitemap (`src/app/robots.ts`; production
   allows crawling and lists `https://serplists.com/sitemap.xml`);
 - loads no Google Tag Manager (the root layout renders its bootstrap only on production).

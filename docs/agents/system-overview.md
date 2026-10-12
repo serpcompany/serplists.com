@@ -43,7 +43,7 @@ Role capabilities:
 ## Routes
 
 Every page URL ends in a slash, and the other form redirects (308) to it (the SERP URL
-standard, [FRONTEND.md](frontend.md#urls)); the API routes below do not, and are never
+standard, [`frontend.md`](frontend.md#urls)); the API routes below do not, and are never
 redirected. Canonical private routes use `/dashboard/*` and always mean Personal:
 
 - `/dashboard/` (opens the remembered context's Templates)
@@ -82,8 +82,8 @@ Organization scoping applies.
 
 - Auth (Better Auth): `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`, `GET /api/auth/get-session`, `GET /api/auth/status`
 - Public profiles: `GET /api/profiles/by-handle` (a User or an active Organization, through the public handle registry; [Organizations](organizations.md#public-profile)), `GET /api/profiles?collection=people|organizations&after=|before=` (a page of the Profiles directory, [SEO and sitemaps](seo-and-sitemaps.md#profiles-directory)), `GET /api/profiles/by-id`, and `GET /api/profiles/by-username` for tabs loaded before it (TD-84)
-- Templates: `GET /api/templates` (see [public and private data](#public-and-private-data)), `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...` or `?handle=...` (a Public Profile's templates), `GET /api/templates/public/required-tools?ids=...` (the Required tools of up to 50 public templates, for an export with community templates), `GET /api/templates/archived`, `GET /api/templates/:id/history`, `POST /api/templates`, `PUT|DELETE /api/templates/:id` (`DELETE` archives), `POST /api/templates/:id/restore`, `POST /api/templates/:id/clone`, `POST /api/templates/:id/transfer` (to an Organization, [Organizations](organizations.md)), `GET|POST /api/templates/backup` (export and import, [portable templates](../product/portable-templates.md)), `POST /api/templates/generate-from-clipy` (an unsaved draft from a public Clipy recording)
-- Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `GET /api/checklists/archived`, `GET /api/checklists/:id/history`, `POST /api/checklists` (the only `POST` that creates a run), `PUT|DELETE /api/checklists/:id` (`DELETE` archives), `POST /api/checklists/:id/restore`, `POST /api/checklists/:id/revalidate`, `POST|DELETE /api/checklists/run/:id/share` (share, or stop sharing), `GET|PUT /api/checklists/shared/:token` (the share link, no sign-in; [SECURITY.md](security.md#model))
+- Templates: `GET /api/templates` (see [public and private data](#public-and-private-data)), `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...` or `?handle=...` (a Public Profile's templates), `GET /api/templates/public/required-tools?ids=...` (the Required tools of up to 50 public templates, for an export with community templates), `GET /api/templates/archived`, `GET /api/templates/:id/history`, `POST /api/templates`, `PUT|DELETE /api/templates/:id` (`DELETE` archives), `POST /api/templates/:id/restore`, `POST /api/templates/:id/clone`, `POST /api/templates/:id/transfer` (to an Organization, [Organizations](organizations.md)), `GET|POST /api/templates/backup` (export and import, [template import and export](../product/template-import-export.md)), `POST /api/templates/generate-from-clipy` (an unsaved draft from a public Clipy recording)
+- Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `GET /api/checklists/archived`, `GET /api/checklists/:id/history`, `POST /api/checklists` (the only `POST` that creates a run), `PUT|DELETE /api/checklists/:id` (`DELETE` archives), `POST /api/checklists/:id/restore`, `POST /api/checklists/:id/revalidate`, `POST|DELETE /api/checklists/run/:id/share` (share, or stop sharing), `GET|PUT /api/checklists/shared/:token` (the share link, no sign-in; [`security.md`](security.md#model))
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
 - Agent access: `GET|POST /api/agent-keys`, `DELETE /api/agent-keys/:id`, `GET /api/agent-keys/connection`, and the MCP endpoint `POST /api/mcp` (see [agent access](agent-access.md))
@@ -217,4 +217,5 @@ Do not use git history for user-generated Template or Organization history. Git 
 - Staging/preview D1: `serp-checklists-staging-db` through `preview_database_id`, `[[env.preview.d1_databases]]`, and Wrangler's `--preview` flag.
 - Production D1: `serp-checklists-db`.
 
-Preview deployments must not point at production D1. See [database operations](database-operations.md).
+Staging's Worker (`--env preview`) must never use Production's database or upload bucket. See
+[database operations](database-operations.md).

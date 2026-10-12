@@ -1,7 +1,7 @@
 # Design
 
 The UI system and the conventions that keep screens consistent. Product wording
-rules are in [PRODUCT_SENSE.md](../../CONTEXT.md#writing-product-copy).
+rules are in [product principles](../product/principles.md#writing-product-copy).
 
 The brief: Next.js, shadcn components in their default style (base-nova, neutral), modular
 and reusable blocks, no custom design. Page layouts follow https://aiuxplayground.com/. The
@@ -15,7 +15,7 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   `components.json` (style `base-nova` on Base UI primitives, base color `neutral`, CSS
   variables, `lucide` icons), as in the approved zenbujapanese.com stack.
   Reference: [shadcn/ui docs](../references/shadcn-ui-llms.txt). A primitive keeps only the
-  parts screens use: `pnpm run deadcode:check` fails on an unused export, so delete the parts
+  parts screens use: `pnpm run verify deadcode` fails on an unused export, so delete the parts
   a `shadcn add` brings that nothing renders.
 - **Styling:** Tailwind CSS 4 with `tw-animate-css`, `shadcn/tailwind.css` and
   `@tailwindcss/typography`, all loaded by `src/app/globals.css`, which holds the shadcn
@@ -142,7 +142,7 @@ page, so a page's sticky parts stick to the window.
 
 `src/components/ui/` holds the shadcn components and the app's own presentational blocks
 built from them. Use an existing primitive before adding one, and add one there only if it is
-purely presentational: no app state, features or API calls (enforced by `deps:check`).
+purely presentational: no app state, features or API calls (enforced by `verify dependencies`).
 
 - Add shadcn components with the CLI (`npx shadcn@latest add <name>`) and keep them as
   generated, without the comments the CLI writes: the repository's code carries none.

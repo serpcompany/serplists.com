@@ -2,7 +2,7 @@
 
 Better Auth provides cookie-based (httpOnly) sessions from the API, which runs in the app's
 Cloudflare Worker (the route handler `src/app/api/[[...route]]/route.ts`).
-Security rules and required secrets are in [SECURITY.md](security.md).
+Security rules and required secrets are in [`security.md`](security.md).
 
 ## Where it lives
 
@@ -156,7 +156,7 @@ and user-facing failure states when a supporting service is unavailable.
   Tabs never re-announce what they learned, so one change costs one session
   read per other tab. Before a background sign-out or switch to another user is
   applied, pages with unsaved work keep it on the tab to offer it back after sign-in
-  (`beforeSessionLost`; see "Unsaved changes" in [FRONTEND.md](frontend.md)).
+  (`beforeSessionLost`; see "Unsaved changes" in [`frontend.md`](frontend.md)).
 - The server can end a session on its own: it expires, or the user signs out other
   sessions or changes their password on another device. The API client reports every
   `401` (`src/lib/unauthorizedResponses.ts`), and a signed-in tab re-reads the session:
@@ -232,7 +232,7 @@ Better Auth endpoints are under `/api/auth/*`, for example
 `POST /api/auth/sign-out`, `GET /api/auth/get-session`.
 State-changing auth requests must send a JSON body from a trusted origin; the
 router refuses form posts and cross-site requests before Better Auth runs
-([SECURITY.md](security.md#model)).
+([`security.md`](security.md#model)).
 
 ## Local development
 

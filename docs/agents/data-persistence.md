@@ -29,7 +29,7 @@ The persistence layer uses Cloudflare D1 for transactional data, the API in the 
 
 Schema ownership, migrations, seeds, and environments are described in
 [database operations](database-operations.md). The current tables and columns are
-generated into [generated/db-schema.md](../api/db-schema.md).
+generated into [`db-schema.md`](../api/db-schema.md).
 
 ## Runtime access (Drizzle on D1)
 
@@ -133,7 +133,7 @@ Personal data uses User ownership. Organization data uses Organization ownership
     name. A Template counts its `team_id` only while its `owner_type` is `team`, so a
     Personal Template that still names an Organization stays its User's.
   - Public responses name an Organization only by its public handle and name
-    ([SECURITY.md](security.md#model)): `toPublicTemplate`
+    ([`security.md`](security.md#model)): `toPublicTemplate`
     (`functions/api/utils/template-public.ts`) keeps a Personal Template's owner whole and
     sends an Organization Template's as `{ type: 'team', publicHandle, displayName }`, never
     its id, or as `{ type: 'team' }` alone when the Organization has no handle.
@@ -210,9 +210,9 @@ are in [client data](client-data.md#cache-keys).
 ## Stable ids and run reconciliation
 
 Sections, tasks, Sub-tasks and form fields keep their ids across saves, and a run's state
-follows them. The rules people see are in [features](../product/index.md), and the
+follows them. The rules people see are in the [product docs](../product/run-template-updates.md), and the
 storage contract and what counts as a structure change are in the
-[portable template spec](../product/portable-templates.md#storage-strategy-d1). The
+[template storage](../product/template-storage.md#storage-strategy-d1). The
 API applies them like this:
 
 - **Ids on write.** `assignMissingStableTemplateIdentities`
@@ -364,7 +364,7 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   their state through [reconciliation](#stable-ids-and-run-reconciliation). It advanced
   `version` and `content_version`, so an editor opened before it gets a conflict instead of
   saving content without those ids, and marked every linked Run stale
-  ([portable template spec](../product/portable-templates.md#storage-strategy-d1)).
+  ([template storage](../product/template-storage.md#storage-strategy-d1)).
 - **Test data in shared databases.** `0012` deleted the Templates that automated tests and
   manual API smoke runs had left (`Test Template`, `Updated Template Title`), and `0018`
   named the four seeded test Users after their plans (`Admin (Pro)`, `John (Free)`).
@@ -387,7 +387,7 @@ Why some tables and columns look as they do, by topic (the numbers are files in
   Template's Required tools (issue #241). A new column rather than a key in `items`, so a change
   to the tools is not a checklist structure change and never stales Runs, and the lists can leave
   it unread. It is additive: code that predates it never names it, and a save that leaves the
-  tools out keeps them ([Required tools plan](../exec-plans/completed/required-tools.md)).
+  tools out keeps them (issue #241, shipped in #283).
 - **Sitemap revisions for Organizations.** `0032` recreated the three sitemap triggers on
   `templates` so a public Organization Template's writes refresh the cached templates and
   categories sitemaps, as a Personal one's do (never a User's profile), and added three on

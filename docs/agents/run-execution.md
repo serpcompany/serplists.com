@@ -5,7 +5,7 @@ task notes, rename the Run, share it and complete it. A private Run opens at
 `/dashboard/runs/<id>/`, a shared one at `/share/<token>/` for anyone with the link, and a
 [guest run](#guest-runs), kept in a signed-out visitor's browser, at
 `/profile/<user>/<template>/run/`. What
-users see is in [features](../product/runs.md). How the API stores,
+users see is in [the Run page's product doc](../product/run-page.md). How the API stores,
 reconciles and completes a Run, and what a share-link save may change, is in
 [data persistence](data-persistence.md#stable-ids-and-run-reconciliation) and
 [shared-run links](data-persistence.md#shared-run-links). The guard that asks before unsaved notes
@@ -42,7 +42,7 @@ notes, which can no longer be saved (also when the Run was deleted during a save
 failure is a load error the page reports, never "not found".
 
 The model loads again only when the run id or share token changes
-([FRONTEND.md](frontend.md#data-and-state)), since a load clears the unsaved notes and the
+([`frontend.md`](frontend.md#data-and-state)), since a load clears the unsaved notes and the
 selection. The model reads the page's `updateRun` (the Templates context's) through a ref when a
 save calls it, rather than depending on it, so a new callback never reloads the Run. The Run opens
 on its first unfinished task, or on its first task when every task is finished.
@@ -320,7 +320,7 @@ the file once its save landed: leaving the field to open the menu starts that sa
 
 A visitor who is not signed in runs a Public Template at `/profile/<user>/<template>/run/`
 (`src/views/GuestRun.tsx`; what users see is in
-[features](../product/runs.md)). The run lives only in the browser,
+[Guest runs](../product/guest-runs.md)). The run lives only in the browser,
 and the page reuses this model rather than a copy of it:
 
 - `src/features/guest-runs/guestRunStore.ts` is the storage boundary: one entry per Template in

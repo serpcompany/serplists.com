@@ -1,121 +1,146 @@
-# Product Sense
+# SERP Lists
 
-SERP Lists lets people and Organizations own reusable Templates (SOPs, checklists,
-audits, launches) and execute them as Runs with their own progress and history.
-Public Templates are published through Public Profiles; code agents can write
-private Templates and operate Runs through revocable Run Keys. What exists today is specified in
-[product-specs/](docs/product/index.md).
+People and Organizations own reusable Templates (SOPs, checklists, audits, launches) and run them
+as Runs, each with its own progress and history.
 
-## Principles
+Only the terms that are easy to confuse are here, each with what it means and what it isn't. Add
+one when a real confusion is resolved and getting it wrong would cause a product or architecture
+mistake. The product's principles and how to write its copy are in
+[`docs/product/principles.md`](docs/product/principles.md); what each page does is in
+[`docs/product/`](docs/product/index.md).
 
-- **Ownership is explicit.** Everything belongs to a Resource Owner: a User acting
-  Personally or an Organization. Organization access never exposes or upgrades a
-  User's Personal Templates, Runs, or plan.
-- **Runs are snapshots.** A Run keeps its own progress and history; Template edits
-  reconcile into active private Runs by stable ids and never rewrite completed work.
-- **Features are Free unless the pricing spec says otherwise.** Keep the entitlement
-  matrix small and add gates only when the product needs them
-  ([pricing and entitlements](docs/product/pricing-and-entitlements.md)).
-- **The API decides access.** UI gates mirror API behavior but are never the
-  enforcement point.
-- **Say it the same way everywhere.** Use the glossary below in UI copy, API
-  messages, docs, and code comments.
-
-## Glossary
-
-The product language used across public profiles and the authenticated console.
-
-### Identity and ownership
-
-**User**:
-An authenticated human identity that can own personal resources and belong to Organizations.
-_Avoid_: Profile, account, member
-
-**Account**:
-The private login, security, and personal billing record associated with a User.
-_Avoid_: Organization, profile
+## Owners and contexts
 
 **Personal**:
-The default ownership context in which a User directly owns templates and runs.
-_Avoid_: Personal Workspace, personal Organization, personal Team
+The ownership context in which a User owns Templates and Runs directly. Capitalized as a
+context's name: "Switch to Personal".
+_Avoid_: Personal workspace, personal Organization, personal Team
 
 **Organization**:
-A shared resource owner with members and roles that can own templates and runs independently of any one User.
-_Avoid_: Team, Workspace, org, Team account
-
-**Organization Membership**:
-The relationship that gives a User a role in an Organization.
-_Avoid_: Team membership, ownership, profile
-
-**Organization Role**:
-The permission level an Organization Membership grants inside one Organization.
-_Avoid_: Plan, entitlement
+An owner of Templates and Runs with members and roles, apart from any one User
+([ADR 0001](docs/adr/0001-use-personal-and-organization-ownership-contexts.md)). The code calls it
+a team (below).
+_Avoid_: Team, Workspace, org
 
 **Ownership Context**:
-The Personal or Organization context a User is currently acting in. It decides which templates, runs, and entitlements apply. The console's switcher is labeled "Switch context".
+The Personal or Organization context a User is acting in, which decides whose Templates, Runs and
+plan apply. The console's URL decides it: a page under `/dashboard/organization/:organizationId/`
+is that Organization's, any other console page Personal, and a bare `/dashboard/` opens the
+remembered context. The switcher says "Switch context".
 _Avoid_: Workspace, account
 
-**Resource Owner**:
-The User acting Personally or the Organization that controls a template or run.
-_Avoid_: Creator, editor, member
-
-**Creator**:
-The User who originally created a resource. Creator attribution does not determine current ownership.
-_Avoid_: Owner
-
-### Public identity
-
-**Profile Owner**:
-A User or Organization that has a public identity and may publish templates.
-_Avoid_: Publisher account
-
-**Public Handle**:
-The globally unique public name claimed by one Profile Owner.
-_Avoid_: Username or Organization slug when referring to both owner types
-
-**Public Profile**:
-The public representation of a Profile Owner and that owner's public templates.
-_Avoid_: Organization page, team page, user profile when referring generically
-
-### Templates and runs
-
-**Template**:
-A reusable definition of an SOP, checklist, audit, launch, or other repeatable process.
-_Avoid_: Run, task
+**Account**:
+A User's private sign-in, security and Personal billing settings. Not an Organization, and not
+the User's Public Profile.
+_Avoid_: Organization, profile
 
 **Template Owner**:
-The Resource Owner that currently controls a Template.
+The User (for a Personal Template) or the Organization that controls a Template now. A public
+Template's URL carries the Template Owner's handle. Transfer to Organization changes it.
 _Avoid_: Creator
 
-**Template Library**:
-The public discovery surface at `/templates/` that lists Public Templates.
-_Avoid_: Discover, Discover Templates, Browse Templates
+**Creator**:
+The User who created a Template or Run. Creating it grants nothing afterwards: an Organization's
+Templates are managed through its members' roles, and a Creator who leaves loses access.
+_Avoid_: Owner
+
+**Organization Role**:
+What a membership allows in one Organization: `owner`, `admin`, `editor`, `runner` or `viewer`.
+The `owner` role is not the Template Owner, and a role is not a plan.
+_Avoid_: Plan, entitlement
+
+**Pro** and **Paid**:
+Pro is the Personal subscription, and it never applies inside an Organization. Paid is an
+Organization's paid plan, stored as the plan value `team`.
+_Avoid_: Team plan, Pro (for an Organization)
+
+## Templates and Runs
+
+**Template**:
+A reusable definition of a process: its sections, tasks, Sub-tasks and blocks. Editing it never
+rewrites a completed Run.
+_Avoid_: Run, task
 
 **Run**:
-An execution snapshot created from a Template, with progress and history independent from the source Template.
-_Avoid_: Template
+One execution of a Template: a snapshot of its content with its own progress, notes, answers and
+Activity. Template edits reach an active private Run by stable ids. The code and the API call it a
+checklist run (`checklist_runs`, `/api/checklists/:id`).
+_Avoid_: Template, checklist
+
+**Guest run**:
+A Run of a public Template by someone signed out, kept only in that browser at
+`/profile/:handle/:slug/run/` until they save it to an account, where it becomes a Run.
+_Avoid_: shared run
+
+**Shared run**:
+A Run opened through its share link, `/share/:token/`. Anyone with the link can tick tasks, write
+notes and complete it, but never rename or delete it, so it is not read-only. Sharing a Run is not
+making a Template public.
+_Avoid_: public run, read-only run
+
+**Deleted** and **archived**:
+A Template or Run a person deletes is archived by the API (`deleted_at`), and the console's
+Archive lists it for restoring. The UI names the action Delete. An Organization is archived
+instead (`archived_at`): it keeps its handle, and its profile and public Templates answer 404.
+_Avoid_: Archive (as the name of the delete action)
+
+**Activity**:
+The history of a Template or Run on its page. The API calls it history
+(`/api/templates/:id/history`).
+_Avoid_: Changelog
+
+**Template Library**:
+The public page at `/templates/` that lists public Templates. Not My Templates, the console's list
+of one context's Templates.
+_Avoid_: Discover, Discover Templates, Browse Templates
+
+**Public Template** and **Private Template**:
+A public Template is shown on its owner's Public Profile, in the Template Library and in the
+sitemaps, at `/profile/:handle/:slug/`. A private one is seen only by the people and Run Keys
+acting for its Template Owner.
+_Avoid_: unpublished draft, shared run
+
+## Public identity
+
+**Public Handle**:
+The name in `/profile/:handle/`, from one namespace Users and Organizations share, compared
+without regard to case ([ADR 0004](docs/adr/0004-share-one-namespace-for-public-handles.md)). A
+User's handle is their username, and an Organization's is its slug.
+_Avoid_: username or Organization slug, when meaning both
+
+**Template slug**:
+The last part of a public Template's URL, `/profile/:handle/:slug/`, unique across all Templates.
+Not a handle.
+
+**Profile Owner**:
+A User with a username, or an active Organization with a slug: the owners with a Public Profile.
+The Profiles directory, `/profiles/`, lists them as People and Organizations.
+_Avoid_: Publisher account, Teams
+
+## Agents
 
 **Agent**:
-A code agent that acts through explicitly delegated access without becoming a User, member, or Profile Owner.
-_Avoid_: Agent user, machine profile
+A code agent, such as Claude Code or Codex, acting through a Run Key. Never a User, member or
+Profile Owner.
+_Avoid_: agent user, machine profile
 
 **Run Key**:
-A revocable credential that authorizes an Agent to do what its permissions allow (read or write templates, read or write runs) within its permitted Personal or Organization scope. Permissions are chosen when the key is created and cannot be changed.
+A revocable credential an Agent sends to `/api/mcp` as `Authorization: Bearer slrk_...`. It
+reaches its User's Personal Templates and Runs with the permissions chosen when it was created,
+which can't be changed. The code calls it a Personal Run Key (`personal_run_keys`).
 _Avoid_: User session, agent account
 
-### Visibility
+## Legacy names in the code
 
-**Public Template**:
-A Template intentionally visible through its owner's Public Profile and public discovery surfaces.
-_Avoid_: Shared run
+Identifiers, tables, routes and storage keys keep older names (TD-5 in
+[`docs/tech-debt.md`](docs/tech-debt.md)). They never reach what users read, and ESLint flags Team
+and Workspace in UI copy.
 
-**Private Template**:
-A Template visible only to authorized people and agents acting for its Resource Owner.
-_Avoid_: Unpublished draft
-
-## Writing product copy
-
-- Capitalize Personal and Organization when naming an Ownership Context: "Switch to Personal", "Organization settings", "Create Organization".
-- Label a paid Organization's plan "Paid". The stored plan value `team` is a legacy implementation detail.
-- Call `/templates/` the Template Library: "Template Library" where it is a navigation label or a heading, "Browse the Template Library" on buttons. ESLint flags its old names in UI code (Discover, Discover Templates, Browse Templates); prose such as "browse public templates" is fine.
-- Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code: it flags a capitalized Team or Workspace, and "workspace" in prose in any case, the retired term, but not a lowercase "team".
+| In the code | Means |
+| --- | --- |
+| `team`, `teams`, `team_id`, `team_members`, `team_invites`, `owner_type = 'team'` | Organization |
+| `owner_type = 'user'` | Personal |
+| `workspace` (`WorkspaceContext`, `serplists.activeWorkspaceId`) | Ownership Context |
+| `checklist_runs`, `/api/checklists`, `ChecklistRun` | Run |
+| `ChecklistTemplate` | Template |
+| The plan value `team` | Paid |

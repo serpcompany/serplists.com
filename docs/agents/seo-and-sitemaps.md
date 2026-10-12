@@ -6,7 +6,7 @@ How search engines and link previews find the public pages: the XML sitemaps
 and `src/app/sitemaps` only hand these modules the request, the Worker's bindings and
 `waitUntil` (`getSitemapContext` in `src/server/sitemapContext.ts`); they export only `GET`,
 which Next.js also runs for `HEAD`, without the body. Page titles,
-robots rules and environments are in [FRONTEND.md](frontend.md#page-titles-and-meta-tags),
+robots rules and environments are in [`frontend.md`](frontend.md#page-titles-and-meta-tags),
 and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries).
 
 ## Sitemap URLs
@@ -81,7 +81,9 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   page (name, slug, avatar, description) sets; a change to its public Templates dates their
   own entries, not the profile's. Bundled
   starters and static pages carry the dates the bundled catalog records from git
-  ([RELIABILITY.md](ci-deploys.md#deploy-pipeline)).
+  ([`ci-deploys.md`](ci-deploys.md#deploy-pipeline)). A squash merge rewrites those commit dates,
+  so the committed catalog is stale after every merge: each build regenerates it from full
+  history, and `sitemap:check`, which compares the two, runs in no CI job.
 - `/templates/` takes the newest of its own date, the bundled inventory's date and the
   `templates` revision. `/categories/` lists every category, so it takes the newest of its
   own date, the bundled inventory's date, every category entry and every category
@@ -201,13 +203,13 @@ handle), since the profiles themselves are in the profiles sitemap; the pages si
 ## Lookups for page metadata
 
 The public pages render their `<head>` on the server
-([FRONTEND.md](frontend.md#production-and-other-environments)), so these lookups
+([`frontend.md`](frontend.md#production-and-other-environments)), so these lookups
 (`src/server/pageMeta/`, called from each route's `generateMetadata`) run on every visit, by
 people and crawlers alike. A template or profile lookup answers one of three ways: found;
 not found, a settled answer, so the page gets `noindex, nofollow` and no canonical URL (the
 address is not a page); or unavailable, when the lookup failed, which may be brief, so the
 page keeps the site's defaults and stays indexable
-([FRONTEND.md](frontend.md#missing-pages)).
+([`frontend.md`](frontend.md#missing-pages)).
 
 The data-center cache keys start with the request's origin (`getRequestOrigin` in
 `src/server/cloudflare.ts`): staging and production share the `serplists.com` zone and its

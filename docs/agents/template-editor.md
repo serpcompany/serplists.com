@@ -2,9 +2,9 @@
 
 The template editor creates a Template (`/dashboard/templates/new/`) and edits one
 (`/dashboard/templates/<id>/edit/`). What it offers users is in
-[features](../product/templates.md). The form's contract (its values, how stored
+[the editor's product doc](../product/template-editor.md). The form's contract (its values, how stored
 content is coerced, slugs, the defaults a save applies, and the plan-limit notices and kept
-drafts as users see them) is in [FRONTEND.md](frontend.md#template-editor-forms), the leave
+drafts as users see them) is in [`frontend.md`](frontend.md#template-editor-forms), the leave
 guard every page uses is in [unsaved changes](frontend.md#unsaved-changes), and how a save
 refreshes what the app has cached is in [client data](client-data.md#refreshing-after-a-write).
 This page is how the editor's models in `src/features/template-editor/` work, and why. The
@@ -37,7 +37,7 @@ falling back to a cached copy: a list can be minutes old, so a teammate's newer 
 missing from the form and the next save would end in a conflict. From that one response it keeps:
 
 - the form's values, built from the sections as stored, not the display mapper's copy
-  ([FRONTEND.md](frontend.md#template-editor-forms));
+  ([`frontend.md`](frontend.md#template-editor-forms));
 - the `version`, which the next save sends as `expected_version`;
 - the visibility it loaded, so a save can tell whether the editor's own switch changed it;
 - the slug, the Template Owner's handle (`ownerSlug`, under which the Search & SEO panel previews
@@ -74,7 +74,7 @@ still refused.
 
 1. Save is disabled while a file uploads or a Clipy draft generates.
 2. The page sends a deep copy of the form taken at click time
-   ([FRONTEND.md](frontend.md#template-editor-forms)).
+   ([`frontend.md`](frontend.md#template-editor-forms)).
 3. `saveTemplateEditorData` validates the copy, and when a field breaks a rule it returns errors
    that name the field without calling the API. Required tools
    (`src/lib/forms/templateEditorRequiredTools.ts`) drop the tools left blank and trim the rest,
@@ -83,7 +83,7 @@ still refused.
    the number matches what the user sees.
 4. `useTemplateSave` applies the save defaults and sends a create or an update. An update sends
    the `expected_version` the editor holds, and refuses to save without one. It leaves out
-   `rules` and an unchanged slug ([FRONTEND.md](frontend.md#template-editor-forms)), sends the
+   `rules` and an unchanged slug ([`frontend.md`](frontend.md#template-editor-forms)), sends the
    Required tools it holds (an empty list once every tool is removed, which clears them), and it
    sends visibility only when the editor's switch changed it: a Share, or a switch to private,
    made on the detail page or in another tab after the editor loaded would otherwise be undone by
@@ -93,7 +93,7 @@ still refused.
    and sections as stored after the defaults, with the slug the API kept or suffixed. A failed
    save keeps the version it had.
 6. The page rebases the form onto the saved values, keeping any field edited while the save was in
-   flight ([FRONTEND.md](frontend.md#template-editor-forms)). A field counts as edited when it
+   flight ([`frontend.md`](frontend.md#template-editor-forms)). A field counts as edited when it
    differs from what was sent, not from what was stored, since a trimmed title or a final slug
    would otherwise look like an edit. A missing key and an `undefined` value are equal: the form
    sets optional fields either way.
@@ -103,8 +103,8 @@ still refused.
 A save belongs to the editor that started it. When it finishes after the editor unmounted, or
 while the editor shows another template (`shouldApplyTemplateEditorSaveResult`), the model returns
 it marked `stale` and leaves its version and slug alone, since they belong to what the editor shows
-now; the page only reports it ([FRONTEND.md](frontend.md#template-editor-forms)). The page also
-ends its visit when the user leaves the path ([FRONTEND.md](frontend.md#data-and-state)).
+now; the page only reports it ([`frontend.md`](frontend.md#template-editor-forms)). The page also
+ends its visit when the user leaves the path ([`frontend.md`](frontend.md#data-and-state)).
 `saveTemplateForVisit` still settles the kept draft from the result, since what the API did does
 not depend on where the user went, and hands the result to the page only while the visit is
 current.
@@ -217,8 +217,8 @@ elsewhere, and offers it back when the editor opens again (`templateDraftStore.t
 
 The private detail page (`/dashboard/templates/<id>/`) and the public template page
 (`/profile/<user>/<slug>/`) show one template and act on it through `useTemplateDetailModel`.
-Which controls each viewer gets is in [features](../product/templates.md), how
-both pages load and refresh in [FRONTEND.md](frontend.md#data-and-state), and the private
+Which controls each viewer gets is in [Templates](../product/templates.md#who-manages-a-template) and [Public templates](../product/public-templates.md#what-a-viewer-can-do), how
+both pages load and refresh in [`frontend.md`](frontend.md#data-and-state), and the private
 page's cache key in [client data](client-data.md#cache-keys).
 
 ### Loading
@@ -244,7 +244,7 @@ page's cache key in [client data](client-data.md#cache-keys).
 
 Start Run, Copy, Duplicate and Share resolve to an outcome (`TemplateDetailActionResult`) instead
 of acting on the page, and `followTemplateActionResult` acts on it only while the user is still on
-the page that started it ([FRONTEND.md](frontend.md#data-and-state)).
+the page that started it ([`frontend.md`](frontend.md#data-and-state)).
 
 - **Copy** (`saveTemplateToAccount`) checks, in order: that the template can be copied at all (the
   API clones only public templates, and library templates come from the bundle), so a private

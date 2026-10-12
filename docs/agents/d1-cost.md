@@ -68,7 +68,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
     is more. A request that is unbounded by design today (the hotspots below) gets a budget
     that grows with the seeded rows it must read (every public Template, the user's runs, an
     Organization's runs), plus the same margin on what it reads beyond them, and its test name
-    says it is unbounded until the [D1 cost plan](../exec-plans/active/d1-cost.md) bounds it.
+    says it is unbounded by design (issue to come: D1 cost).
   - The budgets bite: dropping `idx_templates_public_created_at` fails the catalog, the lists
     without a scope and both sitemaps; reading every template version instead of the newest
     50 fails the template history; dropping `idx_checklist_runs_template_owner` fails both
@@ -161,7 +161,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    some plans and worsen others, so profile before and after.
 7. **Request data only where it is shown.** Rows are billed per request, so a provider
    that loads a list on every route multiplies its cost by page views. Template lists
-   load on demand ([FRONTEND.md](frontend.md)). The same goes for columns and
+   load on demand ([`frontend.md`](frontend.md)). The same goes for columns and
    limits: the Activity cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
    (`src/lib/schemas/historyLimits.ts`), history lists never return audit `diff_json` (a template or
    run update diff holds the whole template or run), and template history reads the
@@ -198,8 +198,8 @@ That adds one row per Organization Template: the Organization template list's bu
 from 3 to 4 rows per Template on 2026-10-02. Each listed run also reads its starter by primary key and its
 first audit event through `idx_audit_events_resource` for its provenance (origin and who
 started it), and one run's read its whole provenance: the Organization run list's budget went
-from 3 to 5 rows per run, and a run by id from 6 to 12 rows, on 2026-10-04
-([run provenance](../exec-plans/completed/run-provenance.md)). A public Organization Template adds one row to a
+from 3 to 5 rows per run, and a run by id from 6 to 12 rows, on 2026-10-04 (run provenance,
+#271). A public Organization Template adds one row to a
 catalog miss too, the Organization whose handle and name public responses carry while it is
 active. A Public Profile reads its handle and owner by primary key (`GET /api/profiles/by-handle`,
 2 rows), and an Organization's public Templates read every Template of that Organization
@@ -271,4 +271,4 @@ steps.
 `usage_analytics` is neither read nor written by the app; dropping it deletes data, so
 it needs a human decision.
 
-The fixes, in order, are tracked in the [D1 cost plan](../exec-plans/active/d1-cost.md).
+The fixes, in order, are tracked in the D1 cost issue (issue to come: D1 cost).

@@ -1,29 +1,73 @@
-# Tech Debt Tracker
+# Tech debt
 
-Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
-[maintenance report](agents/ci-agents.md#weekly-maintenance) counts open rows. When you close an
-item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
+Known debt in the code: shortcuts, duplication and missing pieces the repository lives with for
+now, each with the issue that tracks it. Debt in the checks, in delivery and in the agent harness
+is in [`harness-debt.md`](harness-debt.md), in the same form. Bugs and features stay in issues
+([`issue-tracker.md`](agents/issue-tracker.md)), and how well each area is tested and documented
+is in [`quality.md`](quality.md).
 
-IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-88.**
+Add a row, with its Size, in the pull request that knowingly leaves debt, and remove it in the one
+that pays it off. A row without an issue says "No issue yet"; open one before starting the work.
+Older rows start with the `TD-n` id that commits and docs name; a removed id is never reused.
 
-"Ratchet" names the check that keeps new instances of the debt out of CI.
-"Size" is `small` (an hour or two, no migration or decision), `medium` (a focused PR) or
-`large` (a plan of its own). The weekly code gardener takes the oldest `small` row it may fix.
+Size is `small` (an hour or two, with no migration, deploy or decision), `medium` (one focused
+pull request) or `large` (a plan of its own, or several pull requests). An item that needs a
+person's decision is never `small`. The weekly maintenance report counts both files' rows by Size,
+and the weekly code gardener takes a small one ([`ci-agents.md`](agents/ci-agents.md), Weekly
+maintenance).
 
-| ID | Area | Debt | Next step | Ratchet | Size |
-| --- | --- | --- | --- | --- | --- |
-| TD-5 | Vocabulary | Code identifiers, tables, and routes still use `team`/`team_id`/`workspace` for Organization ([ADR 0001](adr/0001-use-personal-and-organization-ownership-contexts.md)). | Rename in separately scoped, migration-safe changes. | None | large |
-| TD-11 | Tests | All e2e specs share one database and one set of seeded users, so they interfere when run in parallel (publishing specs move sitemap `lastmod` values). The browser tests also share one local workerd process, which renders every page and link prefetch, so parallel browsers push navigations past the 5-second expect timeout. Every browser test runs on one Playwright worker (`playwright.config.ts`); the full suite takes over an hour locally. | Give each spec its own users and data (or per-worker D1 state), and one preview per worker, so the suite can run in parallel. | `test:e2e:full` in CI on promotions | large |
-| TD-12 | Tooling | No code formatter. Deferred on purpose: a repo-wide reformat would bury real changes in review. | Add Prettier in its own PR, format once, and list that commit in `.git-blame-ignore-revs`. | None | medium |
-| TD-14 | Database | Drizzle snapshot initialization is not done; `pnpm run db:generate` proposes a baseline that must not be committed. | Initialize snapshots as their own change, following the operations playbook. | None | medium |
-| TD-15 | D1 cost | `GET /api/templates` with no `scope` or `teamId` still returns public OR the user's Templates (19k rows read at 20k templates, uncached) for browser tabs loaded before the scoped client shipped. | After a release cycle, make the no-parameter request return the public catalog and delete the branch in `functions/api/handlers/template-reads.ts`. | None | small |
-| TD-16 | D1 cost | Audit rows written before audit compaction still hold up to three full copies of run or template content in `before_json`/`after_json`/`diff_json` (history reads never return them). Content now has a technical limit (768KB per Template, 896KB per run, `src/lib/schemas/contentLimits.ts`) derived from the 1MB save body limit, not a product decision. Rows stored before it (Templates imported up to 2MB) can be over it: a save that does not grow them still goes through, but one over 1MB cannot reach its save route at all. | A human-approved production cleanup that nulls `before_json`/`after_json` and compacts `diff_json` on old `checklist_run.*` and `template.*` rows; confirm or change the content limit as a product limit; with approval, run one read-only query for `templates` and `checklist_runs` rows whose `items` exceed it and decide per row (tell the owner or trim). | None | large |
-| TD-18 | Uploads | `POST /api/uploads` has per-bucket size limits but no per-account quota, and uploads are not recorded in D1, so a signed-in account can keep adding 50MB files that are never referenced or removed. | Add an `uploads` table and a per-account usage row (a migration), reserve bytes atomically before the R2 put, release them on delete, and plan orphan cleanup once references are tracked. The exact SQL, Drizzle definitions and reserve statement are in the [upload quota and ownership plan](exec-plans/active/upload-quota-and-ownership.md). | None | large |
-| TD-19 | Uploads | Template media (`template-images`, `template-videos`, `template-files`) cannot be deleted through the API, because uploads record neither their Personal or Organization owner nor the Templates, versions, Runs and clones that reference them. An Organization admin cannot remove a file a member uploaded, and cleared or replaced files stay stored and publicly served. | With the TD-18 `uploads` table, record the owner (`owner_type`, `team_id`) at upload (an optional `teamId` that requires active editor-or-higher membership) and track references when Templates are saved. Let DELETE authorize against the current owner (the uploader for Personal files; an active editor, admin or owner for Organization files, never a disabled or removed member) and refuse or soft-delete while the key is referenced. The exact SQL, Drizzle definitions and delete rule are in the [upload quota and ownership plan](exec-plans/active/upload-quota-and-ownership.md). | None | large |
-| TD-20 | Storage | Template uploads are never deleted: clearing or replacing a file in the editor leaves the old R2 object, and `DELETE /api/uploads/file` refuses template-bucket keys, so orphans accumulate. | Add a scheduled, batched cleanup that deletes a key only when no `templates.items` (including archived and soft-deleted rows), `template_versions` snapshot, or `checklist_runs.items`/`retired_items` (including soft-deleted runs) references its decoded key, with a grace period for unsaved editor uploads. | None | large |
-| TD-22 | Data | Official templates seeded before the seed fix (`serp-user` rows in `templates`, their `template_versions` snapshots, runs started from them, and user copies) store text blocks as one line with a literal backslash-n per line break, so `expandLegacyEscapedNewlines` still rewrites single-line text blocks on display; a single-line text block with a Windows path outside inline code is still misread. | With human approval, run the scoped data migration in [Migrating the legacy seed rows](agents/template-content-types.md#migrating-the-legacy-seed-rows-proposal-needs-human-approval): read the five `serp-template-*` rows owned by `serp-user`, their `template_versions` and the `checklist_runs` started from them. Rewrite text blocks in Node (`JSON.parse`, `expandLegacyEscapedNewlines`, `JSON.stringify`; runs only where a value is byte-identical to a seeded block). Apply guarded `UPDATE ... WHERE id = ? AND <column> = <old value>` statements, recompute `content_hash`, and bump run `revision`. User-authored rows are never touched. Delete the shim from `MarkdownBlock` once a human decides about user copies. | None | medium |
-| TD-25 | Security | Run Keys never expire; revocation is the only way to end one. The MCP rate limits are in-memory per isolate, so the only global limit is the per-IP Cloudflare WAF rule `MCP rate limit` (see `docs/agents/security.md`); nothing limits a single key globally. Revoked keys are never deleted, so listing a user's keys still scans all their revoked keys (the response is capped at 50). | Add an optional key expiry, and move the per-key limit to shared state (KV, a Durable Object, or a Workers rate-limiting binding). Pruning old revoked keys deletes user data, so it needs a human decision. | None | medium |
-| TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None | small |
-| TD-84 | Public profiles | `GET /api/profiles/by-username` stays for browser tabs loaded before #232's PR 2; the app now resolves `/profile/:handle` through `GET /api/profiles/by-handle` (the public handle registry). | After a release cycle, delete the route and `handleProfileByUsername`, their tests (`tests/unit/functions/api/profiles-by-username-d1.test.ts` and its cases in `profiles-handler.test.ts`), its rate-limit exemption, its rows-read budget and `d1:profile` scenario, and the docs that name it. | None | small |
-| TD-87 | Runs | A typed form answer (short or long text, URL, email, number, date) saves when its field loses focus, with no draft store and no leave guard, so closing the tab or navigating away while the cursor is still in the field loses that answer. Notes keep drafts (`noteDrafts.ts`, `keptNoteDrafts.ts`) and ask before leaving. | Keep typed answers as drafts like notes, save them with the next queued save or on leave, and include them in the run page's leave guard, with a test that leaves with an answer still focused. | None | medium |
+## D1 cost
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-15: `GET /api/templates` with no `scope` or `teamId` still returns the public Templates and the user's own, unbounded and uncached, for browser tabs loaded before the scoped client shipped (`functions/api/handlers/template-reads.ts`). | Each such request reads in proportion to the catalog (19k rows at 20k Templates). The scoped client reached Production with #295 at the latest, so the request can now return the public catalog alone, and the branch can go. | No issue yet | small |
+| TD-16: Audit rows written before audit compaction still hold up to three full copies of a Run's or Template's content in `before_json`, `after_json` and `diff_json`, which history reads never return. Content has a technical limit (768KB a Template, 896KB a Run, `src/lib/schemas/contentLimits.ts`) derived from the 1MB save body, not a product decision; rows stored before it (Templates imported up to 2MB) can be over it. | The old copies cost storage, and a stored Template or Run over 1MB can't reach its save route at all. The cleanup is a production write the owner approves: null the old copies and compact `diff_json`, confirm the limit as a product limit, and decide row by row about content over it after one read-only query. | No issue yet | large |
+
+## Accounts and email
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| Verification and reset emails go through Resend or useSend (`functions/api/utils/auth-email.ts`), from `noreply@mail.auth.serp.co` unless `EMAIL_FROM` names another sender; Production names `noreply@mail.serplists.com`. SERP's Transactional Email standard sends through Cloudflare Email Sending, from `support@serplists.com`, which also takes the replies, with a dev mailbox for local runs and Staging limited to test recipients. | A reply to a no-reply sender reaches no one, and the standard's local capture and Staging limits are missing. The setup predates the standard; whether to move is the owner's call, and `AGENTS.md` records the departure until then. | No issue yet | medium |
+| An account can't be deleted in the product; deletion depends on an email to support, with no documented procedure ([`privacy.md`](product/privacy.md)). | People can't remove their data themselves, and a request by email has no steps to follow. Deleting user data needs the owner. | No issue yet | medium |
+
+## Organizations
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-5: Code identifiers, tables and routes still say `team`, `team_id` and `workspace` for an Organization and the ownership context ([ADR 0001](adr/0001-use-personal-and-organization-ownership-contexts.md); the mapping is in [`CONTEXT.md`](../CONTEXT.md), Legacy names in the code). | A reader meets two names for one thing, and new code can copy the old one. Renaming tables and API routes takes migrations and compatibility for old clients, in separately scoped changes. | No issue yet | large |
+
+## Templates and Runs
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-87: A typed form answer (short or long text, URL, email, number, date) saves only when its field loses focus (`saveRunFormAnswer` in `src/features/run-execution/runExecutionActions.ts`), with no draft and no leave guard; notes keep drafts (`src/features/run-execution/noteDrafts.ts`, `keptNoteDrafts.ts`) and ask before leaving. | Closing the tab, or leaving the page, with the cursor still in a field loses that answer. Keeping answers as drafts like notes, saved with the next queued save or on leaving, with a test that leaves with an answer focused, would keep it. | No issue yet | medium |
+| TD-22: Official Templates seeded before the seed fix (the `serp-user` rows in `templates`, their `template_versions` snapshots, Runs started from them, and users' copies) store each text block as one line with a literal backslash-n for each line break, so `expandLegacyEscapedNewlines` still rewrites single-line text blocks on display. | A single-line text block holding a Windows path outside inline code is misread. The fix is a scoped data migration that needs the owner's approval ([Migrating the legacy seed rows](agents/template-content-types.md#migrating-the-legacy-seed-rows-proposal-needs-human-approval)); the shim in `MarkdownBlock` goes once a person decides about users' copies. | No issue yet | medium |
+| A Free Personal user's template import or export is refused with "Upgrade this Organization to use template import/export." (`functions/api/handlers/template-backup.ts`), though no Organization is involved. | The message names the wrong context and the wrong upgrade, in a refusal the user is meant to act on. Fixing it changes product wording, which the owner decides. | No issue yet | medium |
+
+## Uploads
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-18: `POST /api/uploads` (`functions/api/handlers/uploads.ts`) limits each file's size per bucket, but keeps no per-account quota and records nothing in D1. | A signed-in account can keep adding 50MB files that nothing references or removes. A quota needs an `uploads` table, a usage row per account and a reservation before each R2 put, and its numbers are a pricing decision. The proposed SQL and Drizzle definitions are in the issue. | Issue to come: upload quota | large |
+| TD-19: Template media (`template-images`, `template-videos`, `template-files`) can't be deleted through the API: an upload records neither its Personal or Organization owner nor what references it. | An Organization admin can't remove a file a member uploaded, and cleared or replaced files stay stored and publicly served. It needs TD-18's table, the owner recorded at upload, references kept as Templates and Runs are saved, and a delete that checks the current owner and refuses while a key is referenced. | Issue to come: upload quota | large |
+| TD-20: Template uploads are never deleted: clearing or replacing a file in the editor leaves its R2 object, and `DELETE /api/uploads/file` refuses template-bucket keys. | Orphaned files pile up in R2. A scheduled, batched cleanup that deletes a key only once no Template, version snapshot or Run references it (archived and deleted ones included), after a grace period for unsaved editor uploads, would end it. | Issue to come: upload quota | large |
+
+## Run Keys and MCP
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-25: Run Keys never expire, and revoking is the only way to end one. The MCP rate limits live in each isolate's memory, so the only global limit is the per-IP WAF rule `MCP rate limit` ([`security.md`](agents/security.md)), and nothing limits one key globally. Revoked keys are never deleted, so listing a user's keys still scans every revoked one. | A leaked key works until someone revokes it, and one key can pass its limit across isolates. An optional expiry and a per-key limit in shared state (KV, a Durable Object or the Workers rate-limiting binding) would close both. Pruning revoked keys deletes user data, so it needs the owner. | No issue yet | medium |
+
+## Public pages
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-84: `GET /api/profiles/by-username` stays for browser tabs loaded before #232's second pull request; the app resolves `/profile/:handle` through `GET /api/profiles/by-handle`. | One more route to keep tested, rate-limited and within its rows-read budget. After a release cycle, delete the route and `handleProfileByUsername`, their tests (`tests/unit/functions/api/profiles-by-username-d1.test.ts`, and its cases in `profiles-handler.test.ts`), its rate-limit exemption, its rows-read budget and `d1:profile` scenario, and the docs that name it. | No issue yet | small |
+| TD-45: The footer's Network column is left out, because its SERP DR link pointed at `https://serp.dr`, which doesn't resolve (`src/components/layout/publicSiteLinks.ts`). | The footer lacks the network's links. Once the owner confirms the address, the column comes back as an external https link, with its domain added to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. | No issue yet | medium |
+| serplists.com has no privacy policy page; what the product collects is written only in [`privacy.md`](product/privacy.md). | People can't read what is collected about them. The policy is legal copy the owner approves. | No issue yet | medium |
+
+## Database
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
+| TD-14: Drizzle has no snapshots of the migrations so far, so `pnpm run db:generate` proposes a fresh baseline migration, which must not be applied or committed ([`database-operations.md`](agents/database-operations.md)). | Drizzle Kit can't generate the next migration from a schema change, so each one is written by hand. Initializing the snapshots is a change of its own, following the database playbook. | No issue yet | medium |

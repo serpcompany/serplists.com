@@ -27,7 +27,7 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
   video loaded keeps the player. `tests/e2e/run-task-videos.spec.ts` checks this.
 
 Every iframe origin the helper can produce must be listed in `frame-src` in
-`src/lib/http/securityHeaders.ts` (the policy `next.config.ts` and `public/_headers` send);
+`src/lib/http/securityHeaders.ts` (the policy `next.config.ts` and the built `_headers` send);
 `tests/unit/security/headers.test.ts` checks this.
 
 ## Image blocks
@@ -66,8 +66,8 @@ which would drop focus and the caret as someone types past `https://`.
 ## Form blocks
 
 A form block (`type: 'form'`) holds fields that the Template defines and every run fills
-in. The plan and its decisions are in [forms](../exec-plans/completed/forms.md); the shapes,
-kinds and limits live in `src/lib/schemas/formFields.ts`.
+in. The owner's decisions are on issue #288, built in #290 and #291; the shapes, kinds and
+limits live in `src/lib/schemas/formFields.ts`.
 
 - **Stored shape:** `{ id, type: 'form', value: '', fields }`. Each field has an `id`
   (`field_<uuid>` from the editor), a `label`, a `kind` (`text`, `longText`, `url`,
@@ -102,7 +102,7 @@ kinds and limits live in `src/lib/schemas/formFields.ts`.
   copying clear them, portable export leaves them out, and they change neither a Template's
   structure (`RUN_STATE_KEYS`) nor count as an edit in a run's audit (`RUN_STATE_FIELDS`).
 - **Packs:** JSON and YAML carry `fields` on a `form` block; Markdown carries them as a
-  fenced `serplists:form` YAML list ([portable templates](../product/portable-templates.md)).
+  fenced `serplists:form` YAML list ([the Markdown format](../product/template-authoring.md#strict-markdown-format)).
 - **Screens:** the editor edits the fields in `FormFieldsEditor`
   (`src/components/template-editor/content-types/`). Read-only pages list them with
   `FormFieldList` (`src/components/shared/`), and the run page fills them in with
@@ -122,7 +122,7 @@ line with a literal backslash-n for each line break. `expandLegacyEscapedNewline
 (`src/lib/utils/markdownDisplay.ts`) still lays those out: for a text block with no real
 line break, it turns each literal backslash-n into a line break, except inside inline
 code and after an escaping backslash. It goes away once the stored rows are migrated
-(TD-22 in the [tech debt tracker](../tech-debt.md)).
+(TD-22 in [`tech-debt.md`](../tech-debt.md)).
 
 ### Migrating the legacy seed rows (proposal, needs human approval)
 
