@@ -1,5 +1,12 @@
 # Observability
 
+How to see what the app is doing: its logs, locally and deployed, the release identifier, the
+errors the browser reports, and what to do in an incident. What this collects about the people who
+use SERP Lists, and for how long, is in [privacy](../product/privacy.md); a change to either
+changes both.
+
+## Logs
+
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
   request gets a `requestId`, returned as the `X-Request-Id` header. The router handles
   each request inside a context (`functions/api/utils/request-context.ts`,
@@ -31,9 +38,9 @@
   dropping empty segments, and compares them in any letter case, so extra slashes or
   odd casing cannot move a token past it; `teams/invites/pending/...` carries invite
   ids, not secrets, and is logged as it is. Cloudflare's own request metadata still
-  records the full URL, so limit who can read the runtime logs.
-- Handlers that catch their own errors must log them: the router's `api_error`
-  line only sees errors that reach it. Log errors with `...describeErrorForLog(error)`
+  records the full URL, so limit who can read the deployed logs.
+- Handlers that catch their own errors must log them: the router's `api_error` line
+  only sees errors that reach it. Log errors with `...describeErrorForLog(error)`
   (fields `errorName` and `errorMessage`), which drops the bound parameters (user
   content, emails, share and reset tokens) that Drizzle puts in a failed query's
   message and logs the D1 error it wraps instead. The router's `api_error` and
@@ -44,36 +51,118 @@
   `mcp_template_reload_error` lines rather than a 5xx status. Every authenticated
   MCP request also logs `mcp_request` with its key id, a tool call `mcp_tool_call`
   with the tool's name, and a key over its limit `mcp_rate_limited`.
-- Production: Cloudflare runtime logs for the Pages project. There is no external
-  log sink, metrics, traces, or alerting yet.
-- Local: `pnpm run dev:all` mirrors its output to `tmp/logs/dev-all.log`, and the browser
-  tests' server mirrors its output to `tmp/logs/e2e-server.log`. `pnpm run logs:query`
-  answers questions about either log:
-  - errors grouped by event and error;
-  - requests per route, with 4xx and 5xx counts and p50, p95 and max latency;
-  - the slowest requests;
-  - one request's lines as a timeline;
-  - D1 statements by rows read, when `D1_PROFILE=true`.
-
-  Details and examples are in the
+- **Local:** `pnpm run dev:all` mirrors its output to `tmp/logs/dev-all.log`, and the browser
+  tests' server mirrors its output to `tmp/logs/e2e-server.log`. `pnpm run logs:query` answers
+  questions about either log: errors grouped by event and error; requests per route, with 4xx and
+  5xx counts and p50, p95 and max latency; the slowest requests; one request's lines as a timeline;
+  and D1 statements by rows read, when `D1_PROFILE=true`. Details and examples are in the
   [development environment](development-environment.md#run).
-- Frontend: `ErrorBoundary` (the page-level `RouteErrorBoundary` and the last-resort
-  one in `App.tsx`, see [FRONTEND.md](frontend.md#structure)) and analytics
-  (`src/lib/analytics.ts`, in-memory) write to the browser console only.
-- Weekly maintenance (`.github/workflows/maintenance.yml`): a Claude doc-gardening
-  agent opens a PR fixing docs that drifted from the code, and a report of recorded
-  debt is posted as an issue (`pnpm run maintenance:report`).
+- **Staging and Production:** each Worker's lines go to Cloudflare's Workers Logs
+  (`[observability] enabled = true` in `wrangler.toml`, every line kept), which holds them for 3
+  days on the Workers Free plan and 7 on Workers Paid. `pnpm run logs:deployed` reads them
+  ([reading deployed logs](#reading-deployed-logs)). There are no metrics, traces or alerts
+  beyond what Cloudflare's dashboard shows.
+
+## The release identifier
+
+One identifier names the release that answers: the commit the build was made from and the
+environment it runs in.
+
+- **The commit** is `NEXT_PUBLIC_RELEASE_COMMIT`, which the deploy and browser-test builds set from
+  `github.sha` ([CI deploys](ci-deploys.md)). Next.js writes it into the build, so a Worker and
+  its pages keep the commit they were built from. A local build has none and reports `unknown`,
+  as does a value that is not a 7 to 64 character lowercase SHA, which `pnpm run typecheck:env`
+  refuses (`releaseCommitSchema` in `src/lib/schemas/release.ts`).
+- **The environment** is `SITE_ENV` from the Worker's vars: `production`, `staging`, or `local`
+  for anything else.
+- `GET /api/health` answers `{"status":"ok","release":{"commit":"<sha>","environment":"<env>"}}`,
+  with `Cache-Control: no-store` (`functions/api/utils/release.ts`).
+- Every page's head carries `<meta name="serplists-release" content="<sha>">` (the root layout,
+  `src/app/layout.tsx`, through `src/lib/release.ts`). Read the build a page was rendered by from
+  the page itself, since a cached page can be older than what `/api/health` reports.
+- Every error report from the browser carries the commit of the page that sent it (`release`).
+- Each deploy's smoke test checks that `/api/health` and a page name the commit it just deployed.
+
+## Error reports
+
+- **The Worker** logs its errors through `log()`, as above, and Workers Logs records an uncaught
+  exception as an event of its own.
+- **The browser** reports to the API, which logs the report. The root error boundaries
+  (`ErrorBoundary` in `src/components/ErrorBoundary.tsx`, which `RouteErrorBoundary` wraps) report
+  what they catch, and `src/instrumentation-client.ts`, which Next.js runs before the page
+  hydrates, listens for the window's `error` and `unhandledrejection` events.
+  `src/lib/errorReports.ts` sends each report with `fetch` and `keepalive` to the page's own
+  origin, without cookies; sends at most five a page load and an error that repeats once; leaves
+  out errors from other origins (browser extensions, third-party tags) and the browser's
+  `Script error.`; and swallows its own failures, so reporting never breaks a page.
+- **A report** holds its `kind` (`boundary`, `error` or `unhandledrejection`), the error's `name`,
+  `message` and `stack`, the page's `path`, and the `release`. `scrubClientErrorReport`
+  (`src/lib/schemas/clientErrorReport.ts`) runs in the browser before a report is sent and in the
+  API before it is logged: it drops queries and fragments (keeping a stack frame's line and
+  column), writes the secret in a share, invite or reset path as `:token`, email addresses as
+  `[email]`, and bearer tokens, web tokens and any run of 32 or more letters, digits, `-` and `_`
+  holding both a letter and a digit (Run Keys, session tokens, ids that may be share tokens) as
+  `[token]`, and cuts the name to 100 characters, the message to 300, the stack to 2,000 and the
+  path to 200.
+- **`POST /api/client-errors`** (`functions/api/handlers/client-errors.ts`) takes only JSON from a
+  trusted origin, at most 16KB, 10 reports a minute per client in a bucket of its own
+  ([security](security.md#rate-limits)), logs one `client_error` line at level `error` with the
+  fields `kind`, `errorName`, `errorMessage`, `stack`, `path` and `release`, and answers 204.
+- No source maps are kept, so a report's stack names the production bundle's chunks, lines and
+  columns. Build the reported commit to read one.
+- Why the reports go to Workers Logs and not to Sentry or PostHog:
+  [ADR 0006](../adr/0006-report-errors-to-workers-logs.md).
+
+## Reading deployed logs
+
+`pnpm run logs:deployed -- --env <staging|production>` reads a Worker's lines from Workers Logs,
+read-only, and prints them as `pnpm run logs:query` does:
+
+```bash
+pnpm run logs:deployed -- --env staging --since 1h --level error
+pnpm run logs:deployed -- --env production --since 1d --event client_error
+pnpm run logs:deployed -- --env production --request <id>
+```
+
+It takes `--since` (a duration such as `30m`, `1h` or `2d`, or a date; an hour by default),
+`--level`, `--event`, `--request`, `--path`, `--status`, `--where`, `--limit` (at most 2,000) and
+`--json`. It asks Cloudflare's Workers Observability query API
+(`POST /accounts/<id>/workers/observability/telemetry/query`) for the Worker's events in the window,
+as a dry run that saves nothing, then narrows them as `logs:query` would. The API's lines keep
+their fields; an uncaught exception shows as `exception`, and other console output (a page's
+rendering error, say) as `console` with its text in `detail`, both scrubbed as error reports are
+(`scripts/lib/logsDeployed.ts`).
+
+It needs two variables, set in your shell, never in `.dev.vars` or a committed file:
+
+- `CLOUDFLARE_API_TOKEN`: a token with one permission, Account, Workers Observability, Edit (the
+  API calls it Workers Observability Write; its query endpoint accepts no narrower one), on SERP's
+  account only. It can query Workers Logs and keep saved queries, and reaches no Worker code, D1,
+  R2 or secret. An owner makes it in the Cloudflare dashboard: My Profile, API Tokens, Create
+  Token, Create Custom Token. Wrangler reads the same variable, so in a shell that sets it,
+  Wrangler can do no more than this token allows.
+- `CLOUDFLARE_ACCOUNT_ID`: SERP's account ID, from the team's password manager
+  ([database operations](database-operations.md#applying-migrations)).
+
+Without them, the command says what is missing and how to make the token. The dashboard's Worker
+page (Workers & Pages, the Worker, Logs) shows the same lines to anyone with account access.
 
 ## Incident response
 
 Fast triage (5 minutes):
 
 1. Decide whether the problem is frontend-only or API-only; `GET /api/health`
-   confirms the Functions respond.
-2. Check the Cloudflare runtime logs and collect `X-Request-Id` values from
-   failing responses.
-3. If the incident started right after a deploy, roll back to the previous Pages
-   deployment first.
+   confirms the Worker responds and names the commit and environment it runs.
+2. Read the errors: `pnpm run logs:deployed -- --env production --since 30m --level error`
+   (or the Worker's Logs page in the dashboard). Collect `X-Request-Id` values from failing
+   responses and read each with `--request <id>`; read what browsers report with
+   `--event client_error`. A report whose `release` is older than the deployed commit came from a
+   page loaded before the deploy.
+3. If the incident started right after a deploy, roll the Worker back to its previous version
+   first, then debug: `npx wrangler rollback --env production` (or name a version from
+   `npx wrangler versions list --env production`), or Deployments, Rollback on the Worker's
+   dashboard page. A rollback changes only the code: D1 migrations stay applied, and the next push
+   to `main` deploys again. It acts on Production, so an agent asks the owner first.
 
 Common failures:
 
@@ -84,5 +173,8 @@ Common failures:
   characters, or a URL setting is malformed. Validate with `pnpm run typecheck:env`.
 - **500s on templates or runs:** check recent migrations and deploys. For recovery,
   prefer D1 Time Travel (see [database operations](database-operations.md)).
-- **Uploads failing or 404:** confirm the `R2_UPLOADS` binding and bucket name, that
-  the requested key exists, and that no lifecycle rule is expiring objects.
+- **Uploads failing or 404:** confirm the `R2_UPLOADS` binding names the environment's bucket
+  (`serp-checklists-staging-uploads` on Staging, `serp-checklists-uploads` on Production), that the
+  requested key exists there, and that no lifecycle rule is expiring objects.
+- **Pages fail in the browser:** `--event client_error` groups by `errorName`; the `path` and
+  `release` say where and on which build.

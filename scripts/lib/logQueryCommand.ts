@@ -1,24 +1,19 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { logLevels, parseLogText, requestRecords, type LogEntry, type LogLevelName, type LogSource } from "./logEntries";
+import { buildFilter, filterOptionSpec, linesCommand, parseLimit, QueryError, result, usageError, type CommandResult } from "./logCommandParts";
+import { parseLogText, requestRecords, type LogEntry } from "./logEntries";
 import { formatEntry, formatTable, milliseconds } from "./logFormat";
 import {
-  emptyFilter,
   isProblem,
   matchesFilter,
   normalizeRoute,
-  parsePathPattern,
-  parseSince,
-  parseStatusRange,
-  parseWhere,
   requestTimeline,
   rowsReadByRequest,
   slowestRequests,
   summarizeErrors,
   summarizeRoutes,
   summarizeStatements,
-  type LogFilter,
 } from "./logQueries";
 
 import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH } from "./log-mirror";
@@ -54,49 +49,14 @@ Options:
   --json           print the result as JSON
 `;
 
-export type CommandResult = { output: string; exitCode: number };
-
 const commands = ["lines", "errors", "request", "routes", "slow", "d1"] as const;
 type CommandName = (typeof commands)[number];
-const sources: LogSource[] = ["api", "next"];
 
 const optionSpec = {
   file: { type: "string", multiple: true },
-  since: { type: "string" },
-  level: { type: "string", multiple: true },
-  event: { type: "string", multiple: true },
-  request: { type: "string" },
-  path: { type: "string" },
-  status: { type: "string" },
-  where: { type: "string", multiple: true },
   source: { type: "string", multiple: true },
-  limit: { type: "string" },
-  json: { type: "boolean" },
-  help: { type: "boolean", short: "h" },
+  ...filterOptionSpec,
 } as const;
-
-type FilterOptions = {
-  since?: string;
-  level?: string[];
-  event?: string[];
-  request?: string;
-  path?: string;
-  status?: string;
-  where?: string[];
-  source?: string[];
-};
-
-class QueryError extends Error {
-  constructor(
-    message: string,
-    readonly exitCode: number,
-    readonly showUsage: boolean,
-  ) {
-    super(message);
-  }
-}
-
-const usageError = (message: string) => new QueryError(message, 2, true);
 
 function newestLogFile(folder: string): string | undefined {
   return readdirSync(folder)
@@ -119,50 +79,6 @@ function readLogFiles(files: string[]): { entries: LogEntry[]; read: string[] } 
     read.push(file);
   }
   return { entries, read };
-}
-
-function buildFilter(options: FilterOptions, nowMs: number): LogFilter {
-  const levels = (options.level ?? []).map((level): LogLevelName => {
-    const known = logLevels.find((name) => name === level);
-    if (!known) throw usageError(`--level takes ${logLevels.join(", ")}, not "${level}".`);
-    return known;
-  });
-  const chosenSources = (options.source ?? []).map((source) => {
-    const known = sources.find((name) => name === source);
-    if (!known) throw usageError(`--source takes api or next, not "${source}".`);
-    return known;
-  });
-  try {
-    return {
-      ...emptyFilter,
-      levels,
-      sources: chosenSources,
-      events: options.event ?? [],
-      requestId: options.request,
-      pathPattern: options.path === undefined ? undefined : parsePathPattern(options.path),
-      status: options.status === undefined ? undefined : parseStatusRange(options.status),
-      sinceMs: options.since === undefined ? undefined : parseSince(options.since, nowMs),
-      where: (options.where ?? []).map(parseWhere),
-    };
-  } catch (error) {
-    throw usageError(error instanceof Error ? error.message : String(error));
-  }
-}
-
-function parseLimit(text: string | undefined, fallback: number): number {
-  if (text === undefined) return fallback;
-  const limit = Number(text);
-  if (!Number.isInteger(limit) || limit < 1) throw usageError(`--limit takes a whole number above 0, not "${text}".`);
-  return limit;
-}
-
-const result = (output: string, exitCode = 0): CommandResult => ({ output, exitCode });
-
-function linesCommand(entries: LogEntry[], limit: number, json: boolean): CommandResult {
-  const shown = entries.slice(-limit);
-  if (json) return result(JSON.stringify(shown, null, 2));
-  if (shown.length === 0) return result("No lines match.");
-  return result([`${shown.length} of ${entries.length} matching lines`, ...shown.map(formatEntry)].join("\n"));
 }
 
 function errorsCommand(entries: LogEntry[], limit: number, json: boolean): CommandResult {

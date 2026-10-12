@@ -52,8 +52,8 @@
   form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
   and a cross-site HTML form needs no CORS preflight and sends no `SameSite=Lax`
   session cookie, so it could sign a visitor into another account or sign them
-  out. `functions/api/utils/auth-request-guard.ts` requires every non-`GET`
-  `/api/auth/*` request to send `Content-Type: application/json` (`415` otherwise),
+  out. `functions/api/utils/auth-request-guard.ts`, through `cross-site-guard.ts`, requires every
+  non-`GET` `/api/auth/*` request to send `Content-Type: application/json` (`415` otherwise),
   which forces a CORS preflight for other origins, and refuses with `403` a request
   whose `Origin` is not the API's own origin, `FRONTEND_URL`, or
   `CORS_ALLOWED_ORIGINS` (the set Better Auth trusts, `resolveTrustedOrigins` in
@@ -101,11 +101,16 @@
   (`isCanonicalLoopbackHostname`) and the hosts in `FRONTEND_URL` and
   `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`, even another name for this
   machine such as `app.localhost`.
-  Per-deployment URLs such as `https://<hash>.<project>.pages.dev` are never listed,
-  so Agent Access asks the server which endpoint to show
+  A host left out of both, such as Production's `workers.dev` address, is refused, so Agent
+  Access asks the server which endpoint to show
   (`GET /api/agent-keys/connection`). On a host the check rejects, it shows the
   endpoint on the first configured origin with a note, or no endpoint when none is
-  configured. Never widen the check to a `pages.dev` suffix.
+  configured. Never widen the check to a suffix such as `workers.dev`.
+- **Error reports from the browser** (`POST /api/client-errors`) need no session, so anyone can
+  send one. The route takes only JSON from a trusted origin, through the auth requests' guard
+  (`functions/api/utils/cross-site-guard.ts`: `415`, `403`), at most 16KB and 10 a minute per IP;
+  it parses the report with Zod, scrubs it again (`scrubClientErrorReport`), logs one
+  `client_error` line and stores nothing ([observability](observability.md#error-reports)).
 - **Share links** (`/share/:token`) need no login, so the token is the only
   credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
   applies only completion, task notes, and status onto the stored run
@@ -130,26 +135,17 @@
   a link cannot be used to collect the names and emails of people who use it. Only the
   share-link rows are hidden; that person's other events keep their name
   (`functions/api/utils/share-link-actors.ts`).
-- **Uploads** are written under the uploader's key prefix. Only an account's own
-  avatar (`avatars/<userId>/<file>`, matched segment by segment) can be deleted.
-  Template media cannot be deleted by anyone: Templates, versions, Runs and
-  public-template clones may reference it, and uploads record no Personal or
-  Organization owner, so the uploader (who may since have been disabled in or
-  removed from the Organization) must not be able to break Organization content.
-  Clearing or replacing template media only unlinks it (TD-19). Each bucket has a
-  size limit (avatars 5MB, Template images, videos and files 50MB;
-  `src/lib/schemas/uploadLimits.ts`, shared with the upload forms) and takes only
-  the types listed in `src/lib/schemas/uploadTypes.ts`, which the upload pickers offer
-  too (never HTML, SVG, XML, or scripts, since files are served from the app's origin).
-  Browsers take a file's type from the OS, so one kind of file arrives under several
-  types (Windows reports `.zip` as `application/x-zip-compressed`, and `.csv` as
-  `application/vnd.ms-excel` when Excel is installed), and each kind lists them all. A
-  file with no type, or the generic `application/octet-stream`, is typed from its
-  extension, stored under the first type its kind lists, and rejected if that type is not
-  allowed. The pickers' `accept` lists the extensions as well as the types, since Windows
-  file pickers filter on extensions. Files are served as attachments, and every download
-  is sent with `X-Content-Type-Options: nosniff`. There is no per-account storage
-  quota yet (TD-18).
+- **Uploads** are written under the uploader's key prefix. Only an account's own avatar
+  (`avatars/<userId>/<file>`, matched segment by segment) can be deleted. Template media cannot be
+  deleted by anyone: Templates, versions, Runs and public-template clones may reference it, and
+  uploads record no Personal or Organization owner, so an uploader who has since left an
+  Organization must not be able to break its content; clearing or replacing it only unlinks it
+  (TD-19). Each bucket takes only the sizes and types in `src/lib/schemas/uploadLimits.ts` and
+  `src/lib/schemas/uploadTypes.ts`, which the upload forms share: never HTML, SVG, XML or scripts,
+  since files are served from the app's origin. A file sent with no type, or as
+  `application/octet-stream`, is typed from its extension and refused if that type is not allowed
+  ([R2 uploads](database-operations.md#r2-uploads)). Files are served as attachments with
+  `X-Content-Type-Options: nosniff`. There is no per-account storage quota yet (TD-18).
 - **CSV exports never hand a spreadsheet a formula.** A Run's answers CSV is built in the
   browser from user text (answers, titles, labels), so any cell starting with `=`, `+`,
   `-`, `@`, a tab or a CR gets a leading `'`, unless the cell is only a number such as `-5`
@@ -174,9 +170,8 @@
 ## Secrets and environment
 
 `.dev.vars` is the only local env file and holds local/test values only. `.env`
-and `.env.local` are deprecated. Production values are Cloudflare Pages secrets. On
-Workers, each environment's Worker has its own secrets:
-`wrangler secret put <NAME> --env <preview|production>`.
+and `.env.local` are deprecated. Staging's and Production's values are secrets of their own
+Worker, never shared: `wrangler secret put <NAME> --env <preview|production>`.
 
 | Variable | Purpose |
 | --- | --- |
@@ -192,6 +187,7 @@ Workers, each environment's Worker has its own secrets:
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
 | `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for `localhost`, `127.0.0.1` and `[::1]`, `isCanonicalLoopbackHostname` in `src/lib/utils/loopbackHostname.ts`; `false` turns them off there too) |
 | `NEXT_PUBLIC_API_URL` | Optional; points the pages at another API instead of `/api` on their own origin. A build refuses a loopback value ([development environment](development-environment.md#set-up)) |
+| `NEXT_PUBLIC_RELEASE_COMMIT` | Optional, not a secret; the commit a build was made from, which the deploy and browser-test builds set from `github.sha` ([the release identifier](observability.md#the-release-identifier)) |
 
 Rules:
 
@@ -201,7 +197,9 @@ Rules:
   into the browser bundle only where the code names it in full, so `src/env.ts` lists each
   one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole, and
   `src/next-public-env.d.ts` declares each on `NodeJS.ProcessEnv` so that dot read
-  type-checks. URL values
+  type-checks. `NEXT_PUBLIC_RELEASE_COMMIT` is the one read where it is used
+  (`src/lib/release.ts`, `functions/api/utils/release.ts`), so a malformed value reads as
+  `unknown` instead of stopping every page. URL values
   are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
   host (`functions/api/utils/origin-list.ts`; `scripts/check-env.ts` checks the API's own schema,
@@ -217,18 +215,20 @@ Rules:
   values and `*_LIVE` names. Live Stripe administration takes keys injected into
   the process environment by an approved secret manager. `pnpm run
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
-- `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
-  `scripts/secret-scan.ts` scans every git-tracked file, or the files passed to
-  it, as literal paths through secretlint's engine. The secretlint CLI would read
+- `pnpm run verify secrets` (secretlint) runs in CI and on staged
+  files at commit. `scripts/checks/secrets.ts` scans every file git does not ignore, or the files
+  passed to it, as literal paths through secretlint's engine. The secretlint CLI would read
   route files such as `functions/api/[[route]].ts` as globs and skip them. Deleted
   files, folders, and anything under `.git` or `node_modules` (the folders the CLI skips
   by default) are dropped. A test that needs a token-shaped value assembles it at
   runtime, so the scan never finds one in the test's source.
-- Keep preview and production Pages secrets separate.
 - GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, and
-  `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for Claude code review.
-  The review token is a personal subscription credential, and the review job has
-  read-only repository permissions.
+  `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for the Claude workflows
+  ([ci-agents.md](ci-agents.md)). The token is a personal subscription credential, and the
+  review job has read-only repository permissions.
+- `CLOUDFLARE_API_TOKEN` for `pnpm run logs:deployed` reaches only Workers Observability and
+  lives in the shell of whoever reads the logs, never in `.dev.vars`
+  ([reading deployed logs](observability.md#reading-deployed-logs)).
 
 ## CORS
 
@@ -281,16 +281,16 @@ URL (GA4 sends it as `page_location`). So:
 `next.config.ts` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on every
 page and API response (`src/lib/http/securityHeaders.ts`), with the policy chosen by host
 (below). Static files (the build's `/_next/static` files, fonts and images) are served by
-Workers Static Assets without running the Worker, so each build writes `public/_headers` from
-the same values
+Workers Static Assets without running the Worker, so each build writes a `_headers` file into
+`public/` from the same values
 (`scripts/generate-static-headers.ts`, run by `pnpm run build` before `next build`; the file is
 not committed), and OpenNext copies `public/` into the Worker's assets, so each environment's
 build carries its own.
 `next dev` applies only `next.config.ts`, so check asset headers on `pnpm run preview` or a
 deployed host. A build that is not production also marks every response and file
-`X-Robots-Tag: noindex, nofollow` ([FRONTEND.md](frontend.md#production-and-other-environments)).
+`X-Robots-Tag: noindex, nofollow` ([frontend](frontend.md#production-and-other-environments)).
 Other hosts (`www`, `*.workers.dev`) never serve the site: they redirect to the
-environment's one host ([RELIABILITY.md](environments.md#environments-and-hosts)), so the
+environment's one host ([environments](environments.md#environments-and-hosts)), so the
 API's origin checks and Better Auth's reset and verification links only ever see that host
 (and a workers.dev request carrying CI's `x-serplists-smoke-test` header, which is not a
 secret). On `localhost` and `127.0.0.1` the policy leaves
@@ -310,7 +310,8 @@ the app's own navigations follow to https, which a local server does not serve.
   (`analytics.ahrefs.com`, loaded by a GTM tag). A tag added in GTM that loads a
   script from a new origin needs that origin here, and in the list in
   `tests/unit/security/headers.test.ts`; otherwise the browser blocks it.
-  `connect-src` already allows any `https:` host the beacons report to.
+  `connect-src` already allows any `https:` host the beacons report to, and the
+  browser's error reports go to the page's own origin.
 
 ## Rate limits
 
@@ -346,6 +347,9 @@ neither throw nor merge unrelated clients into one bucket, and the port that
   agent from using up its owner's web saves on the same IP. It also counts calls
   with an unknown Run Key, each of which costs a D1 lookup. The `429` is a JSON-RPC
   error (`code: -32000`, `Rate limit exceeded`) with `Retry-After`.
+- Browser error reports (`POST /api/client-errors`): 10 per minute per IP on deployed hosts (120
+  locally), in their own bucket, so a page failing in a loop neither floods the logs nor uses up
+  its visitor's saves.
 - Billing checkout and portal (`POST /api/billing/*`), which each call Stripe, whose
   rate limit the whole Stripe account shares: 10 per minute per IP on deployed hosts
   (120 locally, as for admin), in their own bucket, and 10 per minute per account in
@@ -400,20 +404,19 @@ limit. A `429` during intensive local QA means the limit, not broken credentials
 ## Request size limits
 
 Request bodies are capped in the router before any handler runs
-(`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE`
-whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
-default, 16KB for `/api/auth/*` (sign-in, sign-up and profile bodies are a few hundred
-bytes, so an oversized value stops before Better Auth parses it), 2MB for Template
-backups, and 50MB (plus 1MB for the multipart envelope) for uploads. Template and run
-content has its own, smaller limit (`src/lib/schemas/contentLimits.ts`,
-`413 content_too_large`): 768KB for a Template, and 896KB for a run, which holds its
-Template's content plus notes. Every save sends the whole content back (the editor's Save,
-and a run page's every tick, note and completion), so no write stores content too large for
-its save route to accept again, with room for the request's other fields; an import, whose
-request holds several Templates, checks each one. Content is measured as the app sends it
-back (`contentSaveBytes`): loading and saving fill in what a stored record may lack (ids,
-titles, descriptions, content lists, block values and completion), so the stored JSON alone
-would undercount content that was imported or written by hand.
+(`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE` whatever the
+`Content-Type`, because handlers parse JSON without checking it: 1MB by default, 16KB for
+`/api/auth/*` (sign-in, sign-up and profile bodies are a few hundred bytes, so an oversized value
+stops before Better Auth parses it) and for `/api/client-errors`, 2MB for Template backups, and 50MB
+(plus 1MB for the multipart envelope) for uploads. Template and run content has its own, smaller
+limit (`src/lib/schemas/contentLimits.ts`, `413 content_too_large`): 768KB for a Template, and 896KB
+for a run, which holds its Template's content plus notes. Every save sends the whole content back
+(the editor's Save, and a run page's every tick, note and completion), so no write stores content
+too large for its save route to accept again, with room for the request's other fields; an import,
+whose request holds several Templates, checks each one. Content is measured as the app sends it back
+(`contentSaveBytes`): loading and saving fill in what a stored record may lack (ids, titles,
+descriptions, content lists, block values and completion), so the stored JSON alone would undercount
+content that was imported or written by hand.
 `tests/unit/lib/schemas/contentLimits.test.ts` runs the app's own load and save code over
 stored content that lacks every one of those, so raising a content limit, lowering a body
 limit, or a field that loading fills in and `contentSaveBytes` does not count fails it. A save
@@ -421,19 +424,9 @@ no larger than the content it replaces is allowed, so content stored before the 
 still be saved and trimmed. A Template save leaves out of reconciliation any run it would take past the run
 limit: that run keeps its content and goes stale while the save and the other runs go
 through, and Revalidate refuses it with the same `413`.
-The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns.
-Every tool result stays within 32KB (`MAX_RESULT_BYTES` in
-`functions/api/handlers/agentMcpPages.ts`), which MCP clients take whole: Claude
-Code sets a result over 25,000 tokens aside in a file, and Codex cuts the middle out of one
-over 48,000 bytes. `get_template` and `get_run` read a larger template or run a part at a
-time, `list_templates` and `list_runs` return a page at a time with a cursor to the next, and
-`update_template` operations and `update_run` change one section or task, so no call returns a
-whole large template or run, and no edit needs one sent back. MCP run writes keep the same
-content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
-30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
-agent writes come back in one result. A form answer it sets keeps its field's limit (10,000
-characters at most, a Long text answer), and it cannot set a File answer, which only an upload
-in the web app makes.
+The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns: each
+tool result stays within 32KB, a large Template or Run is read a part or a page at a time, and its
+run writes keep the web app's content limit ([agent access](agent-access.md)).
 The cap uses `Content-Length`, or, when it is missing or malformed, reads the body once,
 stopping as soon as it passes the cap, so it buffers at most the cap, and hands the
 handler a request built from those bytes (`readBodyWithinLimit` in
@@ -455,10 +448,12 @@ billing, keep it disabled by default:
 
 1. Confirm the `entitlement_overrides` table exists (normal migration checks).
 2. Generate a random `ENTITLEMENTS_ADMIN_SECRET` (for example `openssl rand -base64 32`;
-   never a memorable word), add it as a temporary Pages secret, and redeploy.
+   never a memorable word), and add it as a temporary secret of the production Worker
+   (`wrangler secret put ENTITLEMENTS_ADMIN_SECRET --env production`, which deploys it).
 3. Apply the override, then verify the D1 row and `GET /api/billing/status` for
    the user rather than trusting the command response.
-4. Remove the secret, redeploy, and confirm a `POST` to the endpoint returns `401`.
+4. Remove the secret (`wrangler secret delete ENTITLEMENTS_ADMIN_SECRET --env production`), and
+   confirm a `POST` to the endpoint returns `401`.
 
 Only `POST` and `DELETE` on `/api/admin/entitlements/override` read the secret: any
 other method there gets `405` (with `Allow: POST, DELETE`) and any other path under

@@ -3,7 +3,7 @@ import { checkRateLimit, type RateLimitResult } from './rate-limit';
 import { rateLimitKeyForIp } from './rate-limit-key';
 import { jsonError } from './response';
 
-export type RouteRateLimitBucket = 'write' | 'admin' | 'billing' | 'mcp';
+export type RouteRateLimitBucket = 'write' | 'admin' | 'billing' | 'mcp' | 'error-reports';
 
 type Limit = { windowMs: number; max: number };
 
@@ -24,6 +24,10 @@ const LIMITS: Record<RouteRateLimitBucket, { deployed: Limit; local: Limit }> = 
     deployed: { windowMs: 60 * 1000, max: 2 * RUN_KEY_REQUESTS_PER_MINUTE },
     local: { windowMs: 60 * 1000, max: 2 * RUN_KEY_REQUESTS_PER_MINUTE },
   },
+  'error-reports': {
+    deployed: { windowMs: 60 * 1000, max: 10 },
+    local: { windowMs: 60 * 1000, max: 120 },
+  },
 };
 
 export const ROUTE_RATE_LIMIT_MESSAGES: Record<RouteRateLimitBucket, string> = {
@@ -31,6 +35,7 @@ export const ROUTE_RATE_LIMIT_MESSAGES: Record<RouteRateLimitBucket, string> = {
   admin: 'Too many requests',
   billing: 'Too many billing requests. Please try again in a minute.',
   mcp: 'Rate limit exceeded',
+  'error-reports': 'Too many error reports',
 };
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -53,6 +58,7 @@ export function routeRateLimitBucket(method: string, path: string): RouteRateLim
   if (!MUTATING_METHODS.has(method.toUpperCase())) return null;
   if (path.startsWith('billing')) return 'billing';
   if (path === 'mcp') return 'mcp';
+  if (path === 'client-errors') return 'error-reports';
   return isExemptRoute(path) ? null : 'write';
 }
 

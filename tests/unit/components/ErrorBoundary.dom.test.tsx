@@ -4,11 +4,13 @@ import React, { act } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { usePathname } from 'next/navigation';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { objectContaining } from '../../support/asymmetricMatchers';
 import { firstOf } from '../../support/elements';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorFallback } from '@/components/RouteErrorBoundary';
+import { clientErrorReportSchema } from '@/lib/schemas/clientErrorReport';
 import { onTheInMemoryBrowser, renderSettled } from '../../support/renderInTheDom';
 
 let authUser: { id: string } | null = null;
@@ -51,9 +53,34 @@ function mountBoundaryDrivenLikeReact(props: Props) {
 }
 
 describe('ErrorBoundary', () => {
+  const fetchReport = vi.fn(async (_url: string, _init: RequestInit) => new Response(null, { status: 204 }));
+
+  beforeEach(() => {
+    fetchReport.mockClear();
+    vi.stubGlobal('fetch', fetchReport);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     authUser = null;
+  });
+
+  it('reports the error it catches to /api/client-errors as a boundary error', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    function BrokenPage(): never {
+      throw new TypeError('a row the page cannot show');
+    }
+    try {
+      await onTheInMemoryBrowser(() => renderSettled(<ErrorBoundary><BrokenPage /></ErrorBoundary>));
+    } finally {
+      silence.mockRestore();
+    }
+
+    const reports = fetchReport.mock.calls.map(([url, init]) => ({ url, report: clientErrorReportSchema.parse(JSON.parse(String(init.body))) }));
+    expect(reports).toContainEqual({
+      url: '/api/client-errors',
+      report: objectContaining({ kind: 'boundary', name: 'TypeError', message: 'a row the page cannot show' }),
+    });
   });
 
   it('clears the error when its reset key changes, so navigating away recovers', () => {

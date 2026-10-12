@@ -2,5 +2,6 @@ declare namespace NodeJS {
   interface ProcessEnv {
     NEXT_PUBLIC_API_URL?: string;
     NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED?: string;
+    NEXT_PUBLIC_RELEASE_COMMIT?: string;
   }
 }

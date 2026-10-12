@@ -1,28 +1,27 @@
 # Database Operations
 
 SERP Lists uses Cloudflare D1 through the `DB` binding and R2 through the
-`R2_UPLOADS` binding. Preview deployments must never share the production database.
+`R2_UPLOADS` binding. Staging never shares Production's database or upload bucket.
 
 ## Environments
 
-| Environment | D1 database | UUID in `wrangler.toml` | Used by |
-| --- | --- | --- | --- |
-| Local | Miniflare state under `.wrangler/` | n/a | `pnpm run dev:*`, tests |
-| Staging | `serp-checklists-staging-db` | `fcaf4325-5be7-4ead-ab60-45932a04177b` | Pages preview deployments (`staging` and other branches) |
-| Production | `serp-checklists-db` | `b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1` | Production deployments (`main`) only |
+| Environment | D1 database | UUID in `wrangler.toml` | R2 bucket | Used by |
+| --- | --- | --- | --- | --- |
+| Local | Miniflare state under `.wrangler/` | n/a | Miniflare state | `pnpm run dev:*`, tests |
+| Staging | `serp-checklists-staging-db` | `fcaf4325-5be7-4ead-ab60-45932a04177b` | `serp-checklists-staging-uploads` | `[env.preview]`, from `staging` |
+| Production | `serp-checklists-db` | `b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1` | `serp-checklists-uploads` | `[env.production]`, from `main` |
 
-Auth policy is explicit in `wrangler.toml`: local and preview set
+Auth policy is explicit in `wrangler.toml`: local and staging set
 `AUTH_EMAIL_VERIFICATION_REQUIRED=false`; production sets `true`. Never infer the
-environment from the request hostname, because preview aliases and custom staging
-domains must behave the same.
+environment from the request hostname: a Worker's `workers.dev` address and its own
+domain must behave the same.
 
-Cloudflare Pages supports only `production` and `preview` overrides, so one staging
-database serves every preview deployment. Its UUID must be in both
-`preview_database_id` (used by Wrangler `--preview` commands) and
-`[[env.preview.d1_databases]].database_id` (used by Pages preview deployments).
-`pnpm run check:preview:d1-binding` fails staging deploys unless both are set to
-the same UUID and it differs from production. Staging commands target the `DB`
-binding with `--preview`; do not change them to use the database name directly.
+A Worker environment inherits no binding from the top level of `wrangler.toml`, so each binds its
+own database and bucket (`tests/unit/wrangler/environment-isolation.test.ts`). Staging's UUID is in
+`[[env.preview.d1_databases]]` and in the top level's `preview_database_id`, which Wrangler's
+`--preview` commands use; `pnpm run check:preview:d1-binding` fails staging deploys unless both
+match and differ from production's. Staging commands target the `DB` binding with `--preview`; do
+not change them to use the database name directly.
 
 ## Schema ownership
 
@@ -253,20 +252,20 @@ npx wrangler d1 execute serp-checklists-db --remote --file=./db/maintenance/find
 
 ## Release checklists
 
-Preview/staging:
+Staging:
 
-1. Confirm both preview D1 fields in `wrangler.toml` point at staging, not production.
+1. Confirm both staging D1 fields in `wrangler.toml` point at staging, not production.
 2. Run `pnpm run verify:staging`.
 3. Run `pnpm run db:migrate:d1:staging` only when migrations are pending.
 4. Run `pnpm run check:staging:d1-schema`.
-5. Deploy a preview branch and confirm new data lands in staging.
+5. After `staging` deploys, confirm new data lands in staging's D1 and uploads in its bucket.
 6. Exercise an Organization create, invite, and accept flow before promoting
    Organization-related changes.
 
 Production:
 
 - Back up before migrating (below).
-- Keep preview and production Pages secrets separate.
+- Keep each Worker's secrets its own (`wrangler secret put <NAME> --env <preview|production>`).
 - Run `pnpm run verify:prod:d1` before promoting `staging` to `main`.
 - Confirm the Organization audit/history tables exist before deploying code that
   writes Organization or Template history.
@@ -301,9 +300,10 @@ its owner (`user` or `team`, and the id).
 
 Rollout, one database at a time:
 
-1. `pnpm run check:public-handles:staging` (read-only; `check:public-handles:local` for local
-   D1, `check:public-handles:prod` for production) lists collisions and values outside the rule. `0028`'s backfill stops on a collision, so
-   rename each one by hand first; nothing is renamed automatically.
+1. `pnpm run check:public-handles:staging` (read-only; `check:public-handles:local` for local D1,
+   `check:public-handles:prod` for production) lists collisions and values outside the rule.
+   `0028`'s backfill stops on a collision, so rename each one by hand first; nothing is renamed
+   automatically.
 2. Back up ([below](#backup-and-restore)). Staging, whose database `--env preview` names:
 
    ```bash
@@ -345,62 +345,64 @@ npx wrangler d1 execute serp-checklists-db-restored --remote --file=./tmp/backup
 
 ## R2 uploads
 
-Bucket `serp-checklists-uploads` (binding `R2_UPLOADS`). `POST /api/uploads`
-enforces a per-bucket type list and size limit (`functions/api/handlers/uploads.ts`,
-limits in `src/lib/schemas/uploadLimits.ts`) and writes keys under per-user prefixes:
+Each Worker binds `R2_UPLOADS` to its own bucket: `serp-checklists-uploads` for Production, and
+`serp-checklists-staging-uploads` for Staging since 2026-10-12, when it stopped sharing
+Production's. Both are in SERP's account, set alike: location WNAM, Standard storage, no CORS rules
+or custom domain, `r2.dev` access off, and the multipart rule below. Production's held 0 objects
+that day by `wrangler r2 bucket info`, whose counts can lag, so no Staging upload appears left
+there. As for D1, set `CLOUDFLARE_ACCOUNT_ID` before a bucket command.
+
+`POST /api/uploads` enforces a per-bucket type list and size limit
+(`functions/api/handlers/uploads.ts`, limits in `src/lib/schemas/uploadLimits.ts`) and writes keys
+under per-user prefixes:
 
 - `avatars/<userId>/<uuid>.<ext>`
 - `template-images/<userId>/<uuid>.<ext>`
 - `template-videos/<userId>/<uuid>.<ext>`
 - `template-files/<userId>/<uuid>.<ext>`
 
-The type list lives in `src/lib/schemas/uploadTypes.ts`, which the API and the
-upload pickers share (the pickers' `accept` and checks come from it). A file is
-accepted by its type, including the aliases browsers report (Windows sends `.zip`
-as `application/x-zip-compressed`), or, when the browser sends no type or the
-generic `application/octet-stream`, by its extension, and is then stored under the
-kind's usual type. Files take PDF, ZIP, CSV, Word, Excel, PowerPoint (including the
-older `.doc`, `.xls`, `.ppt`), JSON, Markdown, text, and images; videos take MP4,
-WebM, and MOV; images and avatars take PNG, JPEG, WebP, and GIF. A refused file gets
-415 `unsupported_file_type` with a message that names the accepted types. Avatars
-take at most 5MB and Template images, videos and files 50MB; the upload forms check
-the same limits.
+The type list lives in `src/lib/schemas/uploadTypes.ts`, which the API and the upload pickers share
+(the pickers' `accept` and checks come from it). A file is accepted by its type, including the
+aliases browsers report (Windows sends `.zip` as `application/x-zip-compressed`), or, when the
+browser sends no type or the generic `application/octet-stream`, by its extension, and is then
+stored under the kind's usual type. Files take PDF, ZIP, CSV, Word, Excel, PowerPoint (including the
+older `.doc`, `.xls`, `.ppt`), JSON, Markdown, text, and images; videos take MP4, WebM, and MOV;
+images and avatars take PNG, JPEG, WebP, and GIF. A refused file gets 415 `unsupported_file_type`
+with a message that names the accepted types. Avatars take at most 5MB and Template images, videos
+and files 50MB; the upload forms check the same limits.
 
-Before an Image block upload, the browser shrinks the image
-(`src/lib/imageOptimization.ts`) without changing what it shows: GIFs are sent
-untouched (a canvas keeps one frame), PNG and WebP stay PNG and WebP (JPEG has no
-transparency), other decodable types become PNG, a small image within 1920x1080 is
-sent as it is, and the original is kept when re-encoding does not make it smaller.
+Before an Image block upload, the browser shrinks the image (`src/lib/imageOptimization.ts`) without
+changing what it shows: GIFs are sent untouched (a canvas keeps one frame), PNG and WebP stay PNG
+and WebP (JPEG has no transparency), other decodable types become PNG, a small image within
+1920x1080 is sent as it is, and the original is kept when re-encoding does not make it smaller.
 Files attached to File blocks are never re-encoded.
 
 Before an avatar upload, the browser always redraws the image as a small square
 (`prepareAvatarImage` in `src/lib/imageOptimization.ts`):
 - it crops the centred square, which is what the round avatar shows;
-- it scales it to at most 512 by 512 pixels (`AVATAR_MAX_PIXELS`), never enlarging a
-  smaller one;
-- it encodes it as WebP (PNG in a browser without WebP encoding) under the name
-  `avatar.webp`.
+- it scales it to at most 512 by 512 pixels (`AVATAR_MAX_PIXELS`), never enlarging a smaller one;
+- it encodes it as WebP (PNG in a browser without WebP encoding) under the name `avatar.webp`.
 
-Avatars show at 24 to 128 pixels, so a phone photo of several megabytes becomes tens of
-kilobytes and loads at once. That also means the 5MB limit applies to what is sent, so
-a larger photo is shrunk rather than refused. An animated GIF becomes a still image.
+Avatars show at 24 to 128 pixels, so a phone photo of several megabytes becomes tens of kilobytes
+and loads at once. That also means the 5MB limit applies to what is sent, so a larger photo is
+shrunk rather than refused. An animated GIF becomes a still image.
 
-Uploads are not reference-counted and record no Personal or Organization owner. A
-template upload's URL is copied into the saved template, its `template_versions`
-snapshots, every run started from it, and duplicates and clones, so deleting the
-object breaks all of them. `DELETE /api/uploads/file` therefore deletes only an
-account's own avatar (`avatars/<userId>/<file>`) and refuses template-bucket keys
-with 403 `asset_referenced`; the template editor never deletes uploads when a file
-is cleared or replaced, it only unlinks them (TD-19). Unreferenced template uploads
-accumulate until a reference-checked cleanup exists (TD-20).
+Uploads are not reference-counted and record no Personal or Organization owner. A template upload's
+URL is copied into the saved template, its `template_versions` snapshots, every run started from it,
+and duplicates and clones, so deleting the object breaks all of them. `DELETE /api/uploads/file`
+therefore deletes only an account's own avatar (`avatars/<userId>/<file>`) and refuses
+template-bucket keys with 403 `asset_referenced`; the template editor never deletes uploads when a
+file is cleared or replaced, it only unlinks them (TD-19). Unreferenced template uploads accumulate
+until a reference-checked cleanup exists (TD-20).
 
-Do not add expiration rules yet; they would break templates and avatars. The safe
-baseline aborts incomplete multipart uploads:
+Do not add expiration rules yet; they would break templates and avatars. The safe baseline
+aborts incomplete multipart uploads after 7 days, a rule R2 gives every new bucket ("Default
+Multipart Abort Rule"), and both buckets have it:
 
 ```bash
-npx wrangler r2 bucket lifecycle list serp-checklists-uploads
-npx wrangler r2 bucket lifecycle add serp-checklists-uploads abort-incomplete-mpu --abort-multipart-days 7 --force
+npx wrangler r2 bucket lifecycle list <bucket>
+npx wrangler r2 bucket lifecycle add <bucket> abort-incomplete-mpu --abort-multipart-days 7 --force
 ```
 
-Once reference tracking exists, manage prefix expiration rules as code with
-`npx wrangler r2 bucket lifecycle set serp-checklists-uploads --file <rules.json> --force`.
+Once reference tracking exists, manage prefix expiration rules as code, alike for both buckets,
+with `npx wrangler r2 bucket lifecycle set <bucket> --file <rules.json> --force`.

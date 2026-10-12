@@ -27,6 +27,7 @@ AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
 [env.preview]
 workers_dev = true
+preview_urls = false
 
 [env.preview.vars]
 SITE_ENV = "staging"
@@ -40,6 +41,7 @@ zone_name = "serplists.com"
 
 [env.production]
 workers_dev = true
+preview_urls = false
 
 [env.production.vars]
 SITE_ENV = "production"
@@ -83,7 +85,7 @@ bucket_name = "serp-checklists-uploads"
 
 [[env.preview.r2_buckets]]
 binding = "R2_UPLOADS"
-bucket_name = "serp-checklists-uploads"
+bucket_name = "serp-checklists-staging-uploads"
 
 [[env.production.r2_buckets]]
 binding = "R2_UPLOADS"

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { releaseCommitSchema } from "../../src/lib/schemas/release";
 import { describeFrontendUrlProblem, describeOriginListProblem } from "./utils/origin-list";
 
 const refineWith = (describe: (value: string) => string | null) => (value: string, ctx: z.RefinementCtx) => {
@@ -23,4 +24,5 @@ export const API_ENV_SCHEMA = {
   RESEND_API_KEY: z.string().min(1).optional(),
   USESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).optional(),
+  NEXT_PUBLIC_RELEASE_COMMIT: releaseCommitSchema.optional(),
 };
