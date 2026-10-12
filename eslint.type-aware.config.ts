@@ -3,7 +3,11 @@ import baseConfig from "./eslint.config";
 export const TYPE_CHECKED_AREAS = [
   { folders: ["src"], files: ["src/**/*.{ts,tsx}"], project: "./tsconfig.json" },
   { folders: ["functions", "db"], files: ["functions/**/*.ts", "db/**/*.ts"], project: "./functions/tsconfig.json" },
-  { folders: ["scripts"], files: ["scripts/**/*.{ts,mts}"], project: "./tsconfig.node.json" },
+  {
+    folders: ["scripts", ".claude/skills"],
+    files: ["scripts/**/*.{ts,mts}", ".claude/skills/**/*.{ts,mts}"],
+    project: "./tsconfig.node.json",
+  },
   { folders: ["tests"], files: ["tests/**/*.{ts,tsx,mts,cts}"], project: "./tests/tsconfig.json" },
 ];
 

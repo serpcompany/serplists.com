@@ -3,6 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { checkNames } from '../../../scripts/checks/checks';
+import { knipArguments } from '../../../scripts/checks/deadcode';
+
 const repoRoot = process.cwd();
 const readJson = (file: string): unknown => JSON.parse(readFileSync(path.join(repoRoot, file), 'utf8'));
 
@@ -14,10 +17,9 @@ const ALLOWED_IGNORED_DEPENDENCIES = ['@secretlint/secretlint-rule-preset-recomm
 const ALLOWED_IGNORED_BINARIES = ['stripe'];
 const SETTINGS = ['$schema', 'entry', 'project', 'ignoreDependencies', 'ignoreBinaries', 'treatConfigHintsAsErrors'];
 
-const packageJson = z
-  .object({ scripts: z.object({ 'check:repo': z.string(), 'deadcode:check': z.string() }).catchall(z.string()) })
-  .passthrough()
-  .parse(readJson('package.json'));
+const OUTPUT_ONLY_ARGUMENTS = ['--no-progress'];
+
+const packageJson = z.object({}).passthrough().parse(readJson('package.json'));
 
 const storedConfig = z.record(z.unknown()).parse(readJson(KNIP_CONFIG));
 const patterns = z.array(z.string()).default([]);
@@ -40,16 +42,14 @@ const knipPluginNames = Object.keys(
 const pluginSettings = z.object({ config: patterns, entry: patterns, project: patterns }).strict();
 const pluginsConfigured = Object.keys(storedConfig).filter((key) => !SETTINGS.includes(key));
 
-describe('pnpm run deadcode:check', () => {
-  it('runs in check:repo as plain knip, so every kind of dead code it finds fails verify and CI', () => {
-    expect(packageJson.scripts['check:repo'].split('&&').map((command) => command.trim())).toContain(
-      'pnpm run deadcode:check',
-    );
+describe('pnpm run verify deadcode', () => {
+  it('runs in pnpm run verify as knip with no flag that changes what it reports, so every kind of dead code fails', () => {
+    expect(checkNames).toContain('deadcode');
     expect(
-      packageJson.scripts['deadcode:check'],
-      'deadcode:check must be "knip" with no flags and no "|| true": --include, --exclude, --production, ' +
+      knipArguments.filter((argument) => !OUTPUT_ONLY_ARGUMENTS.includes(argument)),
+      'knipArguments in scripts/checks/deadcode.ts may only quiet the output: --include, --exclude, --production, ' +
         '--max-issues and --no-exit-code each let dead code pass. Settings belong in knip.json.',
-    ).toBe('knip');
+    ).toEqual([]);
   });
 
   it('reads its settings only from knip.json, where they are checked', () => {

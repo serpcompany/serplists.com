@@ -7,7 +7,8 @@ type ExternalSource = "jsonParse" | "responseBody" | "storage" | "messageData" |
 const MESSAGE_OBJECT = /^(?:e|evt|msg)$|event$|message$/i;
 const FORM_OBJECT = /form/i;
 
-const PARSE_AT_THE_BOUNDARY = "AGENTS.md: parse external data with a Zod schema at the boundary, since a cast trusts a guessed shape.";
+const PARSE_AT_THE_BOUNDARY =
+  "Parse external data with a Zod schema where it arrives, since a cast trusts a guessed shape (docs/agents/code.md, External data).";
 
 const EXTERNAL_DATA_CAST_MESSAGES = {
   jsonParse:

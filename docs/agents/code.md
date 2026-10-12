@@ -1,79 +1,292 @@
-# Core Beliefs
+# Code rules and checks
 
-Opinionated rules that keep this repository legible to the next agent run. Each
-rule says why it exists and what enforces it. When a review comment or bug shows
-that a rule is missing, add it here and, whenever possible, promote it into a
-lint rule, dependency rule, or check with an error message that explains the fix.
+The rules every change follows, and the checks that enforce them. Each rule says why it exists,
+how to comply, how an exception is recorded, and what checks it; each check's failure names its
+rule here and says how to fix it. How each check is set up is in [`checks.md`](checks.md).
 
-## Operating beliefs
+A change is done when `pnpm run check` passes once on the finished tree (the environment
+contract, `pnpm run verify`, lint, the type checks, the unit and local D1 tests, schema parity),
+it has the evidence [`verification.md`](verification.md) asks of its kind of change, and the docs
+say what changed: a behavior's product doc and its check in the same pull request, the area's doc
+for how it works. The `finish-change` skill walks an agent through it, with a fresh review of the
+diff, before it drafts the pull request.
 
-- **The repository is the system of record.** Decisions, plans, and debt that are
-  not in the repo do not exist for the next run. Write them into
-  [exec plans](../exec-plans/plans.md), [design docs](), or the
-  [tech debt tracker](../tech-debt.md), not only into chat or issues.
-- **Enforce invariants, not implementations.** Boundaries, data shapes, and
-  vocabulary are strict; how code is written inside them is flexible.
-- **Fix the harness, not just the symptom.** When an agent makes the same mistake
-  twice, add the missing doc, check, or tool.
-- **Pay debt continuously.** Small cleanups every week beat periodic rewrites. See
-  [maintenance](ci-agents.md#weekly-maintenance).
-- **Prefer boring, inspectable dependencies.** Choose libraries whose behavior can
-  be read and tested in-repo over opaque ones.
+Git hooks, which `pnpm install` installs ([`lefthook.yml`](../../lefthook.yml)), check the staged
+files for comments, size, secrets and lint before a commit, refuse a `fix:` commit that changes no
+test, and run `pnpm run verify` at low priority before a push. Fix what they report rather than
+skipping them: CI runs the same checks either way.
 
-## Rules
+## No comments
 
-| Rule | Why | Enforced by |
+Code and config carry no comments, with no exceptions: a comment goes stale without failing
+anything. Names say what code does, a step that needs explaining moves into a function named for
+it, and why it is built that way goes in the doc [`AGENTS.md`](../../AGENTS.md) routes to for that
+area, a product doc or an ADR. A tool directive (`eslint-disable`, `@ts-expect-error`) is a
+comment too: configure the tool in its config file. Commented-out code is deleted, since git keeps
+it. A shebang may open a script, and Markdown holds no HTML comment, which agents read and people
+don't see. Files a tool writes are left as written, and `GENERATED_FILES` in
+`scripts/check-no-comments-lib.ts` lists them. ESLint's `serplists/no-comments`
+checks every TypeScript and JavaScript file, with inline config off, and `pnpm run verify
+comments` every other format, workflows' `run:` blocks included ([`checks.md`](checks.md),
+Comments).
+
+## File size
+
+A code file, tests, scripts and config included, has at most 500 lines: an agent loads a whole
+file to change one line of it. Split one that outgrows the limit by responsibility, into files
+named for what each does. There are no exceptions today; one needs a reason that makes splitting
+unsafe now, and goes in `knownLargeFiles` in `scripts/checks/sizes.ts` with its size and that
+reason, and may only shrink. Checked by `pnpm run verify sizes` and ESLint's `max-lines`, with no
+per-file cap (`tests/unit/config/no-exceptions.test.ts`). The weekly report lists files within 50
+lines of the limit.
+
+## Duplicate code
+
+Code says each thing once: a copy drifts, and a fix reaches only one of them. When two places
+repeat a block of 5 lines or 50 tokens, tests included, move what they share into one function,
+type or test helper named for what it does; where the blocks serve different purposes, its
+parameters name what differs. There are no exceptions today; one needs a reason that makes sharing
+unsafe now, and goes in `knownDuplicates` in `scripts/checks/known-duplicates.ts` as the pair of
+files, their number of blocks and why, and may only shrink. Checked by `pnpm run verify
+duplicates`: jscpd over `src`, `functions`, `scripts`, `db`, `tests` and `tools`, applied
+migrations and generated files aside (`tests/unit/config/duplicate-check.test.ts`).
+
+## Dead code
+
+Nothing unused stays: an agent copies or "fixes" dead code as readily as live code. Delete an
+unused file, export or dependency, and stop exporting what only its own file uses.
+
+- knip (`pnpm run verify deadcode`) starts from the entry points tools load (the routes, the
+  scripts `package.json`, Lefthook and the workflows run, the test, lint and build configs) and
+  fails on an unused file, export or dependency, an unlisted package, and an entry or ignore
+  nothing needs. When it misses a file a tool loads by path, name that file in `knip.json`, with
+  its reason in [`exceptions.md`](exceptions.md), rather than ignoring the finding.
+- dependency-cruiser fails on a module in `src/` or `functions/` that no route, no file Next.js
+  loads by name and not `next.config.ts` reaches, with no folder exempt; code only a script uses
+  lives in `scripts/lib`. ESLint's `no-unused-vars` lets only an argument kept for its type, `_…`.
+  `dead-code-check.test.ts` and `no-exceptions.test.ts` fail if a setting loosens.
+
+## Imports
+
+Imports point one way inside each part, and parts meet only where
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md) says, so a layer changes and tests without the ones
+above it. dependency-cruiser checks the files imports resolve to (`pnpm run verify dependencies`,
+rules in `.dependency-cruiser.cjs`), and each failure names its rule and where the code belongs:
+every layer ARCHITECTURE.md draws, each proven by an import it refuses
+(`tests/unit/config/layer-rules.test.ts`); no cycles, type-only ones included; no test, and no
+devDependency for more than its types, imported by code that runs in production. npm packages
+stay in the graph, unfollowed, so those rules see them (`dependency-graph.test.ts`). There is no
+baseline and every rule is an error (`no-exceptions.test.ts`): move the code, not the rule.
+
+## Types
+
+Everything is TypeScript under `strict` and five stricter settings, since the compiler is the
+fastest check an agent gets: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+`noImplicitOverride`, `noFallthroughCasesInSwitch` and `noPropertyAccessFromIndexSignature` (a key
+read with a dot comes from a type that names it). Fix what they report by handling the case:
+narrow, give a default that is right for that case, or throw an error naming what is missing.
+Never assert: ESLint refuses a `!` everywhere, and an `as` that narrows a type
+(`no-unsafe-type-assertion`) in `pnpm run lint`; narrow with a type guard, `in`, `instanceof` or a
+Zod parse, and in tests through `tests/support/elements.ts`.
+
+`pnpm run typecheck` runs five projects: the app, the scripts and root configs, the API with
+`db/`, the tests, and the declaration files the repository writes, with `skipLibCheck` off.
+JavaScript is only for what no TypeScript loader runs ([`exceptions.md`](exceptions.md)), held to
+ESLint's recommended rules with Node's globals. `tests/unit/config/typecheck-coverage.test.ts`
+fails on a file no project checks, a tsconfig that turns a setting off or takes JavaScript in, and
+JavaScript anywhere else ([`checks.md`](checks.md), Types).
+
+## External data
+
+Data from outside the code (request bodies, API answers, JSON, storage, messages, form fields) is
+parsed with a Zod schema where it arrives, never cast: a cast or an `any` trusts a guessed shape,
+so a changed answer breaks far from where it arrived. The API parses each body from `unknown`
+(`functions/api/utils/payloads.ts`), the app's API client parses every answer with its endpoint's
+schema (`apiRequest` in `src/lib/api/request.ts`), and tests parse what they read the same way.
+ESLint's `serplists/no-external-data-casts` refuses such a cast, `as unknown as` and `as never` in
+all code and tests, and the type-aware `no-unsafe-*` rules an `any` flowing on uncast
+(`tests/unit/config/external-data-boundaries.test.ts`). There are no exceptions.
+
+## Code conventions
+
+A rule about how all code is written lives in ESLint with what to do instead, so its failure
+names the line and the fix. `serplists/restricted-code` takes the conventions in
+`scripts/eslint-rules/code-conventions.ts`, each a selector, its message and the modules that own
+that code: one way to compute progress, build console paths, render a user's image, launch a tool,
+set up a browser spec's data, and more. Toasts come from `sonner`, navigation from
+`@/components/navigation/Link` and `useAppRouter` (`navigate-while-visit-is-current` keeps it
+inside a page-visit check after an await), and storage from `src/lib/browserStorage.ts`. Names are
+camelCase, PascalCase for components and types, UPPER_CASE only for module constants, and a name
+that mirrors external data keeps it (`NAMING_CONVENTIONS`). A TSX module in `src/` that exports a
+component exports nothing else, so Next.js refreshes it in place. `code-conventions.test.ts` and
+`naming-conventions.test.ts` lint a sample of each, and `no-exceptions.test.ts` fails on a file
+held to other options.
+
+## D1 queries
+
+D1 bills rows scanned, so a query that loses its `LIMIT` or index costs more as tables grow, long
+before it is slow. Bound every query and back it with a matching index ([`d1-cost.md`](d1-cost.md)),
+and measure a new or changed one with `pnpm run d1:profile`. Each hot request keeps to its
+rows-read budget (`tests/integration/rows-read-budgets-local-d1.test.ts`, in
+`pnpm run test:local-d1`). Whether a new query is bounded is held by judgment and `d1:profile`
+([`harness-debt.md`](../harness-debt.md), Checks).
+
+## Logging
+
+The API logs through `log(level, 'snake_case_event', { ...fields })` from
+`functions/api/utils/logger.ts`: one JSON line per event, with the request's id inside a request
+([`observability.md`](observability.md)). Log ids such as `userId`, never emails, tokens or other
+personal data. ESLint refuses `console.*` in `functions/` outside the logger, which redacts fields
+named `ip`, `email`, `password`, `token`, `authorization` and `cookie`; personal data under another
+name is held by judgment ([`harness-debt.md`](../harness-debt.md), Checks).
+
+## Vocabulary
+
+User-visible text uses the product's terms ([`CONTEXT.md`](../../CONTEXT.md)): Organization, not
+Team or Workspace; Personal, not "Personal workspace"; the Template Library. Product language
+drifts fast, and users meet it on every page. Legacy identifiers in code (`team_id`,
+`WorkspaceContext`) mean Organization and stay. ESLint refuses Team, Workspace and the Template
+Library's old names in the visible copy of views, components (the UI primitives included) and
+features (`no-exceptions.test.ts`); other terms are held by judgment
+([`harness-debt.md`](../harness-debt.md), Checks). Changing product wording needs the owner.
+
+## Tests
+
+Tests check what code does, not how it is written, and every test runs. ESLint refuses a skipped,
+todo, fixme, conditional or `.only` test, and a file `test:run` leaves out runs in
+`test:local-d1` (`no-exceptions.test.ts`). A test that renders uses happy-dom
+(`*.dom.test.tsx`), never a hand-written DOM, and other tests run in Node (`vitest.config.ts`,
+`test-environment.dom.test.tsx`). No test reads a code file under `src/` or `functions/` as text
+(`serplists/no-source-text-reads`): import the module, render the component or send the request,
+and assert the outcome. Browser specs set up data through the API helpers and open only Templates
+the e2e stack seeds (`tests/unit/e2e/seeded-template-paths.test.ts`). A test is named for the
+behavior it checks, which is judgment ([`harness-debt.md`](../harness-debt.md), Checks). How to
+write each kind is in [`testing.md`](testing.md).
+
+## Secrets
+
+No credential is committed, whatever the file: git history keeps it after a fix, and everyone with
+access can read it. Secrets come from the environment: Wrangler secrets, GitHub Actions secrets,
+and the gitignored `.dev.vars` ([`security.md`](security.md)). Secretlint's recommended rules check
+every text file (`pnpm run verify secrets`). A test value that only looks like a credential is
+changed so it doesn't. If one is committed, have whoever issued it rotate it: deleting the line
+isn't enough. There are no exceptions.
+
+## Linters
+
+Workflows lint clean with actionlint, which also runs ShellCheck on their `run:` blocks, at the
+version pinned in `scripts/checks/linters.ts` (`pnpm run verify linters`). It runs in Docker, or
+as an installed copy; with neither it says so and passes on this machine, and in CI it fails. Fix
+what it reports. There are no exceptions.
+
+## Generated files
+
+A file a tool writes matches its source and is never edited by hand: run the command that writes
+it and commit the result. `pnpm run verify generated` regenerates each and fails on a difference,
+naming the command, and `pnpm run check:db:drizzle-parity` replays the migrations against the
+Drizzle schema. `GENERATED_FILES` in `scripts/check-no-comments-lib.ts` lists the files a tool
+writes ([`checks.md`](checks.md), Generated files).
+
+## Fixes
+
+A bug fix lands with the test that fails without it, so the bug can't come back unnoticed: a file
+under `tests/`, or a `.test.` or `.spec.` file beside the code. `scripts/check-fix-commits.ts`
+refuses a `fix:` commit that changes no test, in the commit message hook and in CI's Quality Gate
+over a pull request's commits, and the `Pull request` workflow refuses such a pull request, titled
+`fix:` or from a `fix/` branch ([`ci.md`](ci.md), Pull request). A change nothing can fail without,
+such as a typo or a workflow setting, isn't a fix: give it another type, such as `chore`.
+
+## Pull requests
+
+One issue, one branch from `staging` (`<type>/<issue>-<slug>`, kept up to date by merging
+`staging` into it), one pull request, small enough to review quickly
+([`issue-tracker.md`](issue-tracker.md)). Its title is a Conventional Commit naming the outcome a
+user notices, typed `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci` or `chore`.
+Its body follows `.github/pull_request_template.md`, starting with `Closes #<number>`, a line per
+issue it finishes, or `No issue: <reason>`, and fills in each evidence line. Every review comment
+is fixed or answered; agents never merge. The `Pull request` workflow checks the title, the issue
+line, the evidence and a fix's test ([`ci.md`](ci.md), Pull request).
+
+## Docs
+
+The docs are the map agents work from, so they stay correct and reachable. `pnpm run verify docs`
+fails on: a relative link or heading anchor that doesn't resolve; a repository path, `pnpm` script
+or test a doc names in code that doesn't exist (a gitignored file counts as missing, and ADRs skip
+the path check); a doc `AGENTS.md` can't reach, outside the layout, or not named in kebab-case; a
+skill whose frontmatter doesn't name its folder, whose description passes 1,024 characters, or
+that the Skills table below doesn't list; and an HTML comment. Each doc keeps to a budget in lines
+wrapped at 100 characters: 120 for a map (`AGENTS.md`, `CLAUDE.md`, the root `README.md`), 300
+for any other. Split one that outgrows it by topic. A doc over budget when the check arrived has
+an entry in `knownLongDocs` at its size, which may only shrink; `docs/api/` and ADRs have none. A
+change to a behavior updates its doc in [`docs/product/`](../product/index.md), with the check that
+proves it or the issue that tracks one, in the same pull request. The weekly doc gardener fixes
+what drifts anyway ([`ci-agents.md`](ci-agents.md)).
+
+## Fix the harness
+
+When the same problem comes up twice, an owner's correction or a review finding on a second pull
+request, fix the harness, not just the symptom: an agent can't remember a correction between
+sessions. Make the bad state impossible, make a check fail with the fix in its message, or give
+agents one helper to copy, and only then write a rule here: in the same pull request or a
+follow-up issue, with a test that fails on the real mistake. Until it is a check, it is a row in
+[`harness-debt.md`](../harness-debt.md); the weekly report's Review findings name the repeats.
+
+## Checks
+
+| Check | What it enforces | Where it runs |
 | --- | --- | --- |
-| Type-check everything under `strict` | Types are the fastest feedback loop an agent gets | `pnpm run typecheck` (`tsc -p` over the app, node, API and tests projects). Scripts are TypeScript run with tsx's loader, and the ESLint configs and rules are TypeScript that ESLint loads through jiti, all in the node project; `tests/unit/config/typecheck-coverage.test.ts` fails on a `.js`, `.mjs`, `.cjs`, `.d.mts` or `.d.cts` file under `scripts/` unless a root config its tool reads without a TypeScript loader imports it ([writing scripts](development-environment.md#writing-scripts)) |
-| The declaration files the repository writes are type-checked | `skipLibCheck`, which the other projects need for third-party declarations, skips every `.d.ts`, so an error in one the repository wrote passes unseen | `tsc -p tsconfig.declarations.json` in `pnpm run typecheck`, with `skipLibCheck` off and no `@types` packages, over every declaration file under `src/`, `functions/`, `scripts/`, `db/` and `tests/`; `tests/unit/config/typecheck-coverage.test.ts` fails on one no project checks with `skipLibCheck` off ([quality gates](checks.md#quality-gates)) |
-| Every TypeScript file is type-checked | A file no checked tsconfig includes is never type-checked, so its errors pass without failing anything | `tests/unit/config/typecheck-coverage.test.ts` fails on a TypeScript file no tsconfig in `pnpm run typecheck` includes, or a tsconfig it skips |
-| Code, tests included, is typed stricter than `strict`: a read that can find nothing, a property that can hold `undefined`, an override and a switch case each say so | An index read can find nothing, an optional property can be set to `undefined`, a renamed base method strands its override, and a case can run into the next; code typed as if none can happen crashes or drops a value | `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride` and `noFallthroughCasesInSwitch` in `tsconfig.json`, `tsconfig.node.json` and `functions/tsconfig.json`, and in `tests/tsconfig.json` by inheritance, so the tests are typed the same way, checked by `pnpm run typecheck`; `tests/unit/config/typecheck-coverage.test.ts` fails when a checked tsconfig turns one off; all four add `noPropertyAccessFromIndexSignature`, the tests' by inheritance (the row on known keys below) ([quality gates](checks.md#quality-gates)) |
-| Read a known key through a type that names it; index only a dictionary whose keys vary | A dot read off `Record<string, unknown>` looks typed but guesses the key, so a renamed or missing one compiles and reads `undefined` | `noPropertyAccessFromIndexSignature` in `tsconfig.json`, `tsconfig.node.json` and `functions/tsconfig.json`, and in `tests/tsconfig.json` by inheritance, checked by `pnpm run typecheck`; values are typed as Drizzle rows, Zod outputs or the record shapes in `src/lib/schemas/jsonRecords.ts`, and in tests as `StoredRow`, `McpRecord`, `LogLine` and `ElementProps`; `tests/unit/config/typecheck-coverage.test.ts` fails when any of the four turns it off ([quality gates](checks.md#quality-gates)) |
-| Narrow a value that can be missing; never assert it with `!` | A `!` tells the compiler a value is there without checking, so a missing one crashes later as a `TypeError` far from the read | ESLint `@typescript-eslint/no-non-null-assertion` on every TypeScript file, tests included; tests narrow with `assert.exists()` or the helpers in `tests/support/elements.ts`, which name what is missing ([testing conventions](testing.md#testing-conventions)) |
-| Give a JavaScript module a test imports a declaration file beside it | Without one TypeScript infers the module's types from its code, so a test can pass a value the module never handles, or none it does | `tests/tsconfig.json` turns `allowJs` off, so `pnpm run typecheck` fails on a test's import of a `.mjs` file with no `.d.mts` ([testing conventions](testing.md#testing-conventions)) |
-| No TypeScript project takes JavaScript in untyped | With `allowJs` a JavaScript module joins the program with the types TypeScript guesses from its code, so a caller can pass what the module never handles | `allowJs` is off in every tsconfig `pnpm run typecheck` runs, the app's set explicitly since Next.js writes `true` only when the key is missing; `tests/unit/config/typecheck-coverage.test.ts` fails if one turns it on ([quality gates](checks.md#quality-gates)) |
-| Parse data at boundaries; never guess shapes | Code built on guessed shapes breaks silently | API bodies arrive as `unknown` under strict TS and are parsed with Zod (`functions/api/utils/payloads.ts`); the API client parses every answer with its endpoint's schema (`apiRequest` in `src/lib/api/request.ts`, [client data](client-data.md#the-api-client)) |
-| Parse external data with a Zod schema; never cast it or let an `any` through | A cast or an `any` trusts a guessed shape, so a changed or malformed answer breaks far from where it arrived | ESLint `serplists/no-external-data-casts` on `src/`, `functions/`, `scripts/`, `db/` and every test file (casts of `JSON.parse`, response bodies, storage reads, message data, form fields and Playwright's `postDataJSON()`, every `as unknown as` and every `as never`), the type-aware `@typescript-eslint/no-unsafe-*` rules on their TypeScript files and the tests' in `pnpm run lint`, and `no-explicit-any` and `no-this-alias` on tests as on app code (`tests/unit/config/external-data-boundaries.test.ts`, [repository checks](checks.md#repository-checks)) |
-| Narrow or parse a value; never assert a narrower type with `as` | An assertion tells the compiler a value has a shape without checking, so a wrong guess fails far from the cast, and nothing tells the next reader it was a guess | ESLint `@typescript-eslint/no-unsafe-type-assertion` on the TypeScript in `src/`, `functions/`, `scripts/` and `db/` and every test file in `pnpm run lint` (`eslint.type-aware.config.ts`); `tests/unit/config/external-data-boundaries.test.ts` fails if a file loses it ([repository checks](checks.md#repository-checks)) |
-| Hold JavaScript files to ESLint's recommended rules, with the globals of where they run | TypeScript does not check `.js`, `.mjs` or `.cjs` files, so a name nothing defines fails only as a `ReferenceError` when the line runs | `js.configs.recommended`, `no-undef` among them, on every JavaScript file in `eslint.config.ts`, with Node's globals: no browser globals, and CommonJS's wrapper variables only in `.cjs` files (`tests/unit/config/javascript-recommended-rules.test.ts`, [quality gates](checks.md#quality-gates)) |
-| Bound every D1 query and back it with a matching index | D1 bills rows scanned, so an unbounded or unindexed query costs more as the table grows | [D1 cost](d1-cost.md) rules; `pnpm run d1:profile` before merging query changes |
-| Keep each hot request within its rows-read budget | A lost `LIMIT` or index multiplies what every request costs long before it is slow, and a wall-clock bound only flakes | `tests/integration/rows-read-budgets-local-d1.test.ts` in `pnpm run test:local-d1`, which CI runs: a constant budget for a bounded request, one that grows with the rows it must read for a request unbounded by design ([D1 cost](d1-cost.md#measuring)) |
-| Respect layer boundaries | Keeps domains independently changeable | `pnpm run deps:check`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) |
-| Keep npm packages in the dependency graph `deps:check` reads | A package missing from the graph makes every rule about packages pass without looking: runtime code importing a devDependency, or shared code importing Next.js | `.dependency-cruiser.cjs` does not follow `node_modules` but excludes only build output at the repository root; `tests/unit/config/dependency-graph.test.ts` fails if a package built into a `dist` folder, or a devDependency import, drops out of the graph ([ARCHITECTURE.md](../../ARCHITECTURE.md#enforced-rules)) |
-| Every module in `src/` and `functions/` is reachable from the app's entry points, with no folder exempt | An unreachable module is dead code that agents copy or "fix", and an exempt folder hides it | `pnpm run deps:check` (`app-code-is-reachable` and `api-code-is-reachable`, from the route files in `src/app` and `next.config.ts`); `tests/unit/config/no-exceptions.test.ts` fails if either rule leaves out anything but declaration files, tests, the route files and JSON, or a rule's path carves a module out with a negative lookahead ([ARCHITECTURE.md](../../ARCHITECTURE.md#enforced-rules)) |
-| A TSX module in `src/` that exports a component exports nothing else | Next.js refreshes a module in place only when every export is a component; an edit to a mixed module reloads its importers and drops their state | ESLint `react-refresh/only-export-components` as an error on every TSX file in `src/`, allowing only the exports Next.js reads from a route module; `tests/unit/config/no-exceptions.test.ts` fails if a file loses the rule or it allows more ([frontend](frontend.md#structure)) |
-| Log through the structured logger in the API; never log emails, tokens, or other personal data | Logs must be queryable JSON with a `requestId` | ESLint `no-restricted-syntax` on `console.*` in `functions/` |
-| Use [PRODUCT_SENSE.md](../../CONTEXT.md) vocabulary in user-visible text | Product language drifts fast | ESLint `no-restricted-syntax` on Team/Workspace copy in UI code |
-| Keep files under 500 lines | Large files are hard for agents to change safely | ESLint `max-lines` on every authored code file (every JavaScript and TypeScript file but the generated ones), tests, scripts, seeds and config included, with no per-file caps or excluded folders (`tests/unit/config/no-exceptions.test.ts`) |
-| Unused variables, imports and caught errors fail the lint; only an argument kept for its type is marked with `_` | A name nothing reads is dead code, and an ignore pattern for variables or caught errors lets any of it stay | `@typescript-eslint/no-unused-vars` on every TypeScript file with only `argsIgnorePattern: "^_"` and `ignoreRestSiblings` (a parameter can matter for its type alone: TanStack infers a mutation's variables from `mutationFn`, a test double declares the signature it stands in for); `tests/unit/config/no-exceptions.test.ts` fails on a file with other options ([quality gates](checks.md#quality-gates)) |
-| UI primitives follow the product vocabulary too | A primitive's visible text reaches every page that uses it | The Team/Workspace copy rule covers `src/components/ui/`, with no folder left out; `tests/unit/config/no-exceptions.test.ts` lints a primitive's copy ([PRODUCT_SENSE.md](../../CONTEXT.md)) |
-| No unused code | Dead code gets copied and "fixed" by mistake | ESLint `@typescript-eslint/no-unused-vars`, `deps:check` |
-| No duplicated code | A copy drifts from the code it copied, and a fix reaches only one of them | `pnpm run duplicates:check` (jscpd at its defaults, 50 tokens and 5 lines, with a threshold of 0) over `src/`, `functions/`, `scripts/`, `db/` and `tests/` together in `check:repo`, `db/migrations` and generated files aside; `tests/unit/config/duplicate-check.test.ts` fails if the settings loosen, the check stops running, a folder drops out or jscpd skips a file it could check ([repository checks](checks.md#repository-checks)) |
-| No unused file, export or dependency, and no package used without being listed | An unused export or file is dead code that agents copy or "fix", an unused package is one more install to keep patched, and an unlisted one works only while another package brings it along | `pnpm run deadcode:check` (knip) in `check:repo`, from the entry points tools load (the Next.js routes, the scripts `package.json`, Lefthook and the workflows run, the test, lint and build configs) and the few `knip.json` names; it ignores only the secretlint preset loaded by name and the Stripe CLI, and fails on an entry or ignore nothing needs; `tests/unit/config/dead-code-check.test.ts` fails if the check stops running, gains a flag, turns an issue type off, carves files out or ignores anything else ([repository checks](checks.md#repository-checks)) |
-| Tests check what code does, not how it is written | A test that matches source text breaks on a harmless refactor and passes when the behavior breaks | ESLint `serplists/no-source-text-reads` on every test file: no reading a code file or folder under `src/` or `functions/` as text, and no `?raw` import of one (`tests/unit/scripts/no-source-text-reads-rule.test.ts`, [repository checks](checks.md#repository-checks)) |
-| A test that renders into a DOM renders into a real DOM implementation, never a hand-written one | A hand-written DOM lacks what a browser has, so code that is right in a browser fails only in tests, and what it fakes is never tested | `vitest.config.ts` runs every `*.dom.test.tsx` file in happy-dom and every other test in Node; `tests/unit/config/test-environment.dom.test.tsx` fails without `Element` or `matchMedia`, `test-environment.test.ts` fails if a Node test gets a DOM, and the naming convention refuses the augmentation of React DOM's root container interface that a hand-written container needs ([testing conventions](testing.md#testing-conventions)) |
-| Name things by one convention: camelCase values, PascalCase components and types, UPPER_CASE only for module constants; a name that mirrors external data keeps it | A name's case tells the reader what it holds, so a local in capitals reads as a constant and a snake_case export as a column | ESLint `@typescript-eslint/naming-convention` with `NAMING_CONVENTIONS` (`scripts/eslint-rules/naming-conventions.ts`) on every TypeScript file, tests included; properties, enum members and destructured names are unchecked, and the few names another module gives are matched by name, never by file; `tests/unit/config/no-exceptions.test.ts` fails on a file held to other options ([repository checks](checks.md#repository-checks)) |
-| Write a rule about how all code is written as a lint rule, with what to do instead | A rule a test enforces by scanning the code is one more text match; a lint rule names the line and the fix | ESLint `serplists/restricted-code` with the conventions in `scripts/eslint-rules/code-conventions.ts` (each with its message and the module that owns the code), and `serplists/navigate-while-visit-is-current`; `tests/unit/config/code-conventions.test.ts` lints a sample of each with the real config |
-| Render a user's image only through `UserContentImage` | A user's image has no known size and may come from any host, so it is served as stored from one place; a second `<img>` drifts from it, and a per-file lint override lets any file skip the check | ESLint `serplists/restricted-code` refuses `<img>` in `src/` outside `src/components/shared/UserContentImage.tsx`; `tests/unit/config/no-exceptions.test.ts` lints an `<img>` in every TSX file in `src/` and fails on any file the convention lets through ([frontend](frontend.md#rendering-user-content)) |
-| Browser specs set up data through the API helpers and open only Templates the e2e stack has | A fetch inside `page.evaluate()` runs a CORS preflight and fails as `TypeError: Failed to fetch`, and a spec that opens a Template nothing seeds fails only in the browser run | ESLint `serplists/restricted-code` with `BROWSER_TEST_CONVENTIONS` on `tests/e2e/`; `tests/unit/e2e/seeded-template-paths.test.ts` checks the Templates the convention lists against the seed and the bundle ([testing conventions](testing.md#testing-conventions)) |
-| Every test runs | A skipped test hides behavior that stopped working | ESLint `no-restricted-syntax` on `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `x*` and `.only` in Vitest and Playwright files; a test file left out of `test:run` must be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`) |
-| Keep docs true and in their place | Stale or scattered docs mislead every future run | `pnpm run docs:check` in CI (layout, links, paths, catalogs); a weekly doc-gardening agent opens fix-up PRs ([maintenance](ci-agents.md#weekly-maintenance)) |
-| Generated artifacts stay in sync | Drift between source and artifact is invisible | `schema:portable:check`, `db:schema:check`, `templates:check`, `check:db:drizzle-parity` in CI; the sitemap catalog is regenerated by every build |
-| No secrets in the repository | Leaked keys are unrecoverable | `pnpm run secret:scan` in CI and pre-commit |
-| No comments | A comment goes stale without failing anything; names, tests named for the behavior and the doc that owns the area hold what it would say | ESLint `serplists/no-comments` on every TypeScript and JavaScript file, with inline config off; `pnpm run comments:check` on every other format, Markdown's HTML comments and every workflow included, in `check:repo` and pre-commit; `tests/unit/scripts/comment-check-coverage.test.ts` fails on a file neither covers ([repository checks](checks.md#repository-checks)) |
-| A bug fix lands with a regression test that fails without the fix | A bug that comes back costs more than it did the first time, and only a test that reproduces it keeps it fixed through later refactors | `scripts/check-fix-commits.ts`: the Lefthook commit-msg hook refuses a `fix:` commit whose staged files hold no test, and CI's Quality Gate refuses a pull request with such a commit (`tests/unit/scripts/check-fix-commits.test.ts`; [repository checks](checks.md#repository-checks)) |
+| `pnpm run verify` | Comments, docs, sizes, secrets, duplicates, dead code, imports, linters, generated files | Pre-push hook, CI's Quality Gate, `pnpm run check` |
+| `pnpm run verify <checks> [paths]` | Some of them, on some paths | By hand; the hooks |
+| The edit hook (`tools/checks/hook.mjs`) | Comments, size, secrets per file written | Claude Code |
+| The stop hook (`stop-hook.mjs`) | The same and the docs, on uncommitted changes | Claude Code |
+| The git hooks | Comments, size, secrets and lint on a commit; `verify` on a push | Every clone |
+| `pnpm run lint`, `typecheck` | Type-aware ESLint, the five tsc projects | `check`, Quality Gate |
+| `pnpm run test:run`, `test:local-d1` | Unit tests, the checks' own among them; local D1 tests | `pnpm run check`, Quality Gate |
+| `pnpm run check:db:drizzle-parity` | The migrations match the Drizzle schema | `check`, CI |
+| `pnpm run check` | `typecheck:env`, then each of the above in turn | By hand, per finished tree |
+| Pull request checks | Title, closing issue, a fix's test, evidence lines | `Pull request` |
+| Browser tests | The whole suite, on the production build | `Browser tests`, each PR |
+| Code review | Each push read against these rules (`pr-review`) | `Code review` workflow |
+| `pnpm run maintenance:report` | Failures, stale docs and grades, debt, exceptions, files near the limit, review findings | `Weekly maintenance` |
 
-## No exceptions
+Each pull request workflow, which the merge queue runs again, ends in a job that always reports
+(`CI passed`, `Browser tests passed`, `Pull request passed`): the checks a merge can wait for
+([`ci.md`](ci.md#checks-a-merge-can-wait-for)).
 
-Every check applies to every file. There are no lint suppressions, dependency baselines,
-per-file size caps, or skipped tests: when a check fails, fix the code. If a rule itself
-seems wrong, stop and ask a human. An exception needs an extremely good reason, recorded
-in the [harness hardening plan](../exec-plans/active/harness-hardening.md#exceptions-allowed).
+## Exceptions
 
-`tests/unit/config/no-exceptions.test.ts` fails when one comes back: an authored code file not
-held to `max-lines` 500, `eslint-suppressions.json` or a suppression flag, a dependency-cruiser
-baseline, `--ignore-known` or a rule below `error`, or a test file no suite runs; a
-reachability rule that leaves a module out or a rule path that carves one out; a TSX file in
-`src/` the fast-refresh rule relaxes; an `<img>` outside `UserContentImage`; a TypeScript
-file whose `no-unused-vars` ignores more than an argument marked `_`; and UI primitives
-outside the vocabulary rule. ESLint refuses skipped, todo, fixme and focused tests.
+A rule is never switched off in the code it flags: an inline directive is a comment, which the
+comments check refuses. An exception is an entry in a list beside its check, with its reason, that
+can only shrink, or a rule a tool's config turns off or narrows. [`exceptions.md`](exceptions.md)
+lists both kinds; add to it in the pull request that makes one. If a rule seems wrong, ask the
+owner rather than working around it. `tests/unit/config/no-exceptions.test.ts` fails when a way
+around a check comes back: an ESLint suppressions file or flag, a dependency-cruiser baseline or a
+rule below `error`, a file a rule's options relax, or a test file no suite runs.
+
+## What needs the owner
+
+Stop and ask before: applying migrations or any write to staging or production D1; anything that
+touches live Stripe keys or billing state; deleting user data; changing product wording or
+pricing; and changing a rule in this doc. Agents never merge ([`AGENTS.md`](../../AGENTS.md)).
+
+## SERP's standards
+
+This repository follows SERP's standards, from [Agent Harness](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/README.md).
+Shared practice isn't restated here: handing work to subagents ([Token Budget](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/token-budget.md)),
+the prompt a review starts from ([Review Prompt](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/review-prompt.md)),
+and cleaning up after merged work ([Housekeeping](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/housekeeping.md)).
+Where this repository differs from a standard, [`AGENTS.md`](../../AGENTS.md) lists it, and that
+list wins.
+
+## Skills
+
+Claude Code loads these from `.claude/skills/` when a task matches.
+
+| Skill | Use it to |
+| --- | --- |
+| [`verify-web`](../../.claude/skills/verify-web/SKILL.md) | Check a page in a real browser |
+| [`verify-api`](../../.claude/skills/verify-api/SKILL.md) | Call the API, Run Keys and MCP |
+| [`browser-tests`](../../.claude/skills/browser-tests/SKILL.md) | Run and add browser tests |
+| [`debug-api`](../../.claude/skills/debug-api/SKILL.md) | Trace what the API did for a request |
+| [`pr-review`](../../.claude/skills/pr-review/SKILL.md) | Review a pull request, as CI does |
+| [`finish-change`](../../.claude/skills/finish-change/SKILL.md) | Take a change to a pull request |

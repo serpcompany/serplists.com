@@ -27,7 +27,7 @@ const dependenciesOf = (file: string) => {
   return graph.modules.find((module) => module.source === file)?.dependencies ?? [];
 };
 
-describe('the dependency graph pnpm run deps:check reads', { timeout: 60_000 }, () => {
+describe('the dependency graph pnpm run verify dependencies reads', { timeout: 60_000 }, () => {
   it('keeps npm packages built into a dist folder, so the rules about packages can see them', () => {
     expect(dependenciesOf('src/components/ui/button-variants.ts').map((dependency) => dependency.module)).toEqual(
       arrayContaining(['class-variance-authority', 'cn']),

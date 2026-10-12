@@ -1,16 +1,8 @@
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  checkedLanguage,
-  findComments,
-  GENERATED_FILES,
-  NO_COMMENTS_MESSAGE,
-} from '../../../scripts/check-no-comments-lib';
-import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
+import { checkedLanguage, commentCheckOf, findComments, GENERATED_FILES } from '../../../scripts/check-no-comments-lib';
 
 const repoRoot = process.cwd();
 const commentLines = (file: string, source: string[]) =>
@@ -33,10 +25,16 @@ describe('checkedLanguage', () => {
     ).toEqual(['yaml', 'yaml', 'toml', 'sql', 'css', 'json', 'xml', 'xml', 'patch']);
   });
 
-  it('checks dotenv files, the Git config files in any folder and .npmrc by their names', () => {
+  it('checks dotenv files, the Git config files in any folder, the housekeeping list and .npmrc by their names', () => {
     expect(
-      ['.dev.vars.example', '.env.example', '.env.local', '.gitignore', 'docs/.gitignore', '.gitattributes', '.npmrc'].map(checkedLanguage),
-    ).toEqual(['dotenv', 'dotenv', 'dotenv', 'gitignore', 'gitignore', 'gitattributes', 'npmrc']);
+      ['.dev.vars.example', '.env.example', '.env.local', '.gitignore', 'docs/.gitignore', '.gitattributes', '.housekeeping', '.npmrc'].map(
+        checkedLanguage,
+      ),
+    ).toEqual(['dotenv', 'dotenv', 'dotenv', 'gitignore', 'gitignore', 'gitattributes', 'gitignore', 'npmrc']);
+  });
+
+  it('knows a file that holds one value, like .node-version, has no comment syntax', () => {
+    expect(commentCheckOf('.node-version')).toBe('no comment syntax');
   });
 
   it('leaves TypeScript and JavaScript to the ESLint rule, even named like a dotenv file', () => {
@@ -355,38 +353,5 @@ describe('patches', () => {
       '31 TypeScript added by a patch',
       '37 Markdown added by a patch',
     ]);
-  });
-});
-
-describe('check-no-comments command', () => {
-  const workDir = mkdtempSync(path.join(tmpdir(), 'check-no-comments-'));
-  afterAll(() => rmSync(workDir, { recursive: true, force: true }));
-  const run = (...files: string[]) => {
-    const { command, args } = buildScriptInvocation(path.join(repoRoot, 'scripts/check-no-comments.ts'), files);
-    return spawnSync(command, args, { cwd: workDir, encoding: 'utf8' });
-  };
-
-  writeFileSync(path.join(workDir, 'clean.toml'), 'name = "serp # checklists"\n');
-  writeFileSync(path.join(workDir, 'commented.toml'), '# why\nname = "serp"\n');
-  writeFileSync(path.join(workDir, 'broken.css'), '.a { content: "unclosed }\n');
-  writeFileSync(path.join(workDir, 'ignored.ts'), '// ESLint checks this file\n');
-
-  it('passes files without comments', () => {
-    const result = run('clean.toml', 'ignored.ts');
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('check-no-comments: no comments in 1 file(s).');
-  });
-
-  it('fails with file:line and the fix-it message for each comment', () => {
-    const result = run('clean.toml', 'commented.toml');
-    expect(result.status).toBe(1);
-    expect(result.stdout).toContain(`commented.toml:1  ${NO_COMMENTS_MESSAGE} (TOML)`);
-    expect(result.stdout).toContain('check-no-comments: 1 comment(s) in 1 file(s) (1 TOML).');
-  });
-
-  it('fails on a file it cannot parse', () => {
-    const result = run('broken.css');
-    expect(result.status).toBe(1);
-    expect(result.stdout).toContain('broken.css  Could not be read to check for comments:');
   });
 });

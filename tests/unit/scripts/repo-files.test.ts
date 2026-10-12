@@ -7,7 +7,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { directoriesAFreshCheckoutLacks, walkFiles } from '../../../scripts/lib/repo-files';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 
-const repoRoot = process.cwd();
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'repo-files-'));
 
 afterAll(() => {
@@ -44,9 +43,6 @@ describe('walkFiles', () => {
     ]);
   });
 
-  it('keeps working for the real active plans folder', () => {
-    expect(() => walkFiles(repoRoot, 'docs/exec-plans/active', (file: string) => file.endsWith('.md'))).not.toThrow();
-  });
 });
 
 describe('directoriesAFreshCheckoutLacks', () => {

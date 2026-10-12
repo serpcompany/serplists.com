@@ -6,13 +6,15 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib';
+import { checkNames } from '../../../scripts/checks/checks';
+import { duplicateFolders } from '../../../scripts/checks/duplicates';
 
 const repoRoot = process.cwd();
 const readJson = (file: string): unknown => JSON.parse(readFileSync(path.join(repoRoot, file), 'utf8'));
 
 const JSCPD_DEFAULT_MIN_TOKENS = 50;
 const JSCPD_DEFAULT_MIN_LINES = 5;
-const AUTHORED_CODE_FOLDERS = ['src', 'functions', 'scripts', 'db', 'tests'];
+const AUTHORED_CODE_FOLDERS = ['src', 'functions', 'scripts', 'db', 'tests', 'tools'];
 const MIGRATIONS = '**/db/migrations/**';
 const BUILD_OUTPUT = [
   '**/node_modules/**',
@@ -40,11 +42,8 @@ const settings = z
   .passthrough()
   .parse(storedSettings);
 
-const packageJson = z
-  .object({ scripts: z.object({ 'check:repo': z.string() }).catchall(z.string()) })
-  .passthrough()
-  .parse(readJson('package.json'));
-const [checkTool, ...checkedFolders] = (packageJson.scripts['duplicates:check'] ?? '').trim().split(/\s+/);
+const packageJson = z.object({}).passthrough().parse(readJson('package.json'));
+const checkedFolders: readonly string[] = duplicateFolders;
 
 const isFolder = (folder: string) =>
   existsSync(path.join(repoRoot, folder)) && statSync(path.join(repoRoot, folder)).isDirectory();
@@ -73,7 +72,7 @@ const holdsNoClone = (reason: string) => {
   return reason === NO_TOKENIZER || (lineCount !== undefined && Number(lineCount) < settings.minLines);
 };
 
-describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
+describe('pnpm run verify duplicates', { timeout: 60_000 }, () => {
   it("fails on any clone of 50 tokens and 5 lines, jscpd's defaults", () => {
     expect(settings.threshold, 'Set "threshold" in .jscpd.json back to 0: any duplicated code fails the check.').toBe(0);
     expect(
@@ -91,18 +90,16 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
     ).toBeLessThanOrEqual(JSCPD_DEFAULT_MIN_LINES);
   });
 
-  it('runs in check:repo as plain jscpd over every folder that holds authored code', () => {
-    expect(packageJson.scripts['check:repo'].split('&&').map((command) => command.trim())).toContain(
-      'pnpm run duplicates:check',
-    );
+  it('runs in pnpm run verify over every folder that holds authored code', () => {
+    expect(checkNames).toContain('duplicates');
     expect(
-      { checkTool, notFolders: checkedFolders.filter((folder) => !isFolder(folder)) },
-      'duplicates:check must be "jscpd" followed by the folders it checks, with no flags and no "|| true": the ' +
-        'settings live in .jscpd.json, and the check fails on the first clone.',
-    ).toEqual({ checkTool: 'jscpd', notFolders: [] });
+      checkedFolders.filter((folder) => !isFolder(folder)),
+      'duplicateFolders in scripts/checks/duplicates.ts names a folder that does not exist. Remove it.',
+    ).toEqual([]);
     expect(
       AUTHORED_CODE_FOLDERS.filter((folder) => !checkedFolders.includes(folder)),
-      'duplicates:check must name every folder that holds authored code: a clone in a folder it skips passes.',
+      'duplicateFolders in scripts/checks/duplicates.ts must name every folder that holds authored code: a clone ' +
+        'in a folder it skips passes.',
     ).toEqual([]);
     expect(
       Object.keys(packageJson),
@@ -114,7 +111,8 @@ describe('pnpm run duplicates:check', { timeout: 60_000 }, () => {
     expect(
       Object.keys(storedSettings).filter((key) => !SETTINGS.includes(key)),
       `Only ${SETTINGS.join(', ')} belong in .jscpd.json. A "path" there is resolved to an absolute path, which ` +
-        'jscpd globs with its backslashes on Windows and so reads no file: name the folders in duplicates:check.',
+        'jscpd globs with its backslashes on Windows and so reads no file: name the folders in duplicateFolders ' +
+        '(scripts/checks/duplicates.ts).',
     ).toEqual([]);
   });
 

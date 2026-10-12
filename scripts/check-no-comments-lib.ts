@@ -20,8 +20,7 @@ import {
   markdownCommentRanges,
   xmlCommentRanges,
 } from "./lib/comment-ranges";
-
-export { NO_COMMENTS_MESSAGE } from "./eslint-rules/no-comments";
+import { withoutGitRepositoryOverrides } from "./lib/git-env";
 
 export type CommentLanguage =
   | "yaml"
@@ -60,6 +59,7 @@ export const GENERATED_FILES: readonly string[] = [
 const FORMATS_WITHOUT_COMMENTS: readonly string[] = [
   ".txt",
   ".gitkeep",
+  ".node-version",
   ".ico",
   ".png",
   ".jpg",
@@ -92,7 +92,7 @@ const FILE_LANGUAGES = new Map<string, CommentLanguage>([
 
 const DOTFILE_LANGUAGES: ReadonlyArray<readonly [RegExp, CommentLanguage]> = [
   [/^\.(?:dev\.vars|env)(?:\.[\w.-]+)?$/, "dotenv"],
-  [/^\.gitignore$/, "gitignore"],
+  [/^\.(?:gitignore|housekeeping)$/, "gitignore"],
   [/^\.gitattributes$/, "gitattributes"],
   [/^\.npmrc$/, "npmrc"],
 ];
@@ -171,8 +171,10 @@ export function commentCheckOf(file: string): CommentCheck | null {
   return FORMATS_WITHOUT_COMMENTS.includes(format) ? "no comment syntax" : null;
 }
 
-export function filesGitTracksOrWouldTrack(): string[] {
+export function filesGitTracksOrWouldTrack(cwd: string = process.cwd()): string[] {
   const listed = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd,
+    env: withoutGitRepositoryOverrides(),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

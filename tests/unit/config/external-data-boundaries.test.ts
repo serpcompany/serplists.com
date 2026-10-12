@@ -23,6 +23,7 @@ const TYPE_CHECKED_FILES = [
   'functions/api/handlers/stripe.ts',
   'scripts/generate-db-schema-doc.ts',
   'scripts/lib/run-tool.ts',
+  'scripts/checks/checks.ts',
   'db/schema/templates.ts',
 ];
 
@@ -67,7 +68,7 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
     expect(TYPE_CHECKED_AREAS.map(({ folders, project }) => [folders.join(' '), project])).toEqual([
       ['src', './tsconfig.json'],
       ['functions db', './functions/tsconfig.json'],
-      ['scripts', './tsconfig.node.json'],
+      ['scripts .claude/skills', './tsconfig.node.json'],
       ['tests', './tests/tsconfig.json'],
     ]);
     expect(TYPE_CHECKED_AREAS.every(({ folders, files }) => files.every((glob) => folders.some((folder) => glob.startsWith(`${folder}/`))))).toBe(true);

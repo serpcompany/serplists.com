@@ -4,9 +4,8 @@ import type { ReactNode } from 'react';
 
 import { DashboardContentShell, DashboardLoadingState } from '@/components/dashboard/DashboardContentShell';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import NotFound from '@/views/NotFound';
 
-export function OrganizationRouteGate({ children }: { children: ReactNode }) {
+export function OrganizationRouteGate({ children, notFound }: { children: ReactNode; notFound: ReactNode }) {
   const { routeOrganizationStatus } = useWorkspace();
 
   if (routeOrganizationStatus === 'confirmed') {
@@ -23,5 +22,5 @@ export function OrganizationRouteGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <NotFound />;
+  return <>{notFound}</>;
 }
