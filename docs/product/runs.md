@@ -1,35 +1,171 @@
-# Runs and sharing
+# Runs
 
-- Users can start checklist runs from templates.
-- A Run shows its provenance from what the database already records: on wide screens My Runs is a table with each Run's Template, status, progress, who started it, its origin ("Web", "MCP" or "Unknown") and its started and updated dates, and the Run page says who started it and how ("Started by Codex SOP Runner via MCP · authorized by Alice"), with Show Details for its id, Template and version, owner, creator, starter, assignee, completer, Run Key and timestamps. An older Run with no record says "Unknown" or "Not recorded", never a guess ([data persistence](../agents/data-persistence.md#run-provenance)).
-- My Runs filters by Template, status and search, which combine. The Template filter is in the URL (`?template=<id>`), so a link, a reload and Back keep it, and "View runs" on a Template's page opens the runs of the context that page shows, filtered to that Template. A Template with no runs says "No runs of this template yet", with "Show all runs" to clear the filter, apart from the general "No runs found".
-- Every Start Run (My Templates, template detail and the public template page) opens the same Start a Run dialog: "Start a Run", a labelled "Run name" field, "Start Run" ("Starting…" while the Run starts) and Cancel (`src/components/ui/run-name-dialog.tsx`). My Templates starts from the Template whose card or row was clicked. On the public template page a visitor who is not signed in gets the same dialog, and its Start Run starts a guest run (below).
-- A visitor who is not signed in can run a public Template in the browser, without an account: a guest run at `/profile/{username}/{templateSlug}/run/`. It lives only in that browser's localStorage, keyed by Template (`src/features/guest-runs/guestRunStore.ts`), and nothing about it is sent to the server, so it needs no rate limit or account. It is a snapshot of the Template's sections when it started, and works like any Run on the run page's own components and rules: tasks, Sub-tasks (a task with Sub-tasks is done exactly when all of them are) and notes, the completion prompt, and a completed run frozen. Its page says "This run is saved in this browser only." and offers "Complete run" and "Delete run" ("Are you sure you want to delete this run?", then back to the template page with "Run deleted"), but no Share or Rename: a guest run can't be shared, and the same address shows each visitor their own run. Each Template has one active guest run per browser: while one is in progress, the public template page's Start Run buttons read "Continue Run" and open it, and starting again after it is completed replaces it. A plain link to the run page opens the visitor's run, and starts one with the default name when there is none, so code projects and SKILL.md files can link straight to it; a signed-in user with no guest run there goes to the template page instead. The run page is `noindex, follow` and names no canonical URL. Two tabs on the same guest run never overwrite each other's ticks: a save made on an older copy reloads the stored run and is applied on top of it, as a run saved elsewhere is.
-- A guest run can be saved into an account. Signed out, its page adds "Log in or sign up to save it to your account." (both links return to the run page, through email verification too). Signed in, the run page offers "Save to account", and so does the public template page while the browser holds a run of it ("Your run of this Template is saved in this browser only."), for roles that can start runs. Saving starts a Run of the Template in the active ownership context under the guest run's name, exactly as Start Run does, then carries the progress onto it by stable ids: each task's tick and notes (notes still being typed included), each Sub-task by id or, without one, by its place, with a task that has Sub-tasks done exactly when all of them are. A completed guest run makes the Run completed when every task carried over done. The guest run then leaves the browser, the toast says "Run saved to your account", and the new Run opens. Plan limits are handled as Start Run handles them: at the Free plan's active-run limit, Personal checkout starts (an Organization gets the paid-plan message), and the guest run stays in the browser.
-- Run titles are limited to 160 characters, the same limit as template titles, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Start a Run dialog suggests the same default run name everywhere, "<template title> - <date and time>", and a run name left blank gets that default; when it would be too long, the template title is shortened with an ellipsis so the date and time stay. The Run name field and the rename boxes stop at the limit, a longer title gets a clear message instead of the API's schema error, and a Start Run that fails keeps the typed name for the retry.
-- Runs store progress independently from templates. Progress counts every task and sub-task as one unit and is a whole percentage: 100% only when every unit is done, 0% only when none is, and anything in between rounds to 1-99% (so 199 of 200 is 99%, not 100%). The app and the API compute it with the same function (`src/lib/progress.ts`).
-- A task with sub-tasks is done when every sub-task in all of its Sub-tasks blocks is ticked, and unticking any of them reopens the task. Mark Complete ticks or unticks all of them. The web app and the agent API use the same rule, and read the same Sub-tasks (`getTaskSubTasks` in `src/lib/schemas/storedSections.ts`): only the rows of Sub-tasks blocks. Sub-items stored on another block or on the task itself (older rows, hand-written packs, direct API writes) are never shown, counted, ticked or matched by reconciliation, and Run Key `get_run` and `update_run` results leave them out (live and retired work alike; the stored run keeps the ones on the task); imports and new runs drop the ones on other blocks.
-- Run task counts ("2 of 5 tasks finished", the task list, "Task N of M", the runs list) count tasks only, never sub-tasks. The progress percentage and its bars follow the progress rule above, the same value the API stores as the run's progress.
-- The run page lists every task and opens any of them directly: in a side column on wide screens, and from a Tasks button in the progress block on phones and narrower windows.
-- The task's Previous, Mark Complete and Next buttons stay at the bottom of the window until the end of the task, so they are in view on a short task and do not move when the run's Activity grows after a save.
-- Moving to another task on the run page (Mark Complete, Next, Previous, or a task list) scrolls back to that task's title when it is out of view, just below the sticky headers. Mark Complete, Next, Previous and the side task list also move focus to the title; the phone Tasks sheet returns focus to its Tasks button, as dialogs do. The rest of a double click that lands after that scroll is ignored. Opening a run, or saving a change to the task on screen, never moves the page or takes focus, and a field the user is typing in keeps its focus.
-- The run page saves one change at a time. Each tick or untick sets the value the user clicked rather than flipping the saved one, so a click made while an earlier save is still in flight never reverses it, and a click that changes nothing sends no save. Completing a task moves on to the next unfinished task only if the completed task is still open when its save lands; a task the user opened while the save was in flight stays open.
-- Run page controls that change what they do after a click (Next Task becomes the next task's Mark Complete, a completed task moves on to the next one, Rename becomes Save title) ignore the second click of a double click, and the completion prompt stays open through the rest of the double click that opened it. Saving an unchanged run title sends nothing.
-- Ticking every task does not complete a run; the user confirms completion in the Run complete dialog ("Complete this Run?": every task is done, and completing freezes the Run's tasks), with "Complete Run" or "Not yet". Completing says "Run completed"; a signed-in owner or member then goes to My Runs, and a guest on a share link stays on the shared run, which shows it completed. While every task is done and the run is still in progress, the run page (private and shared) offers a Complete run action, so a dismissed prompt, a reload, or tasks ticked over MCP never leave a run stuck in progress. A task is done only when its Sub-tasks are too: a ticked task that still has an open Sub-task (older runs, API writes) is where the run opens, the last task's button leads to it (Next unfinished task), and Mark Complete on it ticks the rest. Only a completed run reads Run completed. Active-run limits count runs until they are completed.
-- A completed run is frozen on the run page and through its share link: its tasks and sub-tasks can no longer be ticked or unticked, so it never reads Completed with open tasks. Run Keys follow the same rule: MCP `update_run` with `set_run_status` `completed` fails with `run_incomplete` (naming up to 20 open task ids) unless the run has tasks and every task and Sub-task is done; marking an already completed run completed again still succeeds. A share-link save (`PUT /api/checklists/shared/:token`) is held to the same rule, counting the ticks it sends, and fails with `409 run_incomplete` (with the open task count, never task ids), because the page in a link holder's browser cannot be trusted to check it (`findRunCompletionRefusal` in `functions/api/utils/run-completion.ts`). Task notes stay editable. The API holds every write to the same rule (`functions/api/utils/completed-run-freeze.ts`), so a client that skips the page's check cannot untick either: a `PUT /api/checklists/:id` or share-link save that ticks or unticks a task or Sub-task of a completed run, without setting its status back to `in_progress`, fails with `409 run_completed`, and MCP `set_task_completed` and `set_subtask_completed` fail with `run_completed` on a completed run. Reopening is that status change back to `in_progress` (`PUT /api/checklists/:id` or the share link, or MCP `set_run_status`): it checks the revision like any save, counts toward the active-run limit inside the write, and records an audit event, and the same save may then change tasks. The web app has no Reopen action yet.
-- The runs list (`/dashboard/runs`) links each run to its source Template and matches searches on that Template's title and owner. The source can be a public catalog Template or one of the viewer's Personal or active Organization Templates, public or private. Runs started from library Templates have no source link.
-- Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
-- Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`; reopening counts toward the active-run limit like starting a run.
-- A run copies template content (at creation and revalidation) only from a source the caller may still use: a public template, the caller's own Personal template, or a template of the run's own Organization. A run whose source is no longer usable (made private by its owner, or archived) is not reported stale for that caller, and revalidating it returns `404 source_template_unavailable` (the same answer whether the template is gone or private). The runs list then reloads and says the run's template is no longer available, not the run.
-- Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
-- A task's Form is filled in on the run page and on a guest run. Typed answers save when the field loses focus, choices, checkboxes and files when they change, through the same save queue and revision check as notes. A required field left empty or an answer that breaks its type's rule (a URL that is not http(s), an email that does not look like one, a number outside its range, a date that does not exist, an option that is no longer offered) blocks the task: Mark Complete and the task checkbox stay available, but a click shows each field's message, says which field ("Finish this task's form first. <label>: <message>"), moves focus to it and saves nothing, and ticking a task's last Sub-task does not tick the task while its form blocks it. Fields don't count toward progress. A File field uploads with the template uploader when signed in; a guest sees "Log in to upload". Answers on a completed run are read-only, and the shared run page shows them read-only, where a task whose form blocks it cannot be ticked ("This task can be ticked once its form is answered."). Save to account carries a guest run's answers by field id, and a task whose form blocks it is not carried as done. An agent with a Run Key fills answers through MCP (`update_run` `set_form_answer`), held to the same rules, except that it cannot upload a file and so can only clear a File answer.
-- "Export answers" on the run page and on a guest run (shown when the run has at least one form field, also to a view-only member, never on the shared run link) downloads the run's answers as a file built in the browser: "Download CSV" (one row per field in run order, with the section, task, field, its type, whether it is required, the answer as text and whether the task is done; a UTF-8 byte order mark so spreadsheets read accents) or "Download JSON" (the run's id, title, status, start and completion times and its Template, then each field with its stored answer and the same answer text). Options show by label, a checkbox as "Checked", a file as its name and full link, an unanswered field as an empty answer. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, so a spreadsheet shows it as text instead of running it as a formula. The file is named after the run title (`<run-title>-answers.csv` or `.json`, `run-answers` when the title has no letters or digits) and holds the answers the run has saved.
-- Task notes belong to the run. Unsaved notes stay with their task while the user moves between tasks, are saved with Mark Complete (in the same save, also when another session or a sub-task already completed the task) and when the run is completed, and are never replaced by a save that returns while the user is still typing. Leaving the page with unsaved notes asks for confirmation.
-- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. Where the page can reload the record without losing the user's input, it does so before the control re-enables: Revalidate on the runs list reloads the list (also on `409 shared_run_conflict` or a `404`), and the template page's visibility switch and share action reload the template, so the next click sends the current revision or version. Each run's Revalidate stays disabled until that run's own request finishes, even while other runs revalidate. An item archived elsewhere (another tab, a teammate, MCP) can stay in a cached list for up to 5 minutes: when Archive, Start Run, Share or Stop sharing on it gets a `404`, the page reloads the Template or Run lists (and an open template page, which then shows the template is gone) before the error shows, so the item leaves the list, and the runs list's and My Templates' Archive dialogs close. The public library's cached copy drops the template instead of reloading. The template editor loads the template by id when it opens, never from the cached template lists, and checks against the version it loaded (then the version its last save returned), so a background list refresh cannot hide another editor's save, and it resends visibility only when its own switch changed. After a conflict it keeps the user's draft and offers to load the latest version, replacing the unsaved changes only once the user confirms.
-- When another session (an Organization member, a shared link, a second tab, or an MCP agent) saved the run first, the run page (private and shared) loads the latest run, shows it, and retries the change once on it, so later saves never keep failing on an old revision. A tick or untick is retried as the value the user chose, so a tick made elsewhere is never undone. Notes, a title, or completion are not retried when someone else changed the notes being saved or the title; the page then shows the latest run, keeps the unsaved notes, and asks the user to check and try again.
-- A run records who completed it and when (`completed_by_user_id`, `completed_at`) only when it becomes completed. Later saves of a completed run (a rename, a tick, a note), by anyone, keep the original completer and time, and a client-sent `completed_at` is used only on that transition. Reopening from the run page, a share link, or MCP keeps both; revalidation clears both. A completion through a share link names the visitor only when they belong to the run's owner context, and otherwise no one, so a reopened run never keeps its previous completer. The logic is in `functions/api/utils/run-completion.ts`.
-- Run-level sharing creates public `/share/:token` links (`POST /api/checklists/run/:id/share`). Sharing again mints a new link, and the previous one stops working. The run page and the runs list show the created link in a dialog with a Copy button, so it is never lost when the browser refuses the automatic copy. Reopening Share on the same page shows that link again while the page shows the run shared, and makes a new one once the page shows the run private (sharing was stopped in another tab or by a teammate). The runs list shows a run as shared right away, so a stale shared run reads "Shared snapshot is out of date" and is not offered Revalidate.
-- Stop sharing (`DELETE /api/checklists/run/:id/share`, in the runs list menu and next to Share on the run page, which also marks a shared run) makes the run private and turns its link off; progress and tasks are kept. Anyone who may update the run can share it or stop sharing it. The runs list marks shared runs, and a shared run that went stale offers "Stop sharing to update", after which it can be revalidated.
-- Guests can open shared runs without logging in and update checklist completion state, and the page and the share dialog say so ("Anyone with this link can tick tasks, add notes and complete this Run."): task and sub-item completion, task notes (up to 5,000 characters), and the run's status. The server merges only those fields onto the stored run by task id; titles, descriptions, contents, and the task list itself always come from the stored run, and progress and completion time are computed on the server.
-- Shared runs do not expose owner-only title editing or destructive actions, and the guest view does not reveal who owns or worked on the run.
-- Current run gating is plan-limit based through active-run limits.
+Starting a Run and the runs list, My Runs (`/dashboard/runs`). Working through a Run is in
+[The run page](run-page.md), completing it in [Completing a Run](run-completion.md), its share
+link in [Sharing a Run](run-sharing.md), Runs kept only in a browser in [Guest runs](guest-runs.md),
+and how a Run follows its Template in [Runs follow their Template](run-template-updates.md).
+
+Abbreviations: **Start dialog** is `tests/unit/components/ui/run-name-dialog.dom.test.tsx`,
+**My Templates runs** is
+`tests/unit/features/dashboard-templates/useDashboardTemplatesModel.runs.test.ts`, **Name limits**
+is `tests/unit/lib/schemas/nameLimits.test.ts`, **Run names** is
+`tests/unit/lib/runs/runName.test.ts`, **Long names spec** is `tests/e2e/long-run-names.spec.ts`,
+**Run saves spec** is `tests/e2e/run-saves.spec.ts`, **Start dialog spec** is
+`tests/e2e/run-start-dialog.spec.ts`, **Dashboard templates spec** is
+`tests/e2e/dashboard-templates.spec.ts`, **Active runs** is
+`tests/unit/functions/api/active-run-limit.test.ts`, **Provenance spec** is
+`tests/e2e/run-provenance.spec.ts`, **Provenance panel** is
+`tests/unit/components/run-execution/RunProvenancePanel.dom.test.tsx`, **Run lookup** is
+`tests/unit/features/dashboard-runs/runTemplateLookup.test.ts`, **Template runs spec** is
+`tests/e2e/template-runs.spec.ts`, **List load errors spec** is
+`tests/e2e/list-load-errors.spec.ts`, **Row actions** is
+`tests/unit/features/dashboard-runs/runRowActions.test.ts`, **Run revalidation** is
+`tests/unit/features/dashboard-runs/useRunRevalidation.test.ts`, and **Conflict refresh** is
+`tests/unit/contexts/editConflictRefresh.test.tsx`.
+
+## Starting a Run
+
+Users start Runs from Templates. Every Start Run (My Templates, Template detail and the public
+Template page) opens the same Start a Run dialog: "Start a Run", a labelled "Run name" field,
+"Start Run" ("Starting…" while the Run starts) and Cancel
+(`src/components/ui/run-name-dialog.tsx`).
+
+- Check: Start dialog, "RunNameDialog wording, the same wherever a Run starts: My Templates,
+  template detail and the public template page" and "says Starting… and locks its buttons while the
+  run starts".
+
+My Templates starts from the Template whose card or row was clicked, and opens the new Run in the
+context that owns it. On the public Template page, a visitor who is not signed in gets the same
+dialog, and its Start Run starts a [guest run](guest-runs.md).
+
+- Check: My Templates runs, "creates a run from the requested template and returns its run id"
+  and "opens an Organization's new run in that Organization".
+
+Run titles are limited to 160 characters, the same limit as Template titles, counted after
+trimming (`src/lib/schemas/nameLimits.ts`, matching the API).
+
+- Check: Name limits, "matches the limit the API enforces on run titles, after trimming" and
+  "explains an empty or too long title, measured after trimming".
+
+The dialog suggests the same default run name everywhere, `<template title> - <date and time>`,
+and a run name left blank gets that default. When it would be too long, the Template title is
+shortened with an ellipsis so the date and time stay.
+
+- Check: Run names, "names the run after the template and the start time", "shortens a long
+  template title so the start time stays" and "uses the default name for an empty or
+  whitespace-only input".
+
+So Start Run on a Template with a 160-character title still starts a Run.
+
+- Check: Long names spec, "Start Run on a public template with a 160-character title creates the
+  run under a shortened default name".
+
+The Run name field stops at the limit.
+
+- Check: Start dialog, "caps a typed run name at the API run title limit".
+
+So does the run page's rename box, and a longer title gets a clear message instead of the API's
+schema error.
+
+- Check: Run saves spec, "the run title editor stops at the length the API accepts, and the save
+  goes through".
+
+A Start Run that fails keeps the typed name for the retry, and a cancelled dialog opens empty next
+time.
+
+- Check: Start dialog spec, "a failed start keeps the typed run name, and the retry uses it" and "a
+  cancelled Start Run dialog opens empty next time".
+
+Starting Runs is gated by plan limits on active Runs
+([pricing and entitlements](pricing-and-entitlements.md)). At the limit, Start Run in Personal
+opens checkout instead of only saying so.
+
+- Check: Dashboard templates spec, "Start Run at the run limit opens checkout instead of only
+  toasting".
+
+Active-run limits count Runs until they are completed, shared Runs included: an Organization's
+Runs count against the Organization, and a Personal Run against its owner.
+
+- Check: Active runs, "counts an Organization's in-progress runs by Organization only", "counts a
+  Personal context by owner outside any Organization" and "counts shared runs like any other active
+  run".
+
+## Provenance
+
+A Run shows its provenance from what the database already records. On wide screens My Runs is a
+table with each Run's Template, status, progress, who started it, its origin ("Web", "MCP" or
+"Unknown") and its started and updated dates.
+
+- Check: Provenance spec, "My Runs is a table that says who started each run and whether it came
+  from the Web or MCP".
+
+On a phone, My Runs keeps its cards.
+
+- Check: Provenance spec, "My Runs keeps its cards, and the Run page details fit the screen".
+
+The Run page says who started the Run and how (`Started by Codex SOP Runner via MCP · authorized by
+Alice`), with Show Details for its id, Template and version, owner, creator, starter, assignee,
+completer, Run Key and timestamps.
+
+- Check: Provenance spec, "the Run page names an MCP run's Run Key and authorizer, and Show Details
+  lists its provenance".
+
+An older Run with no record says "Unknown" or "Not recorded", never a guess
+([data persistence](../agents/data-persistence.md#run-provenance)).
+
+- Check: Provenance panel, "says Unknown and Not recorded for an older run, never a guess".
+
+## My Runs
+
+My Runs filters by Template, status and search, which combine.
+
+- Check: Run lookup, "keeps only the chosen Template's runs, together with the status and search
+  filters".
+
+The Template filter is in the URL (`?template=<id>`), so a link, a reload and Back keep it, and
+"View runs" on a Template's page opens the runs of the context that page shows, filtered to that
+Template.
+
+- Check: Template runs spec, "View runs on an Organization Template opens that Organization's runs
+  of it, which a reload keeps and Status narrows" and "choosing a Template on the runs page writes
+  it to the URL, and a search that matches none of its runs says so".
+
+A Template with no runs says "No runs of this template yet", with "Show all runs" to clear the
+filter, apart from the general "No runs found".
+
+- Check: Template runs spec, "a Template with no runs says so, and Show all runs clears the
+  filter".
+
+The list links each Run to its source Template and matches searches on that Template's title and
+owner. The source can be a public catalog Template or one of the viewer's Personal or active
+Organization Templates, public or private. Runs started from library Templates have no source
+link.
+
+- Check: Run lookup, "includes private workspace Templates that the public catalog never returns",
+  "finds a renamed run by its private source Template title and owner" and "never matches a run
+  started from a library Template (empty template id)".
+
+When the runs fail to load, My Runs shows Retry, never an empty list.
+
+- Check: List load errors spec, "My Runs shows Retry instead of an empty list when the runs fail
+  to load".
+
+On an Organization's Runs, a viewer gets no actions, runners and editors can share and revalidate
+but not delete, and admins can delete.
+
+- Check: Row actions, "gives an Organization viewer no actions", "lets runners and editors share
+  and revalidate but not delete" and "lets admins delete Organization runs".
+
+Each Run's Revalidate stays disabled until that Run's own request finishes, even while other Runs
+revalidate, so pressing it again sends no second request.
+
+- Check: Run revalidation, "keeps each run busy until its own request finishes" and "sends one
+  request per run however often its Revalidate is pressed, since a second would carry the same
+  revision and fail with 409 edit_conflict".
+
+A Revalidate refused because the list was out of date (`409 edit_conflict`,
+`409 shared_run_conflict` or a `404`) reloads the list before the button re-enables, so the next
+click sends the current revision.
+
+- Check: Conflict refresh, "refreshes the runs list before Revalidate rejects, so the next click
+  sends the new revision".

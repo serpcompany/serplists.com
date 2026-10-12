@@ -1,29 +1,279 @@
 # Templates
 
-- Users can create, edit, archive, restore, import, and export templates.
-- Users delete templates and runs: My Templates, the template detail page and My Runs call the action Delete ("Delete template", "Delete run", "Template deleted"), and the Activity and Organization activity say "Deleted". Behind the scenes the API archives the item (it sets `deleted_at`, makes a template private and ends a run's share link), so the confirmations ask "Are you sure you want to delete ...?" and never say the action cannot be undone. `/dashboard/archive` lists the active context's archived templates and runs and restores them. Every member of the Organization sees both lists, but Restore is offered only to roles the API allows: editors and above for templates, admins and above for runs (the owner restores both in Personal). Restoring respects plan limits and shows the API's reason when it refuses; a role refusal (a role changed since the page loaded) says the role cannot restore templates or runs. An item already restored elsewhere (another tab, a teammate, or a concurrent request; `400 not_archived`) or gone (`404`) makes the page reload its archive and Template and Run lists and say so, so the row does not keep a Restore that fails every time.
-- Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`. The editor opens its form only for someone the API lets save the template: an Organization's Template for an owner, admin, or editor of that Organization (an edit link for a private one opens at its Organization's URL), a Personal Template for its owner. Anyone else who opens an edit link (a runner or viewer, or another user's public template) sees a read-only notice with a link to the template, and `/dashboard/templates/new` shows the same kind of notice to a role that cannot add Templates to the active Organization. The editor waits for the user's Organizations to load before deciding, and a form that has opened stays open (a later role change is still refused by the save).
-- In the editor, sections, tasks and a task's content blocks reorder by dragging their handle, or with the Up and Down arrow keys on the focused handle. On a touch screen, where dragging does not work, each shows Move up and Move down buttons instead of the handle. Blocks keep their ids when they move, and runs and public pages show blocks in the saved order.
-- A task can hold a Form (Add Block → Form): fields the Template defines and every Run fills in. A field has a label, a type (Short text, Long text, URL, Email, Number, Date, Dropdown, Multiple choice, Checkbox or File), a Required switch, optional help text, options for Dropdown and Multiple choice, and a minimum and maximum for Number. Fields can be added (up to 50), removed (never the last one) and moved up or down. Saving drops fields without a label, blank options, a Dropdown or Multiple choice field left with no option, and a Form left with no field. The public template page, template detail and the editor's preview list the fields read-only, with their type, a "Required" badge, help text and options.
-- The editor works on a phone: below the `lg` width it is one column, and its outline (Template Settings, Search & SEO, the sections and tasks) opens in a sheet from the Outline button in its top bar, which closes on the entry picked or added.
-- Template detail, public template, and public profile pages say a template or user was not found only when the API answers 404 (or the template is not public under that owner). A server or network failure shows "Unable to load" with a Try again button instead. Because every route is served with HTTP 200, the public template and public profile not-found states set `robots` to `noindex, nofollow` so a removed, private or renamed page drops out of search; the "Unable to load" state does not, so a brief outage never deindexes a live page.
-- Template titles are limited to 160 characters. Duplicate names the copy "<title> Copy"; when that would be too long, the title is shortened so the copy still fits. While a copy is being made, Duplicate reads "Duplicating..." and is disabled, and choosing it again (or the copy button) makes no second copy.
-- Export JSON on the template detail page downloads that template as a portable template pack, the format Import Templates accepts, named after its slug (or its id when it has none). Like Import Templates, it needs a paid plan in the active ownership context; otherwise the item reads "Upgrade to export". A template the pack format can't hold (for example one with no tasks) is not downloaded: the page shows an error naming the reason.
-- Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering, also when a task moves to another section or a Sub-task to another task (ids are unique across the Template; a legacy run that repeats an id in several sections matches each copy only in its own section); new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history. Retired sections, tasks, and Sub-tasks keep their completion and notes and appear read-only under "Removed from Template" on the run page and as `retiredItems` in the Run Key `get_run` tool; shared run links leave them out. `get_run` returns them with the run when it fits in one result, and `retired: true` reads them on their own, a page of whole entries at a time (all of them, or one `sectionId`'s or `taskId`'s), so a run with large retired work can still be read in full; a read of a section or task only retired work holds says to pass `retired: true`. When a later Template version brings a retired id back, its run state comes back with it. Each reconcile that changes a run adds an "Updated from Template" entry to the run's Activity naming the retired work (never its notes); Revalidate records the same. A task with Sub-tasks is complete exactly when all of them are (the run page, Run Keys, reconciliation, and revalidation apply the same rule), so a new Sub-task reopens a completed task and removing its last unfinished Sub-task completes it; a task left without Sub-tasks keeps its state. The completion prompt also waits for every Sub-task.
-- On the template detail page, an Organization's Template is managed by the viewer's Organization Role while that Organization is active, never by who created it: owners, admins, and editors get Share, Edit, Duplicate, Export, Archive, and the visibility switch; runners and viewers, including a Creator who was demoted, get read-only controls. From any other context it is read-only, and so is a public Organization Template opened by someone who is no longer an active member (its Creator after leaving, being removed or disabled, or after the Organization is archived): the API leaves out its Organization, and the page offers the public copy instead of Duplicate. A Personal Template is managed only by its owner, who can also move it into an Organization with "Transfer to Organization" in "Template actions" (offered when they are an active owner, admin or editor of at least one Organization). The dialog lists those Organizations and says that Runs already started from it stay in Personal and no longer receive its changes. A public Template moves too: its public page becomes the Organization's, its old link redirects there, and it can only move to an Organization with a slug. The Template keeps its id, content, visibility and history, both libraries refresh, and the page opens it at its Organization's URL (toast "Template transferred to <Organization>"); an Organization at its Template limit, or a Template changed meanwhile, keeps the dialog open with the reason. Share links for an Organization's Templates use the Organization's handle.
-- Every Template the API sends names its Template Owner (`owner`), never the Creator who made it: the User, with their username and name, for a Personal Template, and for an Organization's Template, the Organization with its slug and name to its members. Public responses name an Organization only by its handle and name, and only while it is active and has a handle; otherwise they say only that an Organization owns the Template. They never send its id. A public Template opens only under its Template Owner's handle: an Organization's Template at `/profile/{organization handle}/{templateSlug}`, never under its Creator's username, and a Personal Template never under an Organization's handle. Share, owner links, cards, canonical URLs and the sitemaps all build that one URL (`resolvePublicTemplateOwnerSlug`), and the Creator URL a public Organization Template had before (`/profile/{creator username}/{templateSlug}`) answers a permanent redirect (308) to its Organization's URL, keeping the query string.
-- Public templates can be shared at `/profile/{handle}/{templateSlug}`, under their Template Owner's handle: a Personal template's username, or an Organization's slug while the Organization is active. That is their only public URL, so the template library (`/templates`) and category pages list a public template only when its Template Owner has a handle, as the sitemaps do. The page also opens for other casings of the handle and for the template id (a slug is never a UUID: a save that asks for one gets a short suffix, and an older Template that already has one still opens at it), but its canonical URL and `og:url` are always `https://serplists.com/profile/{handle}/{templateSlug}` with the stored handle casing and no query string, matching the sitemap entry. Share on the template detail page makes a private template public only after that URL resolves; an owner without a username is asked to set one, an Organization without a slug gets "This Organization needs a slug before its templates can be shared. Its owners and admins can set one in its settings.", and the template stays private. Share always sends the loaded version to the server, even when the page already shows the template as public, and builds the link from the slug the server returns and the Template Owner's current handle (for a Personal template, its owner's current username). A template made private, archived, or given a new slug elsewhere gets a conflict: the page reloads it and gives no link. The visibility switch changes only visibility; the badge and switch always show what the server holds after either one, and neither can start while the other is saving. Template and Organization slugs come from one rule (`src/lib/utils/slug.ts`, used by the page, the template editor's URL Slug field, and the API): accented letters fold to their base letter (`Café` becomes `cafe`, `Straße` becomes `strasse`), other characters are dropped, and a title with no Latin letters or digits falls back to `template` (or `team-<id>` for an Organization).
-- The editor's Search & SEO panel previews that URL: the handle is the Template Owner's (for a new template, the signed-in user's username in Personal or the active Organization's slug), and the slug is the one a save stores (a blank slug keeps the saved one, or for a new template comes from its name). It says when the owner has no username, or the Organization no slug ("No public URL yet: the Organization needs a slug, which its owners and admins can set in its settings."), or the template is private, and notes that a slug another template already uses gets a short suffix.
-- Links to a public template, a category page, `/categories` or `/templates` unfurl in Slack, X, Facebook, LinkedIn, Discord and iMessage with that page's own title and description (a template's SEO title and description when set) and the site's 1200x630 preview image (`public/og-default.png`). Those previews do not run JavaScript, so Pages Functions (`functions/seo/`) put the tags into the page's HTML. A private, deleted or unknown template, and a category that only database templates use, keep the generic site card. A template made private can keep its preview for up to 5 minutes (the lookup is edge-cached like the public catalog).
-- The template library keeps its search, sort and category filters in the URL (`?search=`, `?sort=`, `?category=`), so links and Back/Forward change what it shows. A link to `/templates?category={slug}` with no other filter redirects to `/categories/{slug}`; the library's own filter edits never redirect.
-- The Categories page (`/categories`) searches the category names and descriptions; a search that matches none shows 'No categories match "<query>"' with a Clear search button that brings back every category.
-- Each category a public template uses has a page at `/categories/{slug}`. The slug keeps letters and digits in any script (`日本語`, `русский`), with the marks that are part of a letter there (Japanese dakuten, Devanagari vowel signs, Cyrillic `й`), drops accents on Latin letters and folds the others the way template slugs do (`Café Culture` is `cafe-culture`, `Straße` is `strasse`), folds full-width letters (`ＳＥＯ` is `seo`), and joins words with hyphens. The page and the category sitemap build it with the same function (`src/lib/categorySlug.ts`), and the page also opens for other letter cases and Unicode forms of the slug. An old ASCII-only slug (`caf-culture`) redirects to the current one. A category with no letters or digits (only emoji or punctuation) has no page: it is not listed as a category and shows as plain text on the template. Spellings with the same slug (`SEO` and `seo`, `Q&A` and `QA`) are one category: a template counts once toward it however often it lists it, so a category's count always equals the templates its page lists, and template imports and the editor keep only the first spelling (`uniqueCategoryNames` in `src/lib/categorySlug.ts`). The API still stores lists written directly to it as sent.
-- Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it. Copying into Personal is a Pro feature: the browser checks the Personal plan first, and the API returns `403 upgrade_required` on Free. In an Organization the API decides: a Free Organization may copy within its Template limit, the template detail page labels the button "Copy to Organization", and roles that cannot add Templates to the Organization do not see it. The template detail page offers no copy on a private template (such as a private Organization Template viewed from Personal or by a viewer), because the API clones only public ones.
-- The public template page says when the Template was last updated ("Updated <date>", its `updated_at`, else `created_at`), in the viewer's time zone and the same short date format as the template detail page's "Last updated". The public template response already carries both dates, so the page reads nothing extra.
-- The public template page uses the active ownership context for its plan check, Save, and Start Run (a visitor who is not signed in starts a [guest run](runs.md)). In an Organization it follows the viewer's Organization Role, as the template detail page does: roles that cannot add Templates to the Organization (runners and viewers) see no Save or Copy to Library, roles that cannot start runs (viewers) see no Start Run, and the page says which actions their role does not allow. Save opens the new copy, and a copy into an Organization reports "Template copied to this Organization". In Personal, a signed-in Free user's Save buttons read "Upgrade to save" and "Upgrade to copy template", since the click starts checkout; they are disabled while the plan loads, and when the plan check fails they keep their plain labels and a click asks the user to try again. An Organization never sees an upgrade label there, because the API checks its Template limit. When an Organization's plan blocks the action, the page explains that the Organization needs a paid plan instead of starting a Personal checkout.
-- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. The template detail page's Activity shows both as one list, newest first (the latest 8 entries, and "View all activity" loads the latest 100): every version, plus the changes that create no version, such as archive, restore, and making a template public or private. A version and the audit event recorded with it appear once: `GET /api/templates/:id/history` gives each version the `metadata` of that event, the field run history events carry, so an entry names who made the change the way the run Activity does. The Activity refreshes after any template change. A save that changes nothing adds no version. A visibility change (Share or the Public/Private switch) adds a version but never changes the checklist content version, so runs are not staled.
-- The Public/Private switch on template detail sends only the visibility flag, so it never reconciles or stales runs.
-- A Template can list its Required tools: the tools a Run of it needs, each with a name, a link and whether it is required or optional (#241). They are stored in `templates.required_tools` (migration `0031`) and checked by one schema shared by the API and the app (`src/lib/schemas/requiredTools.ts`): at most 20 tools, a name that is not blank and at most 80 characters, and an `http://` or `https://` link of at most 2048 characters with no spaces. The API returns them on a Template's own reads (by id or slug; a public Template's to anyone) and on the import and export page's read of the public Templates it adds to an export (by id, at most 50 per request) but never in lists, and keeps them through a save that leaves them out, Duplicate, Save and Copy to Organization, delete and restore, Transfer to Organization, version snapshots, portable packs, backups and imports. A save that changes them adds a version but no checklist structure change, so Runs are never staled by it. A Run reads its source Template's tools with that Template's title, and only when the viewer may use that Template (the run source rule below); otherwise it gets none. Links are stored and exported exactly as written: nothing adds affiliate tags.
-- The Template editor edits Required tools in Template Settings: "Add tool" adds a card with the tool's "Name", "URL" and a "Required" switch (on for a new tool), "Remove tool N" removes one, and "Add tool" stops at 20 ("A template can list up to 20 tools."). A save drops tools left blank and trims the rest, and refuses a tool without a name or with a URL that is not an `http://` or `https://` address, naming the tool by its place ("Required tools: give tool 2 a name.", "Required tools: tool 1's URL must start with http:// or https:// and have no spaces."). The editor's Preview lists the draft's tools that have a name. The public Template page, Template detail and the Run page list them under "Required tools", before the checklist: each tool's name links to its site in a new tab (`rel="noopener noreferrer"`), with the site's host and a "Required" or "Optional" badge. A Template without tools shows no list, and the Run page shows its source Template's tools only where the viewer may use that Template; the shared run page shows none. Every list fits a 390px phone (one column below `sm`).
-- A public Template's detail page links to its live public page ("View public template", beside the Public badge), built by the same resolver as Share, so an Organization's public Template links to its Organization's URL. A public Template whose owner has no handle says its public page is unavailable instead of guessing a link ("Public page unavailable until its creator sets a username", or "Public page unavailable until its Organization has a slug").
-- Agents work with Personal templates and runs through Run Keys (Agent Access in Account Settings), limited to the permissions chosen when the key is created and never changed afterwards: Read templates (MCP `list_templates`, `get_template`), Write templates (`create_template`, `update_template`), Read runs (`list_runs`, `get_run`) and Write runs (`start_run`, `update_run`; it needs Read templates, since starting a run copies the template). A new key has all but Write templates, and unticking a read in the form also unticks the writes that need it. The MCP lists only the tools a key may use and refuses the others with `permission_denied`. A key writes only its owner's private Personal templates: it cannot delete or publish one, edit a public one (`template_is_public`) or reach an Organization's. Its writes go through the web editor's code (`createTemplateForUser` in `functions/api/handlers/template-create.ts`, `updateTemplateForUser` in `functions/api/handlers/template-update.ts`), so they get the same validation, template limit, version check (`expectedVersion`, `edit_conflict`), history and run sync. `get_template` returns a template's Required tools (`requiredTools`); `create_template` and `update_template` do not take them (`invalid_arguments`), so a key creates templates without tools and its updates always keep the tools a template has. Their audit events record the key (`source: "mcp"`, `personalRunKeyId`, `personalRunKeyName`), so the Activity of the template and of each run the edit updates names an Agent's change "<Run Key name> via MCP · authorized by <user>". `get_template` gives entries stored without ids the ids a save stores, so an agent that sends them back keeps its runs' progress. Every MCP tool result stays within 32KB, which MCP clients take from one call whole (`MAX_RESULT_BYTES` in `functions/api/handlers/agentMcpPages.ts`), and every template and run, whatever its size, can still be read in full. `list_templates` (most recently edited or created first) and `list_runs` (newest first) return a page of summaries at a time (titles over 160 characters and descriptions over 500 are cut), and `nextCursor` for the next page; `list_runs` keeps its `status` filter in it. `get_template` and `get_run` return a template or run whole when it fits; a larger one comes back as an outline (its fields, and each section's id, title, task count and size; `sectionsOmitted`; a run's also counts its retired work), `sectionId` or `taskId` reads one section or task, a section too large for one result comes back a page of tasks at a time (`firstTask`, `taskCount`), and anything too large for a result on its own (a very long task or note) as parts of its JSON text. `nextCursor` continues a read from the version, or the run revision, it started on, and fails with `edit_conflict` once the template or run changes. `start_run` returns the new run whole when it fits, otherwise its fields (`sectionsOmitted`). `update_run` changes one task's completion or notes, one answer in a task's Form (`set_form_answer`, by `fieldId`, checked with the run page's rule for its type; a File answer can only be cleared, since agents cannot upload), one Sub-task (by `subtaskId`, which for a legacy Sub-task stored with a numeric id is that number as text, such as `"7"`), or the run's status, and returns the run's fields, the changed task's `sectionId` and `taskId`, and that task when it fits (`taskOmitted` otherwise). The notes it writes are at most 20,000 characters and 30KB (30,720 bytes) of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so an agent reads back what it wrote in one result; longer notes fail with `invalid_arguments`, naming both limits. Notes written in the web app can be longer: `get_run` reads them in parts, and an agent can replace them with notes within the limit. Run Key run writes keep the web app's run content limit (`content_too_large`), so an agent can start a run from any template the web app can. `update_template` either replaces the fields it is given (`sections` replaces the whole checklist) or, with `operation`, changes one section or task, so an agent never sends more than it read: `replace_section`, `insert_section`, `move_section`, `remove_section`, `replace_task`, `insert_task`, `move_task` and `remove_task`. `sections` is still accepted for a template too large to read in one result, and the tool description warns plainly that it replaces the whole checklist, removing whatever it leaves out, and that `operation` is the safe way to edit a template read in pages. A replace keeps the fields it is not given, new sections, tasks and Sub-tasks get ids in the web editor's format, a section keeps at least one task and a template one section, and the audit event records the operation. A create or update whose template is too large to return comes back without its sections (`sectionsOmitted`), with the section or task an operation changed.
+My Templates (`/dashboard/templates`) and a Template's detail page (`/dashboard/templates/:id`):
+what its owner, and an Organization's members, can do with a Template. The editor is in
+[Template editor](template-editor.md), the public page in [Public Templates](public-templates.md),
+Delete and restore in [Delete and the archive](archive.md), and files in
+[Import and export](template-import-export.md).
+
+Abbreviations: **List load errors spec** is `tests/e2e/list-load-errors.spec.ts`, **Detail page**
+is `tests/unit/views/TemplateDetailPage.test.tsx`, **Detail permissions** is
+`tests/unit/features/template-detail/templatePermissions.test.ts`, **Detail actions** is
+`tests/unit/views/TemplateDetailPage.actions.test.tsx`, **Duplicate spec** is
+`tests/e2e/template-duplicate-in-flight.spec.ts`, **Organization copy** is
+`tests/unit/features/template-detail/organizationCopy.test.ts`, **Private copy** is
+`tests/unit/features/template-detail/privateTemplateCopy.test.ts`, **Export** is
+`tests/unit/features/template-detail/templateExport.test.ts`, **Share** is
+`tests/unit/features/template-detail/shareTemplate.test.ts`, **Visibility spec** is
+`tests/e2e/template-visibility.spec.ts`, **Visibility** is
+`tests/unit/features/template-detail/templateVisibility.test.ts`, **Template saves** is
+`tests/unit/functions/api/templates-handler.reconcile.test.ts`, **Conflict refresh spec** is
+`tests/e2e/edit-conflict-refresh.spec.ts`, **View public spec** is
+`tests/e2e/view-public-template.spec.ts`, **Visibility meta** is
+`tests/unit/components/template/TemplateVisibilityMeta.test.tsx`, **Transfer dialog** is
+`tests/unit/features/template-detail/useTemplateTransfer.dom.test.tsx`, **Transfer spec** is
+`tests/e2e/template-transfer.spec.ts`, **Transfer on D1** is
+`tests/integration/template-transfer-local-d1.test.ts`, **Template history** is
+`tests/unit/features/template-detail/templateHistoryTimeline.test.ts`, **View all spec** is
+`tests/e2e/activity-view-all.spec.ts`, **History API** is
+`tests/unit/functions/api/templates-handler.history.test.ts`, and **Activity spec** is
+`tests/e2e/template-activity.spec.ts`.
+
+## My Templates
+
+My Templates lists the active context's Templates. When the list fails to load it shows Retry,
+never an empty library.
+
+- Check: List load errors spec, "My Templates shows Retry instead of an empty library when the list
+  fails to load".
+
+## The detail page
+
+The detail page shows a read-only preview of the Template first: its stats, structure and details.
+Editing happens in the editor, and Edit opens it by the Template's id, also on a page opened by
+slug.
+
+- Check: Detail page, "renders the v0 private template detail structure with stats, structure, and
+  metadata cards" and "links Edit on a page opened by slug to the loaded template id, since the
+  editor loads by id only".
+
+The page says a Template was not found only when the API answers 404. A server or network failure
+shows "Unable to load" with a Try again button instead.
+
+- Check: Detail page, "offers a retry for a failed load instead of saying the template does not
+  exist" and "keeps the not found message for a template that is really missing".
+
+## Who manages a Template
+
+While its Organization is active, an Organization's Template is managed by the viewer's
+Organization Role, never by who created it: owners, admins and editors get Share, Edit, Duplicate,
+Export, Delete and the visibility switch, and runners and viewers get read-only controls.
+
+- Check: Detail permissions, "follows the viewer's role in the Organization, never who created the
+  template".
+
+A Creator demoted to runner loses Edit and Share but keeps Start Run, and a viewer gets no Start
+Run, Copy or Edit on a private Organization Template.
+
+- Check: Detail page, "takes Edit and Share away from a creator demoted to runner, but keeps Start
+  Run" and "offers an Organization viewer no Start Run, Copy or Edit on a private Organization
+  Template".
+
+From any other context an Organization's Template is read-only, even for its Creator. So is a
+public Organization Template opened by someone who is no longer an active member (its Creator after
+leaving, being removed or disabled, or after the Organization is archived): the API leaves out its
+Organization, and the page offers the public copy instead of Duplicate.
+
+- Check: Detail permissions, "keeps an Organization template read-only outside that Organization,
+  even for its Creator", "gives the Creator nothing on a public Organization template sent without
+  its Organization, as the API sends it once they are no longer an active member" and "offers the
+  Creator of a public Organization template the API's public copy, not owner controls".
+
+A Personal Template is managed only by its owner.
+
+- Check: Detail permissions, "lets only the owner manage a Personal template".
+
+## Duplicate and copy
+
+Duplicate names the copy `<title> Copy`. When that would pass the 160-character title limit, the
+title is shortened so the copy still fits.
+
+- Check: Detail actions, "TemplateDetail Duplicate" and "keeps the copy of a title near the limit
+  within what the API accepts".
+
+While a copy is being made, Duplicate reads "Duplicating..." and is disabled, and choosing it again
+(or the copy button) makes no second copy.
+
+- Check: Duplicate spec, "a slow Duplicate cannot be chosen again and makes one copy".
+
+On a public Template, in an Organization, the page offers "Copy to Organization" whatever the
+Organization's plan, since the API checks its Template limit
+([copying](public-templates.md#copying-a-public-template)). Roles that cannot add Templates to the
+Organization do not see it.
+
+- Check: Organization copy, "offers the copy in an Organization whatever its plan says" and "hides
+  the copy from Organization roles that cannot add Templates".
+
+In Personal, copying is a Pro feature, so the page checks the Personal plan first and asks a Free
+user to upgrade.
+
+- Check: Organization copy, "still asks a Free Personal user to upgrade before copying".
+
+The page offers no copy of a private Template (such as a private Organization Template viewed from
+Personal or by a viewer), because the API copies only public ones.
+
+- Check: Private copy, "is hidden in Personal and in an Organization, whatever the plan" and "allows
+  public and library templates only".
+
+## Export JSON
+
+Export JSON downloads the Template as a portable template pack, the format Import Templates
+accepts, named after its slug (or its id when it has none).
+
+- Check: Export, "builds a portable pack that Import Templates accepts" and "names the file after
+  the slug, or the id when the slug is empty".
+
+Like Import Templates, it needs a paid plan in the active ownership context; otherwise the item
+reads "Upgrade to export". When the plan check failed, it reads Export JSON and checks the plan
+again on click.
+
+- Check: Export, "downloads the pack only on a paid plan", "asks a Free plan to upgrade instead of
+  downloading", "labels the menu item for the plan" and "asks for a retry, never an upgrade, when
+  the plan check failed".
+
+A Template the pack format cannot hold (for example one with no tasks) is not downloaded: the page
+shows an error naming the reason.
+
+- Check: Detail actions, "shows the reason instead of a success message".
+
+## Share and visibility
+
+Share makes a private Template public only after its public URL resolves. An owner without a
+username is asked to set one, and an Organization without a slug gets "This Organization needs a
+slug before its templates can be shared. Its owners and admins can set one in its settings."; the
+Template stays private.
+
+- Check: Share, "leaves a private template private when the owner has no username" and "leaves an
+  Organization Template private while its Organization has no slug, and says so".
+
+Share always sends the loaded version to the server, even when the page already shows the Template
+as public, and builds the link from the slug the server returns and the Template Owner's current
+handle. Share links for an Organization's Templates use the Organization's handle.
+
+- Check: Share, "asks the server to confirm a template the loaded copy shows as public, which
+  stores nothing when it is still public", "builds the link from the slug the server returns" and
+  "builds an Organization Template's link from its Organization's handle, without asking for its
+  Creator's username".
+
+A Template made private, deleted, or given a new slug elsewhere gets a conflict: the page reloads
+it and gives no link.
+
+- Check: Share, "gives no link when a public copy went private or was re-slugged elsewhere" and
+  "gives no link when a public copy was archived elsewhere".
+
+The Public/Private switch sends only the visibility flag, with the loaded version.
+
+- Check: Visibility, "sends only the visibility flag with the loaded version, and applies the new
+  visibility".
+
+The badge and the switch always show what the server holds after Share or the switch, and neither
+can start while the other is saving.
+
+- Check: Visibility spec, "shows Public after Share follows a switch to Private, and accepts the
+  next change".
+
+A visibility change adds a version but never changes the checklist content version, so it never
+reconciles or stales Runs.
+
+- Check: Template saves, "versions a visibility change, so a stale editor gets a conflict, without
+  touching content or runs".
+
+After an edit conflict, the switch reloads the Template before it re-enables, so the next click
+sends the current version.
+
+- Check: Conflict refresh spec, "the visibility switch recovers from an edit conflict without a
+  reload".
+
+Share does the same.
+
+- Check: Share, "reloads the stored template after an edit conflict so a retry can succeed".
+
+A public Template's detail page links to its live public page ("View public template", beside the
+Public badge), built by the same resolver as Share, so an Organization's public Template links to
+its Organization's URL.
+
+- Check: View public spec, "a public Template's page links to its live public page, which opens it"
+  and "the link sits beside the Public badge and fits the screen".
+
+A public Template whose owner has no handle says its public page is unavailable instead of
+guessing a link ("Public page unavailable until its creator sets a username", or "Public page
+unavailable until its Organization has a slug").
+
+- Check: Visibility meta, "says the public page is unavailable, rather than guessing a link, when
+  its creator has no username" and "says an Organization's public page is unavailable while the
+  Organization has no slug, rather than using its creator's".
+
+## Transfer to Organization
+
+A Personal Template's owner can move it into an Organization with "Transfer to Organization" in
+"Template actions", offered when they are an active owner, admin or editor of at least one
+Organization. The dialog lists those Organizations.
+
+- Check: Transfer dialog, "is offered only for your own Personal Template, and only when some
+  Organization can take it" and "offers only active Organizations where the user can add
+  Templates".
+
+The dialog says that Runs already started from the Template stay in Personal and no longer receive
+its changes. The page then opens the Template at its Organization's URL ("Template transferred to
+`<Organization>`"), and the dialog fits a phone.
+
+- Check: Transfer spec, "Transfer to Organization moves a private Personal Template into the chosen
+  Organization and opens it there" and "the transfer dialog fits a phone".
+
+The Template keeps its id, content, visibility and history, its Personal Runs stay where they
+were, and both libraries refresh.
+
+- Check: Transfer on D1, "moves the Template in place to the Organization, keeping its id, creator
+  and content version, with one audit event and version", "leaves the Template's existing Personal
+  runs where they were" and "lists the transferred Template in the Organization for its members,
+  and no longer in Personal".
+
+A public Template moves too: the dialog says first that its public page becomes the
+Organization's, and its old link redirects there.
+
+- Check: Transfer spec, "a public Personal Template transfers too, after the dialog says its public
+  page moves and its current link redirects".
+
+A public Template can move only to an Organization with a slug, so it keeps a public URL.
+
+- Check: Transfer on D1, "moves a public Template too, still public under the Organization, but
+  only to an Organization with a slug, so it keeps a public URL".
+
+An Organization at its Template limit, or a Template changed meanwhile, keeps the dialog open with
+the reason.
+
+- Check: Transfer dialog, "keeps the dialog open with the reason when the transfer is refused, so
+  the user can pick another Organization".
+
+## Activity
+
+Template history is stored in `template_versions`, and related actor and action history in
+`audit_events`. The detail page's Activity shows both as one list, newest first: every version,
+plus the changes that create no version, such as Delete, restore, and making a Template public or
+private.
+
+- Check: Template history, "shows archive, restore and visibility changes between versions, newest
+  first".
+
+It shows the latest 8 entries, and "View all activity" loads the latest 100.
+
+- Check: View all spec, "a Template's Activity shows its latest 8 entries, and View all activity
+  shows the rest".
+
+A version and the audit event recorded with it appear once: `GET /api/templates/:id/history` gives
+each version the `metadata` of that event, the field run history events carry, so an entry names
+who made the change the way the run Activity does.
+
+- Check: History API, "returns template history to active team members, each version with the
+  metadata of its audit event, and the events with them" and "gives each version the metadata of
+  the audit event its write recorded, naming a Run Key, and null to one older than the newest
+  events read".
+
+The Activity refreshes after any Template change, without a reload.
+
+- Check: Activity spec, "Activity shows Share without a reload, and archive and restore next to
+  versions".
+
+A save that changes nothing adds no version.
+
+- Check: Template saves, "accepts a save with no changes without writing anything".
