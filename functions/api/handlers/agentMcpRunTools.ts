@@ -92,6 +92,7 @@ export async function startRun(
     after: summarizeRunForAudit(run),
     metadata: { source: "mcp", personalRunKeyId: identity.keyId, personalRunKeyName: identity.name },
     request,
+    env,
     createdAt: now,
   });
   const batchResults = await db.batch(runInsertStatements(db, run, auditEvent, owner, limit));
@@ -212,6 +213,7 @@ export async function updateRun(
       personalRunKeyName: identity.name,
     },
     request,
+    env,
     createdAt: now,
   });
   const db = createDb(env);

@@ -59,7 +59,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   if (request.method === "POST" && teamsSubpath.length === 0) {
-    return createTeam({ db, request, userId }, await readJsonOrNull(request));
+    return createTeam({ db, env, request, userId }, await readJsonOrNull(request));
   }
 
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[2] === "accept") {
@@ -121,7 +121,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   const role = normalizeTeamRole(membership.role);
 
   if (request.method === "POST" && teamsSubpath.length === 2 && teamsSubpath[1] === "leave") {
-    return leaveTeam({ db, memberId: membership.id, membership, request, teamId, userId });
+    return leaveTeam({ db, env, memberId: membership.id, membership, request, teamId, userId });
   }
 
   if (request.method === "GET" && teamsSubpath.length === 1) {
@@ -152,7 +152,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       });
     }
 
-    return transferTeamOwnership({ db, request, teamId, userId, membership }, await readJsonOrNull(request));
+    return transferTeamOwnership({ db, env, request, teamId, userId, membership }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "activity") {
@@ -192,7 +192,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return revokeTeamInvite({ db, request, teamId, userId }, teamsSubpath[2]);
+    return revokeTeamInvite({ db, env, request, teamId, userId }, teamsSubpath[2]);
   }
 
   if (request.method === "PUT" && teamsSubpath[1] === "members" && teamsSubpath[2]) {
@@ -200,7 +200,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    return updateTeamMember({ db, request, teamId, userId, membership }, teamsSubpath[2], await readJsonOrNull(request));
+    return updateTeamMember({ db, env, request, teamId, userId, membership }, teamsSubpath[2], await readJsonOrNull(request));
   }
 
   return new Response("Method Not Allowed", { status: 405 });

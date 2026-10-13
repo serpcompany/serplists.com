@@ -328,6 +328,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
               after: insertedTemplate as Record<string, unknown>,
               metadata: { source: 'backup_import', importIndex: index, teamId: backupTeamId },
               request,
+              env,
               createdAt: now,
             }),
           };

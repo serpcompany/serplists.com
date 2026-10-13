@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -9,11 +10,12 @@ import { sha256Hex } from '@functions/api/utils/crypto';
 import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
 import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
-import { apiEnv } from '../../../support/apiEnv';
+import { apiEnv, TEST_AUTH_SECRET } from '../../../support/apiEnv';
 import { recordsIn } from '../../../support/mcpResponses';
 import { jsonRecordIn } from '../../../support/storedJson';
 
 const drizzleThatOnlyBuildsSql = createDb(apiEnv());
+const withAuthSecret = { BETTER_AUTH_SECRET: TEST_AUTH_SECRET };
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 
@@ -49,6 +51,7 @@ async function reconcileStatements(expectedRevision: number) {
     resource: { type: 'checklist_run', id: 'run-1' },
     action: 'checklist_run.reconciled',
     metadata: { retired: [{ kind: 'item', id: 'item-dns', title: 'Check DNS' }] },
+    env: withAuthSecret,
     createdAt: '2026-02-01T00:00:00.000Z',
   });
   return {
@@ -130,6 +133,7 @@ function input(overrides: Partial<AuditEventInput>): AuditEventInput {
     subject: { type: 'user', id: 'user-1' },
     resource: { type: 'checklist_run', id: 'run-1' },
     action: 'checklist_run.updated',
+    env: withAuthSecret,
     ...overrides,
   };
 }
@@ -244,18 +248,6 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(values.resource_id).toBe('run-1');
   });
 
-  it("records the request id, a SHA-256 hash of the client's IP address and the user agent, never the address itself", async () => {
-    const request = new Request('https://serplists.com/api/checklists/run-1', {
-      headers: { 'CF-Connecting-IP': '203.0.113.7', 'User-Agent': 'Mozilla/5.0 (test)', 'X-Request-Id': 'req-1' },
-    });
-
-    const values = await buildAuditEventValues(input({ request }));
-
-    expect(values).toMatchObject({ request_id: 'req-1', ip_hash: await sha256Hex('203.0.113.7'), user_agent: 'Mozilla/5.0 (test)' });
-    expect(values.ip_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(JSON.stringify(values)).not.toContain('203.0.113.7');
-  });
-
   it('leaves small payloads unchanged', async () => {
     const values = await buildAuditEventValues(input({
       before: { status: 'in_progress', title: 'Run' },
@@ -268,5 +260,51 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(values.after_json).toBe('{"status":"completed","title":"Run"}');
     expect(values.diff_json).toBe('{"status":"completed"}');
     expect(values.metadata_json).toBe('{"source":"test"}');
+  });
+});
+
+const CLIENT_IP = '203.0.113.7';
+const hmacHex = (key: string, value: string) => createHmac('sha256', key).update(value).digest('hex');
+
+function requestFrom(ip: string) {
+  return new Request('https://serplists.com/api/checklists/run-1', {
+    headers: { 'CF-Connecting-IP': ip, 'User-Agent': 'Mozilla/5.0 (test)', 'X-Request-Id': 'req-1' },
+  });
+}
+
+const ipHashUnder = async (env: AuditEventInput['env']) =>
+  (await buildAuditEventValues(input({ request: requestFrom(CLIENT_IP), env }))).ip_hash;
+
+describe("buildAuditEventValues records where a change came from, never the client's IP address", () => {
+  it('records the request id and the user agent', async () => {
+    const values = await buildAuditEventValues(input({ request: requestFrom(CLIENT_IP) }));
+
+    expect(values).toMatchObject({ request_id: 'req-1', user_agent: 'Mozilla/5.0 (test)' });
+  });
+
+  it('stores a keyed hash of the IP address, never the address or its SHA-256', async () => {
+    const values = await buildAuditEventValues(input({ request: requestFrom(CLIENT_IP) }));
+
+    expect(values.ip_hash).toBe(hmacHex(hmacHex(TEST_AUTH_SECRET, 'serplists:audit-ip-hash'), CLIENT_IP));
+    expect(values.ip_hash).not.toBe(await sha256Hex(CLIENT_IP));
+    expect(JSON.stringify(values)).not.toContain(CLIENT_IP);
+  });
+
+  it('gives an IP address the same hash under the same auth secret', async () => {
+    const first = await ipHashUnder(withAuthSecret);
+
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    expect(await ipHashUnder({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET })).toBe(first);
+  });
+
+  it('gives an IP address another hash under another auth secret', async () => {
+    const other = await ipHashUnder({ BETTER_AUTH_SECRET: 'another-better-auth-secret-32-chars-min!!' });
+
+    expect(other).toMatch(/^[0-9a-f]{64}$/);
+    expect(other).not.toBe(await ipHashUnder(withAuthSecret));
+  });
+
+  it('stores no IP hash without the auth secret, rather than a plain SHA-256', async () => {
+    expect(await ipHashUnder({})).toBeNull();
   });
 });

@@ -68,6 +68,7 @@ export async function restoreChecklistRun(
     after: { ...existingRun, ...restoreUpdates },
     diff: restoreUpdates,
     request,
+    env,
     createdAt: now,
   });
   const archivedRun = and(
@@ -134,6 +135,7 @@ export async function archiveChecklistRun(
     after: archivedChecklist,
     diff: archiveUpdates,
     request,
+    env,
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(

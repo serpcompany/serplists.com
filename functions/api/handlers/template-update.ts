@@ -249,6 +249,7 @@ export async function updateTemplateForUser(
     diff: changes,
     metadata: visibilityChange || options.auditMetadata ? { ...visibilityChange, ...options.auditMetadata } : undefined,
     request,
+    env,
     createdAt: now,
   });
 
@@ -325,6 +326,7 @@ export async function updateTemplateForUser(
             ...options.auditMetadata,
           },
           request,
+          env,
           createdAt: now,
         })
         : undefined,

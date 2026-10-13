@@ -191,6 +191,7 @@ export async function declineTeamInvite({
     action: "team_invite.declined",
     after: { inviteId, revoked_at: now },
     request,
+    env,
     createdAt: now,
   });
   const results = await db.batch([
@@ -227,6 +228,7 @@ export async function declineTeamInvite({
 
 export async function leaveTeam({
   db,
+  env,
   memberId,
   membership,
   request,
@@ -234,6 +236,7 @@ export async function leaveTeam({
   userId,
 }: {
   db: Db;
+  env: Env;
   memberId: string;
   membership: TeamMembership;
   request: Request;
@@ -256,6 +259,7 @@ export async function leaveTeam({
     action: "team_member.left",
     before: membership,
     request,
+    env,
     createdAt: now,
   });
   const leavableMembership = () =>
@@ -273,6 +277,7 @@ export async function leaveTeam({
         invite,
         actorUserId: userId,
         request,
+        env,
         now,
         metadata: { reason: "inviter_left" },
         guard: stillLeavable(),

@@ -213,11 +213,11 @@ password reset ends every session of the account.
 - Check: Password reset tests, "signs out every existing session, including a hijacked one".
 
 **Activity.** Changes to Templates, Runs and Organizations are recorded in D1 with who made them,
-what changed (form answers by task only), the request id, an unsalted SHA-256 hash of the IP
-address and the browser's user agent, and kept with the record.
+what changed (form answers by task only), the request id, the browser's user agent and a keyed
+hash of the IP address that can't be reversed without the auth secret, and kept with the record.
+Older rows hold a plain SHA-256 of the address, reversible for IPv4; the owner keeps them for now.
 
-- Check: Audit tests, "records the request id, a SHA-256 hash of the client's IP address and the
-  user agent, never the address itself".
+- Check: Audit tests, "stores a keyed hash of the IP address, never the address or its SHA-256".
 
 **Deletion.** The product has no way to delete an account yet. A person asks at
 support@serplists.com, the address on the Contact page.

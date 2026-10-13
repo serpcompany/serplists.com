@@ -171,6 +171,7 @@ export async function createChecklistRun(
     after: insertedRun,
     metadata: { source: 'web' },
     request,
+    env,
     createdAt: now,
   });
   const batchResults = await db.batch(runInsertStatements(db, insertedRun, auditEvent, owner, capacity.limit));

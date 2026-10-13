@@ -175,7 +175,7 @@ Worker, never shared: `wrangler secret put <NAME> --env <preview|production>`.
 
 | Variable | Purpose |
 | --- | --- |
-| `BETTER_AUTH_SECRET` | Required. 32+ characters. `JWT_SECRET` is a legacy fallback with the same rule |
+| `BETTER_AUTH_SECRET` | Required. 32+ characters. `JWT_SECRET` is a legacy fallback with the same rule. It also keys the audit rows' IP hash, and rows store none without it |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID` | Required for Checkout |
 | `STRIPE_WEBHOOK_SECRET` | Required only by the webhook endpoint |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |

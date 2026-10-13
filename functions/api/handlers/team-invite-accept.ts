@@ -121,6 +121,7 @@ export async function acceptTeamInviteRecord({
       invite: pendingInvite,
       actorUserId: userId,
       request,
+      env,
       now,
       metadata: { reason: "invitee_already_member" },
       guard: activeTeamMemberExists(db, invite.team_id, userId),
@@ -146,6 +147,7 @@ export async function acceptTeamInviteRecord({
     action: "team_invite.accepted",
     after: { inviteId: invite.id, memberId, role: inviteRole },
     request,
+    env,
     createdAt: now,
   });
 

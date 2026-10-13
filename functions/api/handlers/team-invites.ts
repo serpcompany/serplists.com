@@ -154,6 +154,7 @@ export async function createTeamInvite(
       expires_at: invite.expires_at,
     },
     request,
+    env,
     createdAt: now,
   });
   await db.batch([
@@ -180,7 +181,7 @@ export async function createTeamInvite(
 }
 
 export async function revokeTeamInvite(
-  { db, request, teamId, userId }: { db: Db; request: Request; teamId: string; userId: string },
+  { db, env, request, teamId, userId }: { db: Db; env: Env; request: Request; teamId: string; userId: string },
   inviteId: string,
 ): Promise<Response> {
   const { teamInvites } = schema;
@@ -209,6 +210,7 @@ export async function revokeTeamInvite(
     invite: { ...invite, id: inviteId },
     actorUserId: userId,
     request,
+    env,
     now,
   });
   const [revokeResult] = await db.batch([revoke, revokeAudit]);

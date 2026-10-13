@@ -1,6 +1,7 @@
 import type { AuditAction, TemplateVersionAction } from "../../../src/lib/schemas/auditActions";
 import type { schema } from "../db";
-import { sha256Hex } from "./crypto";
+import type { Env } from "../types";
+import { hmacSha256Hex, sha256Hex } from "./crypto";
 import {
   capAuditColumn,
   compactAuditDiff,
@@ -30,6 +31,7 @@ export type AuditEventInput = {
   diff?: JsonValue;
   metadata?: JsonValue | undefined;
   request?: Request;
+  env: Pick<Env, "BETTER_AUTH_SECRET">;
   createdAt?: string;
 };
 
@@ -57,7 +59,15 @@ function getClientIp(request?: Request): string | null {
   return forwarded?.split(",")[0]?.trim() || null;
 }
 
-async function getRequestAuditMetadata(request?: Request): Promise<{
+const AUDIT_IP_HASH_KEY_LABEL = "serplists:audit-ip-hash";
+
+async function keyedIpHash(ip: string, authSecret: string | undefined): Promise<string | null> {
+  if (!authSecret) return null;
+  const ipHashKey = await hmacSha256Hex(authSecret, AUDIT_IP_HASH_KEY_LABEL);
+  return ipHashKey ? hmacSha256Hex(ipHashKey, ip) : null;
+}
+
+async function getRequestAuditMetadata(request: Request | undefined, authSecret: string | undefined): Promise<{
   requestId: string | null;
   ipHash: string | null;
   userAgent: string | null;
@@ -66,13 +76,13 @@ async function getRequestAuditMetadata(request?: Request): Promise<{
 
   return {
     requestId: request?.headers.get("X-Request-Id") ?? request?.headers.get("CF-Ray") ?? null,
-    ipHash: ip ? await sha256Hex(ip) : null,
+    ipHash: ip ? await keyedIpHash(ip, authSecret) : null,
     userAgent: request?.headers.get("User-Agent") ?? null,
   };
 }
 
 export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.auditEvents.$inferInsert> {
-  const requestMetadata = await getRequestAuditMetadata(input.request);
+  const requestMetadata = await getRequestAuditMetadata(input.request, input.env.BETTER_AUTH_SECRET);
 
   return {
     id: crypto.randomUUID(),

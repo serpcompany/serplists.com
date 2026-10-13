@@ -128,6 +128,7 @@ export async function handleSharedChecklist(
     diff: updates,
     metadata: { source: 'public_share' },
     request,
+    env,
     createdAt: now,
   });
   const missed = await writeAuditedRunUpdate(env, db, {

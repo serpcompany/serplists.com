@@ -105,6 +105,7 @@ export async function reissueTeamInviteLink({
       invited_by_user_id: userId,
     },
     request,
+    env,
     createdAt: now,
   });
   const results = await db.batch([
