@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { isTestFile } from '../../../scripts/lib/fix-commits';
 import { runAgainstAGitHubStandIn, type Route } from '../../support/githubApiStandIn';
+import { commandsTheRunnerRuns } from '../../support/workflowCommands';
 import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
 
 const REPOSITORY = 'serpcompany/serplists.com';
@@ -26,25 +27,6 @@ const github =
 
 const check = (name: string, env: Record<string, string>, api: Route = github()) =>
   runAgainstAGitHubStandIn({ script: SCRIPT, args: [name] }, { GITHUB_REPOSITORY: REPOSITORY, PR_NUMBER: '7', ...env }, api);
-
-function commandsTheRunnerRuns(output: string): string[] {
-  const ran: string[] = [];
-  let stoppedUntil: string | undefined;
-  for (const line of output.split(/\r\n|\r|\n/)) {
-    const command = /^::([^\s:]+)/.exec(line.trimStart())?.[1] ?? /##\[([^\s\]]+)/.exec(line)?.[1];
-    if (command === undefined) continue;
-    if (stoppedUntil !== undefined) {
-      if (command === stoppedUntil) {
-        stoppedUntil = undefined;
-        ran.push('resume');
-      }
-      continue;
-    }
-    if (command === 'stop-commands') stoppedUntil = line.trimStart().slice('::stop-commands::'.length);
-    ran.push(command);
-  }
-  return ran;
-}
 
 describe('the base check', () => {
   it.each([

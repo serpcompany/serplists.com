@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
@@ -26,7 +27,10 @@ function checkRange(range: string): void {
     console.log(`check-fix-commits: every fix: commit in ${range} changes a test.`);
     return;
   }
+  const resumeToken = randomUUID();
+  console.log(`::stop-commands::${resumeToken}`);
   for (const commit of missing) console.log(`${commit.sha.slice(0, 8)}  ${commit.subject}`);
+  console.log(`::${resumeToken}::`);
   console.log(FIX_WITHOUT_A_TEST_MESSAGE);
   process.exitCode = 1;
 }
