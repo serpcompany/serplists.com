@@ -49,8 +49,11 @@ published none. How it works is in
 - A report holds no message, only the error's name and its frames, so it can't carry what someone
   typed or a Template's content; finding the cause takes the frames and the commit. The frames are
   rebuilt in the browser and in the API (`scrubClientErrorReport`), whose tests list what they keep.
-- Only errors whose stack runs through the site's own scripts are reported, so an error in an
-  inline script or a third-party tag is never seen.
+- An error a root error boundary catches is always reported. A window error or unhandled rejection
+  is reported only when a frame of its stack is in the site's own scripts (for a window error whose
+  stack names no frame, the place the window says it was thrown), so an error in an inline script
+  or a third-party tag is never seen, nor a rejected error whose stack names no frame, such as the
+  `TypeError` of a failed `fetch`, which the API client passes on as it is.
 - Workers Logs keeps lines for 3 days on the Workers Free plan and 7 on Workers Paid, so an error is
   read within that window or lost.
 - There is no grouping, alerting or release health: `logs:deployed` filters and prints lines, and

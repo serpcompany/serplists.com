@@ -10,6 +10,7 @@ import {
 
 const CLIENT_ERRORS_ENDPOINT = '/api/client-errors';
 const MAX_REPORTS_PER_PAGE_LOAD = 5;
+const NAME_AND_MESSAGE_SEPARATOR = ': ';
 
 type ErrorReporter = (kind: ClientErrorKind, thrown: unknown, thrownAt?: string) => void;
 
@@ -17,7 +18,29 @@ type PageLocation = Pick<Location, 'origin' | 'pathname'>;
 
 type ErrorEventSource = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 
-const thrownError = z.object({ name: z.string().optional(), stack: z.string().optional() });
+const thrownError = z.object({ name: z.string().optional(), message: z.string().optional(), stack: z.string().optional() });
+
+type ThrownError = z.infer<typeof thrownError>;
+
+const endsALine = (stack: string, at: number): boolean => at === stack.length || stack.startsWith('\n', at);
+
+function stackBelowMessage(stack: string, message: string | undefined): string {
+  if (message === undefined || message === '') return stack;
+  const separator = stack.indexOf(NAME_AND_MESSAGE_SEPARATOR);
+  const starts = separator === -1 ? [0] : [0, separator + NAME_AND_MESSAGE_SEPARATOR.length];
+  const start = starts.find((at) => stack.startsWith(message, at) && endsALine(stack, at + message.length));
+  return start === undefined ? stack : stack.slice(start + message.length);
+}
+
+function describedError(kind: ClientErrorKind, { name, message, stack }: ThrownError, path: string): ClientErrorReport {
+  return {
+    kind,
+    ...(name === undefined ? {} : { name }),
+    ...(stack === undefined ? {} : { stack: stackBelowMessage(stack, message) }),
+    path,
+    release: releaseCommit(),
+  };
+}
 
 export function createErrorReporter(send: (report: ClientErrorReport) => void, page: () => PageLocation): ErrorReporter {
   const reported = new Set<string>();
@@ -26,8 +49,7 @@ export function createErrorReporter(send: (report: ClientErrorReport) => void, p
       if (reported.size >= MAX_REPORTS_PER_PAGE_LOAD) return;
       const { origin, pathname } = page();
       const error = thrownError.safeParse(thrown);
-      const described = { kind, ...(error.success ? error.data : {}), path: pathname, release: releaseCommit() };
-      const scrubbed = scrubClientErrorReport(described, origin);
+      const scrubbed = scrubClientErrorReport(describedError(kind, error.success ? error.data : {}, pathname), origin);
       const report =
         scrubbed.stack === undefined && thrownAt !== undefined ? scrubClientErrorReport({ ...scrubbed, stack: thrownAt }, origin) : scrubbed;
       if (kind !== 'boundary' && !hasSiteBundleFrame(report, origin)) return;

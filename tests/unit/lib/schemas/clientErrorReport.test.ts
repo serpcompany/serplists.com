@@ -73,15 +73,14 @@ describe('scrubClientErrorReport, which runs in the browser before a report is s
     ]);
   });
 
-  it('drops a line that only looks like a frame: a function name holding other characters, an index, an eval or a script that is not a file', () => {
-    const stack = [
-      'Error: No account for alice@https://evil.example/x.js:1:2',
-      '    at async Promise.all (index 0)',
-      `    at eval (eval at <anonymous> (${CHUNK}:1:2), <anonymous>:1:3)`,
-      '    at run (data:text/javascript,alert(1):1:2)',
-      '    at work (blob:https://serplists.com/0b2c9d1e:1:2)',
-    ].join('\n');
-
+  it.each([
+    ['a function name holding other characters, alone in a stack with no frame', `Error: No account for alice@${CHUNK}:1:2`],
+    ['a message line naming a page with no line and column', `TypeError: Could not save\n/profile/alice/q3-plan/\n${ORIGIN}/profile/alice/q3-plan/`],
+    ['a Firefox or Safari frame naming its script by a path, not a whole URL', 'Error\nalice@/profile/alice/q3-plan.js:1:2\n/profile/alice/q3-plan.js:3:4'],
+    ['an index', v8Stack('Error', 'async Promise.all (index 0)')],
+    ['an eval', v8Stack('Error', `eval (eval at <anonymous> (${CHUNK}:1:2), <anonymous>:1:3)`)],
+    ['a script that is not a file', v8Stack('Error', 'run (data:text/javascript,alert(1):1:2)', 'work (blob:https://serplists.com/0b2c9d1e:1:2)')],
+  ])('drops a line that only looks like a frame: %s', (_label, stack) => {
     expect(scrubbed({ stack }).stack).toBeUndefined();
   });
 
@@ -91,7 +90,7 @@ describe('scrubClientErrorReport, which runs in the browser before a report is s
     expect(scrubbed({ name: 'Error: Q3 launch plan' }).name).toBeUndefined();
   });
 
-  it('keeps whole frames only, at most 20 and 2,000 characters, and cuts the path to 200', () => {
+  it('keeps whole frames only, at most 20 and 2,000 characters, skips a longer line, and cuts the path to 200', () => {
     const frames = Array.from({ length: 30 }, (_, index) => `step${index} (${CHUNK}:1:${index})`);
     const longFrames = Array.from({ length: 30 }, (_, index) => `${'f'.repeat(90)}${index} (${CHUNK}:1:${index})`);
 
@@ -99,6 +98,9 @@ describe('scrubClientErrorReport, which runs in the browser before a report is s
     const kept = framesOf(v8Stack('Error', ...longFrames));
     expect(kept.join('\n').length).toBeLessThanOrEqual(2000);
     expect(kept.every((frame) => frame.endsWith(')'))).toBe(true);
+    expect(framesOf(v8Stack('Error', `${'f'.repeat(2000)} (${CHUNK}:1:2)`, `last (${CHUNK}:3:4)`))).toEqual([
+      'at last (/_next/static/chunks/0a1b2c3d.js:3:4)',
+    ]);
     expect(scrubbedPath(`/${'p/'.repeat(500)}`)).toHaveLength(200);
   });
 

@@ -1,10 +1,9 @@
 # Privacy
 
-What SERP Lists collects from the people who use it, why, how long it keeps it, and how to opt out
-or ask for deletion, as the code and configuration have it today. serplists.com has no privacy
-policy page yet; this doc is what one would be written from. A change that collects something
-new, keeps something longer, or sends it somewhere new changes this doc in the same pull request,
-before it ships.
+What SERP Lists collects from the people who use it, why, for how long, and how to opt out or ask
+for deletion, as the code and configuration have it today: what a privacy policy, which
+serplists.com lacks, would be written from. A change that collects something new, keeps it longer
+or sends it somewhere new updates this doc in the same pull request, before it ships.
 
 Abbreviations: **Analytics privacy spec** is `tests/e2e/analytics-privacy.spec.ts`, **Tag Manager
 tests** is `tests/unit/security/gtmBootstrap.test.ts`, **Header tests** is
@@ -39,24 +38,22 @@ builds load none, whatever host serves them.
 - Check: Tag Manager tests, "loads the container only where SITE_ENV=production, never on staging
   or a local build, whatever host serves it".
 
-**What the container runs.** Its tags are set in Google Tag Manager's interface, not in this
-repository, and the owner keeps them ([harness debt](../harness-debt.md)). Its live version
-(version 4, read from its public `gtm.js` on 2026-10-12) runs two tags as soon as it loads
-(`gtm.init`): Google Analytics 4 and the Ahrefs loader, below. A tag added there collects data
-with no pull request, so whoever adds one updates this doc. Scripts load only from Tag Manager
-(`www.googletagmanager.com`, which serves Google Analytics' tag too), Ahrefs and Cloudflare's
-beacon: the Content-Security-Policy blocks any other origin until it, its test and this doc name it.
+**What the container runs.** Its tags are set in Tag Manager, not in this repository, and the owner
+keeps them ([harness debt](../harness-debt.md)). Its live version 4 (read from its public `gtm.js`
+on 2026-10-12) runs two tags as it loads (`gtm.init`): Google Analytics 4 and the Ahrefs loader.
+A tag added there collects data with no pull request, so whoever adds one updates this doc.
+Scripts load only from Tag Manager (`www.googletagmanager.com`, which serves Google Analytics' tag
+too), Ahrefs and Cloudflare's beacon: the Content-Security-Policy blocks any other origin.
 
 - No automated check yet (issue to come: unchecked product behaviors).
 - Check: Header tests, "allows every analytics script origin in script-src, and no wildcard, while
   connect-src lets the beacons report to their own hosts".
 
-**Google Analytics 4 (`G-DHCEX32521`).** To count visits and see where they come from, Google's
-tag sends a page view for each page: the full page URL (`page_location`), the referrer and the
-title, with the browser's IP address and an id it keeps in two first-party cookies, `_ga` and
-`_ga_DHCEX32521`, for two years by default
-([Google's list](https://support.google.com/analytics/answer/11397207)). How long Google keeps the
-data is a Google Analytics setting the owner keeps. To opt out, use Google's
+**Google Analytics 4 (`G-DHCEX32521`).** To count visits and their sources, Google's tag sends a
+page view for each page: the full URL (`page_location`), referrer and title, with the browser's IP
+address and an id it keeps in two first-party cookies, `_ga` and `_ga_DHCEX32521`, for two years
+by default ([Google's list](https://support.google.com/analytics/answer/11397207)). How long
+Google keeps the data is a Google Analytics setting the owner keeps. To opt out, use Google's
 [opt-out add-on](https://tools.google.com/dlpage/gaoptout) or block `www.googletagmanager.com`.
 
 - No automated check yet (issue to come: unchecked product behaviors).
@@ -86,11 +83,13 @@ Manager, Google Analytics, Ahrefs and Cloudflare Insights hosts stops them; page
 
 - No automated check yet (issue to come: unchecked product behaviors).
 
-**In-memory events.** `src/lib/analytics.ts` keeps up to 100 events (page views and Template views)
-in the tab's memory and prints them to the browser console. It sends nothing.
+**In-memory events.** `src/lib/analytics.ts` keeps up to 100 events in the tab's memory and prints
+them to the browser console: page views, Template views and, once a public Template's page has
+loaded, each window error and unhandled rejection with its message, a stack and the page's full
+URL, query included. It sends none of them anywhere.
 
 - Check: In-memory analytics tests, "keeps at most 100 events in the tab's memory and sends none of
-  them anywhere".
+  them anywhere" and "keeps window errors and rejections, with message and URL, and sends none".
 
 ## Videos and media in Templates
 
@@ -98,8 +97,7 @@ in the tab's memory and prints them to the browser console. It sends nothing.
 `www.youtube.com`, or from `www.youtube-nocookie.com` only when the link used that host
 (`getVideoEmbedSource` in `src/utils/urlHelpers.ts`). The frame loads when the block shows, before
 anyone presses play, on every environment: YouTube gets the browser's IP address and the site's
-origin, and sets its own cookies under its privacy policy. Blocking `youtube.com` stops it; the
-video doesn't play, and the rest of the page works.
+origin, and sets its own cookies. Blocking `youtube.com` stops it, and the rest of the page works.
 
 - Check: Video tests, "embeds the YouTube player for %s".
 
@@ -120,51 +118,53 @@ Files uploaded to a Template come from the site's own origin ([uploads](#uploads
 
 ## Error reports
 
-**What a report holds, and why.** When a page fails into a root error boundary, or the window
-reports an uncaught error or unhandled rejection from the site's own scripts, the browser sends
-`POST /api/client-errors`, so the failure can be found and fixed: where it came from, the error's
-name, the stack's frames (each one's function, script path, line and column), the page's path and
-the commit it was built from ([observability](../agents/observability.md#error-reports)). It
-sends no message, which can quote what someone typed or a Template's content, and no form input,
-storage, account id or IP address, to the site's own origin, without cookies. Reports are never
-used for analytics.
+**What a report holds, and why.** So that a failure can be found and fixed, the browser sends
+`POST /api/client-errors` to its own origin, without cookies, when a page fails (below): the
+error's kind, name and stack frames, the page's path and the commit it was built from
+([observability](../agents/observability.md#error-reports)). It sends no message, which can quote
+what someone typed or a Template's content, and no form input, storage, account id or IP address,
+and reports are never used for analytics.
 
 - Check: Browser reporter tests, "reports an error thrown by the site's own scripts with its name,
   frames, page path and release, and never its message" and "posts a report to /api/client-errors
   as JSON, kept alive past the page and sent without cookies or message".
+- Check: Analytics privacy spec, "reports a site script's error once, by frames, never its message".
 
-**Rebuilt twice.** The browser rebuilds each frame from its parts before it sends a report, and the
-API again before it logs it: a line that is not a frame is dropped, however many lines a message
-runs to; a frame loses its query and fragment, and names a script on the page's origin by its
-path, another origin's by origin and path, and an extension's by its scheme alone; a secret in a
-share, invite or reset path becomes `:token`, and an email address `[email]`. A name that is not
-an identifier is dropped, and each field is cut to its bound before any pattern reads it.
+**Rebuilt twice.** The browser cuts the error's name and message off the top of its stack, then
+rebuilds each frame from its parts before it sends a report, and the API again before it logs it:
+a line is kept only as a native frame or one naming its script with a line and column (by the
+script's whole URL in Firefox and Safari); a frame loses its query and fragment, and names a script
+on the page's origin by its path, another origin's by origin and path, and an extension's by its
+scheme alone; a secret in a share, invite or reset path becomes `:token`, and an email address
+`[email]`. A name that is not an identifier is dropped.
 
+- Check: Browser reporter tests, "cuts the message off the stack, so no line of it is sent: %s".
 - Check: Report scrubbing tests, "sends no message text: drops a stack's message lines, however
-  many, and keeps each frame's function, file, line and column", "keeps another origin's frame
-  with its origin, and a browser extension's with its scheme alone" and "writes the secret in an
-  inline script's page as :token, and an email address as [email], as in the page's path".
+  many, and keeps each frame's function, file, line and column", "drops a line that only looks
+  like a frame: %s", "keeps another origin's frame with its origin, and a browser extension's with
+  its scheme alone" and "writes the secret in an inline script's page as :token, and an email
+  address as [email], as in the page's path".
 
-**Only the site's own code, and few.** A window error or rejection is reported only when a frame
-of its stack is in the site's own scripts (`/_next/static/`), never from a browser extension, a
-third-party script, an inline one (as Tag Manager's Custom HTML tags are) or the browser's
-`Script error.`. A page load sends at most five reports and an error that repeats once.
+**Which errors, and few.** An error a root error boundary catches is always reported. A window error
+or rejection is reported only when a frame of its stack is in the site's own scripts
+(`/_next/static/`), or, for a window error naming no frame, if thrown there: never one from a
+browser extension, a third-party or inline script (as Tag Manager's Custom HTML tags are), the
+browser's `Script error.`, a rejected value with no stack, or a rejected error naming no frame, such
+as a failed `fetch`'s `TypeError`. A page load sends at most five reports and an error once.
 
 - Check: Browser reporter tests, "leaves out an error from %s", "reports an unhandled rejection
   only when its stack runs through the site's scripts" and "sends at most five reports a page
   load, and an error that repeats once".
 
-**Where it goes, and for how long.** The API writes one `client_error` line to Workers Logs, which
-keeps it as long as [any log line](#server-logs), and answers 204. It takes a report only as JSON
-from the site's own origins, and 10 a minute from one client.
+**Where it goes, for how long, and opting out.** The API writes one `client_error` line to Workers
+Logs, which keeps it as long as [any log line](#server-logs), and answers 204. It takes a report
+only as JSON from the site's own origins, and 10 a minute from one client. No setting turns
+reports off: blocking `/api/client-errors` stops them, and one that can't be sent never breaks
+the page.
 
 - Check: Error report route tests, "logs one client_error line of the report's frames, path and
   commits, never a message, and answers 204 with no body" and "takes 10 reports a minute from a
   client, in a budget of its own, so a burst of reports never blocks a save".
-
-**Opting out.** There is no setting for it. Blocking `/api/client-errors` in the browser stops the
-reports, and a report that can't be sent never breaks the page.
-
 - Check: Browser reporter tests, "never lets a report that fails break the page".
 
 ## Server logs
@@ -172,36 +172,37 @@ reports, and a report that can't be sent never breaks the page.
 **What the API logs.** Each request's method, path, status and duration under a request id, and
 named events for errors and actions, as JSON lines (`functions/api/utils/logger.ts`). A field named
 `ip`, `email`, `password`, `token`, `authorization` or `cookie` is written as `[redacted]`, and a
-failed query's values are dropped.
+failed query's values are dropped. The API keeps a client's IP address in memory for rate limits
+only and never logs it, and Better Auth's messages, which name the email address on an unknown
+sign-in, reset or repeat sign-up, are logged with the address taken out.
 
 - Check: Logger tests, "redacts personal data and secrets whatever the key casing" and "drops
   Drizzle query parameters from any field, as an error or as its message".
-
-**No IP addresses.** The API keeps a client's IP address in memory for rate limits only, and never
-logs it.
-
 - Check: Router log tests, "keeps the client IP out of the request log".
-
-**No email addresses from sign-in.** Better Auth's own messages, which name the address on an
-unknown sign-in, reset or repeat sign-up, are logged with the address taken out.
-
 - Check: Better Auth log tests, "keeps email addresses out of the logs for unknown sign-ins, resets
   and repeat sign-ups".
 
-**How long.** Staging's and Production's lines, error reports among them, stay in Cloudflare's
-Workers Logs for 3 days on the Workers Free plan and 7 on Workers Paid, then go
-([limits](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#limits)),
-as does Cloudflare's own record of each request, which includes its full URL. Only people with
-access to SERP's Cloudflare account, or a token for its Workers Observability, can read them.
+**Cloudflare's record of each request, and how long.** `[observability] enabled = true` in
+`wrangler.toml` also keeps Workers Logs' invocation logs (`invocation_logs = false` would turn
+them off): one per request, holding "the Request, Response, and related metadata", "enriched with
+information available to Cloudflare in the context of the invocation", say Cloudflare's
+[docs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#invocation-logs).
+That is the full URL and the request's `cf` properties, the visitor's location among them (their
+[query builder](https://developers.cloudflare.com/workers/observability/query-builder/) groups
+these logs by country). The docs list no fields, so a log may also hold the request's headers,
+which carry the visitor's IP address (`CF-Connecting-IP`). These and the API's lines stay 3 days on
+the Workers Free plan and 7 on Workers Paid, then go
+([pricing](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#pricing)), and
+only people with access to SERP's Cloudflare account, or a token for its Workers Observability,
+can read them.
 
 - No automated check yet (issue to come: unchecked product behaviors).
 
 ## Accounts
 
 **What an account keeps.** The email address, the password (hashed by Better Auth), the name,
-username and display name, the avatar, and what the person makes: Templates, Runs, Organizations
-and their memberships, and Run Keys, which are stored hashed. They are kept while the account
-exists, so the person can use them.
+username and display name, the avatar, and what the person makes: Templates, Runs, Organizations and
+their memberships, and Run Keys, which are stored hashed. They are kept while the account exists.
 
 - No automated check yet (issue to come: unchecked product behaviors).
 
@@ -266,8 +267,7 @@ today, so the sidebar opens the same either way.
 
 - Check: Theme tests, "toggles the document dark class and persists the selected theme".
 
-**Card or row views.** `serplists:view-mode:...` in localStorage keeps each screen's view for each
-user.
+**Card or row views.** `serplists:view-mode:...` in localStorage keeps each user's view per screen.
 
 - Check: View mode tests, "scopes each preference to the user and screen".
 

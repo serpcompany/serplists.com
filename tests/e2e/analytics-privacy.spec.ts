@@ -1,6 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
+import { clientErrorReportSchema } from '../../src/lib/schemas/clientErrorReport';
 import { TAG_HOSTS } from './support/analytics';
+
+const SITE_BUNDLE_FRAME = /^at (?:.+ \()?\/_next\/static\/[^\s()]+:\d+:\d+\)?$/m;
+
+const isErrorReport = (request: Request) => new URL(request.url()).pathname === '/api/client-errors';
 
 async function recordTagRequests(page: Page): Promise<string[]> {
   const requests: string[] = [];
@@ -78,5 +83,36 @@ test.describe('analytics privacy', () => {
     await waitUntilTagManagerCouldHaveLoaded(page);
 
     await expect.poll(() => requests.some((entry) => entry.includes('gtm.js?id=GTM-PZZFQBGG'))).toBe(true);
+  });
+});
+
+test.describe('error reports', () => {
+  test("reports a site script's error once, by frames, never its message", async ({ page }) => {
+    await recordTagRequests(page);
+    const reports: Request[] = [];
+    page.on('request', (request) => {
+      if (isErrorReport(request)) reports.push(request);
+    });
+    await page.goto('/templates/');
+    await page.waitForFunction(() => Object.hasOwn(window.history, 'pushState'));
+    const reported = page.waitForResponse((response) => isErrorReport(response.request()));
+
+    const uncaught = await page.evaluate(
+      () =>
+        new Promise<string>((resolve) => {
+          window.addEventListener('error', (event) => resolve(event.message), { once: true });
+          setTimeout(() => window.history.pushState({ notCloneable: () => undefined }, ''));
+        }),
+    );
+
+    const response = await reported;
+    const body = response.request().postData() ?? '';
+    const report = clientErrorReportSchema.strict().parse(JSON.parse(body));
+    expect(response.status()).toBe(204);
+    expect(reports).toHaveLength(1);
+    expect(report).toMatchObject({ kind: 'error', name: 'DataCloneError', path: '/templates/' });
+    expect(report.stack).toMatch(SITE_BUNDLE_FRAME);
+    expect(uncaught).toContain('pushState');
+    expect(body).not.toContain(uncaught.slice(uncaught.indexOf(': ') + 2));
   });
 });

@@ -9,7 +9,6 @@ export type ClientErrorKind = (typeof CLIENT_ERROR_KINDS)[number];
 const LOGGED_LENGTH = { name: 100, functionName: 100, stack: 2000, path: 200 } as const;
 const MAX_FIELD_LENGTH = 20_000;
 const MAX_FRAMES = 20;
-const V8_FRAME_INDENT = '    at ';
 const SITE_BUNDLE_PATH = '/_next/static/';
 
 const field = z.string().max(MAX_FIELD_LENGTH);
@@ -82,17 +81,24 @@ function frameFile(file: string, origin: string): string | undefined {
   return url.origin === origin ? path : `${url.origin}${path}`;
 }
 
-function frameParts(line: string): { functionName: string; location: string } {
+type FrameParts = { functionName: string; location: string; scriptByPath: boolean };
+
+function frameParts(line: string): FrameParts {
   if (line.startsWith('at ')) {
     const rest = line.slice('at '.length);
     const open = rest.indexOf(' (');
     return open > 0 && rest.endsWith(')')
-      ? { functionName: rest.slice(0, open), location: rest.slice(open + 2, -1) }
-      : { functionName: '', location: rest };
+      ? { functionName: rest.slice(0, open), location: rest.slice(open + 2, -1), scriptByPath: true }
+      : { functionName: '', location: rest, scriptByPath: true };
   }
   const at = line.indexOf('@');
-  return at === -1 ? { functionName: '', location: line } : { functionName: line.slice(0, at), location: line.slice(at + 1) };
+  return at === -1
+    ? { functionName: '', location: line, scriptByPath: false }
+    : { functionName: line.slice(0, at), location: line.slice(at + 1), scriptByPath: false };
 }
+
+const namesAScript = (script: string, positioned: boolean, scriptByPath: boolean): boolean =>
+  FRAME_LABELS.has(script) || (positioned && (scriptByPath || !script.startsWith('/')));
 
 type StackFrame = { text: string; file: string };
 
@@ -101,24 +107,25 @@ function stackFrame(stackLine: string, origin: string): StackFrame | undefined {
   const functionName = parts.functionName.slice(0, LOGGED_LENGTH.functionName);
   if (functionName !== '' && !FUNCTION_NAME.test(functionName)) return undefined;
   const position = LINE_AND_COLUMN.exec(parts.location);
-  const file = frameFile(position === null ? parts.location : parts.location.slice(0, position.index), origin);
+  const script = position === null ? parts.location : parts.location.slice(0, position.index);
+  if (!namesAScript(script, position !== null, parts.scriptByPath)) return undefined;
+  const file = frameFile(script, origin);
   if (file === undefined) return undefined;
   const [, lineNumber = '', columnNumber = ''] = position ?? [];
   const where = position === null ? file : `${file}:${lineNumber}:${columnNumber}`;
   return { text: functionName === '' ? `at ${where}` : `at ${functionName} (${where})`, file };
 }
 
-function framesText(stack: string): string[] {
-  const start = stack.startsWith(V8_FRAME_INDENT) ? 0 : stack.indexOf(`\n${V8_FRAME_INDENT}`) + 1;
-  const lines = stack.slice(start, start + LOGGED_LENGTH.stack).split('\n');
-  return stack.length > start + LOGGED_LENGTH.stack ? lines.slice(0, -1) : lines;
+function stackLines(stack: string): string[] {
+  const lines = stack.slice(0, MAX_FIELD_LENGTH).split('\n');
+  return stack.length > MAX_FIELD_LENGTH ? lines.slice(0, -1) : lines;
 }
 
 function stackFrames(stack: string, origin: string): StackFrame[] {
   const frames: StackFrame[] = [];
   let length = 0;
-  for (const line of framesText(stack)) {
-    const frame = stackFrame(line, origin);
+  for (const line of stackLines(stack)) {
+    const frame = line.length > LOGGED_LENGTH.stack ? undefined : stackFrame(line, origin);
     if (frame === undefined) continue;
     length += frame.text.length + 1;
     if (frames.length === MAX_FRAMES || length > LOGGED_LENGTH.stack + 1) break;

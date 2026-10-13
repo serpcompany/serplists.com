@@ -81,6 +81,29 @@ describe('the browser error reporter', () => {
     expect(sent.map(({ name, stack }) => ({ name, stack }))).toEqual([{ name: 'SyntaxError', stack: 'at /_next/static/chunks/0a1b2c3d.js:1:99' }]);
   });
 
+  it("sends no line of a boundary error's message, even one shaped like a frame, when its stack names no frame", () => {
+    const sent: ClientErrorReport[] = [];
+    const message = `Could not save the plan\nalice@${SITE_CHUNK}:1:2`;
+
+    reporterInto(sent)('boundary', Object.assign(new TypeError(message), { stack: `TypeError: ${message}` }));
+
+    expect(sent).toEqual([{ kind: 'boundary', name: 'TypeError', path: '/templates/', release: COMMIT }]);
+  });
+
+  it.each([
+    ['with the name its stack was written with', 'TypeError', 'TypeError'],
+    ['with a name set after its stack was written', 'ApiError', 'Error'],
+  ])('cuts the message off the stack, so no line of it is sent: %s', (_label, name, nameInStack) => {
+    const sent: ClientErrorReport[] = [];
+    const message = `Could not save\n    at Q3 acquisition of Acme (${SITE_CHUNK}:1:2)`;
+    const stack = `${nameInStack}: ${message}\n    at onClick (${SITE_CHUNK}?v=3:1:2345)`;
+
+    reporterInto(sent)('boundary', Object.assign(new Error(message), { name, stack }));
+
+    expect(sent.map((report) => report.stack)).toEqual(['at onClick (/_next/static/chunks/0a1b2c3d.js:1:2345)']);
+    expect(JSON.stringify(sent)).not.toMatch(/Q3|Acme|Could not save/);
+  });
+
   it("reports an unhandled rejection only when its stack runs through the site's scripts", () => {
     const sent: ClientErrorReport[] = [];
     uninstall = installErrorReporting(window, reporterInto(sent));
@@ -90,6 +113,7 @@ describe('the browser error reporter', () => {
     window.dispatchEvent(rejection(inlineScriptError()));
     window.dispatchEvent(rejection('a plain string'));
     window.dispatchEvent(rejection({ message: `an error-like object about ${TEMPLATE_TITLE}` }));
+    window.dispatchEvent(rejection(thrownAt(new TypeError('Failed to fetch'))));
     window.dispatchEvent(rejection(fromSite(new TypeError('Failed to fetch'), 'loadTemplates')));
 
     expect(sent).toEqual([
