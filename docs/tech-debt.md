@@ -64,7 +64,16 @@ maintenance).
 | --- | --- | --- | --- |
 | TD-84: `GET /api/profiles/by-username` stays for browser tabs loaded before #232's second pull request; the app resolves `/profile/:handle` through `GET /api/profiles/by-handle`. | One more route to keep tested, rate-limited and within its rows-read budget. After a release cycle, delete the route and `handleProfileByUsername`, their tests (`tests/unit/functions/api/profiles-by-username-d1.test.ts`, and its cases in `profiles-handler.test.ts`), its rate-limit exemption, its rows-read budget and `d1:profile` scenario, and the docs that name it. | No issue yet | small |
 | TD-45: The footer's Network column is left out, because its SERP DR link pointed at `https://serp.dr`, which doesn't resolve (`src/components/layout/publicSiteLinks.ts`). | The footer lacks the network's links. Once the owner confirms the address, the column comes back as an external https link, with its domain added to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. | No issue yet | medium |
+
+## Privacy
+
+| Debt | Why it matters | Issue | Size |
+| --- | --- | --- | --- |
 | serplists.com has no privacy policy page; what the product collects is written only in [`privacy.md`](product/privacy.md). | People can't read what is collected about them. The policy is legal copy the owner approves. | No issue yet | medium |
+| Production loads Google Analytics 4 through Tag Manager, which sets `_ga` cookies, with no consent banner and no opt-out in the product ([`privacy.md`](product/privacy.md#analytics)). | Consent rules may apply to visitors from some regions; whether to ask, and how, is the owner's decision. | No issue yet | medium |
+| Audit rows keep `ip_hash`, an unsalted SHA-256 of the client's IP address (`functions/api/utils/audit.ts`). | Hashing every IPv4 address recovers the address, so the hash hides little. A keyed hash fixes new rows; the rows already written keep theirs unless the owner decides to clear them. | No issue yet | medium |
+| Template video blocks embed YouTube from `www.youtube.com`, not `www.youtube-nocookie.com` (`src/utils/urlHelpers.ts`, `src/components/shared/VideoEmbed.tsx`). | YouTube can set its cookies as soon as the player loads, before anyone presses play ([`privacy.md`](product/privacy.md#videos-and-media-in-templates)). | No issue yet | small |
+| The sidebar writes a `sidebar_state` cookie that nothing reads (`src/components/ui/sidebar-provider.tsx`). | The browser sends it with every request for nothing ([`privacy.md`](product/privacy.md#cookies-and-browser-storage)). | No issue yet | small |
 
 ## Database
 
