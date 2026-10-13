@@ -33,54 +33,61 @@ the browser specs guard a change before it reaches Staging.
 | Templates | B | `functions/api/handlers/template-create.ts`, `functions/api/handlers/template-update.ts`, `functions/api/handlers/template-reads.ts`, `src/views/TemplateDetail.tsx`, `src/views/TemplateEditor.tsx`, `src/components/template-editor/`, `src/features/template-editor/` | 2026-10-12 |
 | Runs | B | `functions/api/handlers/checklists-update.ts`, `functions/api/handlers/checklists-shared.ts`, `functions/api/utils/run-provenance.ts`, `src/views/ChecklistRun.tsx`, `src/views/GuestRun.tsx`, `src/features/run-execution/`, `src/features/guest-runs/` | 2026-10-12 |
 | Billing and plans | B | `functions/api/handlers/billing.ts`, `functions/api/handlers/stripe.ts`, `functions/api/utils/entitlements.ts`, `src/components/account/BillingSection.tsx`, `src/views/Pricing.tsx` | 2026-10-12 |
-| Run Keys and MCP | A | `functions/api/handlers/agentMcp.ts`, `functions/api/handlers/agentMcpTools.ts`, `functions/api/handlers/agentMcpPages.ts`, `functions/api/handlers/agentMcpTemplates.ts`, `functions/api/handlers/agentMcpRuns.ts`, `functions/api/handlers/agent-keys.ts`, `src/components/account/AgentAccessSection.tsx` | 2026-10-12 |
+| Run Keys and MCP | B | `functions/api/handlers/agentMcp.ts`, `functions/api/handlers/agentMcpTools.ts`, `functions/api/handlers/agentMcpPages.ts`, `functions/api/handlers/agentMcpTemplates.ts`, `functions/api/handlers/agentMcpRuns.ts`, `functions/api/handlers/agent-keys.ts`, `src/components/account/AgentAccessSection.tsx` | 2026-10-12 |
 | Public pages and SEO | A | `functions/sitemap/`, `functions/seo/`, `functions/api/handlers/profile-directory.ts`, `src/views/PublicTemplate.tsx`, `src/views/PublicProfile.tsx`, `src/views/ChecklistLibrary.tsx`, `src/lib/http/urlStandard.ts` | 2026-10-12 |
 | Imports, exports and uploads | B | `functions/api/handlers/template-backup.ts`, `functions/api/handlers/uploads.ts`, `functions/api/handlers/clipy.ts`, `src/components/TemplateBackup.tsx`, `src/features/template-backup/` | 2026-10-12 |
 | Design and phone layout | B | `src/components/ui/`, `src/components/layout/`, `src/app/globals.css` | 2026-10-12 |
 
 - **Accounts and sessions, B.** Better Auth's setup, the request guard, rate limits, sessions and
   their sync across tabs are unit-tested (`tests/unit/functions/api/better-auth-config.test.ts`,
-  `tests/unit/contexts/sessionSync.tabs.test.ts`), and ten browser specs drive signing up, in and
-  out, verification and expiry, `smoke-sign-in.spec.ts` on every pull request. Documented in
+  `tests/unit/contexts/sessionSync.tabs.test.ts`), and twelve browser specs drive signing up, in
+  and out, verification and expiry, `smoke-sign-in.spec.ts` among the smoke tests. Documented in
   [`authentication.md`](agents/authentication.md) and the [account](product/account.md) product
-  doc. Main gap: email delivery is checked only by hand, and the other sign-in specs run before
-  merge only on a promotion or when changed.
+  doc. Main gap: email delivery is checked only by hand, nothing checks that the browser keeps no
+  auth token, and an account can't be deleted in the product ([`tech-debt.md`](tech-debt.md),
+  Accounts and email).
 - **Personal and Organization contexts, B.** A unit test keeps the UI's role matrix equal to the
   API's, the console routes and their parser are unit-tested, and browser specs walk an
   Organization's routes, roles, invites and settings (`organization-routes.spec.ts`;
   `team-invite-flow.spec.ts` and `team-workspace.spec.ts` as smoke tests). Documented in
   [`organizations.md`](agents/organizations.md) and the [contexts](product/contexts.md) and
-  [dashboard](product/dashboard.md) product docs. Main gap: the route and role specs run before
-  merge only on a promotion or when changed, and the code still says team and workspace (TD-5).
+  [dashboard](product/dashboard.md) product docs. Main gap: the code still says team and workspace
+  for an Organization (TD-5, a large rename), and nothing checks that other members see an
+  Organization's avatar without its controls.
 - **Templates, B.** Saves, versions, conflicts, visibility, transfer, Required tools and forms are
   unit-tested, transfer on local D1 too (`tests/integration/template-transfer-local-d1.test.ts`),
   the editor's components run in a real DOM, and 28 browser specs drive the editor, the detail
-  page and the library, two editor tests as smoke tests. Documented in
-  [`template-editor.md`](agents/template-editor.md),
+  page and the library, the editor at a phone width included (`template-editor-phone.spec.ts`).
+  Documented in [`template-editor.md`](agents/template-editor.md),
   [`template-content-types.md`](agents/template-content-types.md) and the
-  [Templates](product/templates.md) product doc. Main gap: the editor's specs run before merge only
-  on a promotion or when changed, and its phone layout is checked by hand.
+  [Templates](product/templates.md) product doc. Main gap: three behaviors have no automated check
+  (the confirmation before "Load latest version", the API copying only public Templates, and
+  Required tools links kept as written), and Templates seeded before the seed fix still store
+  escaped line breaks, which the display rewrites (TD-22).
 - **Runs, B.** Reconciliation, saves and their revisions, sharing, provenance, form answers and
   guest runs are unit-tested, sharing, provenance and source access on local D1 too
   (`tests/integration/run-sharing-local-d1.test.ts`), and 18 browser specs drive the Run page,
   guest runs and shared runs. Documented in [`run-execution.md`](agents/run-execution.md) and the
   [Runs](product/runs.md) product doc. Main gap: a typed form answer still focused when the page
-  closes is lost (TD-87), and the Run page's specs run before merge only on a promotion or when
-  changed.
+  closes is lost (TD-87), the web app has no Reopen action, and nothing checks that sharing a run
+  again ends its previous link.
 - **Billing and plans, B.** Checkout, the portal, the webhook's ordering and guards, entitlements
   and plan limits are unit-tested against stand-ins for Stripe
-  (`tests/unit/functions/api/stripe-webhook-ordering.test.ts`), and plan limits are raced on local
-  D1 (`tests/integration/plan-limits-concurrency-local-d1.test.ts`). Documented in
+  (`tests/unit/functions/api/stripe-webhook-ordering.test.ts`), plan limits are raced on local D1
+  (`tests/integration/plan-limits-concurrency-local-d1.test.ts`), and seven browser specs drive
+  the upgrade offers, plan limits and the way back from Checkout, with Checkout stubbed
+  (`template-limit.spec.ts`, `billing-back-from-checkout.spec.ts`). Documented in
   [`billing.md`](agents/billing.md) and
-  [pricing and entitlements](product/pricing-and-entitlements.md). Main gap: nothing runs against Stripe itself, so a real Checkout, the portal and webhook delivery
-  are checked by hand ([`billing.md`](agents/billing.md), Production verification), and only three
-  browser specs touch paid flows.
-- **Run Keys and MCP, A.** Every tool's arguments, permissions, result bound and pages are
+  [pricing and entitlements](product/pricing-and-entitlements.md). Main gap: nothing runs against
+  Stripe itself, so a real Checkout, the portal and webhook delivery are checked by hand
+  ([`billing.md`](agents/billing.md), Production verification).
+- **Run Keys and MCP, B.** Every tool's arguments, permissions, result bound and pages are
   unit-tested (`tests/unit/functions/api/agent-mcp-result-bounds.test.ts`), local D1 tests drive
   Templates and Runs through a Run Key (`tests/integration/personal-run-mcp-local-d1.test.ts`), and
   `personal-run-mcp.spec.ts` drives a Run with a Run Key as a smoke test. Documented in
   [`agent-access.md`](agents/agent-access.md) and the [MCP release notes](product/mcp.md). Main
-  gap: keys never expire, and nothing limits one key across isolates (TD-25).
+  gap: keys never expire, and nothing limits one key across isolates (TD-25, medium, with no issue
+  yet, so not A).
 - **Public pages and SEO, A.** Sitemaps, their cache and triggers, page metadata, the URL standard
   and the Profiles directory are unit-tested (`tests/unit/config/urlStandard.test.ts`),
   `smoke-sitemaps.spec.ts` and `site-standards.spec.ts` run on every pull request, and each deploy
@@ -95,10 +102,12 @@ the browser specs guard a change before it reaches Staging.
   [`database-operations.md`](agents/database-operations.md), R2 uploads. Main gap: uploads have no
   per-account quota, no delete by their owner and no cleanup of orphans (TD-18 to TD-20).
 - **Design and phone layout, B.** The shadcn components and layout blocks have DOM tests,
-  `heading-outline.spec.ts` reads every page's headings, and three specs check phone layouts (the
-  public menu, the Run's task list and the editor). Documented in [`design.md`](agents/design.md)
-  and [`ui-screen-inventory.md`](agents/ui-screen-inventory.md). Main gap: most screens are checked
-  at phone widths, and in light and dark, only by hand, with screenshots.
+  `heading-outline.spec.ts` reads every page's headings, and 20 browser specs drive a page at a
+  phone width of 390 pixels or less, the public menu, the Run's task list and the editor among
+  them. Documented in [`design.md`](agents/design.md) and
+  [`ui-screen-inventory.md`](agents/ui-screen-inventory.md). Main gap: the screens those specs
+  don't open are checked at phone widths only by hand, and dark mode on every screen too, with
+  screenshots.
 
 ## Layers
 
@@ -129,15 +138,15 @@ the browser specs guard a change before it reaches Staging.
 - **Layers and dead code, B.** dependency-cruiser holds a rule for every arrow `ARCHITECTURE.md`
   draws, with no baseline, and prints each rule's fix (`tests/unit/config/layer-rules.test.ts`);
   knip fails on unused files, exports and packages; each runs in `pnpm run verify`. Main gap:
-  jscpd never compares `.tsx` files, and comparing them finds 6 clones
-  ([`harness-debt.md`](harness-debt.md)).
+  jscpd matches clones only within one format, so a block a `.ts` and a `.tsx` file share passes,
+  and read as one format the code holds 6 clones ([`harness-debt.md`](harness-debt.md), Checks).
 - **Observability, B.** The API logs structured JSON with request ids, and
   `pnpm run logs:query` answers errors, routes, latency and one request's timeline from the local
   and browser-test logs, with tests. Documented in [`observability.md`](agents/observability.md).
   `/api/health` and every page name the release, and the browser reports its errors to Workers
   Logs (ADR 0006). Main gap: reading Staging's or Production's logs (`pnpm run logs:deployed`)
   needs a read-only token an owner makes, and the browser's stacks are minified.
-- **Delivery, C.** CI gates each deploy, which refuses pending migrations, probes the new
+- **Delivery, B.** CI gates each deploy, which refuses pending migrations, probes the new
   deployment and checks it against the site standards, and the workflow tests hold the deploys to
   that (`tests/unit/workflows/deploy-workers.test.ts`). Documented in
   [`ci-deploys.md`](agents/ci-deploys.md). The smoke test checks the deployed commit and a refused

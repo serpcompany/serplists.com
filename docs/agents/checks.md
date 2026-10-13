@@ -124,13 +124,19 @@ comment syntax (`FORMATS_WITHOUT_COMMENTS`: plain text, images, fonts, archives)
 ### Duplicates
 
 jscpd runs over `duplicateFolders` in `scripts/checks/duplicates.ts` (`src`, `functions`,
-`scripts`, `db`, `tests` and `tools`) together, with `.jscpd.json`: 50 tokens and 5 lines, jscpd's
-defaults, and a threshold of 0, so any clone fails, one between app code and a test included. It
-reads every file whatever its size and skips only build output, `db/migrations` and the generated
-files; it has no tokenizer for XML Schema, so the sitemaps.org schemas in `tests/fixtures/` go
-unread. The check names the folders on jscpd's command line because jscpd turns a `path` in its
-config into an absolute glob, which on Windows matches nothing. `duplicate-check.test.ts` fails if
-a setting loosens, a folder drops out, or jscpd skips a file it could read.
+`scripts`, `db`, `tests`, `tools`, `.claude/skills` and `.github/actions`) together, with
+`.jscpd.json`: 50 tokens and 5 lines, jscpd's defaults, and a threshold of 0, so any clone it finds
+fails, one between app code and a test included. It matches clones only within one format, and
+reads `.ts`, `.tsx`, `.js` (with `.mjs` and `.cjs`) and `.jsx` files as four, so a block a `.ts`
+and a `.tsx` file share passes; in a `.tsx` file it reads the code inside JSX braces apart, as
+JavaScript, so repeated JSX can fall short of 50 tokens. Read as one format, as
+zenbujapanese-monorepo maps them with `formatsExts`, the code holds 6 clones today
+([`harness-debt.md`](../harness-debt.md), Checks). It reads every file whatever its size and skips
+only build output, `db/migrations` and the generated files; it has no tokenizer for XML Schema, so
+the sitemaps.org schemas in `tests/fixtures/` go unread. The check names the folders on jscpd's
+command line because jscpd turns a `path` in its config into an absolute glob, which on Windows
+matches nothing. `duplicate-check.test.ts` fails if a setting loosens, a folder drops out, or
+jscpd skips a file it could read.
 
 ### Dead code
 
@@ -162,8 +168,18 @@ one that breaks each rule, and runs dependency-cruiser on both.
 each of which regenerates its files and compares them with the committed ones, and runs
 `wrangler types` on `wrangler.toml` in a scratch folder to compare with `cloudflare-env.d.ts`.
 Each failure names the command that writes the file. `pnpm run check:db:drizzle-parity`, in
-`pnpm run check` and CI, replays every migration and compares it with the Drizzle schema. The
-sitemap catalog is written again by every build.
+`pnpm run check` and CI, replays every migration and compares it with the Drizzle schema. Two
+generated files stay out of the check: the lockfile, which CI's `pnpm install --frozen-lockfile`
+refuses when it doesn't match `package.json`, and the sitemap catalog, which every build writes
+again.
+
+### Linters
+
+`pnpm run verify linters` runs actionlint, with ShellCheck on each `run:` block, over the workflows
+in the run. It runs the image `actionlintImage` in `scripts/checks/linters.ts` pins by version and
+digest, in Docker with no network and the checkout mounted read-only, or an installed `actionlint`
+where Docker can't run; with neither it passes on a developer machine and fails in CI
+(`tests/unit/scripts/checks/linters.test.ts`).
 
 ### Code conventions and names
 

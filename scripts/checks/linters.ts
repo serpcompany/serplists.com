@@ -1,7 +1,8 @@
 import { type Ran, run } from "./tools";
 
 const actionlintVersion = "1.7.12";
-export const actionlintImage = `rhysd/actionlint:${actionlintVersion}`;
+const actionlintDigest = "sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667";
+export const actionlintImage = `rhysd/actionlint:${actionlintVersion}@${actionlintDigest}`;
 
 const DOCKER_COULD_NOT_RUN_THE_CONTAINER = 125;
 const DOCKER_IS_NOT_RUNNING = /Cannot connect to the Docker daemon|error during connect|failed to connect to the docker API/i;
@@ -22,8 +23,9 @@ const dockerRan = (ran: Ran) =>
 export function runActionlint(at: string, files: readonly string[], runner: Runner = (command, args) => run(command, args, { cwd: at })): LinterResult | undefined {
   const workflows = workflowFiles(files);
   if (workflows.length === 0) return undefined;
-  const mount = `type=bind,source=${at},target=/repository`;
-  const inDocker = runner("docker", ["run", "--rm", "--mount", mount, "--workdir", "/repository", actionlintImage, ...workflows]);
+  const mount = `type=bind,source=${at},target=/repository,readonly`;
+  const offline = ["--network", "none"];
+  const inDocker = runner("docker", ["run", "--rm", ...offline, "--mount", mount, "--workdir", "/repository", actionlintImage, ...workflows]);
   if (dockerRan(inDocker)) return { status: inDocker.status === 0 ? "passed" : "failed", ranIn: "docker", output: inDocker.output };
   const installed = runner("actionlint", workflows);
   if (installed.missing) return { status: "not available", ranIn: null, output: "" };

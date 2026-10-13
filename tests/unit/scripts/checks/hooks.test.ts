@@ -3,8 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { root } from '../../../../scripts/checks/files';
-import { editHookReport, stopHookReport } from '../../../../scripts/checks/hooks';
+import { editHookReport, onceUntilFixed, stopHookReport } from '../../../../scripts/checks/hooks';
 import { commentRule, stopRule } from '../../../../scripts/checks/rules';
+import { toldFile } from '../../../../tools/checks/route.mjs';
 import { throwawayRepositoryEnvironment } from '../../../support/throwawayGitRepository';
 import { git, scratchFolder, scratchRepository, writeFiles } from './scratch';
 
@@ -30,7 +31,7 @@ const A_LOADER_THAT_RUNS_TYPESCRIPT_FILES_AS_JAVASCRIPT = {
 
 function otherCheckout(script: 'hook.ts' | 'stop-hook.ts', installed: boolean): string {
   return scratchRepository('hooks', {
-    '.gitignore': 'node_modules/\nignored.ts\n',
+    '.gitignore': 'node_modules/\nignored.ts\ntmp/\n',
     [`scripts/checks/${script}`]: ECHO_THE_CALL,
     'probe.ts': 'export const probe = 1;\n',
     'ignored.ts': 'export const ignored = 1;\n',
@@ -59,6 +60,13 @@ describe('the edit hook', { timeout: 60_000 }, () => {
     const result = edit(path.join(checkout, 'probe.ts'));
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('checked by its own checkout');
+    expect(result.stderr).toContain(JSON.stringify(path.join(checkout, 'probe.ts')));
+  });
+
+  it("finds a relative file_path from the session's cwd, not from the folder the hook was started in", () => {
+    const checkout = otherCheckout('hook.ts', true);
+    const result = hook('hook.mjs', { cwd: checkout, tool_input: { file_path: 'probe.ts' } });
+    expect(result.status).toBe(2);
     expect(result.stderr).toContain(JSON.stringify(path.join(checkout, 'probe.ts')));
   });
 
@@ -113,6 +121,17 @@ describe('the stop hook', { timeout: 60_000 }, () => {
     expect(hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-2' }).status).toBe(2);
   });
 
+  it('asks a session again for an install when a change comes back after a turn with nothing to check', () => {
+    const checkout = committed(otherCheckout('stop-hook.ts', false));
+    const stop = () => hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' }).status;
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    expect(stop()).toBe(2);
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 1;\n' });
+    expect(stop()).toBe(0);
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    expect(stop()).toBe(2);
+  });
+
   it.each([
     ['installed nothing', false],
     ['installed its packages', true],
@@ -146,5 +165,15 @@ describe('the checks the hooks run', { timeout: 60_000 }, () => {
     expect(report.endsWith(stopRule)).toBe(true);
     expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-1')).toBe('');
     expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-2')).toBe(report);
+  });
+
+  it('tell a session about a failure once until a turn ends clean, and again if it comes back', () => {
+    const told = toldFile(scratchFolder('hooks'), 'session-1');
+    const failure = 'docs/agents/ci.md:3  links to gone.md';
+    const report = onceUntilFixed(failure, told);
+    expect(report).toBe(`${failure}\n\n${stopRule}`);
+    expect(onceUntilFixed(failure, told)).toBe('');
+    expect(onceUntilFixed('', told)).toBe('');
+    expect(onceUntilFixed(failure, told)).toBe(report);
   });
 });

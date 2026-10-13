@@ -16,7 +16,7 @@ export const knownLongDocs: Readonly<Record<string, number>> = {
   "docs/agents/system-overview.md": 323,
   "docs/agents/template-content-types.md": 323,
   "docs/agents/template-editor.md": 316,
-  "docs/agents/testing.md": 602,
+  "docs/agents/testing.md": 601,
   "docs/agents/ui-app-map.md": 371,
   "docs/agents/ui-screen-inventory.md": 2699,
 };

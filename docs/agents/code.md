@@ -1,20 +1,19 @@
 # Code rules and checks
 
-The rules every change follows, and the checks that enforce them. Each rule says why it exists,
-how to comply, how an exception is recorded, and what checks it; each check's failure names its
-rule here and says how to fix it. How each check is set up is in [`checks.md`](checks.md).
+The rules every change follows, and the checks that enforce them. Two beliefs shape them: enforce
+invariants, not implementations (boundaries, data shapes and vocabulary are strict, and how code is
+written inside them is free), and prefer boring, inspectable dependencies, whose behavior can be
+read and tested here, over opaque ones. Each rule says why it exists, how to comply, how an
+exception is recorded, and what checks it; each check's failure names its rule here and says how
+to fix it. How each check is set up is in [`checks.md`](checks.md).
 
-A change is done when `pnpm run check` passes once on the finished tree (the environment
-contract, `pnpm run verify`, lint, the type checks, the unit and local D1 tests, schema parity),
-it has the evidence [`verification.md`](verification.md) asks of its kind of change, and the docs
-say what changed: a behavior's product doc and its check in the same pull request, the area's doc
-for how it works. The `finish-change` skill walks an agent through it, with a fresh review of the
-diff, before it drafts the pull request.
+A change is done when `pnpm run check` passes once on the finished tree, it has the evidence
+[`verification.md`](verification.md) asks of its kind of change, and the docs say what changed:
+the product doc for a behavior, the area's doc for how it works. The `finish-change` skill walks
+an agent through it, with a fresh review of the diff, before it drafts the pull request.
 
-Git hooks, which `pnpm install` installs ([`lefthook.yml`](../../lefthook.yml)), check the staged
-files for comments, size, secrets and lint before a commit, refuse a `fix:` commit that changes no
-test, and run `pnpm run verify` at low priority before a push. Fix what they report rather than
-skipping them: CI runs the same checks either way.
+Git hooks, which `pnpm install` installs from [`lefthook.yml`](../../lefthook.yml), check each
+commit and push ([Checks](#checks)). Fix what they report, never skip them: CI runs the same checks.
 
 ## No comments
 
@@ -24,11 +23,10 @@ it, and why it is built that way goes in the doc [`AGENTS.md`](../../AGENTS.md) 
 area, a product doc or an ADR. A tool directive (`eslint-disable`, `@ts-expect-error`) is a
 comment too: configure the tool in its config file. Commented-out code is deleted, since git keeps
 it. A shebang may open a script, and Markdown holds no HTML comment, which agents read and people
-don't see. Files a tool writes are left as written, and `GENERATED_FILES` in
-`scripts/check-no-comments-lib.ts` lists them. ESLint's `serplists/no-comments`
-checks every TypeScript and JavaScript file, with inline config off, and `pnpm run verify
-comments` every other format, workflows' `run:` blocks included ([`checks.md`](checks.md),
-Comments).
+don't see. The files a tool writes that `GENERATED_FILES` in `scripts/check-no-comments-lib.ts`
+lists are left as written. ESLint's `serplists/no-comments` checks every TypeScript and JavaScript
+file, with inline config off, and `pnpm run verify comments` every other format, workflows' `run:`
+blocks included ([`checks.md`](checks.md), Comments).
 
 ## File size
 
@@ -48,8 +46,10 @@ type or test helper named for what it does; where the blocks serve different pur
 parameters name what differs. There are no exceptions today; one needs a reason that makes sharing
 unsafe now, and goes in `knownDuplicates` in `scripts/checks/known-duplicates.ts` as the pair of
 files, their number of blocks and why, and may only shrink. Checked by `pnpm run verify
-duplicates`: jscpd over `src`, `functions`, `scripts`, `db`, `tests` and `tools`, applied
-migrations and generated files aside (`tests/unit/config/duplicate-check.test.ts`).
+duplicates`: jscpd over `src`, `functions`, `scripts`, `db`, `tests`, `tools`, `.claude/skills`
+and `.github/actions`, applied migrations and generated files aside
+(`tests/unit/config/duplicate-check.test.ts`). It compares files of one format at a time, so a
+block a `.ts` and a `.tsx` file share passes ([`harness-debt.md`](../harness-debt.md), Checks).
 
 ## Dead code
 
@@ -63,8 +63,8 @@ unused file, export or dependency, and stop exporting what only its own file use
   its reason in [`exceptions.md`](exceptions.md), rather than ignoring the finding.
 - dependency-cruiser fails on a module in `src/` or `functions/` that no route, no file Next.js
   loads by name and not `next.config.ts` reaches, with no folder exempt; code only a script uses
-  lives in `scripts/lib`. ESLint's `no-unused-vars` lets only an argument kept for its type, `_…`.
-  `dead-code-check.test.ts` and `no-exceptions.test.ts` fail if a setting loosens.
+  lives in `scripts/lib`. ESLint's `no-unused-vars` passes only an argument kept for its type (`_…`)
+  and a rest sibling; `dead-code-check.test.ts` and `no-exceptions.test.ts` fail if they loosen.
 
 ## Imports
 
@@ -175,17 +175,17 @@ isn't enough. There are no exceptions.
 ## Linters
 
 Workflows lint clean with actionlint, which also runs ShellCheck on their `run:` blocks, at the
-version pinned in `scripts/checks/linters.ts` (`pnpm run verify linters`). It runs in Docker, or
-as an installed copy; with neither it says so and passes on this machine, and in CI it fails. Fix
-what it reports. There are no exceptions.
+version and digest pinned in `scripts/checks/linters.ts` (`pnpm run verify linters`). It runs in
+Docker, offline and unable to write the checkout, or as an installed copy; with neither it says so
+and passes on this machine, and in CI it fails. Fix what it reports. There are no exceptions.
 
 ## Generated files
 
-A file a tool writes matches its source and is never edited by hand: run the command that writes
-it and commit the result. `pnpm run verify generated` regenerates each and fails on a difference,
-naming the command, and `pnpm run check:db:drizzle-parity` replays the migrations against the
-Drizzle schema. `GENERATED_FILES` in `scripts/check-no-comments-lib.ts` lists the files a tool
-writes ([`checks.md`](checks.md), Generated files).
+A file a tool writes matches its source and is never edited by hand: run the command that writes it
+and commit the result. `pnpm run verify generated` regenerates each, the lockfile and the sitemap
+catalog aside, and fails on a difference, naming the command; CI's `--frozen-lockfile` install holds
+the lockfile, and every build writes the catalog again. `pnpm run check:db:drizzle-parity` replays
+the migrations against the Drizzle schema ([`checks.md`](checks.md), Generated files).
 
 ## Fixes
 
@@ -204,8 +204,9 @@ One issue, one branch from `staging` (`<type>/<issue>-<slug>`, kept up to date b
 user notices, typed `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci` or `chore`.
 Its body follows `.github/pull_request_template.md`, starting with `Closes #<number>`, a line per
 issue it finishes, or `No issue: <reason>`, and fills in each evidence line. Every review comment
-is fixed or answered; agents never merge. The `Pull request` workflow checks the title, the issue
-line, the evidence and a fix's test ([`ci.md`](ci.md), Pull request).
+is fixed or answered; agents never merge. The `Pull request` workflow checks that a pull request
+into `main` is a promotion, the title, the issue line, the evidence and a fix's test
+([`ci.md`](ci.md), Pull request).
 
 ## Docs
 
@@ -241,10 +242,10 @@ follow-up issue, with a test that fails on the real mistake. Until it is a check
 | The stop hook (`stop-hook.mjs`) | The same and the docs, on uncommitted changes | Claude Code |
 | The git hooks | Comments, size, secrets and lint on a commit; `verify` on a push | Every clone |
 | `pnpm run lint`, `typecheck` | Type-aware ESLint, the five tsc projects | `check`, Quality Gate |
-| `pnpm run test:run`, `test:local-d1` | Unit tests, the checks' own among them; local D1 tests | `pnpm run check`, Quality Gate |
+| `pnpm run test:run`, `test:local-d1` | Unit and local D1 tests | `check`, Quality Gate |
 | `pnpm run check:db:drizzle-parity` | The migrations match the Drizzle schema | `check`, CI |
 | `pnpm run check` | `typecheck:env`, then each of the above in turn | By hand, per finished tree |
-| Pull request checks | Title, closing issue, a fix's test, evidence lines | `Pull request` |
+| Pull request checks | Only a promotion into `main`, title, closing issue, a fix's test, evidence lines | `Pull request` |
 | Browser tests | The whole suite, on the production build | `Browser tests`, each PR |
 | Code review | Each push read against these rules (`pr-review`) | `Code review` workflow |
 | `pnpm run maintenance:report` | Failures, stale docs and grades, debt, exceptions, files near the limit, review findings | `Weekly maintenance` |
@@ -271,12 +272,11 @@ pricing; and changing a rule in this doc. Agents never merge ([`AGENTS.md`](../.
 
 ## SERP's standards
 
-This repository follows SERP's standards, from [Agent Harness](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/README.md).
-Shared practice isn't restated here: handing work to subagents ([Token Budget](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/token-budget.md)),
-the prompt a review starts from ([Review Prompt](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/review-prompt.md)),
-and cleaning up after merged work ([Housekeeping](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/housekeeping.md)).
-Where this repository differs from a standard, [`AGENTS.md`](../../AGENTS.md) lists it, and that
-list wins.
+This repository follows SERP's standards, from [Agent Harness](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/README.md). Shared practice isn't restated
+here: handing work to subagents ([Token Budget](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/token-budget.md)), the prompt a review starts
+from ([Review Prompt](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/agent-harness/review-prompt.md)), and cleaning up after merged work
+([Housekeeping](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/housekeeping.md)). Where this repository differs from a standard, [`AGENTS.md`](../../AGENTS.md) lists
+it, and that list wins.
 
 ## Skills
 

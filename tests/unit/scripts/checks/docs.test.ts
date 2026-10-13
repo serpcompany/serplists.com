@@ -27,16 +27,25 @@ interface DocsRun {
   allowances?: Readonly<Record<string, number>>;
 }
 
-function docsProblems(files: Readonly<Record<string, string>>, { prefixes = [], allowances = {} }: DocsRun = {}) {
-  const root = scratchRepository('docs', { ...REPOSITORY, ...files });
+function problemsIn(files: Readonly<Record<string, string>>, { prefixes = [], allowances = {} }: DocsRun = {}) {
+  const root = scratchRepository('docs', files);
   return checkDocs({ root, all: repositoryFiles(root), prefixes }, allowances).map(located);
 }
+
+const docsProblems = (files: Readonly<Record<string, string>>, run: DocsRun = {}) => problemsIn({ ...REPOSITORY, ...files }, run);
 
 const lines = (count: number) => 'line\n'.repeat(count);
 
 describe('the docs check', () => {
   it('passes docs whose links, anchors, repository paths and scripts all exist', () => {
     expect(docsProblems({})).toEqual([]);
+  });
+
+  it('fails a repository where it finds no doc, or no link to follow, since it then checked nothing', () => {
+    const checkedNothing = (docs: number) =>
+      `AGENTS.md  the docs check found ${docs} docs and 0 links, so it checked nothing: see isDoc in scripts/checks/docs.ts`;
+    expect(problemsIn({ 'src/app.ts': 'export const app = 1;\n' })).toEqual([checkedNothing(0)]);
+    expect(problemsIn({ 'AGENTS.md': '# AGENTS\n\nNo links yet.\n' })).toEqual([checkedNothing(1)]);
   });
 
   it('fails a relative link to a file the repository does not have', () => {

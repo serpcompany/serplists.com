@@ -1,6 +1,6 @@
 # Testing conventions
 
-- Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
+- Run the smallest relevant test while developing, and `pnpm run check` once before a pull request.
 - **Test what the code does, never its text.** ESLint refuses a test that reads code under
   `src/` or `functions/` ([repository checks](checks.md#repository-checks)). Instead:
   - a page, layout or route file: call it (`AppLayout({ children })`, a page's default export)
@@ -17,7 +17,7 @@
     `tests/unit/config/code-conventions.test.ts`.
 - **Look for shared setup before writing any.** A mock, fixture or browser step that a second
   test needs lives in one of three folders, and `pnpm run verify duplicates` fails on a second
-  copy of 5 lines and 50 tokens:
+  copy of 5 lines and 50 tokens in a file of the same format (a `.ts` copy of `.tsx` code passes):
   - `tests/fixtures/`: data and fake objects with the types the code under test receives:
     handler rows (`handlerRows.ts`), Templates and runs (`dashboardTemplate.ts`,
     `launchChecklistTemplate.ts`, `runExecutionFixtures.ts`, `runStartFixtures.ts`),
@@ -66,10 +66,9 @@
     (`api-bodies.ts`), a mocked API (`mocked-api.ts`) and navigation (`navigation.ts`).
 - **Tests that make their own git repositories.** The unit test setup (`tests/setup.ts`)
   clears git's repository variables (`GIT_DIR` and the like) before any test runs.
-  - Inside a git hook git sets them: the pre-push hook runs `pnpm run verify`, and in a linked
-    worktree `GIT_DIR` names that worktree's repository.
-  - Without the clearing, a test that runs `git init`, `add` or `commit` in its fixture would
-    write into the real repository instead.
+  - Git sets them in every command a git hook runs, and in a linked worktree `GIT_DIR` names
+    that worktree's repository. No hook here runs the tests, but under one that did, a test's
+    `git init`, `add` or `commit` would write into the real repository without the clearing.
   - Scripts that run git in a directory they are given use `withoutGitRepositoryOverrides()`
     from `scripts/lib/git-env.ts`.
 - Every test runs. ESLint refuses `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `xit` and a

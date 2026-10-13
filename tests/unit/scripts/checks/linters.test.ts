@@ -17,11 +17,24 @@ function runnerAnswering(answers: Readonly<Record<string, Ran>>) {
 }
 
 describe('actionlint', () => {
-  it('runs at the pinned version in Docker, on the workflows only', () => {
+  it('runs the image pinned by version and digest in Docker, with no network and a read-only checkout, on the workflows only', () => {
     const { runner, calls } = runnerAnswering({ docker: ran(0) });
     expect(runActionlint('/repository', FILES, runner)).toEqual({ status: 'passed', ranIn: 'docker', output: '' });
+    expect(actionlintImage).toMatch(/^rhysd\/actionlint:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/);
     expect(calls).toEqual([
-      ['docker', 'run', '--rm', '--mount', 'type=bind,source=/repository,target=/repository', '--workdir', '/repository', actionlintImage, ...WORKFLOWS],
+      [
+        'docker',
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--mount',
+        'type=bind,source=/repository,target=/repository,readonly',
+        '--workdir',
+        '/repository',
+        actionlintImage,
+        ...WORKFLOWS,
+      ],
     ]);
   });
 

@@ -11,3 +11,4 @@ export declare function runInCheckout(route: Extract<Route, { kind: "run" }>, in
 export declare function changedPaths(...listings: string[]): string[];
 export declare function toldFile(checkout: string, session: string | undefined): string | undefined;
 export declare function alreadyTold(file: string | undefined, report: string): boolean;
+export declare function forgetTold(file: string | undefined): void;

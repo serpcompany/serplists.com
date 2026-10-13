@@ -7,16 +7,17 @@ ends it.
 
 ## Lists beside the checks
 
-Each list is in its check's own code. Each entry has its size or count and its reason, and the
-check fails an entry that grew, asks for one to be lowered as the thing shrinks, and for it to go
-once it isn't needed. An entry is never raised to make a check pass.
+Each list is in its check's own code. The first three only shrink: their check fails an entry that
+grew, asks for one to be lowered as the thing shrinks, and for it to go once it isn't needed. An
+entry is never added or raised to make a check pass, though nothing refuses one yet
+([`harness-debt.md`](../harness-debt.md), Checks).
 
-| List | Holds |
+| List | Each entry holds |
 | --- | --- |
-| `knownLargeFiles` in `scripts/checks/sizes.ts` | Code files over 500 lines. None today |
-| `knownDuplicates` in `scripts/checks/known-duplicates.ts` | Pairs of files that repeat a block. None today |
-| `knownLongDocs` in `scripts/checks/doc-rules/budgets.ts` | Docs over their size budget when the check arrived, each at that size |
-| `GENERATED_FILES` in `scripts/check-no-comments-lib.ts` | Files a tool writes: the lockfile, `cloudflare-env.d.ts`, the portable Template JSON Schema, the bundled sitemap catalog, and the example Templates' `template.json` and `preview.html`. The comment, duplicate and size checks leave them as written |
+| `knownLargeFiles` in `scripts/checks/sizes.ts` | A code file over 500 lines, its size, and why splitting it is unsafe now; the check fails an entry without a reason. None today |
+| `knownDuplicates` in `scripts/checks/known-duplicates.ts` | A pair of files that repeat a block, their number of blocks, and why sharing is unsafe now; the check fails an entry without a reason. None today |
+| `knownLongDocs` in `scripts/checks/doc-rules/budgets.ts` | A doc over its size budget when the check arrived, and that size. No reason: every entry has the same one, a doc older than the budget, and splitting them is a row in [`harness-debt.md`](../harness-debt.md), Harness |
+| `GENERATED_FILES` in `scripts/check-no-comments-lib.ts` | A path, nothing else: a tool writes the file, which is the reason. They are the lockfile, `cloudflare-env.d.ts`, the portable Template JSON Schema, the bundled sitemap catalog, and the example Templates' `template.json` and `preview.html`. The comment, duplicate and size checks leave them as written |
 
 The weekly maintenance report counts the first three ([`ci-agents.md`](ci-agents.md)).
 

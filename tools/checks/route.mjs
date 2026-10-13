@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const SESSION_NAME = /^[A-Za-z0-9_-]{1,128}$/
@@ -87,4 +87,8 @@ export function alreadyTold(file, report) {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, key)
   return false
+}
+
+export function forgetTold(file) {
+  if (file) rmSync(file, { force: true })
 }
