@@ -10,7 +10,8 @@ import {
 
 const CLIENT_ERRORS_ENDPOINT = '/api/client-errors';
 const MAX_REPORTS_PER_PAGE_LOAD = 5;
-const NAME_AND_MESSAGE_SEPARATOR = ': ';
+const V8_DEFAULT_ERROR_NAME = 'Error';
+const V8_FRAME_LINE_START = '    at ';
 
 type ErrorReporter = (kind: ClientErrorKind, thrown: unknown, thrownAt?: string) => void;
 
@@ -18,25 +19,36 @@ type PageLocation = Pick<Location, 'origin' | 'pathname'>;
 
 type ErrorEventSource = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 
-const thrownError = z.object({ name: z.string().optional(), message: z.string().optional(), stack: z.string().optional() });
+const thrownError = z.object({ name: z.string().optional(), message: z.unknown(), stack: z.string().optional() });
 
 type ThrownError = z.infer<typeof thrownError>;
 
-const endsALine = (stack: string, at: number): boolean => at === stack.length || stack.startsWith('\n', at);
+function v8StackTops(name: string | undefined, message: unknown): string[] {
+  if (name === '') return typeof message === 'string' ? [message] : [];
+  const names = [...new Set([name ?? V8_DEFAULT_ERROR_NAME, V8_DEFAULT_ERROR_NAME])];
+  const withMessage = typeof message === 'string' ? [message, ...names.map((errorName) => `${errorName}: ${message}`)] : [];
+  return [...withMessage, ...names].sort((first, second) => second.length - first.length);
+}
 
-function stackBelowMessage(stack: string, message: string | undefined): string {
-  if (message === undefined || message === '') return stack;
-  const separator = stack.indexOf(NAME_AND_MESSAGE_SEPARATOR);
-  const starts = separator === -1 ? [0] : [0, separator + NAME_AND_MESSAGE_SEPARATOR.length];
-  const start = starts.find((at) => stack.startsWith(message, at) && endsALine(stack, at + message.length));
-  return start === undefined ? stack : stack.slice(start + message.length);
+const isV8FrameLine = (line: string): boolean => line.startsWith(V8_FRAME_LINE_START);
+
+function v8FrameRun(text: string): string {
+  const lines = text.split('\n');
+  const end = lines.findIndex((line) => !isV8FrameLine(line));
+  return (end === -1 ? lines : lines.slice(0, end)).join('\n');
+}
+
+function stackFramesText(stack: string, tops: readonly string[]): string {
+  const top = tops.find((text) => stack.startsWith(text) && (stack.length === text.length || stack.startsWith('\n', text.length)));
+  if (top !== undefined) return v8FrameRun(stack.slice(top.length + 1));
+  return stack.split('\n').some(isV8FrameLine) ? '' : stack;
 }
 
 function describedError(kind: ClientErrorKind, { name, message, stack }: ThrownError, path: string): ClientErrorReport {
   return {
     kind,
     ...(name === undefined ? {} : { name }),
-    ...(stack === undefined ? {} : { stack: stackBelowMessage(stack, message) }),
+    ...(stack === undefined ? {} : { stack: stackFramesText(stack, v8StackTops(name, message)) }),
     path,
     release: releaseCommit(),
   };

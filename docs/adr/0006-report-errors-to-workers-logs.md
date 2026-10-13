@@ -7,10 +7,10 @@ status: proposed
 Staging's and Production's errors go to Cloudflare's Workers Logs, where the Worker already writes
 its JSON log lines, and nowhere else. The Worker logs its own errors through `log()`, each line
 naming the commit it was built from. The browser reports its errors to `POST /api/client-errors`:
-the error's name and stack frames, never its message, rebuilt from their parts before it sends
-them, and the API rebuilds each report again and logs it as one `client_error` line. An agent
-reads both with `pnpm run logs:deployed`. SERP's Telemetry standard starts a website with Sentry
-in the front and back end; this repository does not use it yet.
+the error's name and stack frames, without its message but in one case below, rebuilt from their
+parts before it sends them, and the API rebuilds each report again and logs it as one
+`client_error` line. An agent reads both with `pnpm run logs:deployed`. SERP's Telemetry standard
+starts a website with Sentry in the front and back end; this repository does not use it yet.
 
 Chosen with the harness alignment on 2026-10-12 as the interim that needs no new account or
 processor, for the owner to accept or to replace with Sentry, which needs an account and a DSN
@@ -46,9 +46,13 @@ published none. How it works is in
 
 ## Consequences
 
-- A report holds no message, only the error's name and its frames, so it can't carry what someone
-  typed or a Template's content; finding the cause takes the frames and the commit. The frames are
-  rebuilt in the browser and in the API (`scrubClientErrorReport`), whose tests list what they keep.
+- A report holds no message, only the error's name and its frames, so it carries what someone typed
+  or a Template's content in one case only: a message cut at one of its line breaks after its stack
+  was read leaves the lines it lost in the stack, and those shaped like V8's frames go as frames
+  ([observability](../agents/observability.md#error-reports)). Finding the cause takes the frames
+  and the commit, and a stack's frames end at the first line that isn't one, so an `eval` frame
+  drops those below it, and the whole report when the site's frames all lie below it. The frames are rebuilt in the browser and in the API
+  (`scrubClientErrorReport`), whose tests list what they keep.
 - An error a root error boundary catches is always reported. A window error or unhandled rejection
   is reported only when a frame of its stack is in the site's own scripts (for a window error whose
   stack names no frame, the place the window says it was thrown), so an error in an inline script

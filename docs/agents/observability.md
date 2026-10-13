@@ -108,27 +108,43 @@ environment it runs in.
   HTML tags run inline, as the page's own URL); the browser's `Script error.`; a rejection of a
   value with no stack; and a rejected error whose stack names no frame, such as the `TypeError`
   of a failed `fetch`, which `apiRequest` (`src/lib/api/request.ts`) passes on as it is.
-  `tests/e2e/analytics-privacy.spec.ts` follows the whole path in a browser: an error thrown in a
-  built chunk is reported once, by its frames under `/_next/static/`.
+  `tests/e2e/analytics-privacy.spec.ts` follows the whole path in a browser: an error thrown twice
+  in a built chunk is reported once, and another error once more, each by its frames under
+  `/_next/static/` and with a report's fields only.
 - **A report** holds its `kind` (`boundary`, `error` or `unhandledrejection`), the error's `name`,
   its `stack` frames, the page's `path`, and the `release`, and never the error's message, which
   can quote user input, a Template's title or the text `JSON.parse` failed on (SERP's Telemetry
-  standard: stable codes and bounded metadata, never user input). The reporter reads the message
-  only to cut it, with the name before it, off the top of a V8 stack, which starts with both
-  (Firefox's and Safari's stacks hold neither), so no line of it can pass for a frame.
-  `scrubClientErrorReport` (`src/lib/schemas/clientErrorReport.ts`) then runs in the browser
-  before a report is sent and in the API before it is logged, and rebuilds each frame from its
-  parts as `at <function> (<file>:<line>:<column>)`. A line is a frame only when it parses as a
-  V8, Firefox or Safari frame that names its script with a line and column (or is a native frame,
-  such as `JSON.parse (<anonymous>)`), and a Firefox or Safari frame only when it names the script
-  by its whole URL; any other line is dropped. A function name may hold only identifier
-  characters, `<>[]/#*` and spaces; a file on the page's origin becomes its path, another origin's
-  its origin and path, and any other scheme (a browser extension's) the scheme alone, with queries
-  and fragments dropped, the secret in a share, invite or reset path written as `:token` and email
-  addresses as `[email]`. A name that is not an identifier is dropped. No pattern reads more than
-  a bound: the name is cut to 100 characters and the path to 200, and the stack is read a line at
-  a time over its first 20,000 characters, skipping any line over 2,000, for at most 20 whole
-  frames and 2,000 characters.
+  standard: stable codes and bounded metadata, never user input), but in the one case below.
+- **Where the frames start.** A V8 stack (Chrome's, Edge's) opens with the error's name and message
+  as they were when the stack was first read, above lines that start `    at `; Firefox's and
+  Safari's hold neither. So of a stack with `    at ` lines, `src/lib/errorReports.ts` keeps only
+  the unbroken run of them that follows a top that is exactly the error's current
+  `<name>: <message>`, `<message>` or `<name>` (only `<name>` when the message is not text, and
+  only `<message>` when the name is empty), `Error` standing for the name too (V8's default, and
+  how Chrome heads a DOMException's stack), and none when no top matches; of any other stack, the
+  unbroken run of frames it opens with. A message changed, prefixed or cleared after the stack was
+  read so leaves no frame (a window error then names where the window says it was thrown), and
+  nothing below the run, such as a `Caused by:` appended to it, is sent. One case still sends lines
+  of a message: cut at one of its line breaks after the stack was read (or cleared when it began
+  with one), a message leaves the lines it lost between the top and the frames, and those at the
+  start of the run that are shaped like V8 frames, such as `    at <text> (<script>:<line>:<column>)`
+  or `    at <text> (<anonymous>)`, go as frames, since nothing tells them apart.
+- **Rebuilt twice.** `scrubClientErrorReport` (`src/lib/schemas/clientErrorReport.ts`) runs in the
+  browser before a report is sent and in the API before it is logged. It keeps only the unbroken
+  run of frames a stack opens with, so the API logs no frame of a stack sent with anything above
+  them, and none below a line it does not read as a frame (an `eval` frame or
+  `Promise.all (index 0)` ends the run; a window error or rejection whose site frames all lie below
+  such a line is not reported at all). It rebuilds each frame from its parts as
+  `at <function> (<file>:<line>:<column>)`. A line is a frame only when it parses as a V8, Firefox
+  or Safari frame that names its script with a line and column (or is a native frame, such as
+  `JSON.parse (<anonymous>)`), and a Firefox or Safari frame only when it names the script by its
+  whole URL. A function name may hold only identifier characters, `<>[]/#*` and spaces; a file on
+  the page's origin becomes its path, another origin's its origin and path, and any other scheme
+  (a browser extension's) the scheme alone, with queries and fragments dropped, the secret in a
+  share, invite or reset path written as `:token` and email addresses as `[email]`. A name that is
+  not an identifier is dropped. No pattern reads more than a bound: the name is cut to 100
+  characters and the path to 200, and the stack is read a line at a time over its first 20,000
+  characters, ending at any line over 2,000, for at most 20 whole frames and 2,000 characters.
 - **`POST /api/client-errors`** (`functions/api/handlers/client-errors.ts`) takes only JSON from a
   trusted origin, at most 16KB, 10 reports a minute per client in a bucket of its own
   ([security](security.md#rate-limits)), logs one `client_error` line at level `error` with the

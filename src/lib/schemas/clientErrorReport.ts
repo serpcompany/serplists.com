@@ -126,7 +126,7 @@ function stackFrames(stack: string, origin: string): StackFrame[] {
   let length = 0;
   for (const line of stackLines(stack)) {
     const frame = line.length > LOGGED_LENGTH.stack ? undefined : stackFrame(line, origin);
-    if (frame === undefined) continue;
+    if (frame === undefined) break;
     length += frame.text.length + 1;
     if (frames.length === MAX_FRAMES || length > LOGGED_LENGTH.stack + 1) break;
     frames.push(frame);

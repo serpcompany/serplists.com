@@ -118,49 +118,50 @@ Files uploaded to a Template come from the site's own origin ([uploads](#uploads
 
 ## Error reports
 
-**What a report holds, and why.** So that a failure can be found and fixed, the browser sends
-`POST /api/client-errors` to its own origin, without cookies, when a page fails (below): the
-error's kind, name and stack frames, the page's path and the commit it was built from
-([observability](../agents/observability.md#error-reports)). It sends no message, which can quote
-what someone typed or a Template's content, and no form input, storage, account id or IP address,
-and reports are never used for analytics.
+**What a report holds, and why.** To fix a failing page, the browser sends `POST /api/client-errors`
+to its own origin, without cookies: the error's kind, name and stack frames, the page's path and the
+commit it was built from ([observability](../agents/observability.md#error-reports)). It sends no
+form input, storage or account id, and no message, which can quote what someone typed or a
+Template's content, but in one case below. Reports are never used for analytics.
 
 - Check: Browser reporter tests, "reports an error thrown by the site's own scripts with its name,
   frames, page path and release, and never its message" and "posts a report to /api/client-errors
   as JSON, kept alive past the page and sent without cookies or message".
-- Check: Analytics privacy spec, "reports a site script's error once, by frames, never its message".
 
-**Rebuilt twice.** The browser cuts the error's name and message off the top of its stack, then
-rebuilds each frame from its parts before it sends a report, and the API again before it logs it:
-a line is kept only as a native frame or one naming its script with a line and column (by the
-script's whole URL in Firefox and Safari); a frame loses its query and fragment, and names a script
-on the page's origin by its path, another origin's by origin and path, and an extension's by its
-scheme alone; a secret in a share, invite or reset path becomes `:token`, and an email address
-`[email]`. A name that is not an identifier is dropped.
+**Rebuilt twice.** Chrome's stack opens with the error's name and message as they were when first
+read; Firefox's and Safari's hold frames alone. The browser sends only the unbroken run of frames
+under a top that is the error's current name and message (Chrome), or opening the stack (Firefox,
+Safari), and the API logs only a stack's opening run. So a message changed after its stack was read
+sends no frame, but one cut at a line break can send lines cut off that look like Chrome's frames. Each
+frame is rebuilt from its parts, naming a script on the page's origin by its path, another origin's
+by origin and path, an extension's by its scheme alone, never a query or fragment, a share, invite
+or reset token as `:token` and an email address as `[email]`. A non-identifier name is dropped.
 
-- Check: Browser reporter tests, "cuts the message off the stack, so no line of it is sent: %s".
-- Check: Report scrubbing tests, "sends no message text: drops a stack's message lines, however
-  many, and keeps each frame's function, file, line and column", "drops a line that only looks
-  like a frame: %s", "keeps another origin's frame with its origin, and a browser extension's with
-  its scheme alone" and "writes the secret in an inline script's page as :token, and an email
-  address as [email], as in the page's path".
+- Check: Browser reporter tests, "sends no frame of a stack read before its message was %s" and
+  "cuts the message off the stack, so no line of it is sent: %s".
+- Check: Report scrubbing tests, "keeps no frame of a stack sent with its message still on top",
+  "ends the frames at the first line it does not read as one: %s", "keeps another origin's frame
+  with its origin, and a browser extension's with its scheme alone" and "writes the secret in an
+  inline script's page as :token, and an email address as [email], as in the page's path".
 
 **Which errors, and few.** An error a root error boundary catches is always reported. A window error
 or rejection is reported only when a frame of its stack is in the site's own scripts
 (`/_next/static/`), or, for a window error naming no frame, if thrown there: never one from a
 browser extension, a third-party or inline script (as Tag Manager's Custom HTML tags are), the
-browser's `Script error.`, a rejected value with no stack, or a rejected error naming no frame, such
-as a failed `fetch`'s `TypeError`. A page load sends at most five reports and an error once.
+browser's `Script error.`, or a rejection naming no frame, such as a failed `fetch`'s `TypeError`.
+A page load sends at most five reports, and each distinct error once.
 
 - Check: Browser reporter tests, "leaves out an error from %s", "reports an unhandled rejection
   only when its stack runs through the site's scripts" and "sends at most five reports a page
   load, and an error that repeats once".
+- Check: Analytics privacy spec, "reports each distinct error a site script throws once, by frames
+  in the site's chunks and a report's fields only".
 
 **Where it goes, for how long, and opting out.** The API writes one `client_error` line to Workers
-Logs, which keeps it as long as [any log line](#server-logs), and answers 204. It takes a report
-only as JSON from the site's own origins, and 10 a minute from one client. No setting turns
-reports off: blocking `/api/client-errors` stops them, and one that can't be sent never breaks
-the page.
+Logs and answers 204; Cloudflare's own record of the request may also hold the visitor's IP
+address, and both stay 3 to 7 days ([server logs](#server-logs)). It takes a report only as JSON
+from the site's own origins, and 10 a minute from one client. No setting turns reports off:
+blocking `/api/client-errors` stops them, and one that can't be sent never breaks the page.
 
 - Check: Error report route tests, "logs one client_error line of the report's frames, path and
   commits, never a message, and answers 204 with no body" and "takes 10 reports a minute from a
@@ -191,10 +192,8 @@ That is the full URL and the request's `cf` properties, the visitor's location a
 [query builder](https://developers.cloudflare.com/workers/observability/query-builder/) groups
 these logs by country). The docs list no fields, so a log may also hold the request's headers,
 which carry the visitor's IP address (`CF-Connecting-IP`). These and the API's lines stay 3 days on
-the Workers Free plan and 7 on Workers Paid, then go
-([pricing](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#pricing)), and
-only people with access to SERP's Cloudflare account, or a token for its Workers Observability,
-can read them.
+the Workers Free plan and 7 on Workers Paid, the same docs say, then go, and only people with
+access to SERP's Cloudflare account, or a token for its Workers Observability, can read them.
 
 - No automated check yet (issue to come: unchecked product behaviors).
 

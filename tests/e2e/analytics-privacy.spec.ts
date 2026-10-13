@@ -87,32 +87,41 @@ test.describe('analytics privacy', () => {
 });
 
 test.describe('error reports', () => {
-  test("reports a site script's error once, by frames, never its message", async ({ page }) => {
+  test("reports each distinct error a site script throws once, by frames in the site's chunks and a report's fields only", async ({ page }) => {
     await recordTagRequests(page);
     const reports: Request[] = [];
+    const answers: number[] = [];
     page.on('request', (request) => {
       if (isErrorReport(request)) reports.push(request);
     });
+    page.on('response', (response) => {
+      if (isErrorReport(response.request())) answers.push(response.status());
+    });
     await page.goto('/templates/');
-    await page.waitForFunction(() => Object.hasOwn(window.history, 'pushState'));
-    const reported = page.waitForResponse((response) => isErrorReport(response.request()));
+    await page.waitForFunction(() => Object.hasOwn(window.history, 'pushState') && Object.hasOwn(window.history, 'replaceState'));
 
     const uncaught = await page.evaluate(
       () =>
-        new Promise<string>((resolve) => {
-          window.addEventListener('error', (event) => resolve(event.message), { once: true });
-          setTimeout(() => window.history.pushState({ notCloneable: () => undefined }, ''));
+        new Promise<string[]>((resolve) => {
+          const messages: string[] = [];
+          window.addEventListener('error', (event) => {
+            messages.push(event.message);
+            if (messages.length === 3) resolve(messages);
+          });
+          const throwFrom = (method: 'pushState' | 'replaceState') =>
+            setTimeout(() => window.history[method]({ notCloneable: () => undefined }, ''));
+          throwFrom('pushState');
+          throwFrom('pushState');
+          throwFrom('replaceState');
         }),
     );
+    await expect.poll(() => answers.length).toBe(2);
 
-    const response = await reported;
-    const body = response.request().postData() ?? '';
-    const report = clientErrorReportSchema.strict().parse(JSON.parse(body));
-    expect(response.status()).toBe(204);
-    expect(reports).toHaveLength(1);
-    expect(report).toMatchObject({ kind: 'error', name: 'DataCloneError', path: '/templates/' });
-    expect(report.stack).toMatch(SITE_BUNDLE_FRAME);
-    expect(uncaught).toContain('pushState');
-    expect(body).not.toContain(uncaught.slice(uncaught.indexOf(': ') + 2));
+    const sent = reports.map((request) => clientErrorReportSchema.strict().parse(JSON.parse(request.postData() ?? '')));
+    const siteScriptError = { kind: 'error', name: 'DataCloneError', path: '/templates/', stack: expect.stringMatching(SITE_BUNDLE_FRAME) };
+    expect(uncaught).toEqual([expect.stringContaining("'pushState'"), expect.stringContaining("'pushState'"), expect.stringContaining("'replaceState'")]);
+    expect(answers).toEqual([204, 204]);
+    expect(sent).toMatchObject([siteScriptError, siteScriptError]);
+    expect(new Set(sent.map(({ stack }) => stack)).size).toBe(2);
   });
 });

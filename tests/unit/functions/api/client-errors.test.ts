@@ -9,14 +9,23 @@ const COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const WORKER_COMMIT = 'fedcba9876543210fedcba9876543210fedcba98';
 const REPORTS_PER_MINUTE = 10;
 const WORST_CASE_BUDGET_MS = 15;
+const LONGEST_LINE_READ = 2_000;
+const LONGEST_LINES_IN_A_REPORT = 7;
 const FROM_THE_SITE = { 'Content-Type': 'application/json', Origin: DEPLOYED_HOST };
+const SITE_FRAME = `    at render (${DEPLOYED_HOST}/_next/static/chunks/page.js?v=1:4:56)`;
+const LOGGED_SITE_FRAME = 'at render (/_next/static/chunks/page.js:4:56)';
 
 const aReport = {
   kind: 'boundary',
   name: 'TypeError',
-  stack: 'TypeError: Cannot read the account of alice@example.com\n    at render (https://app.example.test/_next/static/chunks/page.js?v=1:4:56)',
+  stack: SITE_FRAME,
   path: '/share/3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e/?ref=email',
   release: COMMIT,
+};
+
+const longestFrameRead = (index: number) => {
+  const end = '.js:1:2)';
+  return `    at step${index} (${DEPLOYED_HOST}/_next/static/chunks/`.padEnd(LONGEST_LINE_READ - end.length, ':1') + end;
 };
 
 describe('POST /api/client-errors, where the browser reports its errors', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
@@ -66,7 +75,7 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
       level: 'error',
       kind: 'boundary',
       errorName: 'TypeError',
-      stack: 'at render (/_next/static/chunks/page.js:4:56)',
+      stack: LOGGED_SITE_FRAME,
       path: '/share/:token/',
       pageRelease: COMMIT,
       release: WORKER_COMMIT,
@@ -75,6 +84,17 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
     expect(line).not.toHaveProperty('errorMessage');
     expect(lines.join('\n')).not.toContain('alice');
     expect(lines.join('\n')).not.toContain('3f2c9a1e');
+  });
+
+  it.each([
+    ['its message left on top of its frames', `TypeError: Cannot read the account of alice@example.com\n${SITE_FRAME}`, undefined],
+    ['a cause appended below its frames', `${SITE_FRAME}\nCaused by: TypeError: Could not load\n${DEPLOYED_HOST}/profile/alice/q3-plan:5:6`, LOGGED_SITE_FRAME],
+  ])('logs only the run of frames a stack opens with, whatever a client sends: a stack with %s', async (_label, stack, logged) => {
+    const response = await send({ body: JSON.stringify({ ...aReport, stack }) });
+
+    expect(response.status).toBe(204);
+    expect(clientErrorLines().map((line) => line['stack'])).toEqual([logged]);
+    expect(lines.join('\n')).not.toContain('alice');
   });
 
   it.each([
@@ -115,10 +135,11 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
     expect(clientErrorLines()).toEqual([]);
   });
 
-  it('handles a worst-case report of nearly 16KB quickly, since no pattern meets a field before it is cut to its bound', async () => {
+  it('rebuilds a report of over 14KB quickly when every line of its stack is a frame of the longest length read, as each pattern reads one line', async () => {
     const apiWorker = await freshApiWorker();
     const env = apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET });
-    const body = JSON.stringify({ ...aReport, message: 'a'.repeat(5_000), stack: '/'.repeat(10_000), path: 'a'.repeat(500) });
+    const stack = Array.from({ length: LONGEST_LINES_IN_A_REPORT }, (_, index) => longestFrameRead(index)).join('\n');
+    const body = JSON.stringify({ ...aReport, stack, path: 'a'.repeat(500) });
     const durations: number[] = [];
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -128,6 +149,9 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
       expect(response.status).toBe(204);
     }
 
+    expect(new Set(stack.split('\n').map((line) => line.length))).toEqual(new Set([LONGEST_LINE_READ]));
+    expect(body.length).toBeGreaterThan(14 * 1024);
+    expect(clientErrorLines().map((line) => String(line['stack']).split('\n').length)).toEqual(durations.map(() => LONGEST_LINES_IN_A_REPORT));
     expect(Math.min(...durations)).toBeLessThan(WORST_CASE_BUDGET_MS);
   });
 
