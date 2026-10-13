@@ -7,7 +7,9 @@ Abbreviations: **Library** is `tests/unit/hooks/useTemplateLibrary.test.tsx`, **
 `tests/e2e/public-template-catalog.spec.ts`, **Categories page** is
 `tests/unit/views/Categories.dom.test.tsx`, **Category slugs** is
 `tests/unit/lib/categorySlug.test.ts`, **Sitemap** is `tests/unit/functions/sitemap.test.ts`,
-**Category page meta** is `tests/unit/server/pageMeta/categoryPage.test.ts`, **Routes** is
+**Category page meta** is `tests/unit/server/pageMeta/categoryPage.test.ts`, **Category page
+view** is `tests/unit/views/CategoryDetail.test.tsx`, **Category route** is
+`tests/unit/views/CategoryDetailRoute.dom.test.tsx`, **Routes** is
 `tests/unit/lib/routes.test.ts`, **Public page view** is
 `tests/unit/components/PublicTemplateView.test.tsx`, and **Category counts** is
 `tests/unit/components/categoryCounts.test.tsx`.
@@ -63,11 +65,18 @@ The page and the category sitemap build the slug with the same function
 
 - Check: Sitemap, "slugs categories exactly like the category pages do, in every script".
 
-The page also opens for other letter cases and Unicode forms of the slug, and names the
-category's own URL as its canonical.
+The page also opens for other letter cases and Unicode forms of the slug.
 
-- Check: Category slugs, "is idempotent and ignores the Unicode normal form of the input" and
-  "links each Unicode category to a path that resolves back to it".
+- Check: Category page view, "opens the category from a decomposed (NFD) or upper-case URL".
+
+Following a link to another spelling of the open category keeps the page, with its search and
+sort.
+
+- Check: Category route, "keeps the page for another spelling of the same category".
+
+Whatever spelling it opens at, the page names the category's own URL as its canonical.
+
+- Check: Category page meta, "points another spelling of the slug at the category’s own URL".
 
 An old ASCII-only slug (`caf-culture`) redirects to the current one.
 

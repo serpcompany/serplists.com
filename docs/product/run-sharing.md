@@ -5,7 +5,8 @@ do.
 
 Abbreviations: **Share API** is `tests/unit/functions/api/checklists-handler.sharing.test.ts`,
 **Share spec** is `tests/e2e/run-share.spec.ts`, **Run page link** is
-`tests/unit/features/run-execution/useRunShareLink.dom.test.tsx`, **Share from list** is
+`tests/unit/features/run-execution/useRunShareLink.dom.test.tsx`, **Share again on D1** is
+`tests/unit/functions/api/checklists-share-again-d1.test.ts`, **Share from list** is
 `tests/unit/features/dashboard-runs/shareRun.test.tsx`, **Share secrets** is
 `tests/unit/functions/api/checklists-share-secrets.test.ts`, **Shared run spec** is
 `tests/e2e/shared-run.spec.ts`, **Stop sharing API** is
@@ -28,7 +29,8 @@ Anyone who may update the Run can share it; an Organization viewer cannot.
 
 Sharing again mints a new link, and the previous one stops working.
 
-- No automated check yet.
+- Check: Share again on D1, "mints a new link, and the previous one stops working for reads and
+  saves".
 
 The run page and the runs list show the created link in a dialog with a Copy button, so it is
 never lost when the browser refuses the automatic copy.

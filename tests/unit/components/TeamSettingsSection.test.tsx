@@ -10,6 +10,7 @@ import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClien
 
 const workspaceMocks = vi.hoisted(() => ({
   activeWorkspace: {
+    avatarUrl: '',
     id: 'team-1',
     memberId: 'member-current',
     name: 'Acme Team',
@@ -91,6 +92,7 @@ describe('TeamSettingsSection', () => {
   });
 
   beforeEach(() => {
+    workspaceMocks.activeWorkspace.avatarUrl = '';
     workspaceMocks.activeWorkspace.role = 'admin';
     workspaceMocks.canManageTeam = true;
   });
@@ -276,6 +278,22 @@ describe('TeamSettingsSection', () => {
     expect(html).not.toContain('Pending invites');
     expect(html).not.toContain('Activity');
     expect(html).not.toContain('role="combobox"');
+  });
+
+  it('shows a member who cannot manage the Organization its avatar, without the controls owners and admins get', () => {
+    workspaceMocks.activeWorkspace.avatarUrl = '/api/uploads/file?key=avatars%2Fteam-1%2Flogo.png';
+    const managerHtml = renderSectionWithMembers([]);
+    workspaceMocks.activeWorkspace.role = 'viewer';
+    workspaceMocks.canManageTeam = false;
+
+    const memberHtml = renderSectionWithMembers([]);
+
+    expect(managerHtml).toContain('Upload avatar');
+    expect(managerHtml).toContain('Remove avatar');
+    expect(memberHtml).toContain('Organization avatar');
+    expect(memberHtml).toContain('data-slot="avatar"');
+    expect(memberHtml).not.toContain('Upload avatar');
+    expect(memberHtml).not.toContain('Remove avatar');
   });
 
   it('shows load errors with Retry instead of empty members, invites, and activity', () => {

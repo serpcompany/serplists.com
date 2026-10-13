@@ -13,6 +13,8 @@ Abbreviations: **Router on D1** is `tests/integration/api-router-local-d1.test.t
 **Password policy tests** is `tests/unit/lib/auth/passwordPolicy.test.ts`,
 **Password limit tests** is `tests/unit/functions/api/better-auth-password-length.test.ts`,
 **Auth config tests** is `tests/unit/functions/api/better-auth-config.test.ts`,
+**Session cookie tests** is `tests/unit/functions/api/better-auth-session-cookies.test.ts`,
+**Token storage tests** is `tests/unit/contexts/authTokenStorage.dom.test.tsx`,
 **Settings tests** is `tests/unit/components/SettingsContexts.dom.test.tsx`,
 **Routes spec** is `tests/e2e/route-structure.spec.ts`,
 **Profiles API tests** is `tests/unit/functions/api/public-profiles-d1.test.ts`,
@@ -34,10 +36,15 @@ that cookie, and a forged cookie reads as signed out.
 - Check: Router on D1, "signs up a new account and signs it in", "reads the signed-in account
   from its session cookie" and "treats a forged session cookie as signed out".
 
-**No tokens in the browser.** Browser auth state lives in Better Auth's httpOnly cookies. The
-client does not store auth tokens.
+**No tokens in the browser.** Browser auth state lives in Better Auth's httpOnly cookies.
 
-- No automated check yet.
+- Check: Session cookie tests, "sets every auth cookie of a sign-up and a sign-in httpOnly,
+  locally and on https, so no page script can read the session".
+
+The client does not store auth tokens.
+
+- Check: Token storage tests, "keeps no auth token in the browser's storage or readable cookies,
+  though the sign-in and session answers carry one".
 
 **Protected pages.** A protected page sends a signed-out visitor to `/login/`, with the page they
 asked for in `?next=`.

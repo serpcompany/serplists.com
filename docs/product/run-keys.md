@@ -5,6 +5,7 @@ and Runs through a Run Key, over the MCP endpoint `POST /api/mcp`. Changes to wh
 or return are announced in [MCP changes for agents](mcp.md).
 
 Abbreviations: **MCP feature** is `tests/unit/functions/api/personal-run-mcp-feature.test.ts`,
+**Run Keys off** is `tests/unit/functions/api/router-run-keys-off.test.ts`,
 **Run Key spec** is `tests/e2e/personal-run-mcp.spec.ts`, **Agent Access** is
 `tests/unit/components/AgentAccessSection.test.tsx`, **Key permissions** is
 `tests/unit/lib/schemas/runKeyPermissions.test.ts`, **MCP tools** is
@@ -27,11 +28,15 @@ Abbreviations: **MCP feature** is `tests/unit/functions/api/personal-run-mcp-fea
 ## Keys and permissions
 
 Run Keys are on where `PERSONAL_RUN_MCP_ENABLED` is `"true"`, as `wrangler.toml` sets it for
-staging and production, and on by default in local development. Where they are off, the MCP
-endpoint and the Agent Access API answer `404`.
+staging and production, and on by default in local development.
 
-- Check: MCP feature, "defaults on locally and off remotely", "honors explicit enablement and
-  disablement" and "matches only the MCP and Agent Access API routes".
+- Check: MCP feature, "defaults on locally and off remotely" and "honors explicit enablement and
+  disablement".
+
+Where they are off, the MCP endpoint and the Agent Access API answer `404`.
+
+- Check: Run Keys off, "answer 404 on the MCP endpoint and the Agent Access API without running
+  their handlers, which answer once Run Keys are on".
 
 A User creates Run Keys under Agent Access in Account Settings. A key is limited to the
 permissions chosen when it is created, never changed afterwards: Read templates

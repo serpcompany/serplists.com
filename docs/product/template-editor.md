@@ -7,7 +7,8 @@ The Template editor: `/dashboard/templates/new` creates a Template, and
 Abbreviations: **Editor access** is `tests/unit/views/TemplateEditor.permissions.test.tsx`,
 **Edit permission** is `tests/unit/features/template-editor/useTemplateEditPermission.test.ts`,
 **Editor outline spec** is `tests/e2e/template-editor-outline.spec.ts`, **Editor saves** is
-`tests/unit/features/template-editor/useTemplateEditorModel.save.test.ts`, **Stale editor spec**
+`tests/unit/features/template-editor/useTemplateEditorModel.save.test.ts`, **Editor view** is
+`tests/unit/views/TemplateEditor.dom.test.tsx`, **Stale editor spec**
 is `tests/e2e/template-stale-editor.spec.ts`, **Kept work spec** is
 `tests/e2e/session-end-kept-work.spec.ts`, **Editor blocks spec** is
 `tests/e2e/template-editor-blocks.spec.ts`, **Block reorder** is
@@ -77,7 +78,8 @@ editor keeps the user's draft and offers "Load latest version".
 
 Loading the latest version replaces unsaved changes only once the user confirms.
 
-- No automated check yet.
+- Check: Editor view, "replaces unsaved changes with the latest version only once the user
+  confirms".
 
 ## Reordering
 

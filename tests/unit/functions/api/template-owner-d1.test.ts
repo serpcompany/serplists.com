@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { sessionMocks } from "../../../support/mockedSession";
 
+import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from "@/lib/schemas/checklistSchema";
 import { schema } from "@functions/api/db";
 import { handleTemplates } from "@functions/api/handlers/templates";
 import { selectTemplatesWithOwner } from "@functions/api/utils/template-rows";
 import { eq } from "drizzle-orm";
 import { apiEnv, apiEnvOn, d1ThatRunsNoQuery } from "../../../support/apiEnv";
+import { onlyElement } from "../../../support/elements";
 import { readJson } from "../../../support/readJson";
 import { SqliteD1, toSqliteValue } from "../../../support/sqlite-d1";
 
@@ -21,6 +23,8 @@ const THE_ORGANIZATION = { type: "team", teamId: "org-1", publicHandle: "acme-la
 const THE_ORGANIZATION_IN_PUBLIC = { type: "team", publicHandle: "acme-launch", displayName: "Acme Launch Team" };
 const THE_ORGANIZATION_BY_ID = /org-1/;
 const THE_PERSONAL_OWNER = { type: "user", userId: "owner-2", publicHandle: "bob", displayName: "Bob Owner" };
+const THE_IMPORTER = { type: "user", userId: "creator-1", publicHandle: "alice", displayName: "Alice Creator" };
+const importSummary = z.object({ successes: z.array(z.object({ slug: z.string() }).passthrough()) }).passthrough();
 
 type StoredTemplate = { id: string; userId: string; ownerType: "user" | "team"; teamId: string | null; createdAt: string };
 
@@ -121,6 +125,27 @@ describe("the owner of a Template in API responses, read from its stored owner t
     const template = await detail("templates/personal-2", "owner-2");
 
     expect(template.owner).toEqual(THE_PERSONAL_OWNER);
+  });
+
+  it("names whoever imported a Template its owner on its public page, never the account that exported the file", async () => {
+    exec("INSERT INTO entitlement_overrides (user_id, plan, created_at) VALUES ('creator-1', 'pro', '2026-01-01')");
+    sessionMocks.getSessionUserId.mockResolvedValue("creator-1");
+    const packExportedByBob = {
+      kind: "serplists-template-pack",
+      schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+      exportedAt: "2026-02-04T00:00:00.000Z",
+      exportedBy: "owner@example.test",
+      templates: [{ title: "Imported playbook", visibility: "public", author: "bob", sections: [{ title: "Section", items: [{ title: "Task" }] }] }],
+    };
+
+    const imported = await handleTemplates(
+      new Request("http://localhost/api/templates/backup", { method: "POST", body: JSON.stringify(packExportedByBob) }),
+      apiEnvOn(database),
+    );
+    const template = await detail(`templates/slug/${onlyElement((await readJson(imported, importSummary)).successes).slug}`, null);
+
+    expect(template.owner).toEqual(THE_IMPORTER);
+    expect(template).toMatchObject({ user_id: "creator-1", owner_username: "alice" });
   });
 
   it("finds the owning Organization by its primary key", () => {

@@ -49,6 +49,18 @@ describe('ChecklistRunPage completion', () => {
     expect(html).toContain('Run completed');
     expect(sharedHtml).not.toContain('Complete run');
   });
+
+  it('offers no Reopen on a completed run, in the private view or the shared one', async () => {
+    const views = [
+      await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2' }),
+      await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2', shared: true }),
+    ];
+
+    for (const html of views) {
+      expect(html).toContain('Last task');
+      expect(html).not.toMatch(/re-?open/i);
+    }
+  });
 });
 
 describe('ChecklistRunPage on a completed run, which is frozen so unticking cannot leave it Completed with open tasks', () => {

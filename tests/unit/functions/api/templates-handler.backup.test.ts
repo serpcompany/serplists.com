@@ -85,6 +85,22 @@ describe('Templates Handlers', () => {
     expect(importedTemplate?.updated_at).toBe(importedTemplate?.created_at);
   });
 
+  it('imports at most 5 Templates per file, refusing a longer file with import_limit before writing any of it', async () => {
+    onTheProPlanWithNoTemplates();
+    const sixTemplates = Array.from({ length: 6 }, (_, index) => ({ ...IMPORTED, title: `Imported ${index + 1}` }));
+
+    const refused = await postBackup({ templates: sixTemplates });
+    const refusal = await readJson(refused, apiErrorBody);
+
+    expect(refused.status).toBe(400);
+    expect(refusal.code).toBe('import_limit');
+    expect(refusal.details).toEqual({ limit: 5, current: 6 });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+
+    const fiveTemplates = await readSuccessfulJson(await postBackup({ templates: sixTemplates.slice(0, 5) }), importBody);
+    expect(fiveTemplates.imported).toBe(5);
+  });
+
   it('should return per-template partial import results when some templates fail', async () => {
     onTheProPlanWithNoTemplates();
 

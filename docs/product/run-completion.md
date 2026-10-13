@@ -121,7 +121,8 @@ Reopening counts toward the active-run limit inside the write.
 
 The web app has no Reopen action yet.
 
-- No automated check yet.
+- Check: Run page completion, "offers no Reopen on a completed run, in the private view or the
+  shared one".
 
 ## Who completed a Run
 

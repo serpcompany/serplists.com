@@ -12,14 +12,16 @@ Abbreviations: **Backup API** is `tests/unit/functions/api/templates-handler.bac
 `tests/unit/lib/utils/templateBackup.files.test.ts`, **Import prep** is
 `tests/unit/lib/utils/templateBackup.import.test.ts`, **Validation errors** is
 `tests/unit/lib/schemas/formatValidationError.test.ts`, **Import preview** is
-`tests/unit/components/TemplateImportPreview.test.tsx`, **Round trip** is
+`tests/unit/components/TemplateImportPreview.test.tsx`, **Import guardrails** is
+`tests/unit/components/TemplateBackupImportGuardrails.dom.test.tsx`, **Round trip** is
 `tests/unit/lib/templates/portableRoundTrip.test.ts`, **Import summary spec** is
 `tests/e2e/template-import-summary.spec.ts`, **Template bounds** is
 `tests/unit/functions/api/templates-handler.bounds.test.ts`, **Portable import API** is
 `tests/unit/functions/api/templates-portable-handler.import.test.ts`, **Content limits** is
 `tests/unit/lib/schemas/contentLimits.test.ts`, **Asset limits** is
 `tests/unit/lib/schemas/templateAssetLimits.test.ts`, **Slug conflicts** is
-`tests/unit/functions/api/templates-slug-conflicts.test.ts`, and **Plan limits on D1** is
+`tests/unit/functions/api/templates-slug-conflicts.test.ts`, **Template owner API** is
+`tests/unit/functions/api/template-owner-d1.test.ts`, and **Plan limits on D1** is
 `tests/integration/plan-limits-concurrency-local-d1.test.ts`.
 
 ## The file and its preview
@@ -97,7 +99,9 @@ Before Confirm Import, the preview applies the guardrails: a file over the 5-Tem
 be confirmed, and oversized assets, counted with the API's own check
 (`countOversizedTemplateAssets`), only raise a warning, since the rest of the file still imports.
 
-- No automated check yet.
+- Check: Import guardrails, "keeps Confirm Import off for a file of more than 5 Templates, and
+  says why" and "only warns about an asset over the upload limit, and still lets the file be
+  confirmed".
 
 ## What an import returns
 
@@ -147,7 +151,8 @@ An `insert_failed` reason is a fixed message; the database error is logged, not 
 
 At most 5 Templates are imported per file.
 
-- No automated check yet.
+- Check: Backup API, "imports at most 5 Templates per file, refusing a longer file with
+  import_limit before writing any of it".
 
 A file may be up to 2MB, but one Template's content may be at most 768KB
 (`src/lib/schemas/contentLimits.ts`): what its editor save and its Runs can send back under the
@@ -219,4 +224,5 @@ For live public-library publishing today, the imported Template should be owned 
 public publisher account before import, because the author's username comes from who owns the
 Template in D1, not from the portable JSON file.
 
-- No automated check yet.
+- Check: Template owner API, "names whoever imported a Template its owner on its public page,
+  never the account that exported the file".

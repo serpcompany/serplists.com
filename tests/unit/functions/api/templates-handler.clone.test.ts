@@ -88,6 +88,18 @@ describe('Templates Handlers', () => {
       expect(jsonRecordIn(versionRow?.snapshot_json)).toEqual(objectContaining({ version: 1, content_version: 1 }));
       expect(jsonRecordIn(auditRow?.metadata_json)).toEqual({ sourceTemplateId: 'template-1', sourceVersion: 37, sourceContentVersion: 12 });
     });
+
+    it('copies only public Templates, answering a private one as not found even to its owner, and writing nothing', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...publicSource, user_id: 'user-123', is_public: false }]);
+
+      const response = await clone({ visibility: 'private' });
+
+      expect(response.status).toBe(404);
+      expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
   });
 
   it('clones a public template for Pro users, whose copies no template count limits', async () => {

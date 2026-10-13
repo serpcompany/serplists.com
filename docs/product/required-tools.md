@@ -67,7 +67,8 @@ Duplicate copies them, and so does saving a library Template to an account.
 
 Links are stored and exported exactly as written: nothing adds affiliate tags or rewrites them.
 
-- No automated check yet.
+- Check: Tools on runs and packs, "stores and exports each link exactly as written, adding no tag
+  and rewriting nothing".
 
 ## In the editor
 

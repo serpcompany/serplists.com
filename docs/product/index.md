@@ -18,19 +18,21 @@ Abbreviations: **Archive spec** is `tests/e2e/archive-restore.spec.ts`, and **Re
 
 Each behavior, a paragraph or a bullet that says what the product does, is followed by one check
 line: an abbreviation, then the exact title of each test that proves it, in double quotes. A
-behavior no test proves yet says so.
+behavior no test proves yet says so, with the issue that tracks its check.
 
 ```markdown
 - Check: Archive spec, "an archived template and run can be restored from the archive page".
-- No automated check yet.
+- No automated check yet (#<issue>).
 ```
 
 The checks come in three kinds:
 
 - **Browser tests** (Playwright) in `tests/e2e/`, whose abbreviations end in "spec". They open the
-  production build on an isolated local stack at desktop and phone widths: `pnpm run test:smoke`
-  runs those tagged `@smoke` (a tag a doc may leave out of a title), and `pnpm run test:e2e:full`
-  runs them all. Pull requests run them in their own workflow.
+  production build on an isolated local stack in the one desktop browser `playwright.config.ts`
+  sets up; a spec that checks a phone sets the phone's width itself (390px, with `test.use` or
+  `page.setViewportSize`). `pnpm run test:smoke` runs those tagged `@smoke` (a tag a doc may leave
+  out of a title), and `pnpm run test:e2e:full` runs them all. Pull requests run them in their own
+  workflow.
 - **Unit tests** (Vitest) in `tests/unit/`, run by `pnpm run test:run`. Those named `*-d1.test.ts`
   run the API's handlers on the migrated tables.
 - **Local D1 tests** in `tests/integration/`, run against a real local D1 by

@@ -5,8 +5,9 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Link } from '@/components/navigation/Link';
+import { EDITOR_LOAD_LATEST_MESSAGE } from '@/features/template-editor/navigationGuards';
 import type { TemplateEditorSaveResult } from '@/features/template-editor/useTemplateEditorModel';
-import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 import TemplateEditor from '@/views/TemplateEditor';
 
@@ -14,6 +15,7 @@ import { deferred } from '../../support/deferred';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
 const mocks = vi.hoisted(() => ({
+  reload: vi.fn(),
   save: vi.fn(),
   settleDraft: vi.fn(),
 }));
@@ -33,7 +35,7 @@ vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOrigin
       ownerSlug: undefined,
       getVersion: () => undefined,
       setVersion: vi.fn(),
-      reload: vi.fn(),
+      reload: mocks.reload,
       save: mocks.save,
       templateSlug: undefined,
     }),
@@ -46,9 +48,6 @@ vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
   const { editorAccess } = await import('../../fixtures/templateEditorHooks');
   return { useTemplateEditorAccess: () => editorAccess({ keepDraft: () => false, settleDraft: mocks.settleDraft }) };
 });
-vi.mock('@/hooks/useTemplateEditorState', async () => ({
-  useTemplateEditorState: (await import('../../fixtures/templateEditorHooks')).editorState,
-}));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', username: 'jane' } }),
 }));
@@ -65,7 +64,19 @@ vi.mock('@/components/template-editor/TemplateHeader', () => ({
   ),
 }));
 vi.mock('@/components/template-editor/OutlineSidebar', () => ({ OutlineSidebar: () => null }));
-vi.mock('@/components/template-editor/EditorPanels', () => ({ EditorPanels: () => null }));
+vi.mock('@/components/template-editor/EditorPanels', async () => {
+  const { useFormContext } = await import('react-hook-form');
+  return {
+    EditorPanels: function EditorPanelsWithARename() {
+      const form = useFormContext<TemplateEditorFormValues>();
+      return (
+        <button type="button" onClick={() => form.setValue('title', 'Renamed, not saved', { shouldDirty: true })}>
+          Rename
+        </button>
+      );
+    },
+  };
+});
 vi.mock('@/components/template-editor/GenerateFromClipy', () => ({ GenerateFromClipy: () => null }));
 vi.mock('@/components/template-editor/TemplateEditorAccessNotices', () => ({
   TemplateEditorAccessNotices: () => null,
@@ -78,6 +89,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   shownConsole.context = PERSONAL_CONSOLE;
 });
+
+const click = (name: string) =>
+  act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }));
+  });
 
 const created = (): TemplateEditorSaveResult => ({
   success: true,
@@ -109,9 +125,7 @@ async function startSavingTheNewTemplate() {
   mocks.save.mockReturnValueOnce(request.promise);
   await renderNewTemplateEditor();
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  });
+  await click('Save');
   return { request };
 }
 
@@ -166,11 +180,6 @@ describe('TemplateEditor navigation in the context it shows', () => {
     );
   }
 
-  const click = (name: string) =>
-    act(async () => {
-      fireEvent.click(screen.getByRole('button', { name }));
-    });
-
   it("goes to the Organization's Templates after creating a Template there", async () => {
     shownConsole.context = organizationConsole('team-1');
     mocks.save.mockResolvedValueOnce(created());
@@ -196,5 +205,34 @@ describe('TemplateEditor navigation in the context it shows', () => {
     await click('Cancel');
 
     expect(navigation.pathname()).toBe('/dashboard/templates/');
+  });
+});
+
+describe('TemplateEditor after its save met a newer version of the Template', () => {
+  const editConflict: TemplateEditorSaveResult = {
+    success: false,
+    editConflict: true,
+    errors: [{ type: 'conflict', message: 'Template changed since it was loaded. Refresh before saving again.' }],
+  };
+
+  async function renameAndSaveOverTheNewerVersion() {
+    mocks.save.mockResolvedValueOnce(editConflict);
+    navigation.reset('/dashboard/templates/template-1/edit/', { routes: ['/dashboard/templates/[id]/edit'] });
+    await renderSettled(<RoutedPages pages={{ '/dashboard/templates/[id]/edit': <TemplateEditor /> }} />);
+    await click('Rename');
+    await click('Save');
+  }
+
+  it('replaces unsaved changes with the latest version only once the user confirms', async () => {
+    await renameAndSaveOverTheNewerVersion();
+    navigation.window.confirm.mockReturnValueOnce(false);
+
+    await click('Load latest version');
+    expect(navigation.window.confirm).toHaveBeenCalledWith(EDITOR_LOAD_LATEST_MESSAGE);
+    expect(mocks.reload).not.toHaveBeenCalled();
+
+    await click('Load latest version');
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(2);
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
   });
 });

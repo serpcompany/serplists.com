@@ -187,7 +187,8 @@ gets `limit_reached` at it, and a role that cannot add Templates is refused.
 
 The API copies only public Templates.
 
-- No automated check yet.
+- Check: Clone API, "copies only public Templates, answering a private one as not found even to
+  its owner, and writing nothing".
 
 ## Link previews
 

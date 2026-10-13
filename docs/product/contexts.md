@@ -156,7 +156,8 @@ must be an upload to SERP Lists.
 
 Other members see the avatar there without the controls.
 
-- No automated check yet.
+- Check: Organization settings tests, "shows a member who cannot manage the Organization its
+  avatar, without the controls owners and admins get".
 
 **Leaving.** Members other than the owner can leave an Organization from its settings, which then
 opens Personal settings.

@@ -16,6 +16,7 @@ Abbreviations: **Billing status tests** is `tests/unit/lib/billing.test.ts`,
 **Guest run save tests** is `tests/unit/features/guest-runs/saveGuestRunToAccount.test.ts`,
 **Organization copy API tests** is `tests/unit/functions/api/templates-clone-organization.test.ts`,
 **Entitlement tests** is `tests/unit/functions/api/entitlements.test.ts`,
+**Paid Organization role tests** is `tests/unit/functions/api/paid-organization-roles.test.ts`,
 **Subscription guard tests** is `tests/unit/functions/api/billing-subscription-guard.test.ts`,
 **Public template actions spec** is `tests/e2e/public-template-actions.spec.ts`,
 **Template limit spec** is `tests/e2e/template-limit.spec.ts`,
@@ -158,8 +159,9 @@ runs. A copy into it goes through while it is under its Template limit.
 **Roles still apply.** Organization Roles still apply after entitlements pass. A paid
 Organization does not let a `viewer` edit Templates or start Runs.
 
-- Check: Organization copy API tests, "refuses a role that cannot add Templates to the
-  Organization".
+- Check: Paid Organization role tests, "lets a runner start a Run there, and refuses a viewer
+  without writing anything" and "lets an editor edit its Template, and refuses a viewer without
+  writing anything".
 
 ## Personal vs Organization Entitlements
 
