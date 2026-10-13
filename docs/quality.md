@@ -40,37 +40,38 @@ the browser specs guard a change before it reaches Staging.
 
 - **Accounts and sessions, B.** Better Auth's setup, the request guard, rate limits, sessions and
   their sync across tabs are unit-tested (`tests/unit/functions/api/better-auth-config.test.ts`,
-  `tests/unit/contexts/sessionSync.tabs.test.ts`), and twelve browser specs drive signing up, in
-  and out, verification and expiry, `smoke-sign-in.spec.ts` among the smoke tests. Documented in
-  [`authentication.md`](agents/authentication.md) and the [account](product/account.md) product
-  doc. Main gap: email delivery is checked only by hand, nothing checks that the browser keeps no
-  auth token, and an account can't be deleted in the product ([`tech-debt.md`](tech-debt.md),
-  Accounts and email).
+  `tests/unit/contexts/sessionSync.tabs.test.ts`), a DOM test checks that signing in leaves no auth
+  token in the browser (`tests/unit/contexts/authTokenStorage.dom.test.tsx`), and twelve browser
+  specs drive signing up, in and out, verification and expiry, `smoke-sign-in.spec.ts` among the
+  smoke tests. Documented in [`authentication.md`](agents/authentication.md) and the
+  [account](product/account.md) product doc. Main gap: email delivery is checked only by hand
+  ([`authentication.md`](agents/authentication.md#verifying-changes-in-production)), with no local
+  mailbox to catch it, and an account can't be deleted in the product; both are medium, with no
+  issue yet ([`tech-debt.md`](tech-debt.md), Accounts and email).
 - **Personal and Organization contexts, B.** A unit test keeps the UI's role matrix equal to the
   API's, the console routes and their parser are unit-tested, and browser specs walk an
   Organization's routes, roles, invites and settings (`organization-routes.spec.ts`;
   `team-invite-flow.spec.ts` and `team-workspace.spec.ts` as smoke tests). Documented in
   [`organizations.md`](agents/organizations.md) and the [contexts](product/contexts.md) and
   [dashboard](product/dashboard.md) product docs. Main gap: the code still says team and workspace
-  for an Organization (TD-5, a large rename), and nothing checks that other members see an
-  Organization's avatar without its controls.
+  for an Organization (TD-5, a large rename with no issue yet, so not A).
 - **Templates, B.** Saves, versions, conflicts, visibility, transfer, Required tools and forms are
   unit-tested, transfer on local D1 too (`tests/integration/template-transfer-local-d1.test.ts`),
   the editor's components run in a real DOM, and 28 browser specs drive the editor, the detail
   page and the library, the editor at a phone width included (`template-editor-phone.spec.ts`).
   Documented in [`template-editor.md`](agents/template-editor.md),
   [`template-content-types.md`](agents/template-content-types.md) and the
-  [Templates](product/templates.md) product doc. Main gap: three behaviors have no automated check
-  (the confirmation before "Load latest version", the API copying only public Templates, and
-  Required tools links kept as written), and Templates seeded before the seed fix still store
-  escaped line breaks, which the display rewrites (TD-22).
+  [Templates](product/templates.md) product doc. Main gap: Templates seeded before the seed fix
+  still store escaped line breaks, which the display rewrites (TD-22, medium, with no issue yet,
+  and its data migration needs the owner, so not A).
 - **Runs, B.** Reconciliation, saves and their revisions, sharing, provenance, form answers and
   guest runs are unit-tested, sharing, provenance and source access on local D1 too
   (`tests/integration/run-sharing-local-d1.test.ts`), and 18 browser specs drive the Run page,
   guest runs and shared runs. Documented in [`run-execution.md`](agents/run-execution.md) and the
   [Runs](product/runs.md) product doc. Main gap: a typed form answer still focused when the page
-  closes is lost (TD-87), the web app has no Reopen action, and nothing checks that sharing a run
-  again ends its previous link.
+  closes is lost (TD-87, medium, with no issue yet, so not A), and the web app has no Reopen
+  action: a completed Run is reopened only through the API or MCP
+  ([run completion](product/run-completion.md#reopening)).
 - **Billing and plans, B.** Checkout, the portal, the webhook's ordering and guards, entitlements
   and plan limits are unit-tested against stand-ins for Stripe
   (`tests/unit/functions/api/stripe-webhook-ordering.test.ts`), plan limits are raced on local D1
@@ -93,8 +94,10 @@ the browser specs guard a change before it reaches Staging.
   `smoke-sitemaps.spec.ts` and `site-standards.spec.ts` run on every pull request, and each deploy
   checks the new deployment against the site standards. Documented in
   [`seo-and-sitemaps.md`](agents/seo-and-sitemaps.md) and [`frontend.md`](agents/frontend.md),
-  URLs. Main gap: how search engines read the site is checked by hand in Search Console, and
-  `sitemap:check` runs nowhere, since squash merges rewrite the dates it compares.
+  URLs. Main gap, small: `sitemap:check` runs nowhere, since squash merges rewrite the dates it
+  compares, so nothing holds the committed sitemap catalog to the packs
+  ([`harness-debt.md`](harness-debt.md), Checks). How search engines read the site is watched by
+  hand in Search Console.
 - **Imports, exports and uploads, B.** Portable packs are generated from and checked against their
   schema, uploads' limits and byte ranges are tested, and browser specs drive import, export and
   uploads (`template-export.spec.ts`, `uploads-range.spec.ts`; `account-avatar.spec.ts` as a smoke
@@ -124,9 +127,10 @@ the browser specs guard a change before it reaches Staging.
 - **Type safety, A.** `strict` and five stricter flags in every project, tests included, all in
   `pnpm run typecheck`; `tests/unit/config/typecheck-coverage.test.ts` fails when a project turns
   one off or a file escapes every project, and ESLint refuses `!` and unsafe assertions.
-  Documented in [`code.md`](agents/code.md). Main gap: the generated `cloudflare-env.d.ts` is
-  regenerated and compared (`pnpm run verify generated`) but type-checked only under
-  `skipLibCheck`.
+  Documented in [`code.md`](agents/code.md). Main gap, small: the generated `cloudflare-env.d.ts`
+  is regenerated and compared (`pnpm run verify generated`) but type-checked only under
+  `skipLibCheck`; on its own, with a stand-in for the build output it names, it type-checks clean
+  ([`harness-debt.md`](harness-debt.md), Checks).
 - **Boundary parsing, A.** Every API answer, Stripe reply, webhook body, stored JSON column and
   browser storage read is parsed with Zod, and `serplists/no-external-data-casts` and the
   type-aware `no-unsafe-*` rules refuse casts of outside data everywhere, tests included
@@ -134,7 +138,7 @@ the browser specs guard a change before it reaches Staging.
 - **D1 cost, B.** Rows-read budgets for the hot requests run on local D1 on every pull request,
   and [`d1-cost.md`](agents/d1-cost.md) holds the query rules and the measurements. Main gap:
   `pnpm run d1:profile`, at full scale, runs only by hand, and Organization run lists and catalog
-  misses still read in proportion to their tables (the D1 cost issue to come).
+  misses still read in proportion to their tables (issue to come: D1 cost).
 - **Layers and dead code, B.** dependency-cruiser holds a rule for every arrow `ARCHITECTURE.md`
   draws, with no baseline, and prints each rule's fix (`tests/unit/config/layer-rules.test.ts`);
   knip fails on unused files, exports and packages; each runs in `pnpm run verify`. Main gap:
@@ -155,14 +159,15 @@ the browser specs guard a change before it reaches Staging.
   after this merges, only `Quality Gate` is required until an admin requires the gate jobs and
   turns the merge queue on, and CI deploys with the account's global API key.
 - **Repository checks and agent workflows, B.** `pnpm run verify` runs the comment, docs, size,
-  secret, duplicate, dead-code, dependency, linter and generated-file checks, on all files or some, the git hooks run the fast ones, and the checks' own
-  tests run in CI (`tests/unit/config/`, `tests/unit/scripts/`); the review, `@claude` and weekly
-  maintenance workflows have outcome guards with tests (`tests/unit/workflows/`). Documented in
+  secret, duplicate, dead-code, dependency, linter and generated-file checks, on all files or
+  some, the git hooks run the fast ones, and the checks' own tests run in CI
+  (`tests/unit/config/`, `tests/unit/scripts/`); the review, `@claude` and weekly maintenance
+  workflows have outcome guards with tests (`tests/unit/workflows/`). Documented in
   [`code.md`](agents/code.md), [`checks.md`](agents/checks.md) and
   [`ci-agents.md`](agents/ci-agents.md). The edit and stop hooks check an agent's files as it
   writes them and before its turn ends. Main gap: the rewritten review, `@claude` and gardening
-  workflows haven't run on GitHub yet, and the review is skipped on pull requests into `staging`
-  until its workflow reaches `main`.
+  workflows haven't run on GitHub yet, and whether the review, which now takes the job's own
+  token, runs while its workflow differs from `main`'s is untested.
 
 Re-grade an area, and set its Graded date to that day, in the same pull request that changes its
 tests, CI or docs, even when its grade stays the same.

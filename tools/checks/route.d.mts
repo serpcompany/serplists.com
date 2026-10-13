@@ -7,6 +7,7 @@ export declare function ignoredByGit(file: string, folder: string): boolean;
 export declare function routeHook(checkout: string | undefined, script: string, has?: (path: string) => boolean): Route;
 export declare function installAdvice(checkout: string): string;
 export declare function refuseUninstalled(checkout: string, told?: (advice: string) => boolean): never;
+export declare function checkInCheckout(route: Extract<Route, { kind: "run" }>, input: unknown): { status: number | null };
 export declare function runInCheckout(route: Extract<Route, { kind: "run" }>, input: unknown): never;
 export declare function changedPaths(...listings: string[]): string[];
 export declare function toldFile(checkout: string, session: string | undefined): string | undefined;

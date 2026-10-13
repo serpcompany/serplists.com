@@ -54,14 +54,17 @@ export function refuseUninstalled(checkout, told = () => false) {
   process.exit(2)
 }
 
-export function runInCheckout(route, input) {
-  const result = spawnSync(process.execPath, ['--import', 'tsx', route.script], {
+export const checkInCheckout = (route, input) =>
+  spawnSync(process.execPath, ['--import', 'tsx', route.script], {
     cwd: route.checkout,
     input: JSON.stringify(input),
     encoding: 'utf8',
     env: withoutGitLocation(process.env),
     maxBuffer: MANY_FILES
   })
+
+export function runInCheckout(route, input) {
+  const result = checkInCheckout(route, input)
   if (result.stdout) process.stdout.write(result.stdout)
   if (result.stderr) process.stderr.write(result.stderr)
   process.exit(result.status ?? 1)

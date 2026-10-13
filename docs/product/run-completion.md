@@ -119,10 +119,12 @@ Reopening counts toward the active-run limit inside the write.
 - Check: Reopen limit, "refuses PUT status in_progress on a completed run at the limit" and
   "refuses a share-link reopen at the owner's limit".
 
-The web app has no Reopen action yet.
+The web app has no Reopen action yet: the Run page offers none, private or shared, and neither do
+the runs list's rows or their menus.
 
 - Check: Run page completion, "offers no Reopen on a completed run, in the private view or the
-  shared one".
+  shared one" and "offers no Reopen on a completed run in the runs list, in its row or its row's
+  menu, as a list or a table".
 
 ## Who completed a Run
 

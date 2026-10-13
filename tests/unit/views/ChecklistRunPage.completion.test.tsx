@@ -1,8 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import type { ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 import { taskAt } from '../../support/elements';
 
 import { renderRunPage, twoTaskRun } from '../../support/checklistRunPage';
+import { navigation } from '../../support/mockedNextNavigation';
+import { RunListItem } from '@/components/dashboard/RunListItem';
+import { RunsTable } from '@/components/dashboard/RunsTable';
+import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
+import { PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
+
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const ShownAsThoughOpen = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+  return {
+    DropdownMenu: ShownAsThoughOpen,
+    DropdownMenuContent: ShownAsThoughOpen,
+    DropdownMenuItem: ShownAsThoughOpen,
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuTrigger: ShownAsThoughOpen,
+  };
+});
+
+const runRowControls = (run: ChecklistRun) => ({
+  actions: getRunRowActions(run, PERSONAL_PERMISSIONS),
+  isRevalidating: false,
+  isStoppingShare: false,
+  onDelete: vi.fn(),
+  onShare: vi.fn(),
+});
 
 describe('ChecklistRunPage completion', () => {
   it('offers a working finish action on a fully ticked run that is still in progress', async () => {
@@ -58,6 +84,22 @@ describe('ChecklistRunPage completion', () => {
 
     for (const html of views) {
       expect(html).toContain('Last task');
+      expect(html).not.toMatch(/re-?open/i);
+    }
+  });
+
+  it("offers no Reopen on a completed run in the runs list, in its row or its row's menu, as a list or a table", () => {
+    const run = twoTaskRun([true, true], 'completed');
+    navigation.reset('/dashboard/runs/');
+    const rows = [
+      renderToStaticMarkup(<RunListItem run={run} {...runRowControls(run)} />),
+      renderToStaticMarkup(<RunsTable controlsFor={runRowControls} runs={[run]} templateFor={() => undefined} />),
+    ];
+
+    for (const html of rows) {
+      expect(html).toContain('View');
+      expect(html).toContain('Share Run');
+      expect(html).toContain('Delete');
       expect(html).not.toMatch(/re-?open/i);
     }
   });

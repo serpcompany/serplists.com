@@ -154,7 +154,7 @@ must be an upload to SERP Lists.
   avatar with null, and writes nothing when neither changes" and "refuses an avatar hosted
   anywhere but SERP Lists' uploads, and a description over 500 characters, saving neither".
 
-Other members see the avatar there without the controls.
+Other members see the Organization's avatar there, without the controls.
 
 - Check: Organization settings tests, "shows a member who cannot manage the Organization its
   avatar, without the controls owners and admins get".

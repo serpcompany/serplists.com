@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import {
   alreadyTold,
   changedPaths,
+  checkInCheckout,
   forgetTold,
   gitOutput,
   owningCheckout,
@@ -12,22 +13,28 @@ import {
 } from './route.mjs'
 
 const call = JSON.parse(readFileSync(0, 'utf8') || '{}')
-if (call.stop_hook_active || process.env.GITHUB_ACTIONS === 'true') process.exit(0)
+if (process.env.GITHUB_ACTIONS === 'true') process.exit(0)
 
 const route = routeHook(owningCheckout(call.cwd ?? process.cwd()), 'stop-hook.ts')
 if (route.kind === 'skip') process.exit(0)
 
 const session = typeof call.session_id === 'string' ? call.session_id : undefined
+const told = toldFile(route.checkout, session)
 const changed = changedPaths(
   gitOutput(route.checkout, 'diff', '--name-only', '--diff-filter=d', '-z', 'HEAD'),
   gitOutput(route.checkout, 'ls-files', '--others', '--exclude-standard', '-z')
 )
 if (changed.length === 0) {
-  forgetTold(toldFile(route.checkout, session))
+  forgetTold(told)
   process.exit(0)
 }
 
+const continuingAfterABlock = Boolean(call.stop_hook_active)
 if (route.kind === 'install') {
-  refuseUninstalled(route.checkout, advice => alreadyTold(toldFile(route.checkout, session), advice))
+  if (continuingAfterABlock) process.exit(0)
+  refuseUninstalled(route.checkout, advice => alreadyTold(told, advice))
 }
-runInCheckout(route, session === undefined ? { changed } : { changed, session })
+if (!continuingAfterABlock) runInCheckout(route, session === undefined ? { changed } : { changed, session })
+
+const checkedWithoutTheRecord = checkInCheckout(route, { changed })
+if (checkedWithoutTheRecord.status === 0) forgetTold(told)

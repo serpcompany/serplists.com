@@ -29,6 +29,11 @@ const A_LOADER_THAT_RUNS_TYPESCRIPT_FILES_AS_JAVASCRIPT = {
   ].join('\n'),
 };
 
+const THE_CHECKS_PASS = 'process.exit(0);\n';
+
+const AGENTS_MAP = '# AGENTS\n';
+const AGENTS_MAP_WITH_A_BROKEN_LINK = '# AGENTS\n\n- [Code](docs/agents/code.md)\n';
+
 function otherCheckout(script: 'hook.ts' | 'stop-hook.ts', installed: boolean): string {
   return scratchRepository('hooks', {
     '.gitignore': 'node_modules/\nignored.ts\ntmp/\n',
@@ -43,6 +48,27 @@ function committed(checkout: string): string {
   git(checkout, 'add', '--all');
   git(checkout, 'commit', '--quiet', '--message', 'Start');
   return checkout;
+}
+
+const checkoutWithDocs = (stopChecks: string) =>
+  committed(
+    scratchRepository('hooks', {
+      '.gitignore': 'node_modules/\ntmp/\n',
+      'AGENTS.md': AGENTS_MAP,
+      'package.json': '{}\n',
+      'scripts/checks/stop-hook.ts': stopChecks,
+      ...A_LOADER_THAT_RUNS_TYPESCRIPT_FILES_AS_JAVASCRIPT,
+    }),
+  );
+
+const stopAfterABlock = (checkout: string) =>
+  hook('stop-hook.mjs', { stop_hook_active: true, cwd: checkout, session_id: 'session-1' });
+
+async function blockOnABrokenLink(checkout: string): Promise<string> {
+  writeFiles(checkout, { 'AGENTS.md': AGENTS_MAP_WITH_A_BROKEN_LINK });
+  const report = await stopHookReport(checkout, ['AGENTS.md'], 'session-1');
+  expect(report).toContain("AGENTS.md:3  links to docs/agents/code.md, which doesn't exist in the repository");
+  return report;
 }
 
 const hook = (script: 'hook.mjs' | 'stop-hook.mjs', input: object, inGitHubActions = false) =>
@@ -91,10 +117,33 @@ describe('the edit hook', { timeout: 60_000 }, () => {
 });
 
 describe('the stop hook', { timeout: 60_000 }, () => {
-  it('blocks a turn once, never twice in a row', () => {
-    const result = hook('stop-hook.mjs', { stop_hook_active: true, cwd: committed(otherCheckout('stop-hook.ts', true)) });
+  it.each([
+    ['its checks fail', true],
+    ['its packages are missing', false],
+  ])('never blocks the stop that follows a block, where %s', (_where, installed) => {
+    const checkout = committed(otherCheckout('stop-hook.ts', installed));
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    const result = stopAfterABlock(checkout);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
+  });
+
+  it.each([
+    ['changes still to commit', `${AGENTS_MAP}\nFixed in the continuation.\n`],
+    ['nothing left to commit', AGENTS_MAP],
+  ])('reports a failure again when it comes back, once the stop after its block found it fixed, with %s', async (_fix, fixed) => {
+    const checkout = checkoutWithDocs(THE_CHECKS_PASS);
+    const report = await blockOnABrokenLink(checkout);
+    writeFiles(checkout, { 'AGENTS.md': fixed });
+    expect(stopAfterABlock(checkout).status).toBe(0);
+    expect(await blockOnABrokenLink(checkout)).toBe(report);
+  });
+
+  it('stays quiet about a failure the stop after its block still finds', async () => {
+    const checkout = checkoutWithDocs(ECHO_THE_CALL);
+    await blockOnABrokenLink(checkout);
+    expect(stopAfterABlock(checkout).status).toBe(0);
+    expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-1')).toBe('');
   });
 
   it('runs the checks of the checkout the session works in, on the files changed since the last commit and new ones', () => {
@@ -159,9 +208,8 @@ describe('the checks the hooks run', { timeout: 60_000 }, () => {
   });
 
   it('report a broken doc link before the turn ends, with the stop rule, once per session', async () => {
-    const checkout = scratchRepository('hooks', { 'AGENTS.md': '# AGENTS\n\n- [Code](docs/agents/code.md)\n', 'package.json': '{}\n' });
-    const report = await stopHookReport(checkout, ['AGENTS.md'], 'session-1');
-    expect(report).toContain("AGENTS.md:3  links to docs/agents/code.md, which doesn't exist in the repository");
+    const checkout = scratchRepository('hooks', { 'AGENTS.md': AGENTS_MAP, 'package.json': '{}\n' });
+    const report = await blockOnABrokenLink(checkout);
     expect(report.endsWith(stopRule)).toBe(true);
     expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-1')).toBe('');
     expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-2')).toBe(report);
