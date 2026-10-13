@@ -1,20 +1,37 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createErrorReporter, installErrorReporting, reportClientError } from '@/lib/errorReports';
 import { clientErrorReportSchema, type ClientErrorReport } from '@/lib/schemas/clientErrorReport';
 import { firstOf } from '../../support/elements';
 
 const COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const PAGE = window.location.origin;
+const SITE_CHUNK = `${PAGE}/_next/static/chunks/0a1b2c3d.js`;
+const TEMPLATE_TITLE = 'Q3 launch plan for alice@example.com';
 
-const reporterInto = (sent: ClientErrorReport[], pagePath = () => '/templates/?q=camping#top') =>
-  createErrorReporter((report) => {
-    sent.push(report);
-  }, pagePath);
+const reporterInto = (sent: ClientErrorReport[]) =>
+  createErrorReporter(
+    (report) => {
+      sent.push(report);
+    },
+    () => ({ origin: PAGE, pathname: '/templates/' }),
+  );
+
+const thrownAt = (error: Error, ...frames: string[]) =>
+  Object.assign(error, { stack: [`${error.name}: ${error.message}`, ...frames.map((frame) => `    at ${frame}`)].join('\n') });
+
+const fromSite = (error: Error, functionName = 'onClick') => thrownAt(error, `${functionName} (${SITE_CHUNK}?v=3:1:2345)`);
 
 const rejection = (reason: unknown) => Object.assign(new Event('unhandledrejection'), { reason });
 
+const inlineScriptError = () => thrownAt(new ReferenceError('dataLayer is not defined'), '<anonymous>:1:5', `${PAGE}/templates/:3:9`);
+
 describe('the browser error reporter', () => {
   let uninstall: () => void = () => undefined;
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', COMMIT);
+  });
 
   afterEach(() => {
     uninstall();
@@ -22,27 +39,30 @@ describe('the browser error reporter', () => {
     vi.unstubAllGlobals();
   });
 
-  it("reports an error thrown by the site's own script, with the release and the page's path without its query", () => {
-    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', COMMIT);
+  it("reports an error thrown by the site's own scripts with its name, frames, page path and release, and never its message", () => {
     const sent: ClientErrorReport[] = [];
     uninstall = installErrorReporting(window, reporterInto(sent));
 
     window.dispatchEvent(
       new ErrorEvent('error', {
-        error: new TypeError('x is undefined'),
-        message: 'Uncaught TypeError: x is undefined',
-        filename: `${window.location.origin}/_next/static/chunks/page.js`,
+        error: fromSite(new TypeError(`Cannot save "${TEMPLATE_TITLE}"`)),
+        message: `Uncaught TypeError: Cannot save "${TEMPLATE_TITLE}"`,
+        filename: SITE_CHUNK,
       }),
     );
 
-    expect(sent).toHaveLength(1);
-    expect(firstOf(sent)).toMatchObject({ kind: 'error', name: 'TypeError', message: 'x is undefined', path: '/templates/', release: COMMIT });
+    expect(sent).toEqual([
+      { kind: 'error', name: 'TypeError', stack: 'at onClick (/_next/static/chunks/0a1b2c3d.js:1:2345)', path: '/templates/', release: COMMIT },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain('Q3 launch plan');
   });
 
   it.each([
-    ['a browser extension', { error: new Error('extension'), filename: 'chrome-extension://abcdef/content.js' }],
-    ['a third-party script', { error: new Error('tag'), filename: 'https://www.googletagmanager.com/gtm.js' }],
+    ['a browser extension', { error: thrownAt(new Error('extension'), 'inject (chrome-extension://abcdef/content.js:1:2)'), filename: 'chrome-extension://abcdef/content.js' }],
+    ['a third-party script', { error: thrownAt(new Error('tag'), 'https://www.googletagmanager.com/gtm.js?id=GTM-PZZFQBGG:1:2'), filename: 'https://www.googletagmanager.com/gtm.js' }],
     ["a cross-origin script, which the browser hides as 'Script error.'", { message: 'Script error.', filename: '' }],
+    ["an inline script, such as a Tag Manager Custom HTML tag, which runs as the page's own URL", { error: inlineScriptError(), filename: `${PAGE}/templates/` }],
+    ['an inline script that throws a value with no stack', { error: 'dataLayer push failed', filename: `${PAGE}/templates/`, lineno: 3, colno: 9 }],
   ])('leaves out an error from %s', (_label, init) => {
     const sent: ClientErrorReport[] = [];
     uninstall = installErrorReporting(window, reporterInto(sent));
@@ -52,20 +72,28 @@ describe('the browser error reporter', () => {
     expect(sent).toEqual([]);
   });
 
-  it('reports an unhandled rejection, describing a value that is not an error by its type alone', () => {
+  it("reports an error from the site's scripts whose stack names no frame, by where the window says it was thrown", () => {
     const sent: ClientErrorReport[] = [];
     uninstall = installErrorReporting(window, reporterInto(sent));
 
-    window.dispatchEvent(rejection(new Error('load failed')));
-    window.dispatchEvent(rejection('a plain string'));
-    window.dispatchEvent(rejection({ message: 'an error-like object' }));
-    window.dispatchEvent(rejection({ email: 'alice@example.com', items: [1, 2] }));
+    window.dispatchEvent(new ErrorEvent('error', { error: thrownAt(new SyntaxError('Unexpected token')), filename: SITE_CHUNK, lineno: 1, colno: 99 }));
 
-    expect(sent.map(({ kind, name, message }) => ({ kind, name, message }))).toEqual([
-      { kind: 'unhandledrejection', name: 'Error', message: 'load failed' },
-      { kind: 'unhandledrejection', name: undefined, message: 'a plain string' },
-      { kind: 'unhandledrejection', name: undefined, message: 'an error-like object' },
-      { kind: 'unhandledrejection', name: undefined, message: '[object Object]' },
+    expect(sent.map(({ name, stack }) => ({ name, stack }))).toEqual([{ name: 'SyntaxError', stack: 'at /_next/static/chunks/0a1b2c3d.js:1:99' }]);
+  });
+
+  it("reports an unhandled rejection only when its stack runs through the site's scripts", () => {
+    const sent: ClientErrorReport[] = [];
+    uninstall = installErrorReporting(window, reporterInto(sent));
+
+    window.dispatchEvent(rejection(thrownAt(new Error('tag failed'), 'https://www.googletagmanager.com/gtm.js:1:2')));
+    window.dispatchEvent(rejection(thrownAt(new Error('extension failed'), 'chrome-extension://abcdef/content.js:1:2')));
+    window.dispatchEvent(rejection(inlineScriptError()));
+    window.dispatchEvent(rejection('a plain string'));
+    window.dispatchEvent(rejection({ message: `an error-like object about ${TEMPLATE_TITLE}` }));
+    window.dispatchEvent(rejection(fromSite(new TypeError('Failed to fetch'), 'loadTemplates')));
+
+    expect(sent).toEqual([
+      { kind: 'unhandledrejection', name: 'TypeError', stack: 'at loadTemplates (/_next/static/chunks/0a1b2c3d.js:1:2345)', path: '/templates/', release: COMMIT },
     ]);
   });
 
@@ -73,18 +101,18 @@ describe('the browser error reporter', () => {
     const sent: ClientErrorReport[] = [];
     const report = reporterInto(sent);
 
-    report('error', new Error('the same error'));
-    report('boundary', new Error('the same error'));
-    for (let error = 1; error <= 6; error += 1) report('error', new Error(`error ${error}`));
+    report('error', fromSite(new Error('the same error'), 'save'));
+    report('boundary', fromSite(new Error('the same error, worded otherwise'), 'save'));
+    for (let error = 1; error <= 6; error += 1) report('error', fromSite(new Error('another error'), `step${error}`));
 
-    expect(sent.map(({ message }) => message)).toEqual(['the same error', 'error 1', 'error 2', 'error 3', 'error 4']);
+    expect(sent.map(({ stack }) => stack?.split(' ')[1])).toEqual(['save', 'step1', 'step2', 'step3', 'step4']);
   });
 
   it('stops listening once uninstalled', () => {
     const sent: ClientErrorReport[] = [];
     installErrorReporting(window, reporterInto(sent))();
 
-    window.dispatchEvent(rejection(new Error('after')));
+    window.dispatchEvent(rejection(fromSite(new Error('after'))));
 
     expect(sent).toEqual([]);
   });
@@ -92,12 +120,12 @@ describe('the browser error reporter', () => {
   it('never lets a report that fails break the page', async () => {
     const failingSend = createErrorReporter(() => {
       throw new Error('send failed');
-    }, () => '/');
-    const failingPath = createErrorReporter(() => undefined, () => {
+    }, () => window.location);
+    const failingPage = createErrorReporter(() => undefined, () => {
       throw new Error('no location');
     });
-    expect(() => failingSend('error', new Error('a'))).not.toThrow();
-    expect(() => failingPath('error', new Error('b'))).not.toThrow();
+    expect(() => failingSend('boundary', new Error('a'))).not.toThrow();
+    expect(() => failingPage('boundary', new Error('b'))).not.toThrow();
 
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
     expect(() => reportClientError('boundary', new Error('while offline'))).not.toThrow();
@@ -106,11 +134,11 @@ describe('the browser error reporter', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  it('posts a report to /api/client-errors as JSON, kept alive past the page and sent without cookies', () => {
+  it('posts a report to /api/client-errors as JSON, kept alive past the page and sent without cookies or message', () => {
     const fetchReport = vi.fn(async (_url: string, _init: RequestInit) => new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchReport);
 
-    reportClientError('boundary', new RangeError('posted'));
+    reportClientError('boundary', fromSite(new RangeError(`posted for ${TEMPLATE_TITLE}`), 'render'));
 
     expect(fetchReport).toHaveBeenCalledTimes(1);
     const [url, init] = firstOf(fetchReport.mock.calls);
@@ -121,11 +149,13 @@ describe('the browser error reporter', () => {
       credentials: 'omit',
       keepalive: true,
     });
-    expect(clientErrorReportSchema.parse(JSON.parse(String(init.body)))).toMatchObject({
+    expect(String(init.body)).not.toContain('posted for');
+    expect(clientErrorReportSchema.parse(JSON.parse(String(init.body)))).toEqual({
       kind: 'boundary',
       name: 'RangeError',
-      message: 'posted',
+      stack: 'at render (/_next/static/chunks/0a1b2c3d.js:1:2345)',
       path: window.location.pathname,
+      release: COMMIT,
     });
   });
 });

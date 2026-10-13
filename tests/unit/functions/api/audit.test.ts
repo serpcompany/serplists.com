@@ -5,6 +5,7 @@ import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
+import { sha256Hex } from '@functions/api/utils/crypto';
 import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
 import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
@@ -241,6 +242,18 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(rowBytes(values)).toBeLessThan(ROW_BUDGET_BYTES);
     expect(values.action).toBe('checklist_run.updated');
     expect(values.resource_id).toBe('run-1');
+  });
+
+  it("records the request id, a SHA-256 hash of the client's IP address and the user agent, never the address itself", async () => {
+    const request = new Request('https://serplists.com/api/checklists/run-1', {
+      headers: { 'CF-Connecting-IP': '203.0.113.7', 'User-Agent': 'Mozilla/5.0 (test)', 'X-Request-Id': 'req-1' },
+    });
+
+    const values = await buildAuditEventValues(input({ request }));
+
+    expect(values).toMatchObject({ request_id: 'req-1', ip_hash: await sha256Hex('203.0.113.7'), user_agent: 'Mozilla/5.0 (test)' });
+    expect(values.ip_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(values)).not.toContain('203.0.113.7');
   });
 
   it('leaves small payloads unchanged', async () => {

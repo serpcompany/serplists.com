@@ -65,7 +65,7 @@ describe('ErrorBoundary', () => {
     authUser = null;
   });
 
-  it('reports the error it catches to /api/client-errors as a boundary error', async () => {
+  it('reports the error it catches to /api/client-errors as a boundary error, without its message', async () => {
     const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
     function BrokenPage(): never {
       throw new TypeError('a row the page cannot show');
@@ -77,10 +77,8 @@ describe('ErrorBoundary', () => {
     }
 
     const reports = fetchReport.mock.calls.map(([url, init]) => ({ url, report: clientErrorReportSchema.parse(JSON.parse(String(init.body))) }));
-    expect(reports).toContainEqual({
-      url: '/api/client-errors',
-      report: objectContaining({ kind: 'boundary', name: 'TypeError', message: 'a row the page cannot show' }),
-    });
+    expect(reports).toContainEqual({ url: '/api/client-errors', report: objectContaining({ kind: 'boundary', name: 'TypeError' }) });
+    expect(fetchReport.mock.calls.map(([, init]) => String(init.body)).join('\n')).not.toContain('a row the page cannot show');
   });
 
   it('clears the error when its reset key changes, so navigating away recovers', () => {

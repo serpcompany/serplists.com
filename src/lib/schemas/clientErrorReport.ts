@@ -6,16 +6,17 @@ const CLIENT_ERROR_KINDS = ['boundary', 'error', 'unhandledrejection'] as const;
 
 export type ClientErrorKind = (typeof CLIENT_ERROR_KINDS)[number];
 
-const LOGGED_LENGTH = { name: 100, message: 300, stack: 2000, path: 200 } as const;
-const SCRUBBED_LENGTH_FACTOR = 4;
+const LOGGED_LENGTH = { name: 100, functionName: 100, stack: 2000, path: 200 } as const;
 const MAX_FIELD_LENGTH = 20_000;
+const MAX_FRAMES = 20;
+const V8_FRAME_INDENT = '    at ';
+const SITE_BUNDLE_PATH = '/_next/static/';
 
 const field = z.string().max(MAX_FIELD_LENGTH);
 
 export const clientErrorReportSchema = z.object({
   kind: z.enum(CLIENT_ERROR_KINDS),
   name: field.optional(),
-  message: field,
   stack: field.optional(),
   path: field,
   release: reportedCommitSchema,
@@ -23,16 +24,18 @@ export const clientErrorReportSchema = z.object({
 
 export type ClientErrorReport = z.infer<typeof clientErrorReportSchema>;
 
-const URL_QUERY_OR_FRAGMENT = /((?:https?:)?\/[^\s?#"'<>()]*)[?#][^\s"'<>()]*?((?::\d+){0,2})(?=[\s"'<>()]|$)/gi;
-const QUERY_PARAMETERS = /\?[\w.%-]+=[^\s"'<>()]*/g;
-const SECRET_PATH_SEGMENT = /\/(share|shared|team-invites|reset-password|invites)\/(?!pending(?=[/\s?#"'<>()]|$))[^\s/?#"'<>()]+/gi;
-const EMAIL_ADDRESS = /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gi;
-const BEARER_TOKEN = /\b(Bearer)\s+[^\s"'<>()]+/gi;
-const WEB_TOKEN = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*)?/g;
-const LONG_SECRET = /(^|[^A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/g;
+const ERROR_NAME = /^[A-Za-z_$][\w$.-]*$/;
+const FUNCTION_NAME = /^[\w$.<>[\]/#* -]+$/;
+const LINE_AND_COLUMN = /:(\d{1,9}):(\d{1,9})$/;
+const WEB_URL = /^https?:\/\//i;
+const OTHER_SCHEME = /^[a-z][a-z\d+.-]{0,30}:\/\//i;
+const FRAME_LABELS: ReadonlySet<string> = new Set(['<anonymous>', 'native', '[native code]']);
+const EMAIL_ADDRESS = /[A-Za-z0-9._%+-]{1,64}(?:@|%40)[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}/gi;
 const SECRET_PAGE_SEGMENT = /^(?:share|team-invites|reset-password)$/i;
 
 const cut = (text: string, length: number): string => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
+
+export const withoutEmailAddresses = (text: string): string => text.replace(EMAIL_ADDRESS, '[email]');
 
 const decodedOrAsSent = (text: string): string => {
   try {
@@ -50,37 +53,97 @@ const decodedPath = (pathname: string): string => {
   }
 };
 
-export function scrubErrorText(text: string, length: number): string {
-  const scrubbed = cut(text, length * SCRUBBED_LENGTH_FACTOR)
-    .replace(URL_QUERY_OR_FRAGMENT, '$1$2')
-    .replace(QUERY_PARAMETERS, '')
-    .replace(SECRET_PATH_SEGMENT, '/$1/:token')
-    .replace(EMAIL_ADDRESS, '[email]')
-    .replace(BEARER_TOKEN, '$1 [token]')
-    .replace(WEB_TOKEN, '[token]')
-    .replace(LONG_SECRET, '$1[token]');
-  return cut(scrubbed, length);
-}
-
 function scrubPagePath(path: string): string {
-  const [pathname = ''] = path.split(/[?#]/, 1);
-  const decoded = decodedPath(cut(pathname, LOGGED_LENGTH.path * SCRUBBED_LENGTH_FACTOR));
+  const [pathname = ''] = cut(path, LOGGED_LENGTH.path).split(/[?#]/, 1);
+  const decoded = decodedPath(pathname);
   const segments = decoded.split('/').filter(Boolean);
   const kept = segments.map((segment, index) =>
     SECRET_PAGE_SEGMENT.test(segments[index - 1] ?? '') ? ':token' : segment,
   );
   const trailingSlash = kept.length > 0 && decoded.endsWith('/') ? '/' : '';
-  return cut(`/${kept.join('/')}${trailingSlash}`.replace(EMAIL_ADDRESS, '[email]'), LOGGED_LENGTH.path);
+  return cut(withoutEmailAddresses(`/${kept.join('/')}${trailingSlash}`), LOGGED_LENGTH.path);
 }
 
-export function scrubClientErrorReport(report: ClientErrorReport): ClientErrorReport {
-  const { kind, name, message, stack, path, release } = report;
+const parsedUrl = (text: string): URL | undefined => {
+  try {
+    return new URL(text);
+  } catch {
+    return undefined;
+  }
+};
+
+function frameFile(file: string, origin: string): string | undefined {
+  if (FRAME_LABELS.has(file)) return file;
+  if (file.startsWith('/')) return scrubPagePath(file);
+  if (!WEB_URL.test(file)) return OTHER_SCHEME.exec(file)?.[0];
+  const url = parsedUrl(file);
+  if (url === undefined) return undefined;
+  const path = scrubPagePath(url.pathname);
+  return url.origin === origin ? path : `${url.origin}${path}`;
+}
+
+function frameParts(line: string): { functionName: string; location: string } {
+  if (line.startsWith('at ')) {
+    const rest = line.slice('at '.length);
+    const open = rest.indexOf(' (');
+    return open > 0 && rest.endsWith(')')
+      ? { functionName: rest.slice(0, open), location: rest.slice(open + 2, -1) }
+      : { functionName: '', location: rest };
+  }
+  const at = line.indexOf('@');
+  return at === -1 ? { functionName: '', location: line } : { functionName: line.slice(0, at), location: line.slice(at + 1) };
+}
+
+type StackFrame = { text: string; file: string };
+
+function stackFrame(stackLine: string, origin: string): StackFrame | undefined {
+  const parts = frameParts(stackLine.trim());
+  const functionName = parts.functionName.slice(0, LOGGED_LENGTH.functionName);
+  if (functionName !== '' && !FUNCTION_NAME.test(functionName)) return undefined;
+  const position = LINE_AND_COLUMN.exec(parts.location);
+  const file = frameFile(position === null ? parts.location : parts.location.slice(0, position.index), origin);
+  if (file === undefined) return undefined;
+  const [, lineNumber = '', columnNumber = ''] = position ?? [];
+  const where = position === null ? file : `${file}:${lineNumber}:${columnNumber}`;
+  return { text: functionName === '' ? `at ${where}` : `at ${functionName} (${where})`, file };
+}
+
+function framesText(stack: string): string[] {
+  const start = stack.startsWith(V8_FRAME_INDENT) ? 0 : stack.indexOf(`\n${V8_FRAME_INDENT}`) + 1;
+  const lines = stack.slice(start, start + LOGGED_LENGTH.stack).split('\n');
+  return stack.length > start + LOGGED_LENGTH.stack ? lines.slice(0, -1) : lines;
+}
+
+function stackFrames(stack: string, origin: string): StackFrame[] {
+  const frames: StackFrame[] = [];
+  let length = 0;
+  for (const line of framesText(stack)) {
+    const frame = stackFrame(line, origin);
+    if (frame === undefined) continue;
+    length += frame.text.length + 1;
+    if (frames.length === MAX_FRAMES || length > LOGGED_LENGTH.stack + 1) break;
+    frames.push(frame);
+  }
+  return frames;
+}
+
+const scrubErrorName = (name: string): string | undefined => {
+  const kept = name.slice(0, LOGGED_LENGTH.name);
+  return ERROR_NAME.test(kept) ? kept : undefined;
+};
+
+export function scrubClientErrorReport(report: ClientErrorReport, origin: string): ClientErrorReport {
+  const { kind, name, stack, path, release } = report;
+  const errorName = name === undefined ? undefined : scrubErrorName(name);
+  const frames = stackFrames(stack ?? '', origin).map(({ text }) => text).join('\n');
   return {
     kind,
-    ...(name === undefined ? {} : { name: scrubErrorText(name, LOGGED_LENGTH.name) }),
-    message: scrubErrorText(message, LOGGED_LENGTH.message),
-    ...(stack === undefined ? {} : { stack: scrubErrorText(stack, LOGGED_LENGTH.stack) }),
+    ...(errorName === undefined ? {} : { name: errorName }),
+    ...(frames === '' ? {} : { stack: frames }),
     path: scrubPagePath(path),
     release,
   };
 }
+
+export const hasSiteBundleFrame = (report: ClientErrorReport, origin: string): boolean =>
+  stackFrames(report.stack ?? '', origin).some(({ file }) => file.startsWith(SITE_BUNDLE_PATH));

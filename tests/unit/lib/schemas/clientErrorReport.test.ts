@@ -1,87 +1,119 @@
 import { describe, expect, it } from 'vitest';
 
-import { clientErrorReportSchema, scrubClientErrorReport, type ClientErrorReport } from '@/lib/schemas/clientErrorReport';
+import { clientErrorReportSchema, hasSiteBundleFrame, scrubClientErrorReport, type ClientErrorReport } from '@/lib/schemas/clientErrorReport';
 
 const COMMIT = '0123456789abcdef0123456789abcdef01234567';
-const FRAME = 'at onClick (https://serplists.com/_next/static/chunks/0a1b2c3d.js:1:2345)';
+const ORIGIN = 'https://serplists.com';
+const CHUNK = `${ORIGIN}/_next/static/chunks/0a1b2c3d.js`;
 
 const report = (overrides: Partial<ClientErrorReport> = {}): ClientErrorReport => ({
   kind: 'error',
   name: 'TypeError',
-  message: 'x is undefined',
-  stack: `TypeError: x is undefined\n    ${FRAME}`,
+  stack: 'at onClick (/_next/static/chunks/0a1b2c3d.js:1:2345)',
   path: '/templates/',
   release: COMMIT,
   ...overrides,
 });
 
-const scrubbedMessage = (message: string) => scrubClientErrorReport(report({ message })).message;
-const scrubbedPath = (path: string) => scrubClientErrorReport(report({ path })).path;
-const assembled = (...parts: string[]) => parts.join('');
+const scrubbed = (overrides: Partial<ClientErrorReport>) => scrubClientErrorReport(report(overrides), ORIGIN);
+const framesOf = (stack: string) => scrubbed({ stack }).stack?.split('\n') ?? [];
+const scrubbedPath = (path: string) => scrubbed({ path }).path;
+const v8Stack = (header: string, ...frames: string[]) => [header, ...frames.map((frame) => `    at ${frame}`)].join('\n');
 
 describe('scrubClientErrorReport, which runs in the browser before a report is sent and in the API before it is logged', () => {
-  it('keeps a report that holds nothing to scrub as it was', () => {
-    expect(scrubClientErrorReport(report())).toEqual(report());
+  it('keeps a report that already holds only a name, frames, a path and a release as it was', () => {
+    expect(scrubClientErrorReport(report(), ORIGIN)).toEqual(report());
   });
 
-  it("drops the query and fragment from URLs and paths, keeping a stack frame's line and column", () => {
-    const scrubbed = scrubClientErrorReport(
-      report({
-        message: 'Failed to fetch https://serplists.com/api/templates?scope=public&token=abc#top',
-        stack: 'Error\n    at load (https://serplists.com/_next/static/chunks/page.js?v=12:3:45)',
-      }),
+  it("sends no message text: drops a stack's message lines, however many, and keeps each frame's function, file, line and column", () => {
+    const stack = v8Stack(
+      `SyntaxError: Unexpected token 'Q', "Q3 launch plan for alice@example.com\n    at nothing" is not valid JSON`,
+      'JSON.parse (<anonymous>)',
+      `loadDraft (${CHUNK}:1:2345)`,
+      `${CHUNK}:2:10`,
     );
 
-    expect(scrubbed.message).toBe('Failed to fetch https://serplists.com/api/templates');
-    expect(scrubbed.stack).toBe('Error\n    at load (https://serplists.com/_next/static/chunks/page.js:3:45)');
+    const frames = framesOf(stack);
+
+    expect(frames).toEqual(['at JSON.parse (<anonymous>)', 'at loadDraft (/_next/static/chunks/0a1b2c3d.js:1:2345)', 'at /_next/static/chunks/0a1b2c3d.js:2:10']);
+    expect(frames.join('\n')).not.toMatch(/launch|alice|nothing/);
   });
 
-  it('drops a query string written without its path', () => {
-    expect(scrubbedMessage('GET templates?email=a%40b.co&x=1 failed')).toBe('GET templates failed');
+  it("names a frame on the page's origin by its path, and drops every frame's query and fragment", () => {
+    expect(framesOf(v8Stack('Error', `load (${CHUNK}?v=12#top:3:45)`, `${ORIGIN}/templates/?q=camping:1:2`))).toEqual([
+      'at load (/_next/static/chunks/0a1b2c3d.js:3:45)',
+      'at /templates/:1:2',
+    ]);
   });
 
-  it.each([
-    ['/share/3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e/', '/share/:token/'],
-    ['/team-invites/an-invite-token', '/team-invites/:token'],
-    ['/api/checklists/shared/a-share-token', '/api/checklists/shared/:token'],
-    ['/api/teams/invites/an-invite-token/accept', '/api/teams/invites/:token/accept'],
-    ['/api/auth/reset-password/a-reset-token', '/api/auth/reset-password/:token'],
-    ['/api/teams/invites/pending/invite-1', '/api/teams/invites/pending/invite-1'],
-  ])('writes the secret a path carries as :token in %s', (path, scrubbed) => {
-    expect(scrubbedMessage(`Request to ${path} failed`)).toBe(`Request to ${scrubbed} failed`);
+  it("keeps another origin's frame with its origin, and a browser extension's with its scheme alone", () => {
+    expect(framesOf(v8Stack('Error', 'https://www.googletagmanager.com/gtm.js?id=GTM-PZZFQBGG:12:34', 'inject (chrome-extension://abcdefghijkl/content.js:1:2)'))).toEqual([
+      'at https://www.googletagmanager.com/gtm.js:12:34',
+      'at inject (chrome-extension://:1:2)',
+    ]);
   });
 
-  it('replaces email addresses, written plain or URL-encoded', () => {
-    expect(scrubbedMessage('No account for alice@example.com or bob%40example.org')).toBe('No account for [email] or [email]');
+  it("reads Firefox's and Safari's frames, which join a function to its file with an at sign", () => {
+    const stack = [`onClick@${CHUNK}:1:2345`, `async*load@${CHUNK}:3:4`, `@${CHUNK}:5:6`, `global code@${CHUNK}:7:8`, 'forEach@[native code]', `${CHUNK}:9:10`].join('\n');
+
+    expect(framesOf(stack)).toEqual([
+      'at onClick (/_next/static/chunks/0a1b2c3d.js:1:2345)',
+      'at async*load (/_next/static/chunks/0a1b2c3d.js:3:4)',
+      'at /_next/static/chunks/0a1b2c3d.js:5:6',
+      'at global code (/_next/static/chunks/0a1b2c3d.js:7:8)',
+      'at forEach ([native code])',
+      'at /_next/static/chunks/0a1b2c3d.js:9:10',
+    ]);
   });
 
-  it("keeps a Firefox or Safari stack frame's function name, which an at sign joins to its URL", () => {
-    const frame = 'onClick@https://serplists.com/_next/static/chunks/0a1b2c3d.js:1:2345';
-
-    expect(scrubClientErrorReport(report({ stack: frame })).stack).toBe(frame);
+  it("writes the secret in an inline script's page as :token, and an email address as [email], as in the page's path", () => {
+    expect(framesOf(v8Stack('Error', `${ORIGIN}/share/3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e/:3:9`, `render (${ORIGIN}/profile/alice@example.com/:1:2)`))).toEqual([
+      'at /share/:token/:3:9',
+      'at render (/profile/[email]/:1:2)',
+    ]);
   });
 
-  it('replaces bearer tokens, Run Keys, session tokens, JSON Web Tokens and ids that may be share tokens', () => {
-    const runKey = assembled('slrk', '_', 'Ab3dE6gH9jK2mN5pQ8sT1vW4yZ7bC0eF3hJ6kM9nP2r');
-    const sessionToken = assembled('k7Hq2', 'Zp9Xw4Lm1Nv8Rt5Yb3Cd6Fg0Jh2Ks9Qe');
-    const webToken = [assembled('eyJ', 'hbGciOiJIUzI1NiJ9'), assembled('eyJ', 'zdWIiOiJ1c2VyLTEifQ'), 'c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU'].join('.');
-    const shareId = '3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e';
+  it('drops a line that only looks like a frame: a function name holding other characters, an index, an eval or a script that is not a file', () => {
+    const stack = [
+      'Error: No account for alice@https://evil.example/x.js:1:2',
+      '    at async Promise.all (index 0)',
+      `    at eval (eval at <anonymous> (${CHUNK}:1:2), <anonymous>:1:3)`,
+      '    at run (data:text/javascript,alert(1):1:2)',
+      '    at work (blob:https://serplists.com/0b2c9d1e:1:2)',
+    ].join('\n');
 
-    const scrubbed = scrubbedMessage(`Bearer short1 ${runKey} ${sessionToken} ${webToken} ${shareId}`);
-
-    expect(scrubbed).toBe('Bearer [token] [token] [token] [token] [token]');
+    expect(scrubbed({ stack }).stack).toBeUndefined();
   });
 
-  it('cuts each field to its bound', () => {
-    const scrubbed = scrubClientErrorReport(
-      report({ name: 'N'.repeat(500), message: 'm '.repeat(500), stack: 's\n'.repeat(5000), path: `/${'p/'.repeat(500)}` }),
-    );
+  it('keeps an error name made of identifier characters, cut to 100, and drops any other', () => {
+    expect(scrubbed({ name: 'NotAllowedError' }).name).toBe('NotAllowedError');
+    expect(scrubbed({ name: 'N'.repeat(500) }).name).toHaveLength(100);
+    expect(scrubbed({ name: 'Error: Q3 launch plan' }).name).toBeUndefined();
+  });
 
-    expect(scrubbed.name).toHaveLength(100);
-    expect(scrubbed.message).toHaveLength(300);
-    expect(scrubbed.stack).toHaveLength(2000);
-    expect(scrubbed.path).toHaveLength(200);
-    expect(scrubbed.message.endsWith('…')).toBe(true);
+  it('keeps whole frames only, at most 20 and 2,000 characters, and cuts the path to 200', () => {
+    const frames = Array.from({ length: 30 }, (_, index) => `step${index} (${CHUNK}:1:${index})`);
+    const longFrames = Array.from({ length: 30 }, (_, index) => `${'f'.repeat(90)}${index} (${CHUNK}:1:${index})`);
+
+    expect(framesOf(v8Stack('Error', ...frames))).toHaveLength(20);
+    const kept = framesOf(v8Stack('Error', ...longFrames));
+    expect(kept.join('\n').length).toBeLessThanOrEqual(2000);
+    expect(kept.every((frame) => frame.endsWith(')'))).toBe(true);
+    expect(scrubbedPath(`/${'p/'.repeat(500)}`)).toHaveLength(200);
+  });
+
+  it('gives the same report when the API scrubs what the browser already scrubbed', () => {
+    const once = scrubbed({ stack: v8Stack('TypeError: x', `a (${CHUNK}:1:2)`, 'b (moz-extension://0b2c9d1e/c.js:3:4)', 'https://cdn.example.com/x/y.js?q=1:5:6') });
+
+    expect(scrubClientErrorReport(once, ORIGIN)).toEqual(once);
+  });
+});
+
+describe('hasSiteBundleFrame', () => {
+  it("is true only when a frame runs in the site's own scripts under /_next/static/", () => {
+    expect(hasSiteBundleFrame(scrubbed({ stack: v8Stack('Error', `${CHUNK}:1:2`) }), ORIGIN)).toBe(true);
+    expect(hasSiteBundleFrame(scrubbed({ stack: v8Stack('Error', `${ORIGIN}/templates/:3:9`, '<anonymous>:1:5') }), ORIGIN)).toBe(false);
+    expect(hasSiteBundleFrame(scrubbed({ stack: v8Stack('Error', 'https://evil.example/_next/static/chunks/a.js:1:2') }), ORIGIN)).toBe(false);
   });
 });
 
@@ -98,8 +130,8 @@ describe("the page path a report names, which the browser takes from the address
     ['/dashboard/templates/0b2c9d1e-1111-4a2b-8c3d-123456789abc/', '/dashboard/templates/0b2c9d1e-1111-4a2b-8c3d-123456789abc/'],
     ['/profile/alice@example.com/', '/profile/[email]/'],
     ['', '/'],
-  ])('logs %j as %j', (path, scrubbed) => {
-    expect(scrubbedPath(path)).toBe(scrubbed);
+  ])('logs %j as %j', (path, expected) => {
+    expect(scrubbedPath(path)).toBe(expected);
   });
 });
 
@@ -116,8 +148,8 @@ describe('clientErrorReportSchema', () => {
     expect(clientErrorReportSchema.safeParse({ ...report(), release: 'main' }).success).toBe(false);
   });
 
-  it('drops any field the report does not define, so nothing else a page sends is logged', () => {
-    const parsed = clientErrorReportSchema.parse({ ...report(), cookie: 'session=abc', url: 'https://serplists.com/?token=x' });
+  it('drops any field the report does not define, a message among them, so nothing else a page sends is logged', () => {
+    const parsed = clientErrorReportSchema.parse({ ...report(), message: 'Q3 launch plan', cookie: 'session=abc', url: 'https://serplists.com/?token=x' });
 
     expect(parsed).toEqual(report());
   });

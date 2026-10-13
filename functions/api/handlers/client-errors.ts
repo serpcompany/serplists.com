@@ -19,14 +19,13 @@ export async function handleClientErrors(request: Request, env: Env): Promise<Re
   const read = await readJsonPayload(request, clientErrorReportSchema, 'Invalid error report');
   if ('response' in read) return read.response;
 
-  const report = scrubClientErrorReport(read.payload);
+  const report = scrubClientErrorReport(read.payload, new URL(request.url).origin);
   log('error', 'client_error', {
     kind: report.kind,
     errorName: report.name,
-    errorMessage: report.message,
     stack: report.stack,
     path: report.path,
-    release: report.release,
+    pageRelease: report.release,
   });
   return new Response(null, { status: 204 });
 }

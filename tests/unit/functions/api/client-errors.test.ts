@@ -6,14 +6,15 @@ import { logLineIn } from '../../../support/storedJson';
 
 const TEMPLATES_MODULE = '../../../../functions/api/handlers/templates';
 const COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const WORKER_COMMIT = 'fedcba9876543210fedcba9876543210fedcba98';
 const REPORTS_PER_MINUTE = 10;
+const WORST_CASE_BUDGET_MS = 15;
 const FROM_THE_SITE = { 'Content-Type': 'application/json', Origin: DEPLOYED_HOST };
 
 const aReport = {
   kind: 'boundary',
   name: 'TypeError',
-  message: 'Cannot read the account of alice@example.com',
-  stack: 'TypeError: Cannot read\n    at render (https://app.example.test/_next/static/chunks/page.js?v=1:4:56)',
+  stack: 'TypeError: Cannot read the account of alice@example.com\n    at render (https://app.example.test/_next/static/chunks/page.js?v=1:4:56)',
   path: '/share/3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e/?ref=email',
   release: COMMIT,
 };
@@ -32,25 +33,30 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
 
   afterEach(() => {
     vi.doUnmock(TEMPLATES_MODULE);
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     vi.resetModules();
   });
 
-  const send = async (init: { method?: string; headers?: Record<string, string>; body?: string }, path = 'client-errors') => {
-    const apiWorker = await freshApiWorker();
-    const request = new Request(`${DEPLOYED_HOST}/api/${path}`, {
+  type Sent = { method?: string; headers?: Record<string, string>; body?: string };
+
+  const requestFor = (init: Sent, path: string) =>
+    new Request(`${DEPLOYED_HOST}/api/${path}`, {
       method: init.method ?? 'POST',
       headers: { 'CF-Connecting-IP': ip, ...(init.headers ?? FROM_THE_SITE) },
       ...(init.body === undefined ? {} : { body: init.body }),
     });
-    return apiWorker.fetch(request, apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET }));
-  };
+
+  const send = async (init: Sent, path = 'client-errors') =>
+    (await freshApiWorker()).fetch(requestFor(init, path), apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET }));
 
   const clientErrorLines = () =>
     lines.filter((line) => line.startsWith('{')).map(logLineIn).filter((line) => line.message === 'client_error');
 
-  it('logs one client_error line from the report, scrubbed, and answers 204 with no body', async () => {
-    const response = await send({ body: JSON.stringify(aReport) });
+  it("logs one client_error line of the report's frames, path and commits, never a message, and answers 204 with no body", async () => {
+    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', WORKER_COMMIT);
+
+    const response = await send({ body: JSON.stringify({ ...aReport, message: 'Cannot read the account of alice@example.com' }) });
 
     expect(response.status).toBe(204);
     expect(await response.text()).toBe('');
@@ -60,13 +66,14 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
       level: 'error',
       kind: 'boundary',
       errorName: 'TypeError',
-      errorMessage: 'Cannot read the account of [email]',
-      stack: 'TypeError: Cannot read\n    at render (https://app.example.test/_next/static/chunks/page.js:4:56)',
+      stack: 'at render (/_next/static/chunks/page.js:4:56)',
       path: '/share/:token/',
-      release: COMMIT,
+      pageRelease: COMMIT,
+      release: WORKER_COMMIT,
       requestId: response.headers.get('X-Request-Id'),
     });
-    expect(lines.join('\n')).not.toContain('alice@example.com');
+    expect(line).not.toHaveProperty('errorMessage');
+    expect(lines.join('\n')).not.toContain('alice');
     expect(lines.join('\n')).not.toContain('3f2c9a1e');
   });
 
@@ -85,7 +92,7 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
   it.each([
     ['JSON it cannot parse', '{"kind":'],
     ['a kind it does not know', JSON.stringify({ ...aReport, kind: 'warning' })],
-    ['no message', JSON.stringify({ ...aReport, message: undefined })],
+    ['no path', JSON.stringify({ ...aReport, path: undefined })],
     ['a release that is not a commit', JSON.stringify({ ...aReport, release: 'main' })],
   ])('refuses a report with %s with 400, and logs nothing from it', async (_label, body) => {
     const response = await send({ body });
@@ -106,6 +113,22 @@ describe('POST /api/client-errors, where the browser reports its errors', { time
 
     expect(response.status).toBe(413);
     expect(clientErrorLines()).toEqual([]);
+  });
+
+  it('handles a worst-case report of nearly 16KB quickly, since no pattern meets a field before it is cut to its bound', async () => {
+    const apiWorker = await freshApiWorker();
+    const env = apiEnv({ BETTER_AUTH_SECRET: TEST_AUTH_SECRET });
+    const body = JSON.stringify({ ...aReport, message: 'a'.repeat(5_000), stack: '/'.repeat(10_000), path: 'a'.repeat(500) });
+    const durations: number[] = [];
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const started = performance.now();
+      const response = await apiWorker.fetch(requestFor({ body }, 'client-errors'), env);
+      durations.push(performance.now() - started);
+      expect(response.status).toBe(204);
+    }
+
+    expect(Math.min(...durations)).toBeLessThan(WORST_CASE_BUDGET_MS);
   });
 
   it('takes 10 reports a minute from a client, in a budget of its own, so a burst of reports never blocks a save', async () => {
