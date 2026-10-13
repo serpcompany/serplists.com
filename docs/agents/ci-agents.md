@@ -37,29 +37,35 @@ would post, and posts only when you say so. How it's built, and why:
 
 - **A pull request can't change its own review.** The action replaces `CLAUDE.md`, `.claude/`, and
   `.mcp.json` with the base branch's copies before Claude starts, keeping the pull request's under
-  `.claude-pr/` for the reviewer to read, so the skill comes from the base branch. It leaves
-  `AGENTS.md` alone, so the job writes the base branch's `AGENTS.md` over the pull request's. The
-  job also copies `AGENTS.md`, `ARCHITECTURE.md`, [`code.md`](code.md), and `CONTEXT.md` from the
-  base branch into a file outside the checkout, and hands it to Claude and every subagent
+  `.claude-pr/` for the reviewer to read, so the skill and the settings come from the base branch.
+  A hook in those settings would still run a script from the pull request's checkout, such as
+  `tools/checks/hook.mjs`, with the job's tokens in its environment, so every Claude job in CI
+  turns hooks off (`--settings '{"disableAllHooks":true}'`). The action leaves `AGENTS.md` alone,
+  so the job writes the base branch's `AGENTS.md` over the pull request's. The job also copies
+  `AGENTS.md`, `ARCHITECTURE.md`, [`code.md`](code.md), and `CONTEXT.md` from the base branch into
+  a file outside the checkout, and hands it to Claude and every subagent
   (`--append-system-prompt-file`, `--append-subagent-system-prompt-file`). On a base branch from
   before the docs moved, it takes the core beliefs and the product sense doc from their old paths
   instead.
 - **It reads the issue as data.** The job finds the `Closes #<n>` lines in the pull request's body
-  and writes each issue, with its comments, to `tmp/review-issues.md`, which the skill reads for
-  the acceptance criteria. Anyone can write an issue, so its text never goes into the
-  instructions. GitHub links closing keywords only on pull requests into the default branch, so
-  the job reads the body itself.
+  and writes each issue, with its comments, to `tmp/review-issues.md`. Anyone can write an issue,
+  so its text goes into no prompt: Claude reads the file with Read, and gives each reviewer only
+  the pull request's number and the file's path, so each reads it with Read too. GitHub links
+  closing keywords only on pull requests into the default branch, so the job reads the body itself.
 - **Claude posts nothing.** It writes its findings to `tmp/review-findings.json` and the summary to
-  `tmp/review-summary.md`, and a step after it posts them with the job's own token, as
-  `github-actions[bot]`: each finding as an inline comment on the reviewed commit (on its file when
-  GitHub can't place it on its line, and in the summary when its file isn't in the pull request),
-  then the summary, by editing the earlier summary comment by id or creating one. The step refuses
-  a summary without its `## Claude review` heading or too long for a comment, and a finding with
-  no file, no line, or no blocking or suggestion mark, and then posts nothing. The job deletes any
-  of these files the pull request carries before Claude starts. The token needs
-  `pull-requests: write`: GitHub refuses a comment on a pull request from a token with only
-  `issues: write`. Claude needs no write tool, so `.claude/settings.json` can ask before every
-  `gh api` write.
+  `tmp/review-summary.md`, the only files it may write (`Edit` rules for the two, in
+  `--allowedTools` and the skill's `allowed-tools`), so nothing it reads can have it change a file
+  the job runs. A step after it posts them with the job's own token, as `github-actions[bot]`:
+  each finding as an inline comment on the reviewed commit (on its file when GitHub can't place it
+  on its line, and in the summary when its file isn't in the pull request), then the summary, by
+  editing the earlier summary comment by id or creating one. The step refuses a summary without its
+  `## Claude review` heading or too long for a comment, a finding with no file, no line, or no
+  blocking or suggestion mark, and any of them holding what looks like a token (`ghs_`, `ghp_`,
+  `gho_`, `ghu_`, `github_pat_`, `x-access-token:` or `sk-ant-` and a token's characters, or the
+  checkout's credentials header), and then posts nothing. The job deletes any of these files the
+  pull request carries before Claude starts. The token needs `pull-requests: write`: GitHub
+  refuses a comment on a pull request from a token with only `issues: write`. Claude needs no
+  GitHub write tool, so `.claude/settings.json` can ask before every `gh api` write.
 - **A re-review raises only what's new.** Before Claude starts, the job adds to its instructions
   the findings already on the pull request (posted by the workflow, or by Claude itself before the
   workflow posted them) and the latest summary. Claude's answers to `@claude` requests, and its
@@ -75,13 +81,16 @@ would post, and posts only when you say so. How it's built, and why:
   owner chose it; SERP's Token Budget asks for the strongest model for review, which is a row of
   [`harness-debt.md`](../harness-debt.md). `--strict-mcp-config` keeps `.mcp.json`'s servers, such
   as Chrome, out of CI. `--allowedTools` lists every tool in the skill's `allowed-tools`:
-  `gh pr view`, `gh pr diff`, Write, Task, Read, Glob, and Grep. Naming Glob and Grep brings them
-  back on Linux, where Claude Code otherwise searches with `grep` and `find` in Bash.
+  `gh pr view`, `gh pr diff`, edits to the two files, Task, Read, Glob, and Grep. Naming Glob and
+  Grep brings them back on Linux, where Claude Code otherwise searches with `grep` and `find` in
+  Bash.
 - **The settings never block what a CI job uses.** The action restores `.claude/` from the base
-  branch, so `.claude/settings.json` applies in CI, where an ask rule can't prompt and so denies.
-  Its rules never deny or ask for a tool a Claude job uses: the tools in each job's
-  `--allowedTools`, Read, Glob, and Grep, `git push` to a branch, and `gh pr create`.
-  `tests/unit/config/agent-tooling.test.ts` checks both directions.
+  branch, so the permissions in `.claude/settings.json` apply in CI, where an ask rule can't prompt
+  and so denies; its hooks don't run (above). Its rules never deny or ask for a tool a Claude job
+  uses: the tools in each job's `--allowedTools`, Read, Glob, and Grep, `git push` to a branch
+  other than `staging` or `main`, the action's own push script, and `gh pr create`.
+  `tests/unit/config/agent-tooling.test.ts` checks both directions, and
+  `tests/unit/workflows/claude-guards.test.ts` that every Claude job turns hooks off.
 - **The check fails unless the whole change was reviewed.** After the review, a script fails the
   job when Claude left no log, ended in an error, ended with subagents still running, or nothing
   was posted during the run, saying whether Claude wrote its summary; a denied tool fails it only
@@ -91,8 +100,8 @@ would post, and posts only when you say so. How it's built, and why:
   them on a `Not read:` line. It counts only what the workflow posted, the summary and top-level
   inline comments, and not an answer to an `@claude` request. It runs when the review step fails
   too, and shows what Claude said, such as the API refusing the token (Claude's app and token,
-  below). It runs inline, since the job can mint an OIDC token, so it runs no script from the pull
-  request.
+  below). It runs inline, as the job's other scripts do, and Claude's hooks are off, so nothing in
+  the job, which can mint an OIDC token, runs a script from the pull request.
 - **A pull request from a fork fails with a notice.** GitHub gives it no secrets, so Claude can't
   review it; the job says so and fails rather than passing with no review. A member reviews it, or
   pushes its branch to this repository and opens the pull request from there.
@@ -107,9 +116,11 @@ skipped (Claude's app and token, below).
 
 ## @claude requests
 
-`.github/workflows/claude.yml` answers `@claude` in an issue, a pull request comment, a review, or a
-review comment, from the repository's owners, members, and collaborators, and never from a bot, so
-Claude's own comments can't start it again. The repository is public, so the job checks the
+`.github/workflows/claude.yml` answers `@claude` in an issue as it's opened, a pull request
+comment, a review, or a review comment, from the repository's owners, members, and collaborators,
+and never from a bot, so Claude's own comments can't start it again. It doesn't start when an
+issue is assigned: the action answers an assignment only to the user its `assignee_trigger` names,
+which this workflow doesn't set. The repository is public, so the job checks the
 commenter's association before it does anything: otherwise a stranger's `@claude` on their own
 fork's pull request would check out and install that pull request with the job's tokens. It also
 skips, with a notice, a pull request whose branch is in a fork, whoever asks: checking it out would
@@ -134,13 +145,13 @@ the waiting one, so ask again after the first finishes.
   pushing, with the faster checks while it works, and to push nothing and say why if it still
   fails; that the browser tests can't run on the runner, so it says so; to stage files by path; to
   add no attribution; and never to push to `main` or `staging`. Blanket adds (`git add -A`, `.`,
-  `-u`, and `git commit -a`) are refused with `--disallowedTools`: on a pull request the action
-  resets `.claude/`, `.mcp.json`, and `CLAUDE.md` to the base branch's copies, and a blanket add
-  would commit that reset. The job sets the placeholder `BETTER_AUTH_SECRET` CI sets, which
-  `pnpm run check` needs.
+  `./`, `:/`, `-- .`, `-u`, `git stage`, and `git commit -a`) are refused with
+  `--disallowedTools`: on a pull request the action resets `.claude/`, `.mcp.json`, and
+  `CLAUDE.md` to the base branch's copies, and a blanket add would commit that reset. The job sets
+  the placeholder `BETTER_AUTH_SECRET` CI sets, which `pnpm run check` needs.
 - **Its limits.** `--max-turns 60`, a 45-minute timeout, and `BASH_DEFAULT_TIMEOUT_MS` of 15
-  minutes, since `pnpm run check` takes about ten. Like the review, it pins the model, keeps
-  subagents in the foreground, leaves the MCP servers out, and keeps its transcript
+  minutes, since `pnpm run check` takes about ten. Like the review, it pins the model, runs no
+  hooks, keeps subagents in the foreground, leaves the MCP servers out, and keeps its transcript
   (`claude-transcript`).
 - **The check after it.** A script reads Claude's log and the branch. It passes when Claude
   answered in its comment or pushed, fails when Claude did neither, ended in an error or with
@@ -169,11 +180,12 @@ jobs install the dependencies as CI does but run no git hook (`LEFTHOOK=0`): the
 opens runs every check in CI, a hook would only repeat them, and a hook that failed on something
 already broken on `staging` would stop a docs pull request that didn't break it.
 
-- **`doc-gardening`**: unless a "docs: weekly doc gardening" pull request is already open, Claude
-  takes up to eight docs from the report, checks each against the code, and fixes what's no longer
-  true, in Markdown only: never an ADR, a doc a tool writes, code, or a workflow. It re-grades each
-  row under "Scores to re-grade" and sets its Graded date, even when the grade stays the same, and
-  updates the debt files. It runs `pnpm run verify docs` and opens one pull request into `staging`
+- **`doc-gardening`**: unless a `chore/doc-gardening-` pull request into `staging` is still open,
+  which the job checks before it checks anything out, Claude takes up to eight docs from the
+  report, checks each against the code, and fixes what's no longer true, in Markdown only: never
+  an ADR, a doc a tool writes, code, or a workflow. It re-grades each row under "Scores to
+  re-grade" and sets its Graded date, even when the grade stays the same, and updates the debt
+  files. It runs `pnpm run verify docs` and opens one pull request into `staging`
   from `chore/doc-gardening-<date>`, with its body written to `tmp/pr-body.md`: each doc changed,
   each row re-graded with its old and new grade, and the docs checked without changes.
 - **`code-gardening`**: unless a `chore/code-gardening-` pull request is still open, Claude fixes
@@ -185,20 +197,22 @@ already broken on `staging` would stop a docs pull request that didn't break it.
   `chore/code-gardening-<date>` that closes the row's issue or says `No issue:`, or it says
   "Nothing to garden". It has 60 minutes.
 - **`report`** posts the report as one open issue, "Weekly repository maintenance", labelled
-  `chore` and `ready-for-agent`, and edits it each week rather than opening another. It first
+  `chore` and `ready-for-agent`, and edits it each week rather than opening another. It looks the
+  issue up among those `github-actions[bot]` opened, so it never edits a stranger's issue of the
+  same title. It first
   collects what the review commented inline in the last four weeks (`tmp/review-findings.json`),
   so its report can group the findings by the part of the repository and name a part with three
   or more across two or more pull requests as repeated (`scripts/lib/review-findings.ts`). The
   gardening jobs' reports, and one built by hand, say the findings weren't collected. It has 15
   minutes.
 
-Both gardening jobs pin the model, keep subagents in the foreground, give each Bash command 15
-minutes (`BASH_DEFAULT_TIMEOUT_MS`), leave the MCP servers out, add no attribution (the
+Both gardening jobs pin the model, run no hooks, keep subagents in the foreground, give each Bash
+command 15 minutes (`BASH_DEFAULT_TIMEOUT_MS`), leave the MCP servers out, add no attribution (the
 `attribution` setting and the prompt, since the model otherwise adds a Co-Authored-By trailer by
 habit), and keep their transcripts (`doc-gardening-transcript`, `code-gardening-transcript`). A
 script after each prints what Claude said and passes only on an outcome. Doc gardening's: one
-gardening pull request opened during the run, "No doc drift found", or an open one left alone.
-Code gardening's: one pull request opened, or "Nothing to garden". Both fail on a second pull
+gardening pull request opened during the run, or "No doc drift found". Code gardening's: one pull
+request opened, or "Nothing to garden". Both fail on a second pull
 request, on attribution in the pull request or its commits, and when Claude left no log, ended in
 an error or with subagents running, or reached no outcome; a denied tool only warns when Claude got
 there anyway, since it often retries a refused command another way

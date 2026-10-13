@@ -31,43 +31,54 @@ jobs:
       HAS_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
       LEFTHOOK: "0"
     steps:
-      - name: Skip while the CLAUDE_CODE_OAUTH_TOKEN secret isn't set
-        if: env.HAS_CLAUDE_TOKEN != 'true'
-        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN isn't set, so the docs aren't gardened (docs/agents/ci-agents.md, Weekly maintenance)."
+      - name: Skip this week unless there's room for a gardening pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$HAS_CLAUDE_TOKEN" != "true" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN isn't set, so the docs aren't gardened (docs/agents/ci-agents.md, Weekly maintenance)."
+            exit 0
+          fi
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --base staging --state open --limit 100 --json number,headRefName --jq '[.[] | select(.headRefName | startswith("chore/doc-gardening-")) | .number] | first // empty')
+          if [ -n "$open" ]; then
+            echo "::notice::Doc gardening pull request #$open is still open, so doc gardening skips this week."
+            exit 0
+          fi
+          echo "GARDEN=true" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         with:
           ref: staging
           fetch-depth: 0
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         with:
           package_json_file: package.json
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         with:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build the maintenance report
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
 
       - name: Note when doc gardening starts
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         run: echo "GARDENING_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Garden the docs with Claude
         id: garden
-        if: env.HAS_CLAUDE_TOKEN == 'true'
+        if: env.GARDEN == 'true'
         uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b
         env:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
@@ -80,9 +91,6 @@ jobs:
             Goal: docs and quality grades that no longer match the code are fixed in one small pull
             request into staging.
 
-            0. First run `gh pr list --state open --search "docs: weekly doc gardening in:title"`. If
-               it lists a pull request, stop and say that a gardening pull request is already open,
-               with its number.
             1. Read tmp/maintenance-report.md. Your work list is the "Checks" failures that are
                about docs, the "Docs to re-verify" list, and the rows under "Scores to re-grade".
                Handle at most 8 docs, starting with the ones whose named files changed most.
@@ -117,10 +125,11 @@ jobs:
             --model claude-sonnet-5-5
             --max-turns 80
             --strict-mcp-config
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run verify docs:*),Bash(date:*)"
+            --settings '{"disableAllHooks":true}'
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr create:*),Bash(pnpm run verify docs:*),Bash(date:*)"
 
       - name: Keep the doc gardening transcript
-        if: always() && env.HAS_CLAUDE_TOKEN == 'true' && steps.garden.outputs.execution_file != ''
+        if: always() && env.GARDEN == 'true' && steps.garden.outputs.execution_file != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: doc-gardening-transcript
@@ -187,13 +196,12 @@ jobs:
             ))]
             const startedAt = Date.parse(process.env.GARDENING_STARTED_AT || '')
             if (Number.isNaN(startedAt)) fail("GARDENING_STARTED_AT isn't set, so the check can't tell whether this run opened a pull request.")
-            let prs
+            let opened
             try {
-              prs = (await get('/pulls?state=open&base=staging&per_page=100')).filter(pr => String(pr?.head?.ref).startsWith(process.env.BRANCH_PREFIX))
+              opened = (await get('/pulls?state=open&base=staging&per_page=100')).filter(pr => String(pr?.head?.ref).startsWith(process.env.BRANCH_PREFIX) && Date.parse(pr.created_at) >= startedAt - 30 * 1000)
             } catch (error) {
               fail(`Couldn't list the open pull requests to check the outcome: ${error.message}`)
             }
-            const opened = prs.filter(pr => Date.parse(pr.created_at) >= startedAt - 30 * 1000)
             if (opened.length > 1) fail(`Doc gardening opened ${opened.map(pr => `#${pr.number}`).join(', ')}; it opens one pull request each week.`)
             let outcome = null
             if (opened.length === 1) {
@@ -211,7 +219,6 @@ jobs:
               if (marked.length > 0) fail(`Doc gardening opened #${pr.number}, but ${marked.join(' and ')} carry attribution. This repository's commits and pull requests carry no Co-Authored-By trailer and no "Generated with Claude Code" line.`)
               outcome = `opened #${pr.number}`
             } else if (/No doc drift found/i.test(said)) outcome = 'found no doc drift'
-            else if (prs.length > 0 && /already/i.test(said)) outcome = `left the open gardening pull request #${prs[0].number} alone`
             if (!outcome) {
               const reason = denied.length > 0 ? ` Claude was denied ${denied.join(', ')}; allow it in claude_args.` : ''
               fail(`Doc gardening finished without opening a pull request or reporting "No doc drift found".${reason} Claude said: ${clean(said || '(nothing)', 400)}`)
@@ -329,6 +336,7 @@ jobs:
             --model claude-sonnet-5-5
             --max-turns 80
             --strict-mcp-config
+            --settings '{"disableAllHooks":true}'
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr create:*),Bash(pnpm run check),Bash(pnpm run verify:*),Bash(pnpm exec tsc:*),Bash(pnpm exec vitest:*),Bash(date:*)"
 
       - name: Keep the code gardening transcript
@@ -401,9 +409,7 @@ jobs:
             if (Number.isNaN(startedAt)) fail("GARDENING_STARTED_AT isn't set, so the check can't tell whether this run opened a pull request.")
             let opened
             try {
-              opened = (await get('/pulls?state=open&base=staging&per_page=100')).filter(
-                pr => String(pr?.head?.ref).startsWith(process.env.BRANCH_PREFIX) && Date.parse(pr.created_at) >= startedAt - 30 * 1000
-              )
+              opened = (await get('/pulls?state=open&base=staging&per_page=100')).filter(pr => String(pr?.head?.ref).startsWith(process.env.BRANCH_PREFIX) && Date.parse(pr.created_at) >= startedAt - 30 * 1000)
             } catch (error) {
               fail(`Couldn't list the open pull requests to check the outcome: ${error.message}`)
             }
@@ -482,7 +488,7 @@ jobs:
 
       - name: Open or update the maintenance issue
         run: |
-          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          number=$(gh issue list --state open --author app/github-actions --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then
             gh issue edit "$number" --body-file tmp/weekly-report.md
             gh issue comment "$number" --body "Report refreshed on $(date -u +%F)."

@@ -52,7 +52,7 @@ blocking finding. Count the rounds for the pull request.
 ## 4. Bring the records in line
 
 - `docs/product/`: each behavior the change adds or changes, followed by its `- Check:` line naming
-  the test that proves it, or `- No automated check yet.`
+  the test that proves it, or `- No automated check yet (#<issue>).`
 - The area's doc in `docs/agents/` that `AGENTS.md` routes to, for how it works.
 - The area's row in `docs/quality.md` when its tests, CI or docs changed, graded today.
 - `docs/tech-debt.md` (the code) or `docs/harness-debt.md` (checks, delivery, the harness): a row
@@ -70,8 +70,8 @@ and who can finish it; the evidence by level (`docs/agents/verification.md`, Evi
 review (`Review: 2 rounds, clean`); and the status a fresh agent would start from. Every evidence
 line gets text after its colon, and a level that doesn't apply says so (`UI tests: none, no screen
 changed`): the `Pull request` workflow fails an empty one, as it does a title without a type, a
-first line that isn't `Closes #` or `No issue:`, and a `fix:` with no test (`docs/agents/ci.md`,
-Pull request). Write the body to `tmp/pr-body.md` and pass `--body-file`. Show it to the person
+first line that isn't `Closes #` or `No issue:`, a `fix:` with no test, and a pull request into
+`main` that isn't a promotion (`docs/agents/ci.md`, Pull request). Write the body to `tmp/pr-body.md` and pass `--body-file`. Show it to the person
 before pushing or opening anything, and mark a draft ready only after the last push's checks have
 started.
 

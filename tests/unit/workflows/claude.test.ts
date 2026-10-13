@@ -15,8 +15,10 @@ import {
   guardAfter,
   jobOf,
   minutesAfter,
+  parseRule,
   readWorkflow,
   type Route,
+  ruleMatches,
   runNodeStep,
   stepNamed,
   stepsOf,
@@ -31,6 +33,12 @@ const claudeArgs = String(claude.with?.['claude_args'] ?? '');
 const rules = steps.find((step) => step.run?.includes('claude-rules.md'))?.run ?? '';
 const { step: guard, index: guardIndex } = guardAfter(steps, claude);
 const indexOfUses = (action: string) => steps.findIndex((step) => step.uses?.startsWith(action));
+const clauseFor = (event: string) =>
+  (job.if ?? '')
+    .split("github.event_name == '")
+    .slice(1)
+    .find((clause) => clause.startsWith(`${event}'`)) ?? '';
+const refused = (command: string) => disallowedTools(claude).some((rule) => ruleMatches(parseRule(rule), 'Bash', command));
 
 const REPOSITORY = 'serpcompany/serplists.com';
 const BOT = 'claude[bot]';
@@ -44,9 +52,21 @@ describe('the Claude workflow', () => {
     expect(job.if?.match(/@claude/g)?.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('answers only the owners, members, and collaborators, before it checks out or installs anything', () => {
-    for (const entity of ['comment', 'review', 'issue']) expect(job.if).toContain(`github.event.${entity}.author_association`);
-    expect(job.if?.match(/fromJSON\('\["OWNER","MEMBER","COLLABORATOR"\]'\)/g)).toHaveLength(4);
+  it("starts on an issue only when it's opened: the action answers an assignment only to an assignee_trigger, which isn't set", () => {
+    expect(workflow.on['issues']).toEqual({ types: ['opened'] });
+    expect(claude.with?.['assignee_trigger']).toBeUndefined();
+  });
+
+  it.each([
+    ['issue_comment', 'comment'],
+    ['pull_request_review_comment', 'comment'],
+    ['pull_request_review', 'review'],
+    ['issues', 'issue'],
+  ])('answers %s only when its own %s mentions @claude and comes from an owner, member, or collaborator', (event, entity) => {
+    const clause = clauseFor(event);
+    expect(clause).toContain(`contains(github.event.${entity}.body, '@claude')`);
+    expect(clause).toContain(`contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.${entity}.author_association)`);
+    expect(clause.match(/github\.event\.\w+\.(?:author_association|body|title)/g)?.every((field) => field.startsWith(`github.event.${entity}.`))).toBe(true);
   });
 
   it("runs one request per issue or pull request at a time, queued in the job so comments that don't ask never displace one", () => {
@@ -83,10 +103,26 @@ describe('the Claude workflow', () => {
     expect(rules).toContain('carry no attribution');
   });
 
-  it('stages files by path only, since the action resets .claude/ on a pull request and a blanket add would commit that reset', () => {
-    for (const blanket of ['git add -A', 'git add --all', 'git add .', 'git add -u', 'git commit -a']) {
-      expect(disallowedTools(claude).some((tool) => tool.startsWith(`Bash(${blanket}`)), blanket).toBe(true);
-    }
+  it.each([
+    'git add -A',
+    'git add --all',
+    'git add .',
+    'git add ./',
+    'git add :/',
+    'git add -- .',
+    'git add -u',
+    'git add --update',
+    'git stage .',
+    'git commit -a -m "fix: rename"',
+    'git commit -am "fix: rename"',
+    'git commit --all',
+  ])('refuses %s, since the action resets .claude/ on a pull request and a blanket add would commit that reset', (command) => {
+    expect(refused(command)).toBe(true);
+  });
+
+  it('stages a file by path', () => {
+    expect(refused('git add src/lib/api/request.ts')).toBe(false);
+    expect(refused('git commit -m "fix: rename the helper"')).toBe(false);
     expect(rules).toContain('Stage only the files you changed, by path');
   });
 

@@ -108,7 +108,7 @@ describe('the Weekly maintenance workflow', () => {
     expect(docPrompt).toContain('docs/adr/ (ADRs record decisions; never rewrite them)');
     expect(docPrompt).toContain('Run `pnpm run verify docs`');
     expect(docPrompt).toContain('--body-file tmp/pr-body.md');
-    expect(docPrompt).not.toMatch(/Last verified|design-docs|docs:check/);
+    expect(docPrompt).not.toMatch(/Last verified|design-docs|docs:check|gh pr list/);
     expect(allowedTools(docGarden)).toEqual(expect.arrayContaining(['Bash(pnpm run verify docs:*)', 'Bash(gh pr create:*)', 'Bash(git:*)']));
   });
 
@@ -142,6 +142,7 @@ describe('the Weekly maintenance workflow', () => {
 
     expect(runs).toContain('pnpm run --silent maintenance:report > tmp/weekly-report.md');
     expect(runs).not.toMatch(/> [\w-]+\.md/);
+    expect(runs).toContain('gh issue list --state open --author app/github-actions --search "\\"$TITLE\\" in:title"');
     expect(runs).toContain('gh issue edit "$number" --body-file tmp/weekly-report.md');
     expect(runs).toContain('gh issue create --title "$TITLE" --body-file tmp/weekly-report.md');
     expect(jobOf(maintenance, 'report').env?.['TITLE']).toBe('Weekly repository maintenance');
@@ -179,11 +180,11 @@ describe("doc gardening's guard", () => {
     expect((await runDocGuard([result({ result: 'No doc drift found' })])).status).toBe(0);
   });
 
-  it("passes when last week's pull request is still open and Claude left it alone", async () => {
+  it("fails when Claude stopped for last week's open pull request, since the job skips such a week before Claude starts", async () => {
     const { status, output } = await runDocGuard([result({ result: 'A gardening pull request is already open (#39), so I stopped.' })], [docsLastWeek]);
 
-    expect(status).toBe(0);
-    expect(output).toContain('#39');
+    expect(status).not.toBe(0);
+    expect(output).toContain('without opening a pull request');
   });
 
   it('fails when Claude opened more than one pull request, since it opens one a week', async () => {
@@ -230,14 +231,23 @@ describe("doc gardening's guard", () => {
   });
 });
 
-describe('the code gardening job', () => {
-  it('skips the week while a code gardening pull request into staging is still open', () => {
-    const skip = firstOf(codeSteps);
+describe('each gardening job', () => {
+  it.each([
+    ['doc-gardening', docSteps, docGuard],
+    ['code-gardening', codeSteps, codeGuard],
+  ] as const)('%s skips the week while its last pull request into staging is still open, before it checks out anything', (name, jobSteps, guard) => {
+    const skip = firstOf(jobSteps);
 
     expect(skip.run).toContain('--base staging');
-    expect(skip.run).toContain('startswith("chore/code-gardening-")');
+    expect(skip.run).toContain(`startswith("chore/${name}-")`);
     expect(skip.run).toContain('echo "GARDEN=true"');
-    expect(codeSteps.slice(1).filter((step) => step !== codeGuard).every((step) => step.if?.includes("env.GARDEN == 'true'"))).toBe(true);
+    expect(guard.env?.['BRANCH_PREFIX']).toBe(`chore/${name}-`);
+    expect(jobSteps.slice(1).filter((step) => step !== guard).every((step) => step.if?.includes("env.GARDEN == 'true'"))).toBe(true);
+  });
+});
+
+describe('the code gardening job', () => {
+  it('gets an hour, since it runs the whole finish gate', () => {
     expect(jobOf(maintenance, 'code-gardening')['timeout-minutes']).toBe(60);
   });
 

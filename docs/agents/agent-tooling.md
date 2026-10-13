@@ -43,12 +43,16 @@ server, change its version in `.mcp.json` and in the `verify-web` skill's setup 
   everything through.
 - **The stop hook** (`Stop`) runs `tools/checks/stop-hook.mjs` on the files changed since the last
   commit before a turn ends, the docs check included, and catches a file a shell command rewrote.
-  It blocks a turn once and never loops, and keeps the default on a crash, since a broken stop
-  hook would hold every turn open.
+  It blocks a turn once and never loops, and reports a failure once until a turn ends clean, so
+  one that comes back is reported again; it keeps the default on a crash, since a broken stop hook
+  would hold every turn open.
 
 Both find the checkout from their input rather than `CLAUDE_PROJECT_DIR`, which stays where the
 session started, so they check a worktree's own files. Claude Code reads hooks when a session
-starts: a change to them takes effect in the next session.
+starts: a change to them takes effect in the next session. The Claude jobs in CI run no hooks
+(`--settings '{"disableAllHooks":true}'`): a hook runs a script from the checkout, which on a pull
+request is the pull request's own, with the job's tokens in its environment
+([`ci-agents.md`](ci-agents.md#code-review)).
 
 ## Skills
 
@@ -84,35 +88,47 @@ may do freely.
   VPC, Flagship, Artifacts, Agent Memory, previews and Browser Rendering). OpenNext's `deploy`,
   `upload`, `populateCache remote` and `--remote` too.
 - **Asked, scripts and Stripe:** the package scripts that reach Staging, Production, Cloudflare or
-  Stripe (`*:staging*`, `*:prod*`, `*:remote*` and `stripe:portal:configure`), a script run with
-  `--remote` or `--allow-production`, and `stripe` with `--live`.
+  Stripe (`*:staging*`, `*:prod*`, `*:remote*` and `stripe:portal:configure`), through `pnpm` or
+  `npm`; a script run with `--remote` or `--allow-production` through `node`, `npx`, `pnpm`,
+  `pnpx` or `tsx`; `scripts/stripe/configure-portal.ts` however it starts; and `stripe` with
+  `--live`.
+- **Asked, pushes:** a `git push` that names `staging` or `main` as where it goes (or a branch
+  whose name starts with either): `origin main`, `HEAD:staging`, `+main`, `refs/heads/main`,
+  `--delete staging`. A push to either deploys it.
 - **Asked, GitHub:** `gh pr merge`, since agents never merge; `gh workflow run`, `enable` and
   `disable`, and `gh run rerun` and `cancel`, which start or stop deploys; `gh secret`,
-  `gh variable set` and `delete`; `gh repo edit`, `delete`, `archive` and `rename`; and every
-  `gh api` write (`-X`, `--method`, `-f`, `-F`, `--field`, `--raw-field`, `--input`, `graphql`).
+  `gh variable set` and `delete`; `gh repo edit`, `delete`, `archive` and `rename`;
+  `gh run delete`; and every `gh api` write (`-X`, `--method`, `-f`, `-F`, `--field`,
+  `--raw-field`, `--input`, `graphql`).
 - **Free:** everything local, and every read: `--local` D1 commands and the package scripts that
   run them, `wrangler types`, `dev` and `tail`, OpenNext's `build` and `preview`, `gh` reads, and
-  `git push` of a branch.
+  `git push` of any other branch.
 
-Each rule starts with the program it guards and is written for every way it starts: bare,
-`npx` (with `-y`), `npx <package>@<version>`, `pnpm` and `pnpm exec`, in Bash and in PowerShell.
-None starts with a wildcard, which would match a search or a comment that mentions a command. A
-rule matches the command as written, so it guards against accidents and is not a security
-boundary: credentials that could do damage stay out of agent sessions, and the escalation rules in
+Each rule starts with the program it guards, in Bash and in PowerShell. Started the ways this
+repository starts them (bare, `npx` with or without `-y`, `pnpm`, `pnpm exec`), Wrangler and
+OpenNext ask only for the commands above. Started any other way, they ask for every command, since
+that runs a copy that isn't the project's own: a pinned version (`npx wrangler@<version>`),
+`pnpm dlx` and `pnpx`, or a path into `node_modules`. `npm exec`, `npm x`, `yarn`, `bunx` and
+`bun`, which this repository doesn't use, ask for every command whatever they start. None starts
+with a wildcard, which would match a search or a comment that mentions a command. A rule matches
+the command as written, so it guards against accidents and is not a security boundary:
+credentials that could do damage stay out of agent sessions, and the escalation rules in
 [`code.md`](code.md#what-needs-the-owner) still hold.
 
 ## CI loads the same settings
 
-The Claude jobs in [`ci-agents.md`](ci-agents.md) run in the checkout with these settings, and in
-CI an ask can't prompt, so it denies. The settings therefore never deny or ask for a tool those
-jobs use: `git` (their commits and pushes), `gh pr view`, `diff`, `list` and `create`,
-`gh issue view`, `pnpm run check` and `verify`, `pnpm exec tsc` and `vitest`, and the Read, Write,
-Edit, Grep and Glob tools. A deny on the Grep tool would take it from them; to keep the Grep tool,
+The Claude jobs in [`ci-agents.md`](ci-agents.md) run in the checkout with these permissions but
+without the hooks, and in CI an ask can't prompt, so it denies. The settings therefore never deny
+or ask for a tool those jobs use: `git` (their commits, and pushes to their own branches; `@claude`
+pushes through the action's own script), `gh pr view`, `diff` and `create`, `gh issue view`,
+`pnpm run check` and `verify`, `pnpm exec tsc` and `vitest`, and the Read, Write, Edit, Grep and
+Glob tools. A deny on the Grep tool would take it from them; to keep the Grep tool,
 which runs ripgrep, out of your own sessions, deny it in your `settings.local.json`. The jobs
 pass `--strict-mcp-config`, so the Chrome server never starts in CI.
 
 `tests/unit/config/agent-tooling.test.ts` holds all of this: every package script that reaches
-Staging, Production, Cloudflare or Stripe is asked; every Cloudflare, GitHub and Stripe command
-above is asked however it starts; nothing any of the three agent workflows allows or runs is
-denied or asked; the hooks are as above; the servers `.claude/settings.json` enables are
-`.mcp.json`'s; and the `verify-web` skill names the same server version.
+Staging, Production, Cloudflare or Stripe is asked, through any package manager; every
+Cloudflare, GitHub and Stripe command above, and every push to `staging` or `main`, is asked
+however it starts; nothing any of the three agent workflows allows or runs is denied or asked;
+the hooks are as above; the servers `.claude/settings.json` enables are `.mcp.json`'s; and the
+`verify-web` skill names the same server version.

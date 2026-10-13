@@ -76,7 +76,7 @@ async function verifyApi(name: string, plan: unknown, extra: string[] = []) {
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const planFile = path.join(plans, `${name}.json`);
-  writeFileSync(planFile, JSON.stringify(plan));
+  if (plan !== undefined) writeFileSync(planFile, typeof plan === 'string' ? plan : JSON.stringify(plan));
   const runName = `test-${name}-${process.pid}`;
   runFolders.push(path.join(repoRoot, 'tmp', 'agent', 'verify', `${new Date().toISOString().slice(0, 10)}-${runName}`));
   const base = extra.length > 0 ? extra : ['--base', `http://127.0.0.1:${listeningPort(server)}`];
@@ -141,6 +141,17 @@ describe('the verify-api script', () => {
     const run = await verifyApi('empty', { steps: [] });
     expect(run.status).toBe(2);
     expect(run.output).toContain('a run that asks for nothing proves nothing');
+    expect(run.seen).toEqual([]);
+  }, SLOW);
+
+  it.each([
+    ['a plan file that is missing', 'missing', undefined],
+    ['a plan file that is not JSON', 'not-json', 'steps:\n  - api: GET /api/templates\n'],
+  ])('answers %s with the usage and exit status 2, before it signs in', async (_what, name, plan) => {
+    const run = await verifyApi(name, plan);
+    expect(run.status).toBe(2);
+    expect(run.output).toContain("can't be read as JSON");
+    expect(run.output).toContain('Usage: node --import tsx .claude/skills/verify-api/run.ts');
     expect(run.seen).toEqual([]);
   }, SLOW);
 

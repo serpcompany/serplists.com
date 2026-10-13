@@ -5,7 +5,7 @@ import path from 'node:path';
 import { expect } from 'vitest';
 import { z } from 'zod';
 
-import { elementAt, valueAt } from './elements';
+import { capturedGroup, elementAt, valueAt } from './elements';
 import { throwawayRepositoryEnvironment } from './throwawayGitRepository';
 import { readWorkflowFile, runNodeScript, withAFakeGitHubApi, workflowStepSchema } from './workflowGuards';
 
@@ -63,6 +63,31 @@ const toolList = (step: WorkflowStep, flag: string) =>
 export const allowedTools = (step: WorkflowStep) => toolList(step, '--allowedTools');
 
 export const disallowedTools = (step: WorkflowStep) => toolList(step, '--disallowedTools');
+
+type PermissionRule = { tool: string; pattern: string | null; matches: (command: string) => boolean };
+
+function commandMatcher(tool: string, pattern: string | null): (command: string) => boolean {
+  if (pattern === null) return () => true;
+  const wildcard = pattern.endsWith(':*') ? `${pattern.slice(0, -2)} *` : pattern;
+  const flags = tool === 'PowerShell' ? 'i' : '';
+  const source = wildcard
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  const whole = new RegExp(`^${source}$`, flags);
+  const bare = wildcard.endsWith(' *') && !wildcard.slice(0, -2).includes('*') ? new RegExp(`^${source.slice(0, -3)}$`, flags) : null;
+  return (command) => whole.test(command) || (bare?.test(command) ?? false);
+}
+
+export const parseRule = (rule: string): PermissionRule => {
+  const match = /^([\w-]+)(?:\((.*)\))?$/.exec(rule);
+  if (!match) throw new Error(`Unexpected permission rule: ${rule}`);
+  const tool = capturedGroup(match, 1);
+  const pattern = match[2] ?? null;
+  return { tool, pattern, matches: commandMatcher(tool, pattern) };
+};
+
+export const ruleMatches = (rule: PermissionRule, tool: string, command: string) => rule.tool === tool && rule.matches(command);
 
 export type Answer = { status: number; body: unknown };
 export type Route = (url: URL, method: string, body: string) => Answer | undefined;

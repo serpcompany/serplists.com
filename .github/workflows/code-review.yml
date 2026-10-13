@@ -245,9 +245,10 @@ jobs:
           claude_args: >-
             --model claude-sonnet-5-5
             --strict-mcp-config
+            --settings '{"disableAllHooks":true}'
             --append-system-prompt-file ${{ runner.temp }}/review-context.md
             --append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md
-            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Write,Task,Read,Glob,Grep"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Edit(tmp/review-findings.json),Edit(tmp/review-summary.md),Task,Read,Glob,Grep"
 
       - name: Post the review
         if: env.HAS_REVIEW_TOKEN == 'true' && steps.review.outcome == 'success'
@@ -267,6 +268,10 @@ jobs:
             process.exit(1)
           }
           const summaryLimit = 60000
+          const tokenLike = /(?:gh[opsu]_|github_pat_)[A-Za-z0-9_]{20,}|x-access-token:[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|eC1hY2Nlc3MtdG9rZW46/
+          const refuseTokens = (what, body) => {
+            if (tokenLike.test(String(body))) fail(`${what} holds what looks like a token, so nothing was posted. Read the review transcript, and have whoever issued the token renew it.`)
+          }
           const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`
           const send = async (method, route, body) => {
             for (let attempt = 1; ; attempt += 1) {
@@ -298,6 +303,7 @@ jobs:
               if (typeof finding?.path !== 'string' || !finding.path) fail(`${which} names no file.`)
               if (!Number.isInteger(finding.line) || finding.line < 1) fail(`${which} names no line.`)
               if (!/^\*\*(blocking|suggestion)\*\*/.test(String(finding.body || ''))) fail(`${which} doesn't start with **blocking** or **suggestion**.`)
+              refuseTokens(which, finding.body)
             })
             return findings
           }
@@ -310,6 +316,7 @@ jobs:
             const summary = fs.readFileSync(file, 'utf8').trim()
             if (!/^## Claude review\b/.test(summary)) fail(`${file} doesn't start with "## Claude review", which is how the next review finds it.`)
             if (summary.length > summaryLimit) fail(`${file} is ${summary.length} characters, over the ${summaryLimit} a comment holds.`)
+            refuseTokens(file, summary)
             const findings = readFindings(process.env.FINDINGS_FILE)
             const route = `/pulls/${process.env.PR_NUMBER}/comments`
             const unplaced = []

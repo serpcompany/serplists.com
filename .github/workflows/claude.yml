@@ -8,7 +8,7 @@ on:
   pull_request_review:
     types: [submitted]
   issues:
-    types: [opened, assigned]
+    types: [opened]
 
 jobs:
   claude:
@@ -160,9 +160,10 @@ jobs:
             --model claude-sonnet-5-5
             --max-turns 60
             --strict-mcp-config
+            --settings '{"disableAllHooks":true}'
             --append-system-prompt-file ${{ runner.temp }}/claude-rules.md
             --allowedTools "Bash(pnpm run check),Bash(pnpm run verify:*),Bash(pnpm exec tsc:*),Bash(pnpm exec vitest:*),Task,Read,Glob,Grep"
-            --disallowedTools "Bash(git add -A*),Bash(git add --all*),Bash(git add .),Bash(git add -u*),Bash(git add --update*),Bash(git commit -a*),Bash(git commit --all*)"
+            --disallowedTools "Bash(git add -A*),Bash(git add --all*),Bash(git add .),Bash(git add ./),Bash(git add :/),Bash(git add -- .),Bash(git add -u*),Bash(git add --update*),Bash(git stage*),Bash(git commit -a*),Bash(git commit --all*)"
 
       - name: Keep the transcript
         if: always() && env.ANSWER == 'true' && steps.claude.outputs.execution_file != ''

@@ -2,7 +2,8 @@ import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { claudeStep, guardAfter, runNodeStep } from '../../support/claudeWorkflows';
+import { claudeStep, guardAfter, runNodeStep, type WorkflowStep } from '../../support/claudeWorkflows';
+import { capturedGroup } from '../../support/elements';
 import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
 
 const jobsSchema = z.object({ jobs: z.record(z.object({ steps: z.array(workflowStepSchema).optional() })) });
@@ -17,7 +18,16 @@ const claudeJobs = readdirSync('.github/workflows')
   );
 const cases = claudeJobs.map(({ job, steps }) => {
   const claude = claudeStep(steps).step;
-  return [job, claude.id ?? '', guardAfter(steps, claude).step] as const;
+  return [job, claude.id ?? '', guardAfter(steps, claude).step, claude] as const;
+});
+
+const settingsGiven = (claude: WorkflowStep): unknown =>
+  JSON.parse(capturedGroup(/--settings '([^']*)'/.exec(String(claude.with?.['claude_args'] ?? '')), 1));
+
+describe('each Claude step in CI', () => {
+  it.each(cases)("runs no hook, since a hook runs the checkout's scripts with the job's tokens: %s", (_job, _id, _guard, claude) => {
+    expect(settingsGiven(claude)).toEqual({ disableAllHooks: true });
+  });
 });
 
 describe('the check after each Claude step in CI', () => {

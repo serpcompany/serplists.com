@@ -3,8 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { allowedTools, CLAUDE_WORKFLOWS, readWorkflow } from '../../support/claudeWorkflows';
-import { capturedGroup, valueAt } from '../../support/elements';
+import { allowedTools, claudeStep, CLAUDE_WORKFLOWS, parseRule, readWorkflow, ruleMatches, stepsOf } from '../../support/claudeWorkflows';
+import { capturedGroup, present, valueAt } from '../../support/elements';
 
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
@@ -27,30 +27,8 @@ const mcpServers = z
   .object({ mcpServers: z.record(z.object({ command: z.string(), args: z.array(z.string()) })) })
   .parse(JSON.parse(readText('.mcp.json'))).mcpServers;
 
-type Rule = { tool: string; pattern: string | null };
-
-const parseRule = (rule: string): Rule => {
-  const match = /^([\w-]+)(?:\((.*)\))?$/.exec(rule);
-  if (!match) throw new Error(`Unexpected permission rule: ${rule}`);
-  return { tool: capturedGroup(match, 1), pattern: match[2] ?? null };
-};
-
 const denyRules = settings.permissions.deny.map(parseRule);
 const askRules = settings.permissions.ask.map(parseRule);
-
-const ruleMatches = (rule: Rule, tool: string, command: string) => {
-  if (rule.tool !== tool) return false;
-  if (rule.pattern === null) return true;
-  const pattern = rule.pattern.endsWith(':*') ? `${rule.pattern.slice(0, -2)} *` : rule.pattern;
-  const flags = tool === 'PowerShell' ? 'i' : '';
-  const source = pattern
-    .split('*')
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-    .join('.*');
-  if (new RegExp(`^${source}$`, flags).test(command)) return true;
-  const bare = pattern.slice(0, -2);
-  return pattern.endsWith(' *') && !bare.includes('*') && new RegExp(`^${source.slice(0, -3)}$`, flags).test(command);
-};
 
 const SHELLS = ['Bash', 'PowerShell'];
 
@@ -83,6 +61,19 @@ const WRANGLER_STARTS = [
   'npx --yes wrangler@4',
   'pnpm wrangler',
   'pnpm exec wrangler',
+  'pnpm dlx wrangler',
+  'pnpm dlx wrangler@4.143.0',
+  'pnpx wrangler',
+  'pnpx wrangler@4',
+  './node_modules/.bin/wrangler',
+  'node_modules/.bin/wrangler',
+  'node node_modules/wrangler/bin/wrangler.js',
+  'npm exec wrangler --',
+  'npm x wrangler',
+  'yarn wrangler',
+  'yarn dlx wrangler@4',
+  'bunx wrangler',
+  'bun x wrangler',
 ];
 
 const WRANGLER_COMMANDS_THAT_CHANGE_CLOUDFLARE = [
@@ -99,6 +90,7 @@ const WRANGLER_COMMANDS_THAT_CHANGE_CLOUDFLARE = [
   'd1 delete serp-checklists-db',
   'd1 time-travel restore serp-checklists-db --timestamp=2026-10-01T00:00:00Z',
   'd1 execute serp-checklists-db --remote --command "SELECT 1"',
+  'd1 execute serp-checklists-db --remote --command "DELETE FROM users"',
   'd1 migrations apply DB --remote --preview',
   'd1 export serp-checklists-db --remote --output tmp/backups/production.sql',
   'r2 bucket create serp-checklists-staging-uploads',
@@ -142,14 +134,44 @@ const OPEN_NEXT_STARTS = [
   'npx @opennextjs/cloudflare@1.20.7',
   'pnpm opennextjs-cloudflare',
   'pnpm exec opennextjs-cloudflare',
+  'pnpm dlx @opennextjs/cloudflare@1.20.7',
+  'pnpx @opennextjs/cloudflare',
+  './node_modules/.bin/opennextjs-cloudflare',
+  'node_modules/.bin/opennextjs-cloudflare',
+  'npm exec @opennextjs/cloudflare --',
+  'yarn opennextjs-cloudflare',
+  'bunx @opennextjs/cloudflare',
 ];
 
 const OPEN_NEXT_COMMANDS_THAT_CHANGE_CLOUDFLARE = ['deploy', 'upload --env preview', 'populateCache remote', 'preview --remote'];
 
+const PUSHES_TO_STAGING_OR_MAIN = [
+  'git push origin main',
+  'git push origin staging',
+  'git push -u origin staging',
+  'git push origin HEAD:staging',
+  'git push origin HEAD:main',
+  'git push origin feat/12-run-keys:main',
+  'git push upstream chore/doc-gardening-2026-10-12:staging',
+  'git push --force origin main',
+  'git push -f origin staging',
+  'git push origin main --force',
+  'git push --force-with-lease origin HEAD:main',
+  'git push origin +main',
+  'git push origin +HEAD:staging',
+  'git push origin HEAD:refs/heads/main',
+  'git push origin --delete staging',
+  'git push origin :main',
+];
+
+const claudeAction = present(claudeStep(stepsOf(readWorkflow('.github/workflows/claude.yml'), 'claude')).step.uses, "claude.yml's action");
+const actionPath = `/home/runner/work/_actions/${claudeAction.replace('@', '/')}`;
+
 describe('.claude/settings.json', () => {
-  it('asks before every package script that reaches staging, production, Cloudflare or Stripe', () => {
+  it('asks before every package script that reaches staging, production, Cloudflare or Stripe, through any package manager', () => {
     expect(remoteScripts).toEqual(expect.arrayContaining(['db:migrate:d1:prod', 'db:migrate:d1:staging', 'stripe:portal:configure']));
-    expect(undecidedIn(remoteScripts.flatMap((name) => [`pnpm run ${name}`, `pnpm ${name}`]), 'ask')).toEqual([]);
+    const runs = remoteScripts.flatMap((name) => [`pnpm run ${name}`, `pnpm ${name}`, `npm run ${name}`, `yarn ${name}`, `yarn run ${name}`, `bun run ${name}`]);
+    expect(undecidedIn(runs, 'ask')).toEqual([]);
   });
 
   it.each(WRANGLER_COMMANDS_THAT_CHANGE_CLOUDFLARE)('asks before wrangler %s, however wrangler is started', (command) => {
@@ -161,11 +183,37 @@ describe('.claude/settings.json', () => {
   });
 
   it.each([
+    'npx wrangler@4.143.0 types',
+    'pnpm dlx wrangler@4.143.0 d1 execute serp-checklists-db --local --command "SELECT 1"',
+    'pnpx wrangler types',
+    './node_modules/.bin/wrangler types',
+    'node node_modules/wrangler/bin/wrangler.js types',
+    'npm exec wrangler -- types',
+    'pnpm dlx @opennextjs/cloudflare@1.20.7 build',
+    'node_modules/.bin/opennextjs-cloudflare build',
+    'yarn install',
+    'bunx wrangler types',
+    'bun run build',
+  ])('asks before %s: a downloaded or path-started Wrangler or OpenNext, npm exec, yarn and bun ask for every command', (command) => {
+    expect(undecidedIn([command], 'ask')).toEqual([]);
+  });
+
+  it.each(PUSHES_TO_STAGING_OR_MAIN)('asks before %s: a push to staging or main deploys it', (command) => {
+    expect(undecidedIn([command], 'ask')).toEqual([]);
+  });
+
+  it.each([
     'CLOUDFLARE_ACCOUNT_ID=abc123 npx wrangler d1 migrations apply serp-checklists-db --remote',
     'node scripts/d1-baseline-migrations.mjs --remote --database serp-checklists-db --allow-production',
     'node --import tsx scripts/d1-baseline-migrations.ts --remote --database DB --preview',
     'node --import tsx scripts/d1-baseline-migrations.ts --allow-production',
+    'npx tsx scripts/d1-baseline-migrations.ts --remote --database serp-checklists-db --allow-production',
+    'pnpm exec tsx scripts/d1-baseline-migrations.ts --remote --allow-production',
+    'pnpx tsx scripts/d1-baseline-migrations.ts --allow-production',
+    'tsx scripts/d1-baseline-migrations.ts --remote --database DB',
     'node --import tsx scripts/stripe/configure-portal.ts',
+    'npx tsx scripts/stripe/configure-portal.ts',
+    'pnpm exec tsx scripts/stripe/configure-portal.ts',
     'stripe products list --live',
     'gh pr merge 7 --squash',
     'gh pr merge 7 --auto --squash',
@@ -174,6 +222,7 @@ describe('.claude/settings.json', () => {
     'gh workflow enable claude.yml',
     'gh run rerun 38262303273',
     'gh run cancel 38262303273',
+    'gh run delete 38262303273',
     'gh secret set CLAUDE_CODE_OAUTH_TOKEN',
     'gh variable set DEPLOY_PRODUCTION --body false',
     'gh variable delete DEPLOY_PRODUCTION',
@@ -204,6 +253,7 @@ describe('.claude/settings.json', () => {
     'gh issue comment 12 --body "Ask the owner before gh pr merge"',
     'grep -rn "wrangler deploy" scripts docs',
     'git commit -m "docs: explain npx wrangler d1 migrations apply --remote"',
+    'git commit -m "chore: never git push origin main from a session"',
   ])('lets %s through: it only mentions such a command, and in CI an ask rule would deny it', (command) => {
     expect(undecidedIn([command], 'default')).toEqual([]);
   });
@@ -221,6 +271,8 @@ describe('.claude/settings.json', () => {
     'pnpm exec wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts',
     'pnpm exec opennextjs-cloudflare build',
     'pnpm exec opennextjs-cloudflare preview --port 8787',
+    'pnpm dlx shadcn@latest add button',
+    'npm view wrangler version',
     'pnpm run preview',
     'pnpm run build:worker',
     'pnpm run test:e2e:full tests/e2e/templates.spec.ts',
@@ -236,6 +288,10 @@ describe('.claude/settings.json', () => {
     'gh api repos/serpcompany/serplists.com/actions/runs --jq ".workflow_runs[0].status"',
     'gh label list --limit 200',
     'git push -u origin issue-12-run-key-limits',
+    'git push origin feat/12-main-menu',
+    'git push -u origin fix/31-custom-domain',
+    'git push origin HEAD:feat/12-run-keys',
+    'git push --force-with-lease origin feat/12-run-keys',
     'grep -rn "remote" package.json',
   ])('runs %s without asking: it changes nothing outside this machine', (command) => {
     expect(undecidedIn([command], 'default')).toEqual([]);
@@ -292,11 +348,12 @@ describe('the CI Claude jobs under .claude/settings.json', () => {
   it.each([
     'git add docs/agents/verification.md',
     'git commit -m "docs: weekly doc gardening (2026-10-12)"',
-    'git push -u origin docs/weekly-doc-gardening-2026-10-12',
+    'git push -u origin chore/doc-gardening-2026-10-12',
     'git push -u origin chore/code-gardening-2026-10-12',
-    'git push origin claude/issue-12-20261012-1400',
+    'git push origin HEAD:chore/code-gardening-2026-10-12',
+    `${actionPath}/scripts/git-push.sh origin HEAD`,
+    `${actionPath}/scripts/git-push.sh origin claude/issue-12-20261012-1400`,
     'gh pr create --base staging --title "docs: weekly doc gardening (2026-10-12)" --body-file tmp/pr-body.md',
-    'gh pr list --state open --search "Weekly doc gardening in:title"',
     'gh pr view 7 --json title,body,headRefOid,baseRefName',
     'gh pr diff 7',
     'gh issue view 12 --json title,body,comments',

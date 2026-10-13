@@ -76,8 +76,8 @@ The script does each part of a run, and prints a line per step:
   secret or the session cookie.
 - **Cleanup:** it revokes the Run Key, signs out, and stops `dev:all` only if it started it.
 
-Its exit status is 1 when the server or sign-in fails or an answer isn't the one expected, and 2
-for a plan it can't read.
+Its exit status is 1 when the server or sign-in fails or an answer isn't the one expected, and 2,
+with its usage, for arguments it doesn't take or a plan file it can't read, parse, or accept.
 
 ## 4. Read the answers
 

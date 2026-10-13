@@ -264,6 +264,18 @@ async function run(name: string, plan: Plan, server: Server, folder: string): Pr
   return unexpected > 0 || lines.length === 0 ? 1 : 0;
 }
 
+function readPlan(planFile: string): Plan | string {
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path.resolve(planFile), "utf8"));
+  } catch (error) {
+    return `${planFile} can't be read as JSON: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  const plan = planSchema.safeParse(json);
+  if (plan.success) return plan.data;
+  return `${planFile} isn't a plan: ${plan.error.issues.map((issue) => `${issue.path.join(".") || "plan"}: ${issue.message}`).join("; ")}`;
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const baseFlag = argv.indexOf("--base");
   const base = baseFlag === -1 ? undefined : argv[baseFlag + 1];
@@ -273,21 +285,20 @@ async function main(argv: readonly string[]): Promise<number> {
     console.error(USAGE);
     return 2;
   }
-  const plan = planSchema.safeParse(JSON.parse(readFileSync(path.resolve(planFile), "utf8")));
-  if (!plan.success) {
-    const problems = plan.error.issues.map((issue) => `${issue.path.join(".") || "plan"}: ${issue.message}`).join("; ");
-    console.error(`${planFile} isn't a plan: ${problems}\n${USAGE}`);
+  const plan = readPlan(planFile);
+  if (typeof plan === "string") {
+    console.error(`${plan}\n${USAGE}`);
     return 2;
   }
   process.chdir(REPO_ROOT);
   const folder = path.join(REPO_ROOT, "tmp", "agent", "verify", `${new Date().toISOString().slice(0, 10)}-${name}`);
   mkdirSync(folder, { recursive: true });
-  const { user, permissions, steps } = plan.data;
+  const { user, permissions, steps } = plan;
   writeFileSync(path.join(folder, "plan.json"), `${JSON.stringify({ user, permissions, steps }, null, 2)}\n`);
   const server = await serverFor(base);
   try {
     writeFileSync(path.join(folder, "run.json"), `${JSON.stringify({ folder: path.relative(REPO_ROOT, folder), base: server.base, server: server.description, user }, null, 2)}\n`);
-    return await run(name, plan.data, server, folder);
+    return await run(name, plan, server, folder);
   } finally {
     await server.stop();
   }
