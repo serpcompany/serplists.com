@@ -9,6 +9,7 @@ import {
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { toStoredRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { json, jsonError } from '../utils/response';
+import { personalProRequiredResponse } from '../utils/limit-reached';
 import { invalidPayloadResponse, readJsonBody } from '../utils/request-json';
 import { describeErrorForLog, log } from '../utils/logger';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -385,6 +386,7 @@ export async function handleTemplateBackup(
     ? await getEntitlementsForContext(env, { type: 'team', teamId: backupTeamId, userId })
     : await getEntitlementsForUser(env, userId);
   if (entitlements.plan !== 'pro' && entitlements.plan !== 'team') {
+    if (!backupTeamId) return personalProRequiredResponse('use template import/export');
     return jsonError('Upgrade this Organization to use template import/export.', 403, { code: 'upgrade_required' });
   }
 

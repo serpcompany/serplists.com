@@ -5,7 +5,7 @@ import { dbMocks, importBody, mockEnv, PRO_PLAN, resetTemplatesHandlerMocks } fr
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { ONE_SECTION_WITH_ONE_ITEM, templateRowToExport } from '../../../fixtures/handlerRows';
+import { activeMember, ONE_SECTION_WITH_ONE_ITEM, templateRowToExport } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 import { objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
@@ -38,6 +38,19 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('upgrade_required');
+  });
+
+  it.each([
+    ['a Free Personal user', 'templates/backup', 'Upgrade to Pro to use template import/export.'],
+    ['an editor of a Free Organization', 'templates/backup?teamId=team-1', 'Upgrade this Organization to use template import/export.'],
+  ])('refuses template import/export to %s, naming the upgrade that context needs', async (_who, path, message) => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([activeMember('editor')]);
+
+    const response = await handleTemplates(apiRequest(path), mockEnv);
+    const data = await readJson(response, apiErrorBody);
+
+    expect(response.status).toBe(403);
+    expect(data).toMatchObject({ error: message, code: 'upgrade_required' });
   });
 
   it('should export backup format for pro users when requested', async () => {
