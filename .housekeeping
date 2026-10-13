@@ -1,0 +1,16 @@
+tmp/agent/scratch
+tmp/agent/stop-hook
+tmp/pr-body.md
+tmp/promotion-body.md
+tmp/maintenance-report.md
+tmp/weekly-report.md
+tmp/review-summary.md
+tmp/review-findings.json
+tmp/snapshots
+tmp/design-review
+tmp/d1-profile
+tmp/legacy-newlines
+tests/test-results
+playwright-report
+coverage
+.wrangler/smoke-state

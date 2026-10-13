@@ -38,19 +38,21 @@ const SERPLISTS_RULES = {
 
 const TEST_FILES = ["**/*.test.{ts,tsx,js,mjs}", "**/*.spec.{ts,tsx,js,mjs}", "tests/**/*.{ts,tsx,js,mjs}"];
 
-const APP_API_SCRIPT_AND_DATABASE_CODE = [
-  "src/**/*.{ts,tsx}",
-  "functions/**/*.ts",
+const SCRIPT_CODE = [
   "scripts/**/*.{js,mjs,cjs,ts,mts}",
-  "db/**/*.ts",
+  ".claude/skills/**/*.{ts,mts}",
+  "tools/**/*.{js,mjs,cjs,ts,mts}",
+  ".github/actions/**/*.{js,mjs,cjs}",
 ];
+
+const APP_API_SCRIPT_AND_DATABASE_CODE = ["src/**/*.{ts,tsx}", "functions/**/*.ts", ...SCRIPT_CODE, "db/**/*.ts"];
 const SKIPPED_TEST_MESSAGE =
   "Tests are never skipped, left as todo or fixme, or run only under a condition: a test that does not run hides " +
   "behavior that stopped working. Make it pass and run it in a suite (pnpm run test:run, test:local-d1, or the " +
-  "browser tests), or delete it if another test covers the same behavior.";
+  "browser tests), or delete it if another test covers the same behavior (docs/agents/code.md, Tests).";
 const FOCUSED_TEST_MESSAGE =
   "`.only` skips every other test in the file. Remove it, and run one test with `pnpm exec vitest run <file> -t " +
-  "'<name>'` or Playwright's `-g` instead.";
+  "'<name>'` or Playwright's `-g` instead (docs/agents/code.md, Tests).";
 const TEST_API = "/^(describe|it|test|suite|bench)$/";
 const TEST_API_MODIFIER = "/^(describe|serial|parallel|concurrent|sequential|shuffle)$/";
 const SKIPPING_MODIFIER = "/^(skip|skipIf|runIf|todo|fixme)$/";
@@ -122,13 +124,14 @@ const STORAGE_MESSAGE =
   "Use safeLocalStorage or getLocalStorage() from src/lib/browserStorage.ts, the only module allowed to touch it.";
 
 const VOCABULARY_MESSAGE =
-  "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
-  "(not 'Personal workspace'). Legacy code identifiers are fine; this rule only checks visible copy.";
+  "User-visible text uses the product's terms (docs/agents/code.md, Vocabulary; CONTEXT.md): 'Organization', not " +
+  "Team or Workspace, and 'Personal', not 'Personal workspace'. Legacy code identifiers are fine; this rule checks " +
+  "only visible copy.";
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
 const WORKSPACE_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
 const LIBRARY_MESSAGE =
-  "The /templates/ page is the Template Library (docs/PRODUCT_SENSE.md): label it 'Template Library' and " +
-  "its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
+  "The /templates/ page is the Template Library (docs/agents/code.md, Vocabulary; CONTEXT.md): label it 'Template " +
+  "Library' and its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
 const LIBRARY_OLD_NAME = "/^\\s*Discover\\s*$|\\bDiscover Templates\\b|\\bBrowse (?:Public )?Templates\\b|\\bBrowse templates\\b/";
 
 export default tseslint.config(
@@ -231,7 +234,8 @@ export default tseslint.config(
           selector: "CallExpression[callee.object.name='console']",
           message:
             "Use log(level, 'snake_case_event', { ...fields }) from functions/api/utils/logger.ts so API logs are " +
-            "structured JSON. Log ids (userId, templateId, requestId), never emails, tokens, or other personal data.",
+            "structured JSON. Log ids (userId, templateId, requestId), never emails, tokens, or other personal data " +
+            "(docs/agents/code.md, Logging).",
         },
       ],
     },
@@ -265,7 +269,7 @@ export default tseslint.config(
     rules: { "serplists/restricted-code": ["error", API_CONVENTIONS] },
   },
   {
-    files: ["scripts/**/*.{js,mjs,cjs,ts,mts}"],
+    files: SCRIPT_CODE,
     rules: { "serplists/restricted-code": ["error", SCRIPT_CONVENTIONS] },
   },
   {

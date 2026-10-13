@@ -1,0 +1,123 @@
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: A pull request into main is a promotion
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE: ${{ github.base_ref }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: node tools/checks/pull-request.mjs base
+
+  title:
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: The title is a Conventional Commit
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node tools/checks/pull-request.mjs title
+
+  issue-link:
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: The body closes an issue, or says why there is none
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.base_ref }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: node tools/checks/pull-request.mjs issue-link
+
+  fix-test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: A fix changes a test
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+        run: node tools/checks/pull-request.mjs fix-test
+
+  evidence:
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: The body reports evidence by level
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.base_ref }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: node tools/checks/pull-request.mjs evidence
+
+  pull-request-passed:
+    name: Pull request passed
+    if: always()
+    needs: [base, title, issue-link, fix-test, evidence]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed, or had nothing to check
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

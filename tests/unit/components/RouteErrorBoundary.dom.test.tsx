@@ -3,7 +3,7 @@ import { shownConsole } from '../../support/mockedConsoleContext';
 import React, { act, useEffect } from 'react';
 import { createEvent, fireEvent, screen } from '@testing-library/react';
 import { useSearchParams } from 'next/navigation';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
@@ -62,12 +62,17 @@ const finishNavigation = () =>
   });
 
 describe('RouteErrorBoundary', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+  });
+
   afterEach(() => {
     authUser = null;
     pageThrowsOnABadRow = false;
     pageRendered.mockClear();
     pageMounts = 0;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   const silenceCaughtErrors = () => vi.spyOn(console, 'error').mockImplementation(() => {});

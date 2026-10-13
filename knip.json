@@ -1,10 +1,16 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
+    ".claude/skills/*/*.ts",
     "open-next.config.ts",
+    "scripts/checks/hook.ts",
+    "scripts/checks/stop-hook.ts",
     "scripts/stripe/bootstrap.ts",
     "tests/e2e/preview-server.ts",
-    "tests/support/nextFontGoogle.ts"
+    "tests/support/nextFontGoogle.ts",
+    "tools/checks/*.d.mts",
+    "tools/checks/hook.mjs",
+    "tools/checks/stop-hook.mjs"
   ],
   "drizzle": {
     "config": ["db/drizzle.config.ts"]

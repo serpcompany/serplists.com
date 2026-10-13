@@ -9,7 +9,7 @@ The API logs JSON lines through `log()` in `functions/api/utils/logger.ts`: `lev
 (the event name), `requestId`, and ids, never personal data. Every response carries its request's
 id in the `X-Request-Id` header, and the router writes one `api_request` line per request with
 `method`, `path`, `status`, and `durationMs`. What each event means, and the rules for new log
-lines, are in the Observability section of `docs/RELIABILITY.md`.
+lines, are in `docs/agents/observability.md`.
 
 ## 1. Find the request's lines
 
@@ -27,15 +27,19 @@ pnpm run logs:query lines --event mcp_tool_error --since 1h
 
 Add `--json` to read a result as data; `pnpm run logs:query --help` lists every filter.
 
-Get the id from the response: `get_network_request` in the browser (the `verify-web` skill), the
-test's trace, or `curl -si` for a call you make yourself. The MCP endpoint (`/api/mcp`) answers
-tool failures with HTTP 200 JSON-RPC errors, so look for its `mcp_tool_error`,
-`mcp_tool_invariant`, and `mcp_auth_error` lines instead of a 5xx status.
+Get the id from the response: `get_network_request` in the browser (the `verify-web` skill),
+`requests.txt` in a `verify-api` run's folder, the test's trace, or `curl -si` for a call you make
+yourself. The MCP endpoint (`/api/mcp`) answers tool failures with HTTP 200 JSON-RPC errors, so
+look for its `mcp_tool_error`, `mcp_tool_invariant`, and `mcp_auth_error` lines instead of a 5xx
+status.
 
 `pnpm run preview` runs in workerd and writes no log file: its output goes to the terminal that
 started it, and wrangler writes a debug log for each session, with the `api_request` lines, to
 `.wrangler/logs` in your home folder (`%APPDATA%\xdg.config\.wrangler\logs` on Windows).
 `pnpm run logs:query errors --file <that folder>` reads the folder's newest log.
+
+This skill reads the local stack. Staging's and Production's logs are in Cloudflare's Workers
+Logs; `docs/agents/observability.md` names the read-only command that reads them.
 
 ## 2. Read what it means
 
@@ -52,11 +56,11 @@ started it, and wrangler writes a debug log for each session, with the `api_requ
 
 `pnpm run db:query "SELECT * FROM templates LIMIT 5"` runs a statement on local D1, never a
 remote one (no `--` before the SQL: pnpm would pass it on to wrangler). Table and column names
-are in `docs/generated/db-schema.md`.
+are in `docs/api/db-schema.md`.
 
 ## 4. Measure D1 cost
 
-D1 bills rows scanned, not rows returned (`docs/design-docs/d1-cost.md`):
+D1 bills rows scanned, not rows returned (`docs/agents/d1-cost.md`):
 
 - **Per statement:** add `D1_PROFILE=true` to `.dev.vars` (without printing the file) and
   restart `pnpm run dev:all`. Each statement then logs a `d1_query` line with `rowsRead`,

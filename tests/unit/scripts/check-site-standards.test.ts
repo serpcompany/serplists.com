@@ -10,7 +10,7 @@ import {
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 
 
-async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'staging', { brokenApi = false } = {}) {
+async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'staging', { brokenApi = false, templatesStatus = 200 } = {}) {
   const { redirects } = await loadBuiltRoutes(siteEnv);
   const production = siteEnv === 'production';
   return async (url: string, { host, headers }: Parameters<SiteRequest>[1]) => {
@@ -22,6 +22,7 @@ async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'stag
     if (brokenApi && pathname === '/api/health/') {
       return { status: 308, location: `${target.origin}/api/health`, headers: {}, body: '' };
     }
+    if (pathname === '/api/templates') return { status: templatesStatus, location: null, headers: {}, body: '' };
     const noindex = production ? {} : { 'x-robots-tag': 'noindex, nofollow' };
     if (pathname === '/robots.txt') {
       const body = production
@@ -73,6 +74,16 @@ describe('check-site-standards', () => {
     });
     expect(stagingAsProduction.failed).toBeGreaterThan(0);
     expect(stagingAsProduction.lines).toContain('FAIL robots.txt allows crawling');
+  });
+
+  it.each([403, 404, 503])('fails a site whose Template list answers %i, as an access policy or a missing binding would make it', async (templatesStatus) => {
+    const result = await checkSiteStandards({
+      baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+      siteEnv: 'production',
+      request: await deployedWorkerWithTheBuiltRedirects('production', { templatesStatus }),
+    });
+
+    expect(result.lines.filter((line) => line.startsWith('FAIL'))).toEqual([`FAIL ${templatesStatus} /api/templates (want 200)`]);
   });
 });
 

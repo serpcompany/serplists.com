@@ -1,13 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { capturedGroup } from '../../support/elements';
-import { z } from 'zod';
+import { packageScripts } from '../../support/packageScripts';
 
 const repoRoot = process.cwd();
-const packageScripts = z
-  .object({ scripts: z.record(z.string()) })
-  .parse(JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))).scripts;
 
 const REVIEWED_IDEMPOTENT_REMOTE_SEEDS = ['db/seeds/official-templates.sql'];
 

@@ -141,6 +141,7 @@ export async function createTemplateForUser(
         after: snapshot,
         metadata: options.auditMetadata,
         request,
+        env,
         createdAt: now,
       }),
     };

@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { buttonVariants } from './ui/button-variants';
 import { Link } from './navigation/Link';
 import { buildHomePath } from '@/lib/routes';
+import { reportClientError } from '@/lib/errorReports';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 type FallbackRender = (props: { error?: Error | undefined; reset: () => void }) => ReactNode;
@@ -32,6 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    reportClientError('boundary', error);
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     console.error('Error details:', {
       message: error.message,

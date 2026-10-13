@@ -5,8 +5,13 @@ import { describeErrorForLog, log } from '@functions/api/utils/logger';
 import { runWithRequestId } from '@functions/api/utils/request-context';
 import { logLineIn } from '../../../support/storedJson';
 
+const COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 describe('log', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
 
   function capture(level: 'info' | 'warn' | 'error' | 'debug') {
     const lines: string[] = [];
@@ -86,12 +91,24 @@ describe('log', () => {
     expect(JSON.parse(elementAt(lines, 2))).toMatchObject({ userId: 'user-1' });
   });
 
-  it('never lets a field overwrite the level, event name or timestamp', () => {
+  it('names the release on every line, the commit the Worker was built from, so an error ties to its code', () => {
+    const lines = capture('info');
+
+    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', COMMIT);
+    log('info', 'api_request', { status: 200 });
+    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', '');
+    log('info', 'api_request', { status: 200 });
+
+    expect(lines.map((line) => logLineIn(line)['release'])).toEqual([COMMIT, 'unknown']);
+  });
+
+  it('never lets a field overwrite the level, event name, release or timestamp', () => {
     const lines = capture('error');
 
-    log('error', 'env_validation_error', { message: 'bad FRONTEND_URL', level: 'info', timestamp: 'x' });
+    vi.stubEnv('NEXT_PUBLIC_RELEASE_COMMIT', COMMIT);
+    log('error', 'env_validation_error', { message: 'bad FRONTEND_URL', level: 'info', release: 'main', timestamp: 'x' });
 
-    expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'error', message: 'env_validation_error' });
+    expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'error', message: 'env_validation_error', release: COMMIT });
     expect(logLineIn(firstOf(lines)).timestamp).not.toBe('x');
   });
 });

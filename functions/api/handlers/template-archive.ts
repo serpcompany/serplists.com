@@ -73,6 +73,7 @@ export async function restoreTemplate(
     after: { ...existingTemplate, ...restoreUpdates },
     diff: restoreUpdates as Record<string, unknown>,
     request,
+    env,
     createdAt: now,
   });
   const archivedTemplate = teamId
@@ -136,6 +137,7 @@ export async function archiveTemplate(
     after: archivedTemplate,
     diff: archiveUpdates as Record<string, unknown>,
     request,
+    env,
     createdAt: now,
   });
   const activeTemplate = existingTemplate.owner_type === 'team' && existingTemplate.team_id

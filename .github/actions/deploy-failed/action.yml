@@ -1,0 +1,20 @@
+name: Deploy failed
+description: >-
+  Tells people a push didn't deploy, because its deploy or a check before it failed: comments
+  with the run's link on the open "Staging deploy failed" or "Production deploy failed" issue,
+  labelled bug, or opens it when there is none. Needs permission to write the repository's issues.
+inputs:
+  environment:
+    description: The environment whose deploy failed, staging or production.
+    required: true
+  token:
+    description: A token that can read and write the repository's issues.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: node "$GITHUB_ACTION_PATH/deploy-failed.cjs"

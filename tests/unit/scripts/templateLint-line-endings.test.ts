@@ -7,7 +7,7 @@ import { lintSingleTemplateSource, lintTemplatePair, lintYamlTemplateBundle } fr
 import { z } from 'zod';
 import { parseJsonText } from '../../support/storedJson';
 
-const examplesRoot = path.join(process.cwd(), 'docs/product-specs/portable-templates/examples');
+const examplesRoot = path.join(process.cwd(), 'docs/product/portable-templates/examples');
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
 
 let tempRoot = '';

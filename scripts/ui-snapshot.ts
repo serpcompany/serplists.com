@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
-import { DEFAULT_DEV_PORT, readDevSession } from "./dev-auto-lib";
+import { checkoutPorts } from "../tools/checks/ports.mjs";
+import { readDevSession } from "./dev-auto-lib";
 import { parseUiSnapArgs, UI_SNAP_USAGE, type UiSnapArgs } from "./ui-snapshot-lib";
 
 let options: UiSnapArgs;
@@ -13,7 +14,7 @@ try {
 }
 const { routePath, outPath, ariaPath } = options;
 
-const port = readDevSession()?.port ?? DEFAULT_DEV_PORT;
+const port = readDevSession()?.port ?? checkoutPorts().dev;
 const baseUrl = options.base ?? `http://localhost:${port}`;
 const apiUrl = options.api ?? new URL("/api", baseUrl).toString();
 

@@ -41,6 +41,7 @@ export async function shareChecklistRun(
     after: { ...run, ...shareUpdates },
     diff: shareUpdates,
     request,
+    env,
     createdAt: now,
   });
   const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
@@ -90,6 +91,7 @@ export async function stopSharingChecklistRun(
     after: { ...run, ...revokeUpdates },
     diff: revokeUpdates,
     request,
+    env,
     createdAt: now,
   });
   await db.batch(auditedRunUpdate(db, runId, sharedRun, revokeUpdates, auditEvent));

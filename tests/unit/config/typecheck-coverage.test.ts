@@ -12,7 +12,9 @@ const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
 const JAVASCRIPT_FILE = /\.(js|jsx|mjs|cjs)$/;
 const DECLARATION_OF_A_JAVASCRIPT_MODULE = /\.d\.(mts|cts)$/;
 const DECLARATION_FILE = /\.d\.(ts|mts|cts)$/;
-const FOLDERS_OF_AUTHORED_CODE = ['src/', 'functions/', 'scripts/', 'db/', 'tests/'];
+const FOLDERS_OF_AUTHORED_CODE = ['src/', 'functions/', 'scripts/', 'db/', 'tests/', 'tools/'];
+const JAVASCRIPT_NO_LOADER_RUNS = [/^tools\/checks\/[^/]+\.mjs$/, /^\.github\/actions\/.+\.cjs$/, /^tests\/.+\.test\.mjs$/];
+const DECLARATION_OF_JAVASCRIPT_NO_LOADER_RUNS = /^tools\/checks\/[^/]+\.d\.mts$/;
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
 const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
   'noImplicitOverride',
@@ -61,6 +63,8 @@ const modulesImportedBy = (file: string): string[] =>
 const importedByAConfigOnlyJavaScriptLoads = new Set(configsOnlyJavaScriptLoads.flatMap(modulesImportedBy));
 const loadedOnlyAsJavaScript = (file: string) =>
   importedByAConfigOnlyJavaScriptLoads.has(file) || importedByAConfigOnlyJavaScriptLoads.has(file.replace(JAVASCRIPT_FILE, ''));
+const runsWithoutATypeScriptLoader = (file: string) =>
+  configsOnlyJavaScriptLoads.includes(file) || loadedOnlyAsJavaScript(file) || JAVASCRIPT_NO_LOADER_RUNS.some((place) => place.test(file));
 
 describe('pnpm run typecheck', () => {
   it('runs every tsconfig the repository holds', () => {
@@ -82,7 +86,7 @@ describe('pnpm run typecheck', () => {
       'These tsconfigs turn off a setting every project keeps on. Set it back to true, or remove the override so the ' +
         'project inherits it, and fix the errors it reports: narrow the value, give it a default that is right for ' +
         'that case, or throw an error that names what is missing; type a value read by known keys with the shape it ' +
-        'has and index only a real dictionary; never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
+        'has and index only a real dictionary; never a ! or a cast (docs/agents/checks.md#types).',
     ).toEqual([]);
   });
 
@@ -95,18 +99,20 @@ describe('pnpm run typecheck', () => {
     ).toEqual([]);
   });
 
-  it('keeps every script TypeScript, unless a config only JavaScript can load imports it', () => {
+  it('keeps every code file TypeScript, but JavaScript that runs before or without a TypeScript loader', () => {
     expect(
-      repositoryFiles.filter(
-        (file) =>
-          file.startsWith('scripts/') &&
-          (DECLARATION_OF_A_JAVASCRIPT_MODULE.test(file) || (JAVASCRIPT_FILE.test(file) && !loadedOnlyAsJavaScript(file))),
+      repositoryFiles.filter((file) =>
+        DECLARATION_OF_A_JAVASCRIPT_MODULE.test(file)
+          ? !DECLARATION_OF_JAVASCRIPT_NO_LOADER_RUNS.test(file)
+          : JAVASCRIPT_FILE.test(file) && !runsWithoutATypeScriptLoader(file),
       ),
-      'These files under scripts/ are JavaScript, or a declaration file written for a JavaScript module, so ' +
-        'pnpm run typecheck never checks their code. Write them in TypeScript: every script runs with tsx\'s loader ' +
-        '(node --import tsx), and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. Only a module ' +
-        `that a root config read without a TypeScript loader imports (${configsOnlyJavaScriptLoads.join(', ')}) may be ` +
-        'JavaScript (docs/design-docs/development-environment.md#writing-scripts).',
+      'These files are JavaScript, or a declaration file written for a JavaScript module, so pnpm run typecheck ' +
+        "never checks their code. Write them in TypeScript: every script runs with tsx's loader (node --import tsx), " +
+        'and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. JavaScript is only for what no ' +
+        `TypeScript loader runs: a root config its tool reads as JavaScript (${configsOnlyJavaScriptLoads.join(', ')}) ` +
+        'and what it imports; tools/checks/*.mjs, which hooks and CI run with plain Node before packages are ' +
+        'installed, with a .d.mts beside one TypeScript imports; .github/actions/**/*.cjs, which GitHub runs with ' +
+        'plain Node; and a .test.mjs test of what a JavaScript caller may pass (docs/agents/exceptions.md).',
     ).toEqual([]);
   });
 
@@ -135,8 +141,9 @@ describe('pnpm run typecheck', () => {
     expect(
       repositoryFiles.filter((file) => TYPESCRIPT_FILE.test(file) && !typeChecked.has(file)),
       'No tsconfig that pnpm run typecheck runs includes these files, so their type errors go unseen. Add each to ' +
-        'the "include" of the tsconfig for its folder: tsconfig.json for src/, tsconfig.node.json for scripts/ and ' +
-        'the root config files, functions/tsconfig.json for functions/ and db/, tests/tsconfig.json for tests/. ' +
+        'the "include" of the tsconfig for its folder: tsconfig.json for src/, tsconfig.node.json for scripts/, a ' +
+        "skill's scripts and the root config files, functions/tsconfig.json for functions/ and db/, " +
+        'tests/tsconfig.json for tests/. ' +
         'A .ts file next to a .tsx file of the same name keeps the .tsx one out of every include: rename one of them.',
     ).toEqual([]);
   });

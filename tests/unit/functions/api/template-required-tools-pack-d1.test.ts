@@ -76,6 +76,19 @@ describe("Required tools in portable packs and backups", () => {
     expect(summary.failed[1]?.reason).toBe("requiredTools.0.name: Tool names must be 80 characters or fewer");
   });
 
+  it("stores and exports each link exactly as written, adding no tag and rewriting nothing", async () => {
+    const asWritten = [
+      { name: "Shop", url: "HTTPS://Shop.Example.com/Item?ref=partner-42&utm_source=newsletter#reviews", required: true },
+      { name: "Docs", url: "http://docs.example.org/a%20b/?q=caf%C3%A9&tag=", required: false },
+    ];
+
+    const templateId = await createTemplateAs("alice", { title: "Linked as written", requiredTools: asWritten });
+
+    expect(storedColumns(templateId).required_tools).toBe(JSON.stringify(asWritten));
+    expect((await exportedTemplates())["Linked as written"]?.requiredTools).toEqual(asWritten);
+    expect((await exportedTemplates("?format=backup"))["Linked as written"]?.requiredTools).toEqual(asWritten);
+  });
+
   it("imports the tools of a backup export, which round-trips them", async () => {
     await createTemplateAs("alice", { title: "Round trip", requiredTools: THE_TOOLS });
     const backup = await readJson(await templatesApi("alice", "GET", "/backup?format=backup"), jsonObject);

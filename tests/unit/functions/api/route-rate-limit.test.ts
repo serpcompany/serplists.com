@@ -20,6 +20,8 @@ describe('routeRateLimitBucket', () => {
     ['DELETE', 'agent-keys/key-1', 'write'],
     ['POST', 'mcp', 'mcp'],
     ['GET', 'mcp', null],
+    ['POST', 'client-errors', 'error-reports'],
+    ['GET', 'client-errors', null],
     ['POST', 'templates/generate-from-clipy', 'write'],
     ['GET', 'templates', null],
     ['GET', 'checklists/shared/abc', null],

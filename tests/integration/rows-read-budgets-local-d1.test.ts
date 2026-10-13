@@ -31,7 +31,7 @@ const SYNTHETIC_DATASET_SCALE = 0.02;
 const SEEDED_PASSWORD = "password123";
 const ORGANIZATION = "team-seed-growth";
 const MARGIN = { rows: 2, share: 0.1 };
-const D1_COST_PLAN = "docs/exec-plans/active/d1-cost.md";
+const D1_COST_ISSUE = "the D1 cost issue (#299)";
 
 const seededCountsSchema = z.object({
   publicTemplates: z.number(),
@@ -425,7 +425,7 @@ const title = (route: Route) =>
   route.budget.kind === "bounded"
     ? `${route.name} reads at most ${withMargin(route.budget.measured)} rows`
     : `${route.name} reads ${route.budget.grows} plus at most ${withMargin(route.budget.measuredBeyondThat)} rows, ` +
-      `since it is unbounded by design until ${D1_COST_PLAN} bounds it`;
+      `since it is unbounded by design until ${D1_COST_ISSUE} bounds it`;
 
 describe.sequential("rows read per hot request on local D1, with the synthetic dataset at a small scale", () => {
   beforeAll(async () => {
@@ -455,7 +455,7 @@ describe.sequential("rows read per hot request on local D1, with the synthetic d
     expect(
       measurement?.rowsRead,
       `${route.name} read ${measurement?.rowsRead} rows, over its budget of ${limit}: ${route.reason}. ` +
-        "If it is meant to read more, update its budget in this table (docs/design-docs/d1-cost.md#measuring).",
+        "If it is meant to read more, update its budget in this table (docs/agents/d1-cost.md#measuring).",
     ).toBeLessThanOrEqual(limit);
   });
 });

@@ -1,95 +1,120 @@
 # AGENTS
 
-SERP Lists lets people and Organizations own reusable templates and execute them
-as runs. Next.js app (`src/`) with its API (`functions/`) in one Cloudflare Worker
-(OpenNext) + D1.
-This file is a map: read the linked source of truth before changing an area.
+Routing only. Open the smallest source matching the task.
 
-Using `rg` crashes VS Code because it spawns hundreds of processes. DO NOT USE IT.
-Use `grep`/`find` instead.
+Stage: ship
 
-## Where knowledge lives
+Agents never merge: there is no `Agents may merge` line. Only an owner adds or changes these lines.
 
-| Need | Read |
-| --- | --- |
-| Domains, layers, enforced dependency rules, stack | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Product principles and vocabulary (Personal, Organization, Template, Run) | [docs/PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md) |
-| What the product does today | [docs/product-specs/](docs/product-specs/index.md) |
-| Rules every change follows, and what enforces them | [docs/design-docs/core-beliefs.md](docs/design-docs/core-beliefs.md) |
-| How each subsystem works (auth, Organizations, billing, data, dev environment) | [docs/design-docs/](docs/design-docs/index.md) |
-| Frontend conventions and UI design | [docs/FRONTEND.md](docs/FRONTEND.md), [docs/DESIGN.md](docs/DESIGN.md) |
-| CI, deploys, observability, incidents, testing | [docs/RELIABILITY.md](docs/RELIABILITY.md) |
-| Auth model, secrets, CORS, rate limits | [docs/SECURITY.md](docs/SECURITY.md) |
-| Plans, progress, and known debt | [docs/PLANS.md](docs/PLANS.md) |
-| Quality grade per domain | [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md) |
-| Current database tables (generated) | [docs/generated/db-schema.md](docs/generated/db-schema.md) |
-| Third-party docs for our pinned versions | [docs/references/](docs/references/) |
-| Agent skills (browser checks, API logs, browser tests), Chrome DevTools, permissions | [docs/design-docs/agent-workflow.md](docs/design-docs/agent-workflow.md#agent-tooling) |
+Stop and ask before: migrations or writes to staging or production D1, live Stripe keys or
+billing state, deleting user data, product wording or pricing, and changing a rule in
+[`docs/agents/code.md`](docs/agents/code.md).
+
+## Every change
+
+- [`docs/agents/code.md`](docs/agents/code.md): the rules all code follows (strict types, no
+  comments, a size limit, no duplicate or dead code, layered imports, no secrets, a test for every
+  fix), the checks and git hooks behind them, the skills, and when a change is done. Read it first.
+- [`docs/agents/verification.md`](docs/agents/verification.md): what to run while editing, before
+  a push and at the finish gate, how to wait, the evidence a change needs, and a checkout's ports.
 
 ## Commands
 
-```bash
-pnpm install && pnpm run setup   # fresh clone or worktree: .dev.vars, local D1, browser
-pnpm run dev:all                 # next dev (pages + API) on a free port; logs in tmp/logs/dev-all.log
-pnpm run dev:stop                # stop it, including child processes (use this, not a kill)
-pnpm run logs:query errors       # what the API logged; also routes, slow, request <id>, d1
-pnpm run preview                 # the OpenNext build in workerd, as deployed
-pnpm run ui:snap -- dashboard --login john@test.com   # screenshot + accessibility tree of the dev:all app
-pnpm run verify                  # the pre-PR gate: env, lint, types, repo checks, unit tests
-pnpm run test:smoke              # browser smoke tests: the OpenNext build on an isolated local stack
-pnpm run test:e2e:full           # full browser suite, same stack (required for promotions to main)
-```
+- **Finish gate:** `pnpm run check`, once, on the finished tree.
+- **Checks:** `pnpm run verify`, or some on some paths: `pnpm run verify comments,sizes <paths>`.
+- **Inner loop:** `pnpm exec tsc -p <project> --noEmit`, `pnpm exec vitest related --run <files>`,
+  and `pnpm run verify <checks> <paths>`.
+- **Search** with `grep` and `find`, never `rg` or the Grep or Glob tools: they crash VS Code here.
+- **Before a push:** the tests the change touches, browser specs through
+  `node --import tsx scripts/run-at-low-priority.ts pnpm run test:e2e:full <specs>`.
+- **Evidence:** a page, component, redirect or header change, the skill `verify-web`; an API, Run
+  Keys or MCP change, `verify-api` (both in `.claude/skills/`, proof in `tmp/agent/verify/`); a
+  deploy workflow, routing or Worker config change, Staging's smoke test after the merge.
 
-Details: [development environment](docs/design-docs/development-environment.md).
+## Codebase
 
-## Definition of done
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): the parts, how data moves between them, each part's
+  enforced layers, and the pinned stack. Start here for anything that crosses parts.
+- [`docs/product/index.md`](docs/product/index.md): what the product does today, page by page,
+  and the check behind each behavior. Change a behavior, its doc and its check together.
+- **How it fits together:** [`system-overview.md`](docs/agents/system-overview.md) (components,
+  request flow, routes), [`data-persistence.md`](docs/agents/data-persistence.md) (tables, stored
+  JSON, the migrations' history), [`client-data.md`](docs/agents/client-data.md) (the API client
+  and the browser's cache), [`d1-cost.md`](docs/agents/d1-cost.md) (rows read and the query
+  rules, before any query change), and the generated [`db-schema.md`](docs/api/db-schema.md).
+- **Accounts and access:** [`authentication.md`](docs/agents/authentication.md) (Better Auth,
+  sessions, email), [`organizations.md`](docs/agents/organizations.md) (members, roles, invites,
+  context routes), [`agent-access.md`](docs/agents/agent-access.md) (Run Keys and MCP),
+  [`billing.md`](docs/agents/billing.md) (Stripe and plans), and
+  [`security.md`](docs/agents/security.md) (the auth model, secrets, CORS, rate limits).
+- **Templates and Runs:** [`template-content-types.md`](docs/agents/template-content-types.md)
+  (blocks and their stored shapes), [`template-editor.md`](docs/agents/template-editor.md) (the
+  editor's form and saves), [`run-execution.md`](docs/agents/run-execution.md) (the Run page,
+  saves, reconciliation, guest runs), and [`seo-and-sitemaps.md`](docs/agents/seo-and-sitemaps.md)
+  (public pages' metadata, sitemaps, the Profiles directory).
+- **The UI:** [`frontend.md`](docs/agents/frontend.md) (routes, URLs, data and state, leaving a
+  page), [`design.md`](docs/agents/design.md) (shadcn on Base UI, layout blocks),
+  [`ui-app-map.md`](docs/agents/ui-app-map.md) (every route and how it's reached), and
+  [`ui-screen-inventory.md`](docs/agents/ui-screen-inventory.md) (each screen: open only its own).
+- **Working on it:** [`development-environment.md`](docs/agents/development-environment.md) (setup,
+  dev servers, every script), [`database-operations.md`](docs/agents/database-operations.md)
+  (before changing the schema, a migration or a trigger), [`testing.md`](docs/agents/testing.md)
+  (unit, local D1 and browser tests), [`checks.md`](docs/agents/checks.md) (how each check is set
+  up), [`exceptions.md`](docs/agents/exceptions.md) (every exception and its reason), and
+  [`agent-tooling.md`](docs/agents/agent-tooling.md) (Claude Code's tools and permissions).
+- **CI and production:** [`ci.md`](docs/agents/ci.md) (every workflow and the checks a merge
+  waits for), [`ci-deploys.md`](docs/agents/ci-deploys.md) (deploys and their checks),
+  [`ci-agents.md`](docs/agents/ci-agents.md) (the review, `@claude` and weekly maintenance),
+  [`environments.md`](docs/agents/environments.md) (hosts and configuration), and
+  [`observability.md`](docs/agents/observability.md) (logs, error reports, incidents).
+- [`docs/references/`](docs/references/): vendored docs for the pinned versions of Cloudflare,
+  Drizzle, shadcn, Stripe and Vitest. Read them rather than relying on memory.
 
-1. `pnpm run verify` passes. CI runs the same checks plus D1 integration and schema
-   parity; pull requests also run the build and browser tests in their own workflow.
-2. UI changes: attach `pnpm run ui:snap` output or a screenshot to the PR as evidence.
-3. Behavior changes update the docs that describe them (`pnpm run docs:check` keeps
-   links and paths honest, not content).
-4. Multi-step work has an exec plan in `docs/exec-plans/active/` with progress and a
-   decision log ([PLANS.md](docs/PLANS.md)); shortcuts go in the tech debt tracker.
-5. The PR template is filled in, the PR is small enough to review quickly, and every
-   review comment (Claude's and humans') is fixed or answered.
+## Work tracking
 
-## Working rules
+- [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md): issues, labels, branches, pull
+  requests and promotions. Plans live in issues.
+- [`docs/quality.md`](docs/quality.md): a grade for each product area and layer, with the code it
+  covers and the day it was graded. Re-grade a row when its tests, CI or docs change.
+- [`docs/tech-debt.md`](docs/tech-debt.md), and [`docs/harness-debt.md`](docs/harness-debt.md)
+  for checks, delivery and the harness: known debt, each with its issue and Size. Add debt you
+  knowingly leave; remove what you pay off.
 
-- Follow [core beliefs](docs/design-docs/core-beliefs.md). Lint and dependency
-  errors include the fix; read the message before changing code.
-- There are no lint suppressions, dependency baselines, file-size exceptions, or
-  skipped tests. When a check fails, fix the code; never add an exception to pass.
-- Every bug fix, regressions included, lands with a test that fails without the fix, in
-  the same `fix:` commit, so the bug cannot come back unnoticed. The commit-msg hook and
-  CI refuse a `fix:` commit that changes no test.
-- Parse external data with Zod at the boundary; do not guess shapes.
-- API code logs with `log()` from `functions/api/utils/logger.ts`, never personal data.
-- User-visible text uses [PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md) terms (Organization, not Team or Workspace).
-- When you hit the same problem twice, fix the harness: add the missing doc, check,
-  or script, in the same PR or as a follow-up issue.
+## Decisions
 
-## Escalate to a human
+- [`docs/adr/`](docs/adr/): decisions that are hard to reverse, each with Why, Considered and
+  Consequences. Read the ones the task touches. A record is superseded, never rewritten.
+- [`CONTEXT.md`](CONTEXT.md): easily confused terms, such as Template Owner and Creator.
 
-Stop and ask before: applying migrations or running writes against staging or
-production D1; anything touching live Stripe keys or billing state; deleting user
-data; changing product wording or pricing; changing a rule in the core beliefs.
+## Where this differs from SERP's standards
 
-## Git flow
+[SERP's standards](https://github.com/serpcompany/serp/tree/main/docs/engineering/standards) apply;
+where one says otherwise, these win:
 
-- `main` is the production branch.
-- `staging` is the primary integration branch for active development.
-- New implementation work should happen on short-lived issue/task branches created from `staging` unless there is an explicit reason to branch from somewhere else.
-- Finished issue/task branches should merge into `staging` first.
-- Only promote changes from `staging` into `main` when they are ready for production.
-
-## Database changes
-
-- Read [database operations](docs/design-docs/database-operations.md) before changing the Drizzle schema, D1 migrations, or SQL-only database objects.
-- D1 bills rows scanned, not rows returned: follow the query rules in [D1 cost](docs/design-docs/d1-cost.md) and check new or changed queries with `pnpm run d1:profile`.
-- Run `pnpm run check:db:drizzle-parity` and `pnpm run db:schema:generate` after changing any of them (CI checks both).
-- Do not apply or commit the baseline currently proposed by `pnpm run db:generate`; Drizzle snapshot initialization is tracked separately.
+- **No comments in code,** checked ([`code.md`](docs/agents/code.md), No comments).
+- **Review runs on every push, beside CI,** and stays advisory until an admin requires resolved
+  conversations ([`ci-agents.md`](docs/agents/ci-agents.md), Code review).
+- **`staging` is the base, and `main` is Production and the default branch,** promoted by
+  squash-merging a prepared branch; a hotfix goes through `staging` too, until the owner decides
+  otherwise ([ADR 0002](docs/adr/0002-keep-staging-and-main-and-promote-by-squash-merge.md)).
+  GitHub links no issue into `staging`, so `Pull request` reads the body in place of PR Issue Link.
+- **A merge queue tests merged trees,** not a check on push with receipts, once an admin turns it
+  on ([`ci.md`](docs/agents/ci.md#checks-a-merge-can-wait-for)).
+- **`CI` runs a branch's pushes one at a time, in push order,** so deploys land in that order; a
+  push still waiting gives way to a newer one ([`ci-deploys.md`](docs/agents/ci-deploys.md)).
+- **Branches are named `<type>/<issue>-<slug>`** ([`code.md`](docs/agents/code.md), Pull requests).
+- **Only the root `README.md` is a map;** others are leaves ([`code.md`](docs/agents/code.md#docs)).
+- **Edit and stop hooks** run the checks ([`agent-tooling.md`](docs/agents/agent-tooling.md)).
+- **Errors go to Workers Logs, not Sentry,** for now; Sentry may come later
+  ([ADR 0006](docs/adr/0006-report-errors-to-workers-logs.md)).
+- **A deploy refuses pending migrations** rather than applying them
+  ([ADR 0005](docs/adr/0005-deploys-refuse-pending-migrations.md)).
+- **Email goes through Resend or useSend,** not Cloudflare Email Sending, until the owner moves it
+  ([`tech-debt.md`](docs/tech-debt.md), Accounts and email).
+- **`docs/references/` holds vendored docs** ([`ARCHITECTURE.md`](ARCHITECTURE.md), Stack).
 
 ## This is NOT the Next.js you know
 
-This version has breaking changes: APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code, and heed deprecation notices. `agentRules: false` in `next.config.ts` stops `next dev` from writing its own copy of this section, with HTML comment markers, into this file.
+Read the guide for the installed version in `node_modules/next/dist/docs/` before writing Next.js
+code, and heed its deprecation notices
+([ADR 0003](docs/adr/0003-run-nextjs-on-cloudflare-workers-through-opennext.md)).

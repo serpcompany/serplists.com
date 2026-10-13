@@ -28,7 +28,7 @@ const NO_SOURCE_TEXT_READS_MESSAGE =
   "passes when the behavior breaks. Import the module and call it, render the component or send the request, and " +
   "assert the outcome. A rule about how all code is written (always import X from Y, never call Z) belongs in an " +
   "ESLint rule (scripts/eslint-rules/, scripts/eslint-rules/code-conventions.ts) or a dependency-cruiser rule. " +
-  "Import data the app ships (JSON) instead of reading its file.";
+  "Import data the app ships (JSON) instead of reading its file (docs/agents/code.md, Tests).";
 
 const calleeName = (callee: ESTree.Node): string | null => {
   if (callee.type === "Identifier") return callee.name;

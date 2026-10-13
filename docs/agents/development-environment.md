@@ -1,0 +1,262 @@
+# Development Environment
+
+Every clone or git worktree runs its own isolated stack: local D1 state lives in that checkout's
+`.wrangler/`, and each server takes the checkout's own port or a free one. The app is one Next.js
+server: the pages and the API (`src/app/api/[[...route]]/route.ts`) share an origin, and the
+Cloudflare bindings (D1, R2, vars) come from `wrangler.toml` and `.dev.vars` through
+`getCloudflareContext()`. Requirements: the Node.js version in `.node-version` and the pnpm in
+`package.json`'s `packageManager` ([verification](verification.md#toolchain-versions)); Wrangler is
+a dev dependency. Next.js takes the workspace root from the nearest lockfile it finds, which can be
+one in a folder above the checkout, so `next.config.ts` sets `turbopack.root` to the checkout
+itself.
+
+## Set up
+
+```bash
+pnpm install        # also installs git hooks
+pnpm run setup      # safe to re-run
+```
+
+`pnpm install` lays out `node_modules` flat, as npm does (`node-linker=hoisted` in `.npmrc`): on
+Windows pnpm otherwise links packages with absolute junctions, and the OpenNext build copies those
+links, so its Worker bundle would pick up the unpatched originals of patched packages. A flat
+`node_modules` has no links to copy and builds the same on Windows, macOS, Linux and CI.
+
+`setup` creates `.dev.vars` from `.dev.vars.example` with a generated `BETTER_AUTH_SECRET` and
+optional integrations commented out (never overwriting an existing file), creates local D1 if the
+checkout has none (otherwise applies pending migrations), seeds whatever seed data is missing, and
+installs the Playwright browser. The seed decision comes from the database, not its directory:
+`node --import tsx scripts/data/local-d1-data.ts seed-status` reports whether the test data, the
+official Templates and the official login are there, and setup runs only the missing stages, so a
+seed that failed or was interrupted is finished on the next run and data you created is never
+reset. A database seeded before the test Templates got `sample-` slugs has test Templates holding
+four official Templates' slugs, so those official Templates are missing; setup renames the test
+Templates' slugs in place first (the `repair-test-slugs` stage) and then seeds them. Setup fails,
+without printing the sign-in hint, if a seed stage fails (the error names the stage and how to
+recover) or seed data is still missing afterwards.
+
+`.dev.vars` is the only local env file; variables are listed in
+[security](security.md#secrets-and-environment), including the optional ones `.dev.vars.example`
+leaves out: the Run Key and MCP flags for a remote trial, `STRIPE_PRO_LEGACY_PRICE_IDS` and
+`NEXT_PUBLIC_API_URL`. The server reads it as Worker vars: `next dev` through
+`initOpenNextCloudflareForDev()` in `next.config.ts`, the preview through `wrangler dev`. The pages
+read `NEXT_PUBLIC_*` variables through `src/env.ts`, which Next.js inlines when it builds or serves
+them: `pnpm run dev:all` hands `.dev.vars` to `next dev`, and a build takes them from its shell.
+Pages call the API on their own origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another
+API. `next build` refuses a local or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`,
+which `next.config.ts` runs), since every visitor's pages would send their sign-in and API requests
+there, unless `ALLOW_LOCAL_API_URL=1` (a build you only serve locally). At runtime
+`src/lib/apiBaseUrl.ts` ignores one unless the page itself is served from a local development host
+(`isLocalDevelopmentHostname`): a name for this machine (`localhost`, `*.localhost`, `127.0.0.0/8`
+or `::1`, `isLoopbackHostname`) or `0.0.0.0`, the address of a dev server bound to all interfaces.
+The build refuses the same hosts. After changing `wrangler.toml` or the variable names in
+`.dev.vars`, `pnpm run cf-typegen` regenerates `cloudflare-env.d.ts`.
+
+## Run
+
+```bash
+pnpm run dev:all    # the app and its API on a free port (dev:api and dev:auto are aliases)
+pnpm run dev:stop   # stop it, including child processes
+pnpm run dev        # plain `next dev` on this checkout's dev port, without the launcher
+pnpm run preview    # build with OpenNext and serve the Worker in workerd, as deployed
+pnpm run ports      # this checkout's ports; `pnpm run ports delete` gives a worktree's up
+```
+
+`pnpm run dev` and `pnpm run preview` serve on this checkout's own ports, which
+`tools/checks/ports.mjs` hands out: 3000 and 8787 in the main checkout, and a block of its own in a
+worktree ([verification](verification.md#this-checkouts-ports)). A `PORT` set in the shell wins.
+The preview also passes its own address as `FRONTEND_URL`, so the links the API builds (emails,
+invites, checkout returns) come back to it.
+
+`dev:all` runs `next dev` on port `3000`, or the next free port. A port counts as free only when
+nothing accepts a connection on `127.0.0.1` or `::1` and it binds on `127.0.0.1`, `::1`, `0.0.0.0`
+and `::` in turn (`isPortAvailable` in `scripts/dev-auto-lib.ts`): on Windows a bind to one address
+succeeds while another process holds the port on a different one. A connection probe that is
+refused or gets no answer within half a second leaves the answer to the binds, since on some
+Windows setups a refused loopback connection takes a second or more, and an address the machine
+lacks (`::1` with IPv6 off) does not make a port busy. The smoke runner and the Stripe listener's
+predicted target pick ports the same way. The URL is printed and saved in `tmp/dev-session.json`.
+
+The Worker vars that name the server cannot come from `.dev.vars`, since the port is picked at
+start: the launcher passes `FRONTEND_URL` (the server's origin), `CORS_ALLOWED_ORIGINS` (the
+configured origins plus that one) and the auth secret to `next dev` in `SERPLISTS_DEV_BINDINGS`,
+and `next.config.ts` sets them over the bindings (`scripts/lib/dev-bindings.ts`), so the API's own
+links (Stripe returns, invites) come back to this server. It sets them once
+`initOpenNextCloudflareForDev()` has set up the bindings; Next.js also loads the config in a
+process that serves no requests and has no bindings, where nothing is set.
+
+Use `pnpm run dev:stop` to stop: killing only the launcher leaves Next.js and workerd running on
+Windows and holding the port. The launcher itself stops the server's whole process tree on Ctrl+C,
+on `SIGTERM`, and when its terminal window closes (`SIGHUP` on Windows).
+
+`agentRules: false` in `next.config.ts` keeps `next dev` from writing its own copy of Next.js's
+agent rules into `AGENTS.md`.
+
+The session records the launcher's pid with its process start time. A launch or `dev:stop` trusts
+a recorded pid only while that pid still runs `scripts/dev-auto.ts` and started at the recorded
+time (within five seconds: `ps` reports whole seconds, and Node takes a moment to start), because
+the OS reuses the pid of a launcher that was killed. So a stale session file never makes `dev:all`
+skip starting, and `dev:stop` never kills an unrelated process: it skips (and reports) such a pid
+and always clears the file. While the recorded launcher runs, `dev:all` prints its URL and exits
+instead of starting a second server.
+
+Local servers (`localhost`, `127.0.0.1`) get the Content-Security-Policy without
+`upgrade-insecure-requests` (`next.config.ts`): on plain http the browser would upgrade the
+redirects the app's navigations follow to https, which nothing serves.
+
+Output is mirrored to `tmp/logs/dev-all.log`. API logs are JSON lines with a `requestId` (also the
+`X-Request-Id` response header). `pnpm run logs:query` reads them, and Next.js's page lines,
+instead of a `grep`:
+
+```bash
+pnpm run logs:query errors                # warnings, errors and 5xx requests, grouped
+pnpm run logs:query routes --since 15m    # requests, 4xx, 5xx, p50, p95 and max per route
+pnpm run logs:query slow                  # the slowest requests, with their request ids
+pnpm run logs:query request <id>          # one request's lines in order, with offsets
+pnpm run logs:query lines --event mcp_tool_error --path /^mcp/
+pnpm run logs:query d1                    # D1 statements by rows read (D1_PROFILE=true)
+```
+
+Every line the API logs while handling a request carries that request's id, `d1_query` lines
+included, so with `D1_PROFILE=true` a request's timeline ends with its D1 totals and `routes` adds
+the rows each request read. Every command takes `--json` for scripts. `--file` reads another log,
+or the newest `.log` file in a folder. `pnpm run logs:query --help` lists the filters (level,
+event, request, path, status, field values and time).
+
+A failed query after pulling new code usually means local D1 is behind; `pnpm run setup` applies
+pending migrations.
+
+## Sign in
+
+Seeded users share the password `password123`:
+
+| User | Plan | Notes |
+| --- | --- | --- |
+| `admin@test.com` | Pro | Pro from a seeded `entitlement_overrides` row |
+| `jane@test.com` | Pro | Pro from a seeded `entitlement_overrides` row |
+| `john@test.com` | Free | Member of seeded Organizations |
+| `bob@test.com` | Free | |
+| `checklists@serp.co` | Pro | Official `serp` publisher that owns the official Templates |
+
+In development (`next dev`), `/login/` has quick-fill buttons and `DevLoginBar` sits at the bottom
+of the app; production builds (the preview, the browser tests) have neither.
+`pnpm run db:reset:test-user-passwords` restores changed passwords. Admin and Jane are Pro only
+through their seeded overrides: the API never grants a plan by email address, so a local D1 seeded
+before those rows existed shows them as Free until `pnpm run db:seed`. If sign-in fails, check
+`tmp/logs/dev-all.log` and that local D1 is seeded. A `429` means the local sign-in rate limit
+(300 per hour), not bad credentials.
+
+## See the UI
+
+```bash
+pnpm run ui:snap -- dashboard/templates --login admin@test.com
+pnpm run ui:snap -- templates --mobile
+```
+
+Opens the app `dev:all` runs (its port from `tmp/dev-session.json`, else this checkout's `dev`
+port; the API is on the same origin). Saves a full-page screenshot in `tmp/snapshots/` (or at
+`--out`, which must end in `.png`, `.jpg` or `.jpeg`, in lower case: Playwright reads the extension
+case-sensitively) with the accessibility tree beside it as `<name>.aria.yml`, and prints the tree
+(a readable text outline of the page), console errors, and failed requests. Write routes without
+the leading slash; Git Bash rewrites `/path` arguments into file paths. Flags (`--login`,
+`--password`, `--mobile`, `--out`, `--base`, `--api`) may come before or after the route; an
+unknown flag, a flag with no value, or a second route stops with the usage text instead of
+snapshotting another page. Use it to reproduce a bug before fixing it and to show the fix
+afterwards.
+
+To click through a flow, record it, or read the network and console as you go, an agent drives
+Chrome with the `verify-web` skill; to call the API and the MCP endpoint with a Run Key, the
+`verify-api` skill ([agent tooling](agent-tooling.md)).
+
+## Local database
+
+```bash
+pnpm run db:reset                  # clear local D1, migrate, and seed
+pnpm run db:seed                   # seed only
+pnpm run db:migrate:d1:local
+pnpm run db:migrations:list:local
+pnpm run db:query "SELECT * FROM templates LIMIT 5"
+```
+
+The seed creates the test Users above, sample Personal and Organization data, Organization
+memberships, pending invites, Organization entitlement overrides, audit rows, and the official
+`serp` publisher and Templates. Fixture ids keep legacy `team` names. Remote commands and the
+staging/production model are in [database operations](database-operations.md).
+
+## Tests
+
+```bash
+pnpm run check            # the finish gate: every check and test below but the browser tests
+pnpm run verify           # the repository checks
+pnpm run typecheck        # tsc for the app, scripts, API and tests
+pnpm run test:run         # unit tests (pnpm run test for watch mode)
+pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
+pnpm run test:smoke       # @smoke browser specs on an isolated stack
+pnpm run test:e2e:full    # every browser spec on the same stack
+pnpm run test:coverage
+```
+
+What to run while editing, before a push and at the finish gate is in
+[verification](verification.md). Vitest and Playwright run a test without checking its types, so a
+passing test can still fail `pnpm run typecheck`, which checks every test, browser specs included,
+through `tests/tsconfig.json`. To check only the tests, run
+`pnpm exec tsc -p tests/tsconfig.json --noEmit` (about 30 seconds).
+
+The browser tests run the production build: `test:smoke` and `test:e2e:full` build it with OpenNext
+and `SITE_ENV=production`, wipe, migrate and seed their own D1 in `.wrangler/smoke-state`, and serve
+the build with `opennextjs-cloudflare preview` (workerd) on this checkout's `e2e` port, or the next
+free one (`tests/e2e/run-smoke.ts`, `tests/e2e/preview-server.ts`). `test:e2e:full` passes `--all`,
+which drops the `@smoke` filter, and the runner hands every argument it does not know to
+Playwright, so `pnpm run test:e2e:full --skip-build tests/e2e/<name>.spec.ts` runs one spec file.
+Leave out pnpm's `--`: pnpm passes it on, and Playwright reads everything after it as a file
+filter. `--skip-build` reuses the build in `.open-next/`, made with
+`SITE_ENV=production pnpm run build:worker`. The runner refuses one made for another environment,
+which it tells from the `.open-next/assets/_headers` the build ships: a build that is not production
+marks every file noindex there. `pnpm run preview` and `next dev` run without `SITE_ENV`, as a
+non-production site: noindex, crawlers disallowed, no Tag Manager
+([environments](environments.md)). The browser tests run on one Playwright worker: one workerd
+process renders every page and prefetch. `pnpm exec playwright test` serves the existing build on
+your own local D1.
+
+The browser tests' preview gets the Worker vars that name its origin (`FRONTEND_URL`,
+`CORS_ALLOWED_ORIGINS`), `SITE_ENV` and the auth secret (the shell's `BETTER_AUTH_SECRET` or legacy
+`JWT_SECRET`, else a fixed test secret) as `--var` arguments, which override `.dev.vars`
+(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.ts`). When Playwright stops the preview at the end
+of a run, `preview-server.ts` kills its whole process tree: on Windows, workerd would otherwise keep
+the port.
+
+Browser failures keep a trace, video, and screenshot in `test-results` under `tests/`
+(`retain-on-failure`: retries are off, so `on-first-retry` would keep nothing), and the browser
+tests workflow uploads that folder as the `playwright-evidence` artifact when a run fails; open a
+trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure also has an
+`error-context.md` with the page snapshot at the moment it failed. The server's output from the
+latest browser test run, API lines included, is in `tmp/logs/e2e-server.log`:
+`pnpm run logs:query errors --file tmp/logs/e2e-server.log` shows what the API did while a test
+failed. Testing conventions are in [testing](testing.md).
+
+## Verify an Organization flow by hand
+
+1. Sign in as `admin@test.com` and create an Organization at `/dashboard/settings/`.
+2. Create a link invite for another seeded or newly registered email.
+3. In a separate browser context, sign in as the invitee.
+4. Open `/team-invites/:token/` (legacy route) and click **Accept invite**, or accept from the
+   incoming invites on `/dashboard/settings/`.
+5. Switch to the Organization and confirm Personal data stays separate.
+
+## All scripts
+
+| Area | Scripts |
+| --- | --- |
+| Run | `setup`, `dev`, `dev:all`, `dev:api`, `dev:auto`, `dev:stop`, `build`, `build:worker`, `preview`, `ports`, `cf-typegen`, `ui:snap` |
+| Checks | `check`, `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report` |
+| Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
+| Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `headers:generate` (the `_headers` file the build serves), `templates:generate`, `templates:render-markdown`, `docs:references` |
+| Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
+| Remote D1 | `verify:staging`, `verify:prod:d1`, `db:migrate:d1:staging`, `db:migrate:d1:prod`, `db:migrations:*`, `check:*:d1-schema`, `check:preview:d1-binding`, `db:seed:official:staging`, `db:seed:official:remote` |
+| Stripe (test mode) | `stripe:local:setup`, `stripe:local:listen`, `stripe:local:scrub-live`, `stripe:portal:configure` |
+| Promotion | `promote:prepare`, which prepares the `staging` to `main` promotion ([deploys](ci-deploys.md#promotion)); `pnpm run promote:prepare --dry-run` prints what it would push without pushing |
+
+## Writing scripts
+
+How scripts are written and started, and the line endings files keep, are in
+[writing scripts](scripts.md).

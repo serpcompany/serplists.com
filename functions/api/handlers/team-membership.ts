@@ -2,6 +2,7 @@ import { and, eq, exists, inArray, isNull, ne, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import { schema, type createDb } from "../db";
+import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
 import { insertRowWhere } from "../utils/guarded-insert";
 import { batchWriteMissed } from "../utils/guarded-writes";
@@ -16,6 +17,7 @@ import { invalidPayloadResponse } from "../utils/request-json";
 
 export type TeamRouteContext = {
   db: ReturnType<typeof createDb>;
+  env: Env;
   request: Request;
   teamId: string;
   userId: string;
@@ -32,7 +34,7 @@ const transferTeamOwnerBodySchema = z.object({
 });
 
 export async function transferTeamOwnership(context: TeamRouteContext, body: unknown): Promise<Response> {
-  const { db, request, teamId, userId, membership } = context;
+  const { db, env, request, teamId, userId, membership } = context;
   const { teamMembers, teams } = schema;
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
@@ -93,6 +95,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
       nextOwnerUserId: targetMember.user_id,
     },
     request,
+    env,
     createdAt: now,
   });
 
@@ -202,7 +205,7 @@ export async function updateTeamMember(
   memberId: string,
   body: unknown,
 ): Promise<Response> {
-  const { db, request, teamId, userId } = context;
+  const { db, env, request, teamId, userId } = context;
   const { teamMembers } = schema;
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
@@ -249,6 +252,7 @@ export async function updateTeamMember(
     after: { ...targetMember, ...updates },
     diff: updates,
     request,
+    env,
     createdAt: now,
   });
 
@@ -299,6 +303,7 @@ export async function updateTeamMember(
         invite,
         actorUserId: userId,
         request,
+        env,
         now,
         metadata: { reason },
         guard: memberUpdatedNow,

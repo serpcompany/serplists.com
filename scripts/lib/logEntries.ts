@@ -23,7 +23,7 @@ interface LogFields extends Record<string, unknown> {
   errorName?: unknown;
 }
 
-type ParsedLine = Omit<LogEntry, "lineNumber">;
+export type ParsedLine = Omit<LogEntry, "lineNumber">;
 
 const apiLineSchema = z
   .object({
@@ -47,7 +47,14 @@ const camelCase = (name: string) =>
     .map((word, index) => (index === 0 ? word.toLowerCase() : word[0]?.toUpperCase() + word.slice(1).toLowerCase()))
     .join("");
 
-function parseApiLine(text: string): ParsedLine | null {
+export function apiLineFromValue(value: unknown): ParsedLine | null {
+  const parsed = apiLineSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const { level, message, timestamp, requestId, ...fields } = parsed.data;
+  return { source: "api", level, event: message, timestamp, requestId, fields };
+}
+
+export function parseApiLine(text: string): ParsedLine | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end <= start) return null;
@@ -57,10 +64,7 @@ function parseApiLine(text: string): ParsedLine | null {
   } catch {
     return null;
   }
-  const parsed = apiLineSchema.safeParse(value);
-  if (!parsed.success) return null;
-  const { level, message, timestamp, requestId, ...fields } = parsed.data;
-  return { source: "api", level, event: message, timestamp, requestId, fields };
+  return apiLineFromValue(value);
 }
 
 function parseNextAccessLine(text: string): ParsedLine | null {

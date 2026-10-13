@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { FIX_WITHOUT_A_TEST_MESSAGE, fixCommitsWithoutATest, isFixSubject, isTestFile } from '../../../scripts/lib/fix-commits';
 import { buildScriptInvocation, REPO_ROOT } from '../../../scripts/lib/run-tool';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
+import { commandsTheRunnerRuns } from '../../support/workflowCommands';
 import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
 
 const CHECK = path.join(REPO_ROOT, 'scripts/check-fix-commits.ts');
@@ -87,6 +88,19 @@ describe('pnpm CI: check-fix-commits --range', { timeout: 60_000 }, () => {
     expect(output).toContain('fix: avatar falls back to the default icon');
     expect(output).not.toContain('fix: share link');
     expect(output).toContain(FIX_WITHOUT_A_TEST_MESSAGE);
+  });
+
+  it('lists the subjects where the runner runs no command, so a subject shaped like one runs nothing', () => {
+    const repository = aRepository();
+    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, env, encoding: 'utf8' }).trim();
+    commit(repository, 'fix: mask ##[add-mask]planted', ['src/mask.ts']);
+    commit(repository, 'fix: warn\r::warning file=src/a.ts::planted', ['src/warn.ts']);
+
+    const { status, output } = runCheck(repository, ['--range', `${base}..HEAD`]);
+
+    expect(status).toBe(1);
+    expect(output).toContain('fix: mask ##[add-mask]planted');
+    expect(commandsTheRunnerRuns(output)).toEqual(['stop-commands', 'resume']);
   });
 
   it('passes when every fix commit in the range changes a test', () => {

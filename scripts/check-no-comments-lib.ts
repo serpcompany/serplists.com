@@ -20,8 +20,7 @@ import {
   markdownCommentRanges,
   xmlCommentRanges,
 } from "./lib/comment-ranges";
-
-export { NO_COMMENTS_MESSAGE } from "./eslint-rules/no-comments";
+import { withoutGitRepositoryOverrides } from "./lib/git-env";
 
 export type CommentLanguage =
   | "yaml"
@@ -49,17 +48,18 @@ type HunkLine = { text: string; added: boolean; patchLine: number };
 export const GENERATED_FILES: readonly string[] = [
   "pnpm-lock.yaml",
   "cloudflare-env.d.ts",
-  "docs/generated/portable-template-pack.schema.json",
+  "docs/api/portable-template-pack.schema.json",
   "functions/sitemap/bundled-catalog.generated.json",
-  "docs/product-specs/portable-templates/examples/full/template.json",
-  "docs/product-specs/portable-templates/examples/full/preview.html",
-  "docs/product-specs/portable-templates/examples/minimal/template.json",
-  "docs/product-specs/portable-templates/examples/minimal/preview.html",
+  "docs/product/portable-templates/examples/full/template.json",
+  "docs/product/portable-templates/examples/full/preview.html",
+  "docs/product/portable-templates/examples/minimal/template.json",
+  "docs/product/portable-templates/examples/minimal/preview.html",
 ];
 
 const FORMATS_WITHOUT_COMMENTS: readonly string[] = [
   ".txt",
   ".gitkeep",
+  ".node-version",
   ".ico",
   ".png",
   ".jpg",
@@ -92,7 +92,7 @@ const FILE_LANGUAGES = new Map<string, CommentLanguage>([
 
 const DOTFILE_LANGUAGES: ReadonlyArray<readonly [RegExp, CommentLanguage]> = [
   [/^\.(?:dev\.vars|env)(?:\.[\w.-]+)?$/, "dotenv"],
-  [/^\.gitignore$/, "gitignore"],
+  [/^\.(?:gitignore|housekeeping)$/, "gitignore"],
   [/^\.gitattributes$/, "gitattributes"],
   [/^\.npmrc$/, "npmrc"],
 ];
@@ -171,8 +171,10 @@ export function commentCheckOf(file: string): CommentCheck | null {
   return FORMATS_WITHOUT_COMMENTS.includes(format) ? "no comment syntax" : null;
 }
 
-export function filesGitTracksOrWouldTrack(): string[] {
+export function filesGitTracksOrWouldTrack(cwd: string = process.cwd()): string[] {
   const listed = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd,
+    env: withoutGitRepositoryOverrides(),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

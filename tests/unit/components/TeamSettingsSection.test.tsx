@@ -10,6 +10,7 @@ import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClien
 
 const workspaceMocks = vi.hoisted(() => ({
   activeWorkspace: {
+    avatarUrl: '',
     id: 'team-1',
     memberId: 'member-current',
     name: 'Acme Team',
@@ -60,6 +61,17 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('@/components/ui/avatar', () => {
+  const Plain = ({ children }: { children?: React.ReactNode }) => <span>{children}</span>;
+  return {
+    Avatar: Plain,
+    AvatarFallback: Plain,
+    AvatarImage: ({ src }: { src?: string }) => <img alt="" data-slot="avatar-image" src={src} />,
+  };
+});
+
+const avatarImageSource = (html: string) => /<img[^>]*data-slot="avatar-image"[^>]*src="([^"]*)"/.exec(html)?.[1];
+
 function renderSectionWithMembers(members: unknown[], invites: unknown[] = [], activity: unknown[] = []) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -91,6 +103,7 @@ describe('TeamSettingsSection', () => {
   });
 
   beforeEach(() => {
+    workspaceMocks.activeWorkspace.avatarUrl = '';
     workspaceMocks.activeWorkspace.role = 'admin';
     workspaceMocks.canManageTeam = true;
   });
@@ -276,6 +289,23 @@ describe('TeamSettingsSection', () => {
     expect(html).not.toContain('Pending invites');
     expect(html).not.toContain('Activity');
     expect(html).not.toContain('role="combobox"');
+  });
+
+  it('shows a member who cannot manage the Organization its avatar, without the controls owners and admins get', () => {
+    const organizationAvatar = '/api/uploads/file?key=avatars%2Fteam-1%2Flogo.png';
+    workspaceMocks.activeWorkspace.avatarUrl = organizationAvatar;
+    const managerHtml = renderSectionWithMembers([]);
+    workspaceMocks.activeWorkspace.role = 'viewer';
+    workspaceMocks.canManageTeam = false;
+
+    const memberHtml = renderSectionWithMembers([]);
+
+    expect(avatarImageSource(managerHtml)).toBe(organizationAvatar);
+    expect(managerHtml).toContain('Upload avatar');
+    expect(managerHtml).toContain('Remove avatar');
+    expect(avatarImageSource(memberHtml)).toBe(organizationAvatar);
+    expect(memberHtml).not.toContain('Upload avatar');
+    expect(memberHtml).not.toContain('Remove avatar');
   });
 
   it('shows load errors with Retry instead of empty members, invites, and activity', () => {

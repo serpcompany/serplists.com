@@ -2,13 +2,12 @@ name: Browser tests
 
 on:
   pull_request:
-    branches:
-      - main
-      - staging
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
 
 concurrency:
-  group: browser-tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -21,20 +20,32 @@ jobs:
   browser-tests:
     name: Browser tests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
 
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Restore the Next.js build cache
+        uses: actions/cache@v5
+        with:
+          path: .next/cache
+          key: next-build-production-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-build-production-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -42,30 +53,13 @@ jobs:
       - name: Build
         env:
           SITE_ENV: production
+          NEXT_PUBLIC_RELEASE_COMMIT: ${{ github.sha }}
         run: pnpm run build:worker
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Smoke tests
-        if: github.base_ref != 'main'
-        run: pnpm run test:smoke -- --skip-build
-
-      - name: Browser specs this pull request adds or changes
-        if: github.base_ref != 'main'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          specs=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'tests/e2e/*.spec.ts' | tr '\n' ' ')
-          if [ -z "$specs" ]; then
-            echo "This pull request changes no browser spec."
-            exit 0
-          fi
-          echo "Browser specs this pull request adds or changes: $specs"
-          pnpm run test:e2e:full --skip-build $specs
-
-      - name: Full end-to-end tests (promotions to main)
-        if: github.base_ref == 'main'
+      - name: Every browser test
         run: pnpm run test:e2e:full -- --skip-build
 
       - name: Upload Playwright evidence (traces, videos, screenshots)
@@ -76,3 +70,14 @@ jobs:
           path: tests/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  browser-tests-passed:
+    name: Browser tests passed
+    if: always()
+    needs: [browser-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed, or had nothing to check
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

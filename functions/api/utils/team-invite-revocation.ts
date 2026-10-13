@@ -1,7 +1,7 @@
 import { and, eq, exists, gt, isNull, notExists, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { schema, type createDb } from "../db";
-import { buildAuditEventValues } from "./audit";
+import { buildAuditEventValues, type AuditEventInput } from "./audit";
 import { allConditions, insertRowWhere } from "./guarded-insert";
 
 type Db = ReturnType<typeof createDb>;
@@ -59,6 +59,7 @@ export async function selectPendingInvitesFromInviter(
 
 export async function buildInviteRevocation({
   db,
+  env,
   invite,
   actorUserId,
   request,
@@ -67,6 +68,7 @@ export async function buildInviteRevocation({
   guard,
 }: {
   db: Db;
+  env: AuditEventInput["env"];
   invite: TeamInvite;
   actorUserId: string;
   request: Request;
@@ -86,6 +88,7 @@ export async function buildInviteRevocation({
     after: { ...invite, revoked_at: now, updated_at: now },
     metadata,
     request,
+    env,
     createdAt: now,
   });
   const revokedNow = exists(

@@ -40,7 +40,7 @@ function parseOptionalJson(value: string | null): unknown {
 }
 
 export async function updateTeamSettings(
-  { db, env, request, teamId, userId, membership, role }: TeamRouteContext & { env: Env; role: TeamRole },
+  { db, env, request, teamId, userId, membership, role }: TeamRouteContext & { role: TeamRole },
   body: unknown,
 ): Promise<Response> {
   const { auditEvents, teams } = schema;
@@ -112,6 +112,7 @@ export async function updateTeamSettings(
     after: { ...team, ...updates },
     diff: updates,
     request,
+    env,
     createdAt: updates.updated_at,
   });
   try {

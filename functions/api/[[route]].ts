@@ -27,8 +27,10 @@ import { handleTeams } from './handlers/teams';
 import { handleGenerateTemplateFromClipy } from './handlers/clipy';
 import { handleAgentKeys } from './handlers/agent-keys';
 import { handleAgentMcp } from './handlers/agentMcp';
+import { handleClientErrors } from './handlers/client-errors';
 import { authJsonError, jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
+import { currentRelease } from './utils/release';
 
 function isLocalRequest(url: URL): boolean {
   return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
@@ -191,9 +193,12 @@ async function respondToRequest(context: { request: Request; env: Env }, request
     }
 
     if (path === 'health') {
-      response = new Response(JSON.stringify({ status: 'ok' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      response = Response.json(
+        { status: 'ok', release: currentRelease(env) },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    } else if (path === 'client-errors') {
+      response = await handleClientErrors(request, env);
     } else if (path === 'auth/status' && request.method === 'GET') {
       response = new Response(
         JSON.stringify(getAuthEmailPolicy(env)),

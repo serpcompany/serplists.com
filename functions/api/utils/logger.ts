@@ -1,4 +1,5 @@
 import { DrizzleQueryError } from 'drizzle-orm';
+import { releaseCommitFrom } from '../../../src/lib/schemas/release';
 import { currentRequestId } from './request-context';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -59,7 +60,8 @@ export function log(level: LogLevel, message: string, data?: Record<string, unkn
   const { level: fieldNamedLevel, message: fieldNamedMessage, ...fields } = redact(data);
   const requestId = currentRequestId();
   const request = requestId === undefined ? {} : { requestId };
-  const line = JSON.stringify({ level, message, ...request, ...fields, timestamp: new Date().toISOString() });
+  const release = releaseCommitFrom(process.env.NEXT_PUBLIC_RELEASE_COMMIT);
+  const line = JSON.stringify({ level, message, ...request, ...fields, release, timestamp: new Date().toISOString() });
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
   else if (level === 'debug') console.debug(line);

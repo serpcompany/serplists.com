@@ -93,7 +93,8 @@ const dependencyRules = z
   })
   .parse(createRequire(import.meta.url)(path.join(repoRoot, '.dependency-cruiser.cjs'))).forbidden;
 const patternsOf = (pattern: string | string[] | undefined) => (pattern === undefined ? [] : [pattern].flat());
-const REACHABILITY_LEAVES_OUT = ['\\.d\\.ts$', '\\.test\\.tsx?$', '^src/app/', '\\.json$'];
+const NEXT_ENTRY_FILES = '^src/(instrumentation|instrumentation-client|proxy)\\.ts$';
+const REACHABILITY_LEAVES_OUT = ['\\.d\\.ts$', '\\.test\\.tsx?$', '^src/app/', NEXT_ENTRY_FILES, '\\.json$'];
 
 const testFileArguments = (script: string, flag?: string) =>
   [...script.matchAll(flag ? new RegExp(`${flag}\\s+(\\S+\\.test\\.\\w+)`, 'g') : /(?:^|\s)(tests\/\S+\.test\.\w+)/g)]
@@ -149,7 +150,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     ).toEqual([]);
     expect(
       dependencyRules.filter((rule) => rule.severity !== 'error').map((rule) => `${rule.name}: ${rule.severity}`),
-      'A dependency rule below "error" never fails deps:check. Make it an error and fix the imports it reports.',
+      'A dependency rule below "error" never fails pnpm run verify dependencies. Make it an error and fix the imports it reports.',
     ).toEqual([]);
   });
 
@@ -159,10 +160,10 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     for (const rule of reachabilityRules) {
       expect(
         patternsOf(rule.to.pathNot).filter((pattern) => !REACHABILITY_LEAVES_OUT.includes(pattern)),
-        `${rule.name} may leave out only declaration files, tests, the route files it starts from and JSON. Delete ` +
-          'the dead module, import it where it is needed, or move code only a script uses to scripts/lib.',
+        `${rule.name} may leave out only declaration files, tests, the files Next.js loads by name that it starts ` +
+          'from, and JSON. Delete the dead module, import it where it is needed, or move code only a script uses to scripts/lib.',
       ).toEqual([]);
-      expect(patternsOf(rule.from.path)).toEqual(['^src/app/', '^next\\.config\\.ts$']);
+      expect(patternsOf(rule.from.path)).toEqual(['^src/app/', NEXT_ENTRY_FILES, '^next\\.config\\.ts$']);
     }
     expect(
       dependencyRules.flatMap((rule) =>
@@ -213,7 +214,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     expect(
       await typeScriptFilesNotHeldTo('@typescript-eslint/naming-convention', NAMING_CONVENTIONS),
       'Every TypeScript file, tests included, is held to @typescript-eslint/naming-convention with NAMING_CONVENTIONS ' +
-        '(scripts/eslint-rules/naming-conventions.mjs) in both ESLint configs. Rename the code the rule reports instead of ' +
+        '(scripts/eslint-rules/naming-conventions.ts) in both ESLint configs. Rename the code the rule reports instead of ' +
         'overriding or ignoring the rule for a file.',
     ).toEqual([]);
   });
@@ -224,7 +225,9 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
       await eslint.lintText('export const Label = () => <span>Switch Workspace</span>;', { filePath: 'src/components/ui/sample.tsx' }),
     );
 
-    expect(result.messages.map((message) => message.message)).toContainEqual(expect.stringContaining('PRODUCT_SENSE.md'));
+    expect(result.messages.map((message) => message.message)).toContainEqual(
+      expect.stringContaining('docs/agents/code.md, Vocabulary'),
+    );
   });
 
   it('lets only UserContentImage render <img> in src/, with no file exempt from the convention', async () => {

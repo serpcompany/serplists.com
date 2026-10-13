@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { schema, type createDb } from "../db";
+import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
 import { json, jsonError } from "../utils/response";
 import { invalidPayloadResponse } from "../utils/request-json";
@@ -21,10 +22,10 @@ const createTeamBodySchema = z.object({
 const MAX_CREATE_ATTEMPTS = 3;
 
 export async function createTeam(
-  context: { db: ReturnType<typeof createDb>; request: Request; userId: string },
+  context: { db: ReturnType<typeof createDb>; env: Env; request: Request; userId: string },
   body: unknown,
 ): Promise<Response> {
-  const { db, request, userId } = context;
+  const { db, env, request, userId } = context;
   const { auditEvents, teamMembers, teams } = schema;
 
   const parsed = createTeamBodySchema.safeParse(body);
@@ -71,6 +72,7 @@ export async function createTeam(
       action: "team.created",
       after: { team, membership },
       request,
+      env,
       createdAt: now,
     });
 

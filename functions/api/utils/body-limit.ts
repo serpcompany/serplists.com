@@ -15,6 +15,8 @@ type BodyLimitRejection = { status: 411 | 413; error: string };
 
 export type BodyLimitCheck = { rejection: BodyLimitRejection } | { request: Request };
 
+const SMALL_JSON_BODY: BodyLimit = { maxBytes: 16 * 1024, label: '16KB', withoutContentLength: 'count' };
+
 export function requestBodyLimit(path: string): BodyLimit {
   if (path === 'uploads' || path.startsWith('uploads/')) {
     return {
@@ -26,9 +28,7 @@ export function requestBodyLimit(path: string): BodyLimit {
   if (path.startsWith('templates/backup')) {
     return { maxBytes: 2 * MB, label: '2MB', withoutContentLength: 'count' };
   }
-  if (path === 'auth' || path.startsWith('auth/')) {
-    return { maxBytes: 16 * 1024, label: '16KB', withoutContentLength: 'count' };
-  }
+  if (path === 'auth' || path.startsWith('auth/') || path === 'client-errors') return SMALL_JSON_BODY;
   return { maxBytes: MB, label: '1MB', withoutContentLength: 'count' };
 }
 

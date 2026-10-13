@@ -30,6 +30,9 @@
     "db/**/*.d.cts",
     "tests/**/*.d.ts",
     "tests/**/*.d.mts",
-    "tests/**/*.d.cts"
+    "tests/**/*.d.cts",
+    "tools/**/*.d.ts",
+    "tools/**/*.d.mts",
+    "tools/**/*.d.cts"
   ]
 }

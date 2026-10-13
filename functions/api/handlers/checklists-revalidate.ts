@@ -99,6 +99,7 @@ export async function revalidateChecklistRun(
       retired: summarizeRetiredEntries(reconciled.newlyRetired),
     },
     request,
+    env,
     createdAt: now,
   });
   const missed = await writeAuditedRunUpdate(env, db, {

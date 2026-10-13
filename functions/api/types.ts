@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  SITE_ENV?: string;
   D1_PROFILE?: string;
   JWT_SECRET?: string;
   BETTER_AUTH_SECRET?: string;

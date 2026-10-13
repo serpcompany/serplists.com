@@ -2,7 +2,7 @@ import type { Rule } from "eslint";
 
 export const NO_COMMENTS_MESSAGE =
   "Remove the comment. Put what it explains into a clearer name, a smaller function, a test named for the behavior, " +
-  "or the doc that owns this area (see AGENTS.md).";
+  "or the doc AGENTS.md routes to for this area (docs/agents/code.md, No comments).";
 
 export const noComments: Rule.RuleModule = {
   meta: {

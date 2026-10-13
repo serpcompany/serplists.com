@@ -91,6 +91,7 @@ export async function updateChecklistRun(
     after: { ...existingRun, ...updates },
     diff: updates,
     request,
+    env,
     createdAt: now,
   });
   const missed = await writeAuditedRunUpdate(env, db, {

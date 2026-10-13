@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { dismissTheNextConfirm } from "./support/navigation";
-import { apiJson } from "./support/api-requests";
+import { API_BASE_URL, apiJson } from "./support/api-requests";
 import { savedTemplateSchema } from "./support/api-bodies";
 import { reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from "./support/billing";
 import { registerNewAccount, uniqueSuffix } from "./support/sign-in";
@@ -9,6 +9,8 @@ import { registerNewAccount, uniqueSuffix } from "./support/sign-in";
 const PASSWORD = "Aa!template-limit-password-12345";
 const CHECKOUT_RETURN_PATH = "/account";
 const BILLING_SETTINGS_URL = /\/dashboard\/settings/;
+const ONE_LIMIT_MESSAGE = /^Template limit reached\./;
+const TEMPLATES_ROUTE = new URL(`${API_BASE_URL}/templates`).pathname;
 
 async function registerFreeAccount(page: Page) {
   await registerNewAccount(page, {
@@ -36,6 +38,14 @@ async function answerCheckoutWithTheBillingPage(page: Page): Promise<{ requests:
   return checkout;
 }
 
+async function saveAndWaitForTheRefusal(page: Page) {
+  const refusal = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === TEMPLATES_ROUTE,
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await refusal).status()).toBe(403);
+}
+
 async function waitUntilTheEditorHasCountedTheTemplates(page: Page) {
   await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toBeVisible();
 }
@@ -54,10 +64,10 @@ test.describe("template limit upgrade path", () => {
     await waitUntilTheEditorHasCountedTheTemplates(page);
 
     await page.getByPlaceholder("Enter template name...").fill("Second template");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await saveAndWaitForTheRefusal(page);
 
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
-    await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toHaveCount(1);
+    await expect(page.getByText(ONE_LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
 
     await expect(page).toHaveURL(BILLING_SETTINGS_URL);
@@ -78,8 +88,8 @@ test.describe("template limit upgrade path", () => {
     await waitUntilTheEditorHasCountedTheTemplates(page);
     const title = page.getByPlaceholder("Enter template name...");
     await title.fill("Second template");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toHaveCount(1);
+    await saveAndWaitForTheRefusal(page);
+    await expect(page.getByText(ONE_LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
     await expect(page).toHaveURL(BILLING_SETTINGS_URL);
     await page.getByRole("link", { name: "Resume template draft" }).click();

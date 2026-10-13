@@ -139,6 +139,7 @@ export async function cloneTemplate(
           sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
         },
         request,
+        env,
         createdAt: now,
       }),
     };

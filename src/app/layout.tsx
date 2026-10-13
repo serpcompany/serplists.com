@@ -6,6 +6,8 @@ import './globals.css';
 import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { SITE_SOCIAL_IMAGE } from '@/lib/publicPageMeta';
+import { releaseCommit } from '@/lib/release';
+import { RELEASE_META_NAME } from '@/lib/schemas/release';
 import { isProductionSite } from '@/lib/seo/siteOrigin';
 import { THEME_BOOT_SCRIPT } from '@/lib/themeBootScript';
 
@@ -37,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
     >
       <head>
+        <meta name={RELEASE_META_NAME} content={releaseCommit()} />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         {loadAnalytics ? <script dangerouslySetInnerHTML={{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT }} /> : null}
       </head>

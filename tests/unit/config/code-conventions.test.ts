@@ -113,6 +113,8 @@ const SCRIPT_CASES: Case[] = [
   refused('npx named as a command in an integration test', 'tests/integration/sample.test.ts', 'spawn(`npx`, ["wrangler"]);', 'run-tool.ts'),
   allowed('pnpm in run-tool.ts', 'scripts/lib/run-tool.ts', 'return { command: "pnpm", args, options: {} };'),
   allowed('pnpm in a message', 'scripts/sample.mjs', 'console.log("Run pnpm install first");'),
+  refused('pnpm named as a command in a hook entry', 'tools/checks/sample.mjs', "spawnSync('pnpm', ['run', 'verify']);", 'run-tool.ts'),
+  refused('npx named as a command in an action script', '.github/actions/sample/sample.cjs', "spawnSync('npx', ['tsx']);", 'run-tool.ts'),
   refused('a Stripe key read from env in a Stripe script', 'scripts/stripe/sample.ts', 'const key = env.STRIPE_SECRET_KEY;', 'resolveTestSecretKey()'),
   refused('the dedicated test key read from env', 'scripts/stripe/sample.ts', 'const key = process.env.STRIPE_TEST_SECRET_KEY;', 'resolveTestSecretKey()'),
   refused('a Stripe key read from env by its name in brackets', 'scripts/stripe/sample.ts', 'const key = env["STRIPE_SECRET_KEY"];', 'resolveTestSecretKey()'),
@@ -164,7 +166,7 @@ describe('code conventions in functions/ (serplists/restricted-code with API_CON
   );
 });
 
-describe('code conventions in scripts/ and the browser and integration tests', () => {
+describe('code conventions in scripts/, tools/, .github/actions/ and the browser and integration tests', () => {
   it.each(SCRIPT_CASES)('$name', (sample) => expectCase(sample, 'serplists/restricted-code'));
 });
 

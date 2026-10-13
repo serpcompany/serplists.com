@@ -1,6 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
+import { clientErrorReportSchema } from '../../src/lib/schemas/clientErrorReport';
 import { TAG_HOSTS } from './support/analytics';
+
+const SITE_BUNDLE_FRAME = /^at (?:.+ \()?\/_next\/static\/[^\s()]+:\d+:\d+\)?$/m;
+
+const isErrorReport = (request: Request) => new URL(request.url()).pathname === '/api/client-errors';
 
 async function recordTagRequests(page: Page): Promise<string[]> {
   const requests: string[] = [];
@@ -78,5 +83,45 @@ test.describe('analytics privacy', () => {
     await waitUntilTagManagerCouldHaveLoaded(page);
 
     await expect.poll(() => requests.some((entry) => entry.includes('gtm.js?id=GTM-PZZFQBGG'))).toBe(true);
+  });
+});
+
+test.describe('error reports', () => {
+  test("reports each distinct error a site script throws once, by frames in the site's chunks and a report's fields only", async ({ page }) => {
+    await recordTagRequests(page);
+    const reports: Request[] = [];
+    const answers: number[] = [];
+    page.on('request', (request) => {
+      if (isErrorReport(request)) reports.push(request);
+    });
+    page.on('response', (response) => {
+      if (isErrorReport(response.request())) answers.push(response.status());
+    });
+    await page.goto('/templates/');
+    await page.waitForFunction(() => Object.hasOwn(window.history, 'pushState') && Object.hasOwn(window.history, 'replaceState'));
+
+    const uncaught = await page.evaluate(
+      () =>
+        new Promise<string[]>((resolve) => {
+          const messages: string[] = [];
+          window.addEventListener('error', (event) => {
+            messages.push(event.message);
+            if (messages.length === 3) resolve(messages);
+          });
+          const throwFrom = (method: 'pushState' | 'replaceState') =>
+            setTimeout(() => window.history[method]({ notCloneable: () => undefined }, ''));
+          throwFrom('pushState');
+          throwFrom('pushState');
+          throwFrom('replaceState');
+        }),
+    );
+    await expect.poll(() => answers.length).toBe(2);
+
+    const sent = reports.map((request) => clientErrorReportSchema.strict().parse(JSON.parse(request.postData() ?? '')));
+    const siteScriptError = { kind: 'error', name: 'DataCloneError', path: '/templates/', stack: expect.stringMatching(SITE_BUNDLE_FRAME) };
+    expect(uncaught).toEqual([expect.stringContaining("'pushState'"), expect.stringContaining("'pushState'"), expect.stringContaining("'replaceState'")]);
+    expect(answers).toEqual([204, 204]);
+    expect(sent).toMatchObject([siteScriptError, siteScriptError]);
+    expect(new Set(sent.map(({ stack }) => stack)).size).toBe(2);
   });
 });

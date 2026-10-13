@@ -125,6 +125,7 @@ export async function transferTemplate(
     diff: transfer as Record<string, unknown>,
     metadata: { fromUserId: userId, toTeamId: teamId },
     request,
+    env,
     createdAt: now,
   });
 

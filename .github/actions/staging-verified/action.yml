@@ -1,0 +1,29 @@
+name: Staging verified
+description: >-
+  Fails a Production deploy unless Staging has deployed and checked the same files: a push run of
+  the workflow on the staging branch whose commit has this commit's git tree, and whose staging
+  deploy job passed in its latest attempt. A promotion gives main exactly staging's files, so its
+  tree is one staging had. Needs permission to read the repository's contents and workflow runs.
+inputs:
+  workflow:
+    description: The file name of the workflow whose runs deploy Staging, such as ci.yml.
+    required: true
+  job:
+    description: The staging deploy job's name as GitHub lists a run's jobs, such as "Deploy staging / deploy".
+    required: true
+  branch:
+    description: The branch whose pushes deploy Staging.
+    default: staging
+  token:
+    description: A token that can read the repository's commits and workflow runs.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        WORKFLOW: ${{ inputs.workflow }}
+        JOB: ${{ inputs.job }}
+        BRANCH: ${{ inputs.branch }}
+      run: node "$GITHUB_ACTION_PATH/staging-verified.cjs"

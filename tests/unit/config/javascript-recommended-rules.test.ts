@@ -15,6 +15,8 @@ describe("ESLint's recommended JavaScript rules on .js, .mjs and .cjs files", { 
     ['tests/e2e/sample.mjs', 'export const port = defaultPort + 1;\n'],
     ['sample.config.js', 'export const port = defaultPort + 1;\n'],
     ['scripts/sample.cjs', 'module.exports = { port: defaultPort + 1 };\n'],
+    ['tools/checks/sample.mjs', 'export const port = defaultPort + 1;\n'],
+    ['.github/actions/sample/sample.cjs', 'module.exports = { port: defaultPort + 1 };\n'],
   ])('refuses a name nothing defines in %s, which would throw a ReferenceError when it runs', async (filePath, code) => {
     expect(await rulesReported(code, filePath)).toContain('no-undef');
   });
