@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
@@ -5,7 +6,6 @@ import { z } from "zod";
 import { SMOKE_TEST_HEADER } from "../src/lib/seo/siteOrigin";
 
 export const SIGN_IN_PATH = "/api/auth/sign-in/email";
-export const MADE_UP_ACCOUNT = { email: "deploy-smoke-test@example.com", password: "not-the-password-of-any-account" };
 const RELEASE_PAGE = "/about/";
 const RELEASE_META_TAG = /<meta\b[^>]*\bname=["']serplists-release["'][^>]*>/i;
 const CONTENT_ATTRIBUTE = /\bcontent=["']([^"']*)["']/i;
@@ -89,6 +89,8 @@ function judgeSignIn(answer: Answer): Verdict {
   return failed(`answered ${answer.status} to a made-up account with a wrong password, not 401 or 403`, answer.status >= 500);
 }
 
+const anAccountNoOneHasRegistered = () => ({ email: `deploy-smoke-test-${randomUUID()}@example.com`, password: randomUUID() });
+
 function deploymentProbes(inputs: Inputs): Probe[] {
   return [
     { path: "/api/health", judge: judgeHealth(inputs) },
@@ -98,7 +100,7 @@ function deploymentProbes(inputs: Inputs): Probe[] {
       path: SIGN_IN_PATH,
       method: "POST",
       headers: { "content-type": "application/json", origin: new URL(inputs.DEPLOY_URL).origin },
-      body: JSON.stringify(MADE_UP_ACCOUNT),
+      body: JSON.stringify(anAccountNoOneHasRegistered()),
       judge: judgeSignIn,
     },
   ];

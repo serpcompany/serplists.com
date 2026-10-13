@@ -24,7 +24,7 @@ to the time limits and the Node version.
 | --- | --- | --- | --- |
 | `CI` | `.github/workflows/ci.yml` | Every pull request, again when it is marked ready; the merge queue; pushes to `staging` and `main`; by hand | This doc; its deploy jobs in [ci-deploys.md](ci-deploys.md) |
 | `Browser tests` | `.github/workflows/browser-tests.yml` | Every pull request, again when it is marked ready; the merge queue | This doc |
-| `Pull request` | `.github/workflows/pull-request.yml` | Every pull request, again when its title or body is edited; the merge queue | This doc |
+| `Pull request` | `.github/workflows/pull-request.yml` | Every pull request, again when its title, body or base is edited; the merge queue | This doc |
 | `Deploy staging to Cloudflare Workers` | `.github/workflows/deploy-staging.yml` | Called by `CI` on a push to `staging` | [ci-deploys.md](ci-deploys.md) |
 | `Deploy production to Cloudflare Workers` | `.github/workflows/deploy-production.yml` | Called by `CI` on a push to `main` | [ci-deploys.md](ci-deploys.md) |
 | `Code review` | `.github/workflows/code-review.yml` | See [ci-agents.md](ci-agents.md) | [ci-agents.md](ci-agents.md) |
@@ -50,11 +50,14 @@ the admin only has to switch them on:
 - **Each ends in one job that always runs.** It fails when a job it needs failed or was
   cancelled, and passes when they passed or were skipped. A job skipped because the one it needs
   failed counts as passing, so only this last job is safe to require.
-- **A merge queue run, and a run on a push to `staging` or `main`, is never cancelled.** A new
-  push to a pull request cancels that pull request's last run only. The concurrency group is
+- **Only a pull request's run is cancelled once it has started,** by a new push to that pull
+  request. `Browser tests` and `Pull request` use SERP's CI Workflows group,
   `${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}`,
-  as SERP's CI Workflows standard has it, so a push to `staging` never cancels the run before it
-  and its deploy.
+  so a run in the merge queue never waits for or cancels another. `CI` adds the branch for a push,
+  `${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.event_name == 'push' && format('push-{0}', github.ref) || github.run_id }}`,
+  so it runs a branch's pushes one at a time, in push order: a push waits while the run before it
+  finishes, deploy included, and a push still waiting is cancelled when a newer one, which
+  carries its commits, arrives ([ci-deploys.md](ci-deploys.md#deploy-pipeline)).
 - **Drafts run everything.** The repository is public, so standard runners cost nothing, and
   `ready_for_review` starts the checks again when a draft is marked ready.
 
@@ -64,7 +67,7 @@ The jobs to require, in a ruleset for `staging` and for `main`, with Require mer
 | --- | --- | --- |
 | `CI passed` | `CI` | `Quality Gate` and `Drizzle schema parity` |
 | `Browser tests passed` | `Browser tests` | `Browser tests` |
-| `Pull request passed` | `Pull request` | `title`, `issue-link`, `fix-test` and `evidence` |
+| `Pull request passed` | `Pull request` | `base`, `title`, `issue-link`, `fix-test` and `evidence` |
 
 The jobs they cover keep their names, so the rule that requires `Quality Gate` today keeps
 working until the admin switches to the three above. `issue-link` is the name SERP's standard
@@ -89,8 +92,8 @@ every job a pull request runs.
   migration replayed and compared with the Drizzle schema.
 - **`CI passed`** (`ci-passed`), the job to require.
 - On a push to `staging` or `main`, once both checks pass, **`Deploy staging`** or
-  **`Deploy production`**, and **`Report a failed deploy`** when that deploy failed
-  ([ci-deploys.md](ci-deploys.md)).
+  **`Deploy production`**, and **`Report a failed deploy`** when that deploy, or a check that
+  skipped it, failed ([ci-deploys.md](ci-deploys.md#a-failed-deploy-opens-an-issue)).
 
 These are the commands `pnpm run check` runs locally, the finish gate, so a change that passes
 `check` passes this workflow. It doesn't build: the deploy jobs build for their environment, and
@@ -119,8 +122,13 @@ it on the tree that will land. `Browser tests passed` is the job to require.
 
 ## Pull request
 
-`.github/workflows/pull-request.yml` holds four rules about a pull request itself, each a job:
+`.github/workflows/pull-request.yml` holds five rules about a pull request itself, each a job:
 
+- **`base`**: a pull request into `main` is a promotion, from a `promote/` branch of this
+  repository. Production deploys only files Staging has deployed and checked
+  ([ci-deploys.md](ci-deploys.md#production-waits-for-staging)), so any other change into `main`,
+  a hotfix included, would merge and then never deploy. The job says to open it into `staging`,
+  and to promote it once Staging's deploy passes. A pull request into any other branch passes.
 - **`title`**: the title is a Conventional Commit: `feat`, `fix`, `perf`, `refactor`, `docs`,
   `test`, `build`, `ci` or `chore`, an optional scope in brackets, an optional `!`, a colon and a
   space, as in `fix: Escape closes the Settings window`. A squash merge makes the title the
@@ -154,7 +162,10 @@ deploy of the same files, which the Production deploy checks.
 
 Each job runs `tools/checks/pull-request.mjs`, which needs nothing but Node, so the job checks
 out that one file and installs nothing. The title and body reach it through the environment,
-never inside the command. The workflow runs again when the title or body is edited. A pull request
-a bot opened skips all four. In the merge queue the jobs start and pass at once: the pull request
-was checked, and a required check that never reports in the queue blocks every merge.
+never inside the command, and it prints what GitHub sent with workflow commands stopped
+(`::stop-commands::`), so a title, a body or a file name shaped like a command runs none. The
+workflow runs again when the title, body or base is edited. A pull request a bot opened skips
+all but `base`: a bot's pull request into `main` couldn't deploy either. In the merge queue the
+jobs start and pass at once: the pull request was checked, and a required check that never
+reports in the queue blocks every merge.
 `tests/unit/workflows/pull-request.test.ts` runs the script against a stand-in for GitHub's API.

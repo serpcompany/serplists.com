@@ -60,19 +60,29 @@ and `CLOUDFLARE_API_KEY`, the account's email and global API key. `CI` hands the
 those three by name, and each workflow gives them to two steps only, the migrations check and the
 deploy, so `pnpm install`'s scripts and the build never see them.
 
-Runs of one environment's deploy never overlap, and a running one is never cancelled: each job
-is in the `deploy-staging` or `deploy-production` concurrency group, which never cancels a job in
-progress, and `CI` never cancels a run on a push ([ci.md](ci.md#checks-a-merge-can-wait-for)). A
-newer push that waits for the group replaces an older one still waiting, so the newest files
-deploy next.
+A branch's pushes deploy one at a time, in push order. On a push, `CI`'s concurrency group is the
+workflow and the branch, such as `CI-push-refs/heads/staging`
+([ci.md](ci.md#checks-a-merge-can-wait-for)), so:
+
+- a push that arrives while a run of its branch is in progress waits until that run, deploy
+  included, has finished;
+- when a newer push arrives, GitHub cancels the push still waiting, and the newer one, whose
+  commits include it, takes its place. A run cancelled while it waited runs no job: it deploys
+  nothing and opens no issue, and the newest files deploy next;
+- a run in progress is never cancelled, so a deploy never stops part way. The deploy job's own
+  group, `deploy-staging` or `deploy-production`, never cancels a job in progress either.
+
+Starting an old run again puts it in the same queue, where it cancels a push still waiting: once
+the old run has finished, start that push's run again.
 
 ## An old run never deploys over a newer one
 
 Each deploy job starts, right after its checkout, with the `latest-run` action
 (`.github/actions/latest-run/`), which fails the job when a later run of `CI` on the branch has
 already run that same deploy job. Deploying then would put old code over new, and nothing would
-put the new code back. It asks on every attempt: GitHub doesn't promise the order of runs, and
-anyone can start an old run again.
+put the new code back. A branch's pushes run in order (above), so only an old run started again
+meets a later run that has deployed; anyone who can write to the repository can start one, so the
+action asks on every attempt.
 
 - **What counts.** A later run's deploy job counts once it is running or has finished, in any of
   that run's attempts, whatever its result. A later run still waiting behind this one doesn't
@@ -100,7 +110,9 @@ A promotion gives `main` exactly `staging`'s files, so its tree is one `staging`
 fails, saying why, when:
 
 - no push run on `staging`, among its last 100, built this tree, as for a change pushed or merged
-  straight into `main`: merge it into `staging` first, then promote;
+  straight into `main`: merge it into `staging` first, then promote. The `Pull request`
+  workflow's `base` check fails such a pull request before it merges
+  ([ci.md](ci.md#pull-request));
 - Staging's deploy of this tree failed, was skipped, or is still running: once it passes, start
   the Production job again, which the `latest-run` guard allows while no later run has deployed.
 
@@ -123,8 +135,11 @@ deployment before the domain serves it.
 2. `/api/templates` answers 200, so D1 is bound;
 3. `/about/` answers 200 and its `<meta name="serplists-release">` names the commit just deployed,
    since a page can answer from an older build than the health route;
-4. a sign-in with a made-up account and a wrong password, posted as JSON from the deployment's own
-   origin to `/api/auth/sign-in/email`, is refused with 401 or 403.
+4. a sign-in as an account made up for this run, posted as JSON from the deployment's own origin
+   to `/api/auth/sign-in/email`, is refused with 401 or 403. Its email and password are random
+   (`randomUUID()`) and written nowhere: anyone may sign up on Staging, so a fixed account the
+   repository names could be registered, and every Staging deploy, and so every Production one,
+   would then fail.
 
 It tries each check up to six times, 10 seconds apart, while the new deployment comes up or the
 previous one still answers, and fails the deploy when the last try still gets another answer. It
@@ -139,13 +154,15 @@ seconds (`checkSiteStandardsUntilItPasses`).
 
 ## A failed deploy opens an issue
 
-When a deploy job fails, `CI`'s `Report a failed deploy` job runs the `deploy-failed` action
-(`.github/actions/deploy-failed/`). It comments on the open issue titled `Staging deploy failed`
-or `Production deploy failed`, labelled `bug`, with the commit and the run's link, or opens that
-issue when none is open, so GitHub notifies the repository's watchers. Close the issue once a
-deploy of that environment passes again. It is the only job in `CI` with a write token:
-`issues: write`, on that job alone. `tests/unit/workflows/deploy-failed.test.ts` runs the script
-against a stand-in for GitHub's API.
+When a push's run fails, in its deploy job or in a check, which skips the deploy, `CI`'s
+`Report a failed deploy` job runs the `deploy-failed` action (`.github/actions/deploy-failed/`).
+It comments on the open issue titled `Staging deploy failed` (a push to `staging`) or
+`Production deploy failed` (a push to `main`), labelled `bug`, with the commit and the run's link,
+or opens that issue when none is open, so GitHub notifies the repository's watchers. A push
+cancelled while it waited opens nothing: the push that took its place carries its commits. Close
+the issue once a deploy of that environment passes again. It is the only job in `CI` with a write
+token: `issues: write`, on that job alone. `tests/unit/workflows/deploy-failed.test.ts` runs the
+script against a stand-in for GitHub's API.
 
 ## Promotion
 
@@ -153,7 +170,8 @@ against a stand-in for GitHub's API.
 pull request that `pnpm run promote:prepare` prepares and a squash merge lands
 ([issue-tracker.md](issue-tracker.md)). The script:
 
-- refuses when `main` has changes `staging` lacks, such as a hotfix, and lists their files;
+- refuses when `main` has changes `staging` lacks, such as one merged straight into `main`, and
+  lists their files. A hotfix is no exception: it goes through `staging` like any change;
 - writes the promotion's body to `tmp/promotion-body.md`: one `Closes #<number>` line for each
   issue that the pull requests merged into `staging` since the last promotion closed, read from
   each one's body with `gh`, then the pull requests it promotes. Merging into `main`, the default

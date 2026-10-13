@@ -27,8 +27,8 @@ async function main() {
     body: [
       failure,
       "",
-      "Open the run and read the step that failed; docs/agents/ci-deploys.md says what each step checks. " +
-        "Fix the cause with a pull request into staging.",
+      "Open the run and read the step that failed. A failed check skips the deploy: docs/agents/ci.md says what each " +
+        "check runs, and docs/agents/ci-deploys.md what each deploy step checks. Fix the cause with a pull request into staging.",
       "",
       `While this issue is open, each later failed ${environment} deploy adds its run here. ` +
         `Done when a ${environment} deploy passes again; then close this issue.`,

@@ -1,8 +1,8 @@
 name: Deploy failed
 description: >-
-  Tells people a deploy failed: comments with the run's link on the open "Staging deploy failed"
-  or "Production deploy failed" issue, labelled bug, or opens it when there is none. Needs
-  permission to write the repository's issues.
+  Tells people a push didn't deploy, because its deploy or a check before it failed: comments
+  with the run's link on the open "Staging deploy failed" or "Production deploy failed" issue,
+  labelled bug, or opens it when there is none. Needs permission to write the repository's issues.
 inputs:
   environment:
     description: The environment whose deploy failed, staging or production.

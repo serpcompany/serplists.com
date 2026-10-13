@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const TYPES = ["feat", "fix", "perf", "refactor", "docs", "test", "build", "ci", "chore"];
 const CONVENTIONAL_TITLE = new RegExp(`^(?:${TYPES.join("|")})(?:\\([a-z0-9][a-z0-9-]*\\))?!?: \\S`);
 const FIX_TITLE = /^fix(?:\([^)]*\))?!?:/i;
@@ -5,7 +7,13 @@ const CLOSES_LINE = /^closes #(\d+)$/i;
 const NO_ISSUE_LINE = /^no issue: *\S/i;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const PROMOTION_BRANCH = "promote/";
+const PRODUCTION_BRANCH = "main";
 const WHERE = "docs/agents/ci.md, Pull request";
+
+const BASE_RULE =
+  `Production deploys only files Staging has deployed and checked, so a change, a hotfix included, reaches ${PRODUCTION_BRANCH} ` +
+  `only in a promotion (${WHERE}). Open this pull request into staging instead; once Staging's deploy of it passes, ` +
+  `pnpm run promote:prepare prepares the promotion into ${PRODUCTION_BRANCH} from a ${PROMOTION_BRANCH} branch.`;
 
 const TITLE_RULE =
   `A pull request's title is a Conventional Commit that names the outcome a user notices, such as ` +
@@ -35,6 +43,8 @@ const isTest = (path) => path.startsWith("tests/") || TEST_FILE.test(path);
 
 const isPromotion = (env) => (env.PR_BRANCH ?? "").startsWith(PROMOTION_BRANCH) && env.PR_HEAD_REPOSITORY === env.GITHUB_REPOSITORY;
 
+const listed = (paths) => paths.map((path) => `- ${path}`).join("\n");
+
 async function get(path) {
   const api = `${process.env.GITHUB_API_URL || "https://api.github.com"}/repos/${process.env.GITHUB_REPOSITORY}`;
   const response = await fetch(`${api}${path}`, {
@@ -45,6 +55,14 @@ async function get(path) {
     },
   });
   return { status: response.status, body: response.ok ? await response.json() : null };
+}
+
+function base(env) {
+  const into = env.PR_BASE ?? "";
+  if (into === "") return { passed: false, message: "PR_BASE, the branch the pull request merges into, is not set." };
+  if (into !== PRODUCTION_BRANCH) return { passed: true, message: `Into ${into}, which any branch may merge into.` };
+  if (isPromotion(env)) return { passed: true, message: `A promotion into ${PRODUCTION_BRANCH} from this repository's ${env.PR_BRANCH}.` };
+  return { passed: false, message: `A pull request into ${PRODUCTION_BRANCH} from ${env.PR_BRANCH ?? ""} is not a promotion.\n\n${BASE_RULE}` };
 }
 
 function title(env) {
@@ -107,8 +125,8 @@ async function fixTest(env) {
   if (!branch.startsWith("fix/") && !FIX_TITLE.test(env.PR_TITLE ?? "")) return { passed: true, message: "Not a fix." };
   const changed = await changedFiles(env.PR_NUMBER ?? "");
   const tests = changed.filter(isTest);
-  if (tests.length > 0) return { passed: true, message: `Changes a test: ${tests.join(", ")}` };
-  return { passed: false, message: `Changes no test:\n${changed.join("\n")}\n\n${FIX_RULE}` };
+  if (tests.length > 0) return { passed: true, message: `Changes a test:\n${listed(tests)}` };
+  return { passed: false, message: `Changes no test:\n${listed(changed)}\n\n${FIX_RULE}` };
 }
 
 function evidence(env) {
@@ -128,6 +146,7 @@ function evidence(env) {
 }
 
 const CHECKS = new Map([
+  ["base", base],
   ["title", title],
   ["issue-link", issueLink],
   ["fix-test", fixTest],
@@ -136,7 +155,7 @@ const CHECKS = new Map([
 
 async function run(name, env) {
   const check = CHECKS.get(name ?? "");
-  if (!check) return { passed: false, message: "Run it as: node tools/checks/pull-request.mjs title, issue-link, fix-test or evidence." };
+  if (!check) return { passed: false, message: "Run it as: node tools/checks/pull-request.mjs base, title, issue-link, fix-test or evidence." };
   try {
     return await check(env);
   } catch (error) {
@@ -145,5 +164,7 @@ async function run(name, env) {
 }
 
 const { passed, message } = await run(process.argv[2], process.env);
-console.log(passed ? message : `::error::${message.split("\n")[0]}\n${message}`);
+const resumeToken = randomUUID();
+const withCommandsStopped = `::stop-commands::${resumeToken}\n${message}\n::${resumeToken}::`;
+console.log(passed ? withCommandsStopped : `::error::${message.split("\n")[0]}\n${withCommandsStopped}`);
 process.exit(passed ? 0 : 1);

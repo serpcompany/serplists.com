@@ -15,6 +15,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: tools/checks/pull-request.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: A pull request into main is a promotion
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE: ${{ github.base_ref }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: node tools/checks/pull-request.mjs base
+
   title:
     if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
@@ -94,7 +112,7 @@ jobs:
   pull-request-passed:
     name: Pull request passed
     if: always()
-    needs: [title, issue-link, fix-test, evidence]
+    needs: [base, title, issue-link, fix-test, evidence]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

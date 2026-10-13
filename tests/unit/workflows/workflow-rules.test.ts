@@ -39,10 +39,20 @@ const action = (path: string) => actionSchema.parse(readWorkflowFile(path));
 const needsOf = (job: Job) => [job.needs ?? []].flat();
 
 const READY_PULL_REQUEST = ['opened', 'synchronize', 'reopened', 'ready_for_review'];
+const RUN_GROUP = "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}";
+const PUSHES_IN_ORDER_GROUP =
+  "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.event_name == 'push' && format('push-{0}', github.ref) || github.run_id }}";
 const REQUIRABLE = [
-  { file: 'ci.yml', gate: 'ci-passed', name: 'CI passed', checks: ['quality', 'db-parity'], types: READY_PULL_REQUEST },
-  { file: 'browser-tests.yml', gate: 'browser-tests-passed', name: 'Browser tests passed', checks: ['browser-tests'], types: READY_PULL_REQUEST },
-  { file: 'pull-request.yml', gate: 'pull-request-passed', name: 'Pull request passed', checks: ['title', 'issue-link', 'fix-test', 'evidence'], types: ['opened', 'edited', 'reopened', 'synchronize', 'ready_for_review'] },
+  { file: 'ci.yml', gate: 'ci-passed', name: 'CI passed', checks: ['quality', 'db-parity'], types: READY_PULL_REQUEST, group: PUSHES_IN_ORDER_GROUP },
+  { file: 'browser-tests.yml', gate: 'browser-tests-passed', name: 'Browser tests passed', checks: ['browser-tests'], types: READY_PULL_REQUEST, group: RUN_GROUP },
+  {
+    file: 'pull-request.yml',
+    gate: 'pull-request-passed',
+    name: 'Pull request passed',
+    checks: ['base', 'title', 'issue-link', 'fix-test', 'evidence'],
+    types: ['opened', 'edited', 'reopened', 'synchronize', 'ready_for_review'],
+    group: RUN_GROUP,
+  },
 ];
 const GATE_STEP = {
   name: 'Every job passed, or had nothing to check',
@@ -50,7 +60,7 @@ const GATE_STEP = {
   run: 'exit 1',
 };
 
-describe.each(REQUIRABLE)('$file, a check a merge can wait for', ({ file, gate, name, checks, types }) => {
+describe.each(REQUIRABLE)('$file, a check a merge can wait for', ({ file, gate, name, checks, types, group }) => {
   const { on, concurrency, jobs } = workflow(`.github/workflows/${file}`);
 
   it('starts on every pull request, again when one is marked ready, and in the merge queue, with no path filter', () => {
@@ -61,11 +71,8 @@ describe.each(REQUIRABLE)('$file, a check a merge can wait for', ({ file, gate, 
     expect(Object.keys(on)).toContain('merge_group');
   });
 
-  it("cancels a pull request's superseded run, and never a run in the merge queue or on a branch", () => {
-    expect(concurrency).toEqual({
-      group: "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
-      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
-    });
+  it("cancels a pull request's superseded run, never a run in the merge queue or one in progress on a branch", () => {
+    expect(concurrency).toEqual({ group, 'cancel-in-progress': "${{ github.event_name == 'pull_request' }}" });
   });
 
   it(`ends in "${name}", which always reports and fails when a check failed or was cancelled`, () => {

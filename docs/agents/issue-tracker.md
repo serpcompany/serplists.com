@@ -49,11 +49,12 @@ the reason. Here:
    into it ([`code.md`](code.md#pull-requests)).
 3. Reproduce first (a failing test, or the `verify-web` or `verify-api` skill), make the change
    with its tests, and finish it with the `finish-change` skill.
-4. Open the pull request into `staging` from the template. The `Pull request` workflow checks its
-   Conventional Commit title, its first line (`Closes #<number>` or `No issue: <reason>`), a test
-   in a `fix:`, and a line of text for each evidence level ([`ci.md`](ci.md#pull-request)). The
-   code review workflow reviews every push ([`ci-agents.md`](ci-agents.md)); answer every finding.
-   The owner merges: agents never do.
+4. Open the pull request into `staging` from the template, a hotfix included: only a promotion
+   goes into `main`. The `Pull request` workflow checks that, its Conventional Commit title, its
+   first line (`Closes #<number>` or `No issue: <reason>`), a test in a `fix:`, and a line of
+   text for each evidence level ([`ci.md`](ci.md#pull-request)). The code review workflow
+   reviews every push ([`ci-agents.md`](ci-agents.md)); answer every finding. The owner merges:
+   agents never do.
 
 ## How issues close here
 
@@ -70,7 +71,10 @@ keyword only on a pull request into the default branch
   --body-file tmp/promotion-body.md`. Merging the promotion into `main` closes them all
   ([`ci-deploys.md`](ci-deploys.md#promotion)).
 - So an issue whose change is on `staging` but not yet promoted stays open, and that is expected.
-  A hotfix into `main` closes its issue when it merges.
+- A hotfix takes the same path: a pull request into `staging`, then a promotion as soon as
+  Staging's deploy of it passes, which closes its issue. Production deploys only files Staging
+  has deployed and checked, so the `Pull request` workflow fails a pull request into `main` that
+  isn't a promotion ([`ci-deploys.md`](ci-deploys.md#production-waits-for-staging)).
 
 ## Labels
 

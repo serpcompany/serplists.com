@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.event_name == 'push' && format('push-{0}', github.ref) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -139,8 +139,8 @@ jobs:
 
   deploy-failed:
     name: Report a failed deploy
-    needs: [deploy-staging, deploy-production]
-    if: always() && contains(needs.*.result, 'failure')
+    needs: [quality, db-parity, deploy-staging, deploy-production]
+    if: always() && github.event_name == 'push' && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -156,4 +156,4 @@ jobs:
       - name: Open or update the issue for the environment whose deploy failed
         uses: ./.github/actions/deploy-failed
         with:
-          environment: ${{ needs.deploy-staging.result == 'failure' && 'staging' || 'production' }}
+          environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name }}

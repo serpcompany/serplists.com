@@ -51,7 +51,7 @@ describe('the deploy-failed action, which tells people a deploy failed', () => {
     expect(opened.title).toBe('Staging deploy failed');
     expect(opened.labels).toEqual(['bug']);
     expect(opened.body).toContain(`The staging deploy of 07ec182 failed: ${RUN_LINK}`);
-    expect(opened.body).toContain('docs/agents/ci-deploys.md');
+    expect(opened.body).toContain('A failed check skips the deploy: docs/agents/ci.md says what each check runs, and docs/agents/ci-deploys.md');
     expect(output).toContain('Opened #301');
   });
 

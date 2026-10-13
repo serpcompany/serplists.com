@@ -16,8 +16,9 @@ const deployWorkflowSchema = z.object({
     }),
   }),
 });
-const ciJobs = z
+const ciWorkflow = z
   .object({
+    concurrency: z.object({ group: z.string(), 'cancel-in-progress': z.string() }),
     jobs: z.record(
       z
         .object({
@@ -32,7 +33,8 @@ const ciJobs = z
         .passthrough(),
     ),
   })
-  .parse(readWorkflowFile('.github/workflows/ci.yml')).jobs;
+  .parse(readWorkflowFile('.github/workflows/ci.yml'));
+const ciJobs = ciWorkflow.jobs;
 
 const callerOf = (workflow: string) => {
   const callers = Object.values(ciJobs).filter((job) => job.uses === `./.github/workflows/${workflow}`);
@@ -148,17 +150,24 @@ describe('the production deploy', () => {
   });
 });
 
-describe('a failed deploy', () => {
+describe('the order of deploys', () => {
+  it("comes from CI running a branch's pushes one at a time, in push order, so an older push never deploys after a newer one, and a push still waiting gives way to a newer one, which carries its commits", () => {
+    expect(ciWorkflow.concurrency.group).toContain("github.event_name == 'push' && format('push-{0}', github.ref)");
+    expect(ciWorkflow.concurrency['cancel-in-progress']).toBe("${{ github.event_name == 'pull_request' }}");
+  });
+});
+
+describe('a push that does not deploy', () => {
   const report = ciJobs['deploy-failed'];
 
-  it('opens or updates the issue of the environment whose deploy failed, with the only write token CI holds', () => {
+  it("opens or updates the issue of the branch's environment when its deploy, or a check that skipped it, failed, with the only write token CI holds", () => {
     assert.exists(report, 'ci.yml has no deploy-failed job');
     const action = report.steps?.find((step) => step.uses === './.github/actions/deploy-failed');
 
-    expect(report.needs).toEqual(['deploy-staging', 'deploy-production']);
-    expect(report.if).toBe("always() && contains(needs.*.result, 'failure')");
+    expect(report.needs).toEqual(['quality', 'db-parity', 'deploy-staging', 'deploy-production']);
+    expect(report.if).toBe("always() && github.event_name == 'push' && contains(needs.*.result, 'failure')");
     expect(report.permissions).toEqual({ contents: 'read', issues: 'write' });
-    expect(action?.with?.['environment']).toBe("${{ needs.deploy-staging.result == 'failure' && 'staging' || 'production' }}");
+    expect(action?.with?.['environment']).toBe("${{ github.ref_name == 'main' && 'production' || github.ref_name }}");
     expect(Object.entries(ciJobs).filter(([, job]) => Object.values(job.permissions ?? {}).includes('write')).map(([id]) => id)).toEqual(['deploy-failed']);
   });
 });

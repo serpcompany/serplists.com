@@ -1,8 +1,9 @@
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { MADE_UP_ACCOUNT, SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment';
+import { SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment';
 import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 import { listeningPort } from '../../support/listeningPort';
 
@@ -31,6 +32,8 @@ const HEALTHY_DEPLOYMENT: Record<string, Reply[]> = {
 };
 
 const noResponse = () => new TypeError('fetch failed', { cause: Object.assign(new Error('connect'), { code: 'ECONNREFUSED' }) });
+
+const signInBody = z.object({ email: z.string().email(), password: z.string().min(8) });
 
 const requestInit = z.object({
   method: z.string(),
@@ -87,13 +90,19 @@ describe('the smoke test of a new deployment', () => {
     expect(calls.every((call) => call.headers.get(SMOKE_TEST_HEADER) === '1' && call.redirect === 'manual')).toBe(true);
   });
 
-  it('signs in as a made-up account with a wrong password, as JSON from the deployment itself', async () => {
-    const [signIn] = callsTo((await smokeTest()).calls, SIGN_IN);
-    const sent: unknown = JSON.parse(signIn?.body ?? '{}');
+  it('signs in as JSON from the deployment itself, as an account made up for each run that the repository names nowhere, so no one can register it first', async () => {
+    const signInOf = async () => {
+      const [signIn] = callsTo((await smokeTest()).calls, SIGN_IN);
+      expect(signIn?.headers.get('content-type')).toBe('application/json');
+      expect(signIn?.headers.get('origin')).toBe(BASE_URL);
+      return signInBody.parse(JSON.parse(signIn?.body ?? '{}'));
+    };
+    const [first, second] = [await signInOf(), await signInOf()];
+    const inTheRepository = spawnSync('git', ['grep', '--quiet', '--fixed-strings', '-e', first.email, '-e', first.password, '-e', second.email, '-e', second.password]);
 
-    expect(signIn?.headers.get('content-type')).toBe('application/json');
-    expect(signIn?.headers.get('origin')).toBe(BASE_URL);
-    expect(sent).toEqual(MADE_UP_ACCOUNT);
+    expect(second.email).not.toBe(first.email);
+    expect(second.password).not.toBe(first.password);
+    expect(inTheRepository.status).toBe(1);
   });
 
   it.each([
