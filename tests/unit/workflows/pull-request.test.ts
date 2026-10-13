@@ -8,6 +8,8 @@ import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuar
 const REPOSITORY = 'serpcompany/serplists.com';
 const SCRIPT = 'tools/checks/pull-request.mjs';
 const ISSUES: Record<number, object> = { 12: { number: 12 }, 13: { number: 13 }, 296: { number: 296, pull_request: {} } };
+const PROMOTION = { PR_BODY: 'Promotes staging 07ec182.', PR_BRANCH: 'promote/staging-2026-10-12-07ec182', PR_HEAD_REPOSITORY: REPOSITORY };
+const COMMANDS_STOPPED = ['stop-commands', 'resume'];
 
 type ChangedFile = { filename: string; status?: string };
 
@@ -28,11 +30,14 @@ const check = (name: string, env: Record<string, string>, api: Route = github())
 function commandsTheRunnerRuns(output: string): string[] {
   const ran: string[] = [];
   let stoppedUntil: string | undefined;
-  for (const line of output.split(/\r?\n/)) {
+  for (const line of output.split(/\r\n|\r|\n/)) {
     const command = /^::([^\s:]+)/.exec(line.trimStart())?.[1] ?? /##\[([^\s\]]+)/.exec(line)?.[1];
     if (command === undefined) continue;
     if (stoppedUntil !== undefined) {
-      if (command === stoppedUntil) stoppedUntil = undefined;
+      if (command === stoppedUntil) {
+        stoppedUntil = undefined;
+        ran.push('resume');
+      }
       continue;
     }
     if (command === 'stop-commands') stoppedUntil = line.trimStart().slice('::stop-commands::'.length);
@@ -61,7 +66,8 @@ describe('the base check', () => {
     const { status, output } = await check('base', { PR_BASE: 'main', ...pullRequest });
 
     expect(status).toBe(1);
-    expect(output).toContain(`::error::A pull request into main from ${pullRequest.PR_BRANCH} is not a promotion.`);
+    expect(output).toContain('::error::A pull request into main is not a promotion.');
+    expect(output).toContain(`A pull request into main from ${pullRequest.PR_BRANCH} is not a promotion.`);
     expect(output).toContain('Open this pull request into staging instead; once Staging\'s deploy of it passes, pnpm run promote:prepare');
   });
 
@@ -90,16 +96,21 @@ describe('the title check', () => {
       const { status, output } = await check('title', { PR_TITLE: title });
 
       expect(status).toBe(1);
-      expect(output).toContain(`::error::"${title}" is not a Conventional Commit.`);
+      expect(output).toContain('::error::The title is not a Conventional Commit.');
+      expect(output).toContain(`"${title}" is not a Conventional Commit.`);
       expect(output).toContain('Start it with one of feat, fix, perf, refactor, docs, test, build, ci, chore');
     },
   );
 
-  it('reads the title as text, so a title that looks like a command runs nothing', async () => {
-    const { status, output } = await check('title', { PR_TITLE: 'Say the stage; $(echo ran) `echo ran`' });
+  it.each([
+    ['a shell command', 'Say the stage; $(echo ran) `echo ran`'],
+    ['a workflow command after a carriage return', 'x\r::warning file=src/a.ts::planted'],
+  ])('reads a title holding %s as text, and runs nothing it holds', async (_case, title) => {
+    const { status, output } = await check('title', { PR_TITLE: title });
 
     expect(status).toBe(1);
-    expect(output).toContain('"Say the stage; $(echo ran) `echo ran`"');
+    expect(output).toContain(`"${title}" is not a Conventional Commit.`);
+    expect(commandsTheRunnerRuns(output)).toEqual(['error', ...COMMANDS_STOPPED]);
   });
 });
 
@@ -146,12 +157,28 @@ describe('the issue-link check', () => {
     expect(output).toContain(problem);
   });
 
-  it("exempts a promotion from this repository's own branch, whose merge into main closes what its pull requests closed", async () => {
-    const promotion = { PR_BODY: 'Promotes staging 07ec182.', PR_BRANCH: 'promote/staging-2026-10-12-07ec182' };
+  it.each([
+    ['a warning', 'x\r::warning file=src/a.ts::planted'],
+    ['a mask', 'x\r::add-mask::planted'],
+    ['a stop', 'x\r::stop-commands::planted'],
+  ])('reads a body hiding %s after a carriage return as text, and runs nothing it holds', async (_case, body) => {
+    const { status, output } = await check('issue-link', { PR_BODY: body });
 
-    expect((await check('issue-link', { ...promotion, PR_HEAD_REPOSITORY: REPOSITORY })).status).toBe(0);
-    expect((await check('issue-link', { ...promotion, PR_HEAD_REPOSITORY: 'someone/serplists.com' })).status).toBe(1);
+    expect(status).toBe(1);
+    expect(output).toContain(`The body starts with "${body}".`);
+    expect(commandsTheRunnerRuns(output)).toEqual(['error', ...COMMANDS_STOPPED]);
   });
+});
+
+describe('a promotion', () => {
+  it.each(['issue-link', 'evidence'])(
+    "skips %s only into main from this repository's own promote/ branch: its merge closes what its pull requests closed, and its evidence is Staging's deploy",
+    async (name) => {
+      expect((await check(name, { ...PROMOTION, PR_BASE: 'main' })).status).toBe(0);
+      expect((await check(name, { ...PROMOTION, PR_BASE: 'staging' })).status).toBe(1);
+      expect((await check(name, { ...PROMOTION, PR_BASE: 'main', PR_HEAD_REPOSITORY: 'someone/serplists.com' })).status).toBe(1);
+    },
+  );
 });
 
 describe('the fix-test check', () => {
@@ -175,8 +202,8 @@ describe('the fix-test check', () => {
   });
 
   it.each([
-    ['fails', ['::error::named like a command.ts', 'src/##[add-mask]legacy.ts', 'src/two\n::warning::lines.ts'], 1, ['error', 'stop-commands']],
-    ['passes', ['tests/::error::named like a command.test.ts', 'tests/##[add-mask]legacy.test.ts', 'tests/two\n::warning::lines.test.ts'], 0, ['stop-commands']],
+    ['fails', ['::error::named like a command.ts', 'src/##[add-mask]legacy.ts', 'src/two\n::warning::lines.ts'], 1, ['error', ...COMMANDS_STOPPED]],
+    ['passes', ['tests/::error::named like a command.test.ts', 'tests/##[add-mask]legacy.test.ts', 'tests/two\r::warning::lines.test.ts'], 0, COMMANDS_STOPPED],
   ])('lists the files of a fix that %s with workflow commands stopped, so a file named like a command runs none', async (_case, named, exitCode, commands) => {
     const { status, output } = await check('fix-test', { PR_TITLE: 'fix: the change' }, github({ files: named.map((filename) => ({ filename })) }));
 
@@ -254,12 +281,6 @@ describe('the evidence check', () => {
     expect(status).toBe(1);
     expect(output).toContain('The body has no "## Evidence" section.');
   });
-
-  it("exempts a promotion from this repository's own branch, whose evidence is Staging's deploy of the same files", async () => {
-    const promotion = { PR_BODY: 'Promotes staging 07ec182.', PR_BRANCH: 'promote/staging-2026-10-12-07ec182', PR_HEAD_REPOSITORY: REPOSITORY };
-
-    expect((await check('evidence', promotion)).status).toBe(0);
-  });
 });
 
 const checkJob = z.object({ if: z.string().optional(), steps: z.array(workflowStepSchema) });
@@ -293,8 +314,8 @@ describe('the Pull request workflow', () => {
     expect(job.steps).toHaveLength(2);
   });
 
-  it('tells the base check the branch the pull request merges into and the branch and repository it comes from', () => {
-    expect(workflow.jobs.base.steps[1]?.env).toEqual({
+  it.each(['base', 'issue-link', 'evidence'] as const)('tells %s the branch the pull request merges into, and the branch and repository it comes from', (name) => {
+    expect(workflow.jobs[name].steps[1]?.env).toMatchObject({
       PR_BASE: '${{ github.base_ref }}',
       PR_BRANCH: '${{ github.head_ref }}',
       PR_HEAD_REPOSITORY: '${{ github.event.pull_request.head.repo.full_name }}',

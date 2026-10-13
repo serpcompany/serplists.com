@@ -39,9 +39,14 @@ const EVIDENCE_RULE =
   `(${WHERE}). A lower level never proves a higher one, and a level that doesn't apply says so, such as ` +
   '"UI tests: none, no screen changed". Link logs; don\'t paste them.';
 
+const passes = (message) => ({ passed: true, message });
+
+const fails = (problem, message = problem) => ({ passed: false, problem, message });
+
 const isTest = (path) => path.startsWith("tests/") || TEST_FILE.test(path);
 
-const isPromotion = (env) => (env.PR_BRANCH ?? "").startsWith(PROMOTION_BRANCH) && env.PR_HEAD_REPOSITORY === env.GITHUB_REPOSITORY;
+const isPromotion = (env) =>
+  env.PR_BASE === PRODUCTION_BRANCH && (env.PR_BRANCH ?? "").startsWith(PROMOTION_BRANCH) && env.PR_HEAD_REPOSITORY === env.GITHUB_REPOSITORY;
 
 const listed = (paths) => paths.map((path) => `- ${path}`).join("\n");
 
@@ -59,16 +64,19 @@ async function get(path) {
 
 function base(env) {
   const into = env.PR_BASE ?? "";
-  if (into === "") return { passed: false, message: "PR_BASE, the branch the pull request merges into, is not set." };
-  if (into !== PRODUCTION_BRANCH) return { passed: true, message: `Into ${into}, which any branch may merge into.` };
-  if (isPromotion(env)) return { passed: true, message: `A promotion into ${PRODUCTION_BRANCH} from this repository's ${env.PR_BRANCH}.` };
-  return { passed: false, message: `A pull request into ${PRODUCTION_BRANCH} from ${env.PR_BRANCH ?? ""} is not a promotion.\n\n${BASE_RULE}` };
+  if (into === "") return fails("PR_BASE, the branch the pull request merges into, is not set.");
+  if (into !== PRODUCTION_BRANCH) return passes(`Into ${into}, which any branch may merge into.`);
+  if (isPromotion(env)) return passes(`A promotion into ${PRODUCTION_BRANCH} from this repository's ${env.PR_BRANCH}.`);
+  return fails(
+    `A pull request into ${PRODUCTION_BRANCH} is not a promotion.`,
+    `A pull request into ${PRODUCTION_BRANCH} from ${env.PR_BRANCH ?? ""} is not a promotion.\n\n${BASE_RULE}`,
+  );
 }
 
 function title(env) {
   const text = env.PR_TITLE ?? "";
-  if (CONVENTIONAL_TITLE.test(text)) return { passed: true, message: `"${text}" names its type.` };
-  return { passed: false, message: `"${text}" is not a Conventional Commit.\n\n${TITLE_RULE}` };
+  if (CONVENTIONAL_TITLE.test(text)) return passes(`"${text}" names its type.`);
+  return fails("The title is not a Conventional Commit.", `"${text}" is not a Conventional Commit.\n\n${TITLE_RULE}`);
 }
 
 function closingLines(body) {
@@ -91,22 +99,22 @@ async function whyItCannotClose(number) {
 }
 
 async function issueLink(env) {
-  if (isPromotion(env)) {
-    return { passed: true, message: "A promotion closes the issues its pull requests closed, so it needs no line of its own." };
-  }
+  if (isPromotion(env)) return passes("A promotion closes the issues its pull requests closed, so it needs no line of its own.");
   const { firstLine, issues } = closingLines(env.PR_BODY ?? "");
-  if (NO_ISSUE_LINE.test(firstLine)) return { passed: true, message: firstLine };
+  if (NO_ISSUE_LINE.test(firstLine)) return passes(firstLine);
   if (issues.length === 0) {
     const found = firstLine ? `The body starts with "${firstLine}".` : "The body is empty.";
-    return { passed: false, message: `${found}\n\n${ISSUE_RULE}` };
+    return fails("The body starts with neither Closes #<number> nor No issue: <reason>.", `${found}\n\n${ISSUE_RULE}`);
   }
   const problems = [];
   for (const number of issues) {
     const problem = await whyItCannotClose(number);
     if (problem) problems.push(problem);
   }
-  if (problems.length > 0) return { passed: false, message: `${problems.join("\n")}\n\n${ISSUE_RULE}` };
-  return { passed: true, message: issues.map((number) => `Closes #${number}`).join("\n") };
+  if (problems.length > 0) {
+    return fails("A number the body closes is not an issue GitHub shows in this repository.", `${problems.join("\n")}\n\n${ISSUE_RULE}`);
+  }
+  return passes(issues.map((number) => `Closes #${number}`).join("\n"));
 }
 
 async function changedFiles(number) {
@@ -122,27 +130,27 @@ async function changedFiles(number) {
 
 async function fixTest(env) {
   const branch = env.PR_BRANCH ?? "";
-  if (!branch.startsWith("fix/") && !FIX_TITLE.test(env.PR_TITLE ?? "")) return { passed: true, message: "Not a fix." };
+  if (!branch.startsWith("fix/") && !FIX_TITLE.test(env.PR_TITLE ?? "")) return passes("Not a fix.");
   const changed = await changedFiles(env.PR_NUMBER ?? "");
   const tests = changed.filter(isTest);
-  if (tests.length > 0) return { passed: true, message: `Changes a test:\n${listed(tests)}` };
-  return { passed: false, message: `Changes no test:\n${listed(changed)}\n\n${FIX_RULE}` };
+  if (tests.length > 0) return passes(`Changes a test:\n${listed(tests)}`);
+  return fails("A fix changes no test.", `Changes no test:\n${listed(changed)}\n\n${FIX_RULE}`);
 }
 
 function evidence(env) {
-  if (isPromotion(env)) {
-    return { passed: true, message: "A promotion's evidence is Staging's deploy of the same files, which the Production deploy checks." };
-  }
+  if (isPromotion(env)) return passes("A promotion's evidence is Staging's deploy of the same files, which the Production deploy checks.");
   const lines = (env.PR_BODY ?? "").split(/\r?\n/).map((line) => line.trim());
   const heading = lines.findIndex((line) => EVIDENCE_HEADING.test(line));
-  if (heading === -1) return { passed: false, message: `The body has no "## Evidence" section.\n\n${EVIDENCE_RULE}` };
+  const noSection = 'The body has no "## Evidence" section.';
+  if (heading === -1) return fails(noSection, `${noSection}\n\n${EVIDENCE_RULE}`);
   const after = lines.slice(heading + 1);
   const next = after.findIndex((line) => line.startsWith("## "));
   const section = next === -1 ? after : after.slice(0, next);
   const reported = new Set(section.map((line) => EVIDENCE_LINE.exec(line)?.[1]?.trim().toLowerCase()));
   const silent = EVIDENCE_LEVELS.filter((level) => !reported.has(level.toLowerCase()));
-  if (silent.length > 0) return { passed: false, message: `The evidence says nothing for: ${silent.join(", ")}.\n\n${EVIDENCE_RULE}` };
-  return { passed: true, message: "The evidence reports every level." };
+  const unreported = `The evidence says nothing for: ${silent.join(", ")}.`;
+  if (silent.length > 0) return fails(unreported, `${unreported}\n\n${EVIDENCE_RULE}`);
+  return passes("The evidence reports every level.");
 }
 
 const CHECKS = new Map([
@@ -155,16 +163,16 @@ const CHECKS = new Map([
 
 async function run(name, env) {
   const check = CHECKS.get(name ?? "");
-  if (!check) return { passed: false, message: "Run it as: node tools/checks/pull-request.mjs base, title, issue-link, fix-test or evidence." };
+  if (!check) return fails("Run it as: node tools/checks/pull-request.mjs base, title, issue-link, fix-test or evidence.");
   try {
     return await check(env);
   } catch (error) {
-    return { passed: false, message: error instanceof Error ? error.message : String(error) };
+    return fails(`The ${name} check couldn't finish.`, error instanceof Error ? error.message : String(error));
   }
 }
 
-const { passed, message } = await run(process.argv[2], process.env);
+const { passed, problem, message } = await run(process.argv[2], process.env);
 const resumeToken = randomUUID();
 const withCommandsStopped = `::stop-commands::${resumeToken}\n${message}\n::${resumeToken}::`;
-console.log(passed ? withCommandsStopped : `::error::${message.split("\n")[0]}\n${withCommandsStopped}`);
+console.log(passed ? withCommandsStopped : `::error::${problem}\n${withCommandsStopped}`);
 process.exit(passed ? 0 : 1);

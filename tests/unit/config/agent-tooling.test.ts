@@ -138,6 +138,7 @@ const OPEN_NEXT_STARTS = [
   'pnpx @opennextjs/cloudflare',
   './node_modules/.bin/opennextjs-cloudflare',
   'node_modules/.bin/opennextjs-cloudflare',
+  'node node_modules/@opennextjs/cloudflare/dist/cli/index.js',
   'npm exec @opennextjs/cloudflare --',
   'yarn opennextjs-cloudflare',
   'bunx @opennextjs/cloudflare',
@@ -162,6 +163,9 @@ const PUSHES_TO_STAGING_OR_MAIN = [
   'git push origin HEAD:refs/heads/main',
   'git push origin --delete staging',
   'git push origin :main',
+  'git push --all origin',
+  'git push -u origin --all',
+  'git push --mirror origin',
 ];
 
 const claudeAction = present(claudeStep(stepsOf(readWorkflow('.github/workflows/claude.yml'), 'claude')).step.uses, "claude.yml's action");
@@ -190,7 +194,9 @@ describe('.claude/settings.json', () => {
     'node node_modules/wrangler/bin/wrangler.js types',
     'npm exec wrangler -- types',
     'pnpm dlx @opennextjs/cloudflare@1.20.7 build',
+    'npx @opennextjs/cloudflare@1.20.7 build',
     'node_modules/.bin/opennextjs-cloudflare build',
+    'node node_modules/@opennextjs/cloudflare/dist/cli/index.js build',
     'yarn install',
     'bunx wrangler types',
     'bun run build',

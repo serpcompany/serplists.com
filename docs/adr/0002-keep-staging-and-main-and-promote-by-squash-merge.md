@@ -55,8 +55,10 @@ promotions since #201 and the harness audit of that day.
 - Workflows that comments or schedules start run `main`'s copy, so a change to one takes effect
   for those events only once it is promoted.
 - A hotfix goes through `staging` and a promotion like any change, so it reaches Production only
-  once Staging has deployed and checked it. A change that reaches `main` another way, such as an
-  admin's push, can't deploy, and the next promotion can't be prepared until a pull request brings
-  it into `staging`.
+  once Staging has deployed and checked it. A promotion carries all of `staging`, so the hotfix
+  ships with every change merged there since the last promotion, which the promotion's body
+  lists: one not ready for Production is reverted on `staging` first, or the hotfix waits for it.
+  A change that reaches `main` another way, such as an admin's push, can't deploy, and the next
+  promotion can't be prepared until a pull request brings it into `staging`.
 - How a promotion is opened and checked is in [`issue-tracker.md`](../agents/issue-tracker.md) and
   [`ci-deploys.md`](../agents/ci-deploys.md).

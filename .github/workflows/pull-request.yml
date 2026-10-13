@@ -66,6 +66,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.base_ref }}
           PR_BRANCH: ${{ github.head_ref }}
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: node tools/checks/pull-request.mjs issue-link
@@ -105,6 +106,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.base_ref }}
           PR_BRANCH: ${{ github.head_ref }}
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: node tools/checks/pull-request.mjs evidence

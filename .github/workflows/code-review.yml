@@ -17,7 +17,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
     env:
       HAS_REVIEW_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
@@ -240,6 +239,7 @@ jobs:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
           allowed_bots: "claude[bot]"
           prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: >-
@@ -371,7 +371,7 @@ jobs:
             const file = process.env.EXECUTION_FILE
             if (!file || !fs.existsSync(file)) {
               if (process.env.CLAUDE_OUTCOME === 'failure') fail("The Claude step failed before Claude ran, so it wrote no execution log: that step's own log says why.")
-              fail("The review wrote no execution log, so no review happened. The action skips a run whose workflow file differs from main's, which a change to this workflow does until it is promoted (docs/agents/ci-agents.md, Code review).")
+              fail("The review wrote no execution log, so no review happened: the Claude step's own log says why (docs/agents/ci-agents.md, Code review).")
             }
             let messages
             try {

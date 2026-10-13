@@ -6,16 +6,18 @@ and gardens the docs and the code each week. Every workflow and what starts it i
 [`ci-deploys.md`](ci-deploys.md). Change a workflow's section here in the same pull request as the
 workflow.
 
-**A change to these workflows runs only once it reaches `main`.** The action gets its GitHub token
-from Claude's app, which first checks that the workflow file matches the copy on the default
-branch, `main`. When it doesn't, the action skips ("Skipping action due to workflow validation")
-and writes no log, and the job's check fails. So once a pull request that changes `code-review.yml`,
-`claude.yml`, or `maintenance.yml` merges into `staging`, the review fails that way on every pull
-request into `staging` until the change is promoted to `main`: promote it soon after it merges.
-Comments on issues and in a pull request's conversation run `main`'s copy of `claude.yml`, and the
-weekly schedule runs `main`'s `maintenance.yml`. A change to a Claude workflow can't be tried on
-its own pull request; try it in a throwaway repository with the same workflow, skill, and rules
-first.
+**A change to `claude.yml` or `maintenance.yml` runs only once it reaches `main`.** Their jobs get
+a GitHub token from Claude's app, which first checks that the workflow file matches the copy on
+the default branch, `main`. When it doesn't, the action skips ("Skipping action due to workflow
+validation") and writes no log, and the job's check fails. Comments on issues and in a pull
+request's conversation run `main`'s copy of `claude.yml` anyway, and the weekly schedule runs
+`main`'s `maintenance.yml`: try a change to either in a throwaway repository with the same
+workflow, skill, and rules first, and promote it soon after it merges. The review takes the job's
+own token instead (Code review, below), so its file isn't checked against `main`'s. That check
+skipped every review of a pull request into `staging` from #260 to #296 while `code-review.yml`
+differed from `main`'s. Whether the review now runs while they differ is untested: the pull
+request that brings the change runs its own copy, as does every pull request into `staging` until
+the promotion, so the first of them shows it.
 
 ## Code review
 
@@ -66,6 +68,13 @@ would post, and posts only when you say so. How it's built, and why:
   pull request carries before Claude starts. The token needs `pull-requests: write`: GitHub
   refuses a comment on a pull request from a token with only `issues: write`. Claude needs no
   GitHub write tool, so `.claude/settings.json` can ask before every `gh api` write.
+- **Claude holds only the job's token.** The action takes the job's own token (`github_token`)
+  and asks Claude's app for none, so the job needs no `id-token: write`. It hands that token to
+  Claude as `GH_TOKEN` and `GITHUB_TOKEN` and writes it into the checkout's `origin` URL,
+  whatever the checkout kept: without the input, the app's token, which can also write the
+  contents and issues, would sit there. The job's token reads the contents and issues and writes
+  to pull requests, for the posting step; Claude has no tool that writes with it, and the posting
+  step refuses token-shaped text ([`harness-debt.md`](../harness-debt.md), Harness).
 - **A re-review raises only what's new.** Before Claude starts, the job adds to its instructions
   the findings already on the pull request (posted by the workflow, or by Claude itself before the
   workflow posted them) and the latest summary. Claude's answers to `@claude` requests, and its
@@ -101,7 +110,7 @@ would post, and posts only when you say so. How it's built, and why:
   inline comments, and not an answer to an `@claude` request. It runs when the review step fails
   too, and shows what Claude said, such as the API refusing the token (Claude's app and token,
   below). It runs inline, as the job's other scripts do, and Claude's hooks are off, so nothing in
-  the job, which can mint an OIDC token, runs a script from the pull request.
+  the job runs a script from the pull request with its token.
 - **A pull request from a fork fails with a notice.** GitHub gives it no secrets, so Claude can't
   review it; the job says so and fails rather than passing with no review. A member reviews it, or
   pushes its branch to this repository and opens the pull request from there.
@@ -158,7 +167,8 @@ the waiting one, so ask again after the first finishes.
   subagents running, or pushed a commit with attribution, and warns when a commit changes a file
   the action resets or Claude pushed without replying (`tests/unit/workflows/claude.test.ts`).
 
-It uses the same app and token as the review.
+It runs on the same `CLAUDE_CODE_OAUTH_TOKEN` as the review, and pushes and comments as Claude's
+app (below).
 
 ## Weekly maintenance
 
@@ -237,8 +247,9 @@ no token.
 
 ## Claude's app and token (admin only)
 
-The review, `@claude`, and gardening jobs authenticate as the Claude GitHub App and run on a Claude
-subscription. An admin sets them up once:
+`@claude` and the gardening jobs authenticate to GitHub as the Claude GitHub App, since a push or
+pull request made with the job's own token starts no workflow; the review uses the job's token.
+All three run on a Claude subscription. An admin sets them up once:
 
 1. Install the [Claude GitHub App](https://github.com/apps/claude) on this repository. The action
    pushes and comments as the app (`claude[bot]`).

@@ -87,6 +87,10 @@ describe('the Code review workflow', () => {
     expect(review.with?.['allowed_bots']).toBe('claude[bot]');
   });
 
+  it("can't write the contents or issues, or mint an OIDC token, since the action takes the job's own token and asks Claude's app for none", () => {
+    expect(job.permissions).toEqual({ contents: 'read', 'pull-requests': 'write', issues: 'read' });
+  });
+
   it('keeps subagents in the foreground, pins the model, and leaves the MCP servers out', () => {
     expect(review.env?.['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']).toBe('1');
     expect(claudeArgs).toContain('--model claude-sonnet-5-5');

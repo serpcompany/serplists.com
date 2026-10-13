@@ -74,7 +74,10 @@ keyword only on a pull request into the default branch
 - A hotfix takes the same path: a pull request into `staging`, then a promotion as soon as
   Staging's deploy of it passes, which closes its issue. Production deploys only files Staging
   has deployed and checked, so the `Pull request` workflow fails a pull request into `main` that
-  isn't a promotion ([`ci-deploys.md`](ci-deploys.md#production-waits-for-staging)).
+  isn't a promotion ([`ci-deploys.md`](ci-deploys.md#production-waits-for-staging)). The
+  promotion carries all of `staging`, so the hotfix ships with every change merged there since
+  the last promotion, which the promotion's body lists: revert one not ready for Production on
+  `staging` first, or let the hotfix wait for it.
 
 ## Labels
 

@@ -156,16 +156,18 @@ closes. GitHub links a closing keyword only on a pull request into the default b
 one reads the lines instead and checks that each names an issue. The issues close when the
 promotion merges into `main`: `pnpm run promote:prepare` writes one `Closes #<number>` line into
 the promotion's body for each issue its pull requests closed
-([ci-deploys.md](ci-deploys.md#promotion)). A promotion, whose branch starts with `promote/` in
-this repository, needs no line of its own, and no evidence of its own: its evidence is Staging's
-deploy of the same files, which the Production deploy checks.
+([ci-deploys.md](ci-deploys.md#promotion)). A promotion, a pull request into `main` from a
+`promote/` branch of this repository, needs no line of its own, and no evidence of its own: its
+evidence is Staging's deploy of the same files, which the Production deploy checks. A `promote/`
+branch's pull request into another branch is checked like any other.
 
 Each job runs `tools/checks/pull-request.mjs`, which needs nothing but Node, so the job checks
 out that one file and installs nothing. The title and body reach it through the environment,
-never inside the command, and it prints what GitHub sent with workflow commands stopped
-(`::stop-commands::`), so a title, a body or a file name shaped like a command runs none. The
-workflow runs again when the title, body or base is edited. A pull request a bot opened skips
-all but `base`: a bot's pull request into `main` couldn't deploy either. In the merge queue the
-jobs start and pass at once: the pull request was checked, and a required check that never
-reports in the queue blocks every merge.
+never inside the command. It prints what GitHub sent only with workflow commands stopped
+(`::stop-commands::`), and its `::error::` line holds only its own text: the runner also ends a
+line at a lone carriage return, which GitHub keeps in a body. So a title, a body or a file name
+shaped like a command runs none. The workflow runs again when the title, body or base is edited.
+A pull request a bot opened skips all but `base`: a bot's pull request into `main` couldn't deploy
+either. In the merge queue the jobs start and pass at once: the pull request was checked, and a
+required check that never reports in the queue blocks every merge.
 `tests/unit/workflows/pull-request.test.ts` runs the script against a stand-in for GitHub's API.

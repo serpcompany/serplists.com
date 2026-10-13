@@ -43,9 +43,11 @@ server, change its version in `.mcp.json` and in the `verify-web` skill's setup 
   everything through.
 - **The stop hook** (`Stop`) runs `tools/checks/stop-hook.mjs` on the files changed since the last
   commit before a turn ends, the docs check included, and catches a file a shell command rewrote.
-  It blocks a turn once and never loops, and reports a failure once until a turn ends clean, so
-  one that comes back is reported again; it keeps the default on a crash, since a broken stop hook
-  would hold every turn open.
+  When the checks fail it blocks the turn with their report; the stop that follows a block never
+  blocks, so it can't loop. It gives a session the same report once, until a stop finds nothing
+  changed since the last commit or the checks passing, the stop that follows a block included: a
+  failure that comes back after that is reported again. It keeps the default on a crash, since a
+  broken stop hook would hold every turn open.
 
 Both find the checkout from their input rather than `CLAUDE_PROJECT_DIR`, which stays where the
 session started, so they check a worktree's own files. Claude Code reads hooks when a session
@@ -94,7 +96,8 @@ may do freely.
   `--live`.
 - **Asked, pushes:** a `git push` that names `staging` or `main` as where it goes (or a branch
   whose name starts with either): `origin main`, `HEAD:staging`, `+main`, `refs/heads/main`,
-  `--delete staging`. A push to either deploys it.
+  `--delete staging`; and `--all` and `--mirror`, which push both without naming them. A push to
+  either deploys it.
 - **Asked, GitHub:** `gh pr merge`, since agents never merge; `gh workflow run`, `enable` and
   `disable`, and `gh run rerun` and `cancel`, which start or stop deploys; `gh secret`,
   `gh variable set` and `delete`; `gh repo edit`, `delete`, `archive` and `rename`;
@@ -107,8 +110,10 @@ may do freely.
 Each rule starts with the program it guards, in Bash and in PowerShell. Started the ways this
 repository starts them (bare, `npx` with or without `-y`, `pnpm`, `pnpm exec`), Wrangler and
 OpenNext ask only for the commands above. Started any other way, they ask for every command, since
-that runs a copy that isn't the project's own: a pinned version (`npx wrangler@<version>`),
-`pnpm dlx` and `pnpx`, or a path into `node_modules`. `npm exec`, `npm x`, `yarn`, `bunx` and
+that runs a copy that isn't the project's own: a pinned version (`npx wrangler@<version>`,
+`npx @opennextjs/cloudflare@<version>`), `pnpm dlx` and `pnpx`, or a path into `node_modules`,
+the package's own script included (`node node_modules/@opennextjs/cloudflare/dist/cli/index.js`,
+whose `deploy` runs Wrangler's). `npm exec`, `npm x`, `yarn`, `bunx` and
 `bun`, which this repository doesn't use, ask for every command whatever they start. None starts
 with a wildcard, which would match a search or a comment that mentions a command. A rule matches
 the command as written, so it guards against accidents and is not a security boundary:

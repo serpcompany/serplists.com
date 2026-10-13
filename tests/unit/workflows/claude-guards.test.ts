@@ -28,6 +28,10 @@ describe('each Claude step in CI', () => {
   it.each(cases)("runs no hook, since a hook runs the checkout's scripts with the job's tokens: %s", (_job, _id, _guard, claude) => {
     expect(settingsGiven(claude)).toEqual({ disableAllHooks: true });
   });
+
+  it.each(cases)("takes the job's own token only to review, and otherwise Claude's app token, since a push or pull request made with the job's token starts no workflow: %s", (job, _id, _guard, claude) => {
+    expect(claude.with?.['github_token']).toBe(job === 'code-review.yml review' ? '${{ github.token }}' : undefined);
+  });
 });
 
 describe('the check after each Claude step in CI', () => {
