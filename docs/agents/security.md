@@ -226,9 +226,9 @@ Rules:
   `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for the Claude workflows
   ([ci-agents.md](ci-agents.md)). The token is a personal subscription credential, and the
   review job has read-only repository permissions.
-- `CLOUDFLARE_API_TOKEN` for `pnpm run logs:deployed` reaches only Workers Observability and
-  lives in the shell of whoever reads the logs, never in `.dev.vars`
-  ([reading deployed logs](observability.md#reading-deployed-logs)).
+- `pnpm run logs:deployed` reads the logs with the deploys' `CLOUDFLARE_API_KEY`,
+  `CLOUDFLARE_EMAIL` and `CLOUDFLARE_ACCOUNT_ID`, set in the shell of whoever reads them, never in
+  `.dev.vars` ([reading deployed logs](observability.md#reading-deployed-logs)).
 
 ## CORS
 

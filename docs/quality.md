@@ -148,16 +148,16 @@ the browser specs guard a change before it reaches Staging.
   `pnpm run logs:query` answers errors, routes, latency and one request's timeline from the local
   and browser-test logs, with tests. Documented in [`observability.md`](agents/observability.md).
   `/api/health` and every page name the release, and the browser reports its errors to Workers
-  Logs (ADR 0006). Main gap: reading Staging's or Production's logs (`pnpm run logs:deployed`)
-  needs a read-only token an owner makes, and the browser's stacks are minified.
+  Logs (ADR 0006), and `pnpm run logs:deployed` reads Staging's or Production's logs. Main gap:
+  the browser's stacks are minified, with no source maps kept.
 - **Delivery, B.** CI gates each deploy, which refuses pending migrations, probes the new
   deployment and checks it against the site standards, and the workflow tests hold the deploys to
   that (`tests/unit/workflows/deploy-workers.test.ts`). Documented in
   [`ci-deploys.md`](agents/ci-deploys.md). The smoke test checks the deployed commit and a refused
   sign-in, Production waits for a verified Staging deploy of the same files, a re-run of an old run
   deploys nothing, and a failed deploy opens an issue. Main gaps: these guards first run on GitHub
-  after this merges, only `Quality Gate` is required until an admin requires the gate jobs and
-  turns the merge queue on, and CI deploys with the account's global API key.
+  after this merges, and only `Quality Gate` is required until an admin requires the gate jobs and
+  turns the merge queue on.
 - **Repository checks and agent workflows, B.** `pnpm run verify` runs the comment, docs, size,
   secret, duplicate, dead-code, dependency, linter and generated-file checks, on all files or
   some, the git hooks run the fast ones, and the checks' own tests run in CI

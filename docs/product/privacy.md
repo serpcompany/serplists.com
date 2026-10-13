@@ -193,7 +193,7 @@ That is the full URL and the request's `cf` properties, the visitor's location a
 these logs by country). The docs list no fields, so a log may also hold the request's headers,
 which carry the visitor's IP address (`CF-Connecting-IP`). These and the API's lines stay 3 days on
 the Workers Free plan and 7 on Workers Paid, the same docs say, then go, and only people with
-access to SERP's Cloudflare account, or a token for its Workers Observability, can read them.
+access to SERP's Cloudflare account can read them.
 
 - No automated check yet (issue to come: unchecked product behaviors).
 

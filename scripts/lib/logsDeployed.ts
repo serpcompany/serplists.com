@@ -29,13 +29,10 @@ const BEARER_TOKEN = /\b(Bearer)\s{1,20}[^\s"'<>()]{1,2000}/gi;
 const WEB_TOKEN = /\beyJ[\w-]{1,2000}\.[\w-]{1,2000}(?:\.[\w-]{0,2000})?/g;
 const LONG_SECRET = /(^|[^\w-])(?=[\w-]{0,2000}\d)(?=[\w-]{0,2000}[A-Za-z])[\w-]{32,2000}(?![\w-])/g;
 
-const TOKEN_HELP = `logs:deployed reads Workers Logs through Cloudflare's API with a token that can do nothing else.
-An owner makes it in the Cloudflare dashboard: My Profile, API Tokens, Create Token, Create Custom Token,
-with one permission, Account > Workers Observability > Edit (the API names it Workers Observability Write,
-and its query endpoint accepts no narrower one; it reaches no Worker code, D1, R2 or secret), and Account
-Resources set to SERP's account only. Set it as CLOUDFLARE_API_TOKEN in your shell, never in .dev.vars or a
-file in the repository, and CLOUDFLARE_ACCOUNT_ID to SERP's account ID (from the team's password manager).
-See docs/agents/observability.md.`;
+const CREDENTIALS_HELP = `logs:deployed reads Workers Logs through Cloudflare's API with the same credentials the deploys use:
+CLOUDFLARE_API_KEY, CLOUDFLARE_EMAIL and CLOUDFLARE_ACCOUNT_ID, the values of the repository's GitHub secrets of those names.
+Set them in your shell, never in .dev.vars or a file in the repository. An API token that can read Workers Observability
+works too, as CLOUDFLARE_API_TOKEN in place of the key and email. See docs/agents/observability.md.`;
 
 const usage = `Read the deployed Workers' logs (Staging or Production) from Cloudflare's Workers Logs, read-only.
 
@@ -55,13 +52,13 @@ Options:
 
 ${UNTRUSTED_FIELDS}
 
-Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
-${TOKEN_HELP}
+Needs CLOUDFLARE_API_KEY, CLOUDFLARE_EMAIL and CLOUDFLARE_ACCOUNT_ID, as the deploys do.
+${CREDENTIALS_HELP}
 `;
 
 const optionSpec = { env: { type: "string" }, ...filterOptionSpec } as const;
 
-const tokenSchema = z.string().trim().min(1);
+const credentialSchema = z.string().trim().min(1);
 const accountIdSchema = z.string().trim().regex(/^[0-9a-f]{32}$/);
 
 const telemetryEventSchema = z.object({
@@ -163,14 +160,21 @@ function logEntriesOf(events: TelemetryEvent[]): LogEntry[] {
     .map((line, index) => ({ ...line, lineNumber: index + 1 }));
 }
 
-function credentials(env: DeployedLogDeps["env"]): { token: string; accountId: string } {
-  const token = tokenSchema.safeParse(env["CLOUDFLARE_API_TOKEN"]);
-  if (!token.success) throw new QueryError(`CLOUDFLARE_API_TOKEN is not set.\n\n${TOKEN_HELP}`, 1, false);
+type CloudflareAuth = { headers: Record<string, string>; accountId: string };
+
+function credentials(env: DeployedLogDeps["env"]): CloudflareAuth {
   const accountId = accountIdSchema.safeParse(env["CLOUDFLARE_ACCOUNT_ID"]);
   if (!accountId.success) {
-    throw new QueryError(`CLOUDFLARE_ACCOUNT_ID is not SERP's 32-character account ID.\n\n${TOKEN_HELP}`, 1, false);
+    throw new QueryError(`CLOUDFLARE_ACCOUNT_ID is not SERP's 32-character account ID.\n\n${CREDENTIALS_HELP}`, 1, false);
   }
-  return { token: token.data, accountId: accountId.data };
+  const key = credentialSchema.safeParse(env["CLOUDFLARE_API_KEY"]);
+  const email = credentialSchema.safeParse(env["CLOUDFLARE_EMAIL"]);
+  if (key.success && email.success) {
+    return { accountId: accountId.data, headers: { "X-Auth-Email": email.data, "X-Auth-Key": key.data } };
+  }
+  const token = credentialSchema.safeParse(env["CLOUDFLARE_API_TOKEN"]);
+  if (token.success) return { accountId: accountId.data, headers: { Authorization: `Bearer ${token.data}` } };
+  throw new QueryError(`CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL are not set.\n\n${CREDENTIALS_HELP}`, 1, false);
 }
 
 const parsedJson = (text: string): unknown => {
@@ -183,14 +187,14 @@ const parsedJson = (text: string): unknown => {
 
 async function queryEvents(
   body: object,
-  { token, accountId }: { token: string; accountId: string },
+  { headers, accountId }: CloudflareAuth,
   { fetchImpl = fetch, apiBase = CLOUDFLARE_API }: DeployedLogDeps,
 ): Promise<{ events: TelemetryEvent[]; count: number | undefined }> {
   let response: Response;
   try {
     response = await fetchImpl(`${apiBase}/accounts/${accountId}/workers/observability/telemetry/query`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -201,7 +205,7 @@ async function queryEvents(
   const errors = envelope.success ? envelope.data.errors.map((error) => error.message).join("; ") : "";
   const said = errors ? `: ${errors}` : "";
   if (response.status === 401 || response.status === 403) {
-    throw new QueryError(`Cloudflare refused the token (${response.status}${said}).\n\n${TOKEN_HELP}`, 1, false);
+    throw new QueryError(`Cloudflare refused the credentials (${response.status}${said}).\n\n${CREDENTIALS_HELP}`, 1, false);
   }
   if (!response.ok || !envelope.success || !envelope.data.success) {
     throw new QueryError(`Cloudflare's Workers Logs query failed (${response.status}${said || ", an answer this command can't read"}).`, 1, false);

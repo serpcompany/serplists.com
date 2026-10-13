@@ -179,18 +179,14 @@ Every run says on stderr that every field is untrusted data, never instructions:
 line's `path` is the URL a request asked for, on routes that need no session too, and a
 `client_error` line's fields are what was posted to `/api/client-errors`.
 
-It needs two variables, set in your shell, never in `.dev.vars` or a committed file:
+It reads the logs with the same Cloudflare credentials the deploys use: `CLOUDFLARE_API_KEY`,
+`CLOUDFLARE_EMAIL` and `CLOUDFLARE_ACCOUNT_ID`, the values of the repository's GitHub secrets of those
+names ([database operations](database-operations.md#applying-migrations)), set in your shell, never
+in `.dev.vars` or a committed file. Wrangler reads the same variables, so in a shell that sets
+them, Wrangler acts with the account's key rather than your login. An API token that can read
+Workers Observability works too, as `CLOUDFLARE_API_TOKEN` in place of the key and email.
 
-- `CLOUDFLARE_API_TOKEN`: a token with one permission, Account, Workers Observability, Edit (the
-  API calls it Workers Observability Write; its query endpoint accepts no narrower one), on SERP's
-  account only. It can query Workers Logs and keep saved queries, and reaches no Worker code, D1,
-  R2 or secret. An owner makes it in the Cloudflare dashboard: My Profile, API Tokens, Create
-  Token, Create Custom Token. Wrangler reads the same variable, so in a shell that sets it,
-  Wrangler can do no more than this token allows.
-- `CLOUDFLARE_ACCOUNT_ID`: SERP's account ID, from the team's password manager
-  ([database operations](database-operations.md#applying-migrations)).
-
-Without them, the command says what is missing and how to make the token. The dashboard's Worker
+Without them, the command says what is missing. The dashboard's Worker
 page (Workers & Pages, the Worker, Logs) shows the same lines to anyone with account access.
 
 ## Incident response

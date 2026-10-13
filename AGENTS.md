@@ -105,7 +105,7 @@ where one says otherwise, these win:
 - **Branches are named `<type>/<issue>-<slug>`** ([`code.md`](docs/agents/code.md), Pull requests).
 - **Only the root `README.md` is a map;** others are leaves ([`code.md`](docs/agents/code.md#docs)).
 - **Edit and stop hooks** run the checks ([`agent-tooling.md`](docs/agents/agent-tooling.md)).
-- **Errors go to Workers Logs, not Sentry,** until the owner decides
+- **Errors go to Workers Logs, not Sentry,** for now; Sentry may come later
   ([ADR 0006](docs/adr/0006-report-errors-to-workers-logs.md)).
 - **A deploy refuses pending migrations** rather than applying them
   ([ADR 0005](docs/adr/0005-deploys-refuse-pending-migrations.md)).

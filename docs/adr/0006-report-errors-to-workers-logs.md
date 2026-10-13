@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Report errors to Workers Logs
@@ -12,11 +12,10 @@ parts before it sends them, and the API rebuilds each report again and logs it a
 `client_error` line. An agent reads both with `pnpm run logs:deployed`. SERP's Telemetry standard
 starts a website with Sentry in the front and back end; this repository does not use it yet.
 
-Chosen with the harness alignment on 2026-10-12 as the interim that needs no new account or
-processor, for the owner to accept or to replace with Sentry, which needs an account and a DSN
-only the owner can create. The guide's default is SERP's (Sentry in every app), and its variant of
-platform tools only applies when a published privacy promise rules an SDK out; this repository had
-published none. How it works is in
+The owner chose Workers Logs for now on 2026-10-12, and expects to move to Sentry later: it needs
+no new account or processor, while Sentry needs an account and a DSN. The guide's default is
+SERP's (Sentry in every app), and its variant of platform tools only applies when a published
+privacy promise rules an SDK out; this repository had published none. How it works is in
 [`observability.md`](../agents/observability.md#error-reports), and what a report holds in
 [privacy](../product/privacy.md#error-reports).
 
@@ -66,7 +65,7 @@ published none. How it works is in
   failed" issue.
 - No source maps are kept, so a browser stack names the minified chunks; finding the code means
   building the reported commit.
-- Reading the logs needs a Cloudflare API token that only reaches Workers Observability, which an
-  owner makes.
+- Reading the logs from a terminal (`pnpm run logs:deployed`) takes the Cloudflare credentials the
+  deploys use.
 - Moving to Sentry later changes the privacy doc first, then adds its SDK beside the reporter or in
   its place; the report's fields and the release identifier carry over.

@@ -7,9 +7,11 @@ import { firstOf } from '../../support/elements';
 import { readWranglerToml } from '../../support/wranglerToml';
 
 const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
+const API_KEY = 'stand-in-global-api-key';
+const EMAIL = 'deploys@example.test';
 const TOKEN = 'stand-in-observability-token';
 const NOW = Date.parse('2026-10-12T18:00:00.000Z');
-const CREDENTIALS = { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID };
+const CREDENTIALS = { CLOUDFLARE_API_KEY: API_KEY, CLOUDFLARE_EMAIL: EMAIL, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID };
 
 const queryBody = z.object({
   queryId: z.string(),
@@ -23,7 +25,14 @@ const queryBody = z.object({
   }),
 });
 
-type Received = { method: string | undefined; url: string | undefined; authorization: string | undefined; body: string };
+type Received = {
+  method: string | undefined;
+  url: string | undefined;
+  authorization: string | undefined;
+  authEmail: string | string[] | undefined;
+  authKey: string | string[] | undefined;
+  body: string;
+};
 
 let received: Received[] = [];
 let reply: { status: number; body: string } = { status: 200, body: '{}' };
@@ -34,7 +43,14 @@ const server: Server = createServer((request, response) => {
     body += chunk.toString();
   });
   request.on('end', () => {
-    received.push({ method: request.method, url: request.url, authorization: request.headers.authorization, body });
+    received.push({
+      method: request.method,
+      url: request.url,
+      authorization: request.headers.authorization,
+      authEmail: request.headers['x-auth-email'],
+      authKey: request.headers['x-auth-key'],
+      body,
+    });
     response.writeHead(reply.status, { 'Content-Type': 'application/json' }).end(reply.body);
   });
 });
@@ -110,7 +126,9 @@ describe('pnpm run logs:deployed', () => {
     expect(request).toMatchObject({
       method: 'POST',
       url: `/client/v4/accounts/${ACCOUNT_ID}/workers/observability/telemetry/query`,
-      authorization: `Bearer ${TOKEN}`,
+      authorization: undefined,
+      authEmail: EMAIL,
+      authKey: API_KEY,
     });
     const query = queryBody.parse(JSON.parse(request.body));
     expect(query.timeframe).toEqual({ from: NOW - 2 * 3_600_000, to: NOW });
@@ -225,31 +243,41 @@ describe('pnpm run logs:deployed', () => {
     expect(queryBody.parse(JSON.parse(firstOf(received).body)).limit).toBe(1);
   });
 
-  it('explains how to make a token when CLOUDFLARE_API_TOKEN is missing, and calls nothing', async () => {
+  it("reads the logs with an API token in place of the deploys' key and email", async () => {
+    answerWith([]);
+
+    const { exitCode } = await run(['--env', 'staging'], { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID });
+
+    expect(exitCode).toBe(0);
+    expect(firstOf(received)).toMatchObject({ authorization: `Bearer ${TOKEN}`, authEmail: undefined, authKey: undefined });
+  });
+
+  it("names the deploys' own credentials when none are set, and calls nothing", async () => {
     const { output, exitCode } = await run(['--env', 'staging'], { CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID });
 
     expect(exitCode).toBe(1);
-    expect(output).toContain('CLOUDFLARE_API_TOKEN is not set');
-    expect(output).toContain('Workers Observability');
+    expect(output).toContain('CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL are not set');
+    expect(output).toContain('the same credentials the deploys use');
     expect(received).toEqual([]);
   });
 
   it("refuses a CLOUDFLARE_ACCOUNT_ID that is not an account's id", async () => {
-    const { output, exitCode } = await run(['--env', 'staging'], { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: 'serp' });
+    const { output, exitCode } = await run(['--env', 'staging'], { ...CREDENTIALS, CLOUDFLARE_ACCOUNT_ID: 'serp' });
 
     expect(exitCode).toBe(1);
     expect(output).toContain('CLOUDFLARE_ACCOUNT_ID');
     expect(received).toEqual([]);
   });
 
-  it('says Cloudflare refused the token, and how to make one, without printing the token', async () => {
+  it('says Cloudflare refused the credentials, and which ones it reads, without printing them', async () => {
     reply = { status: 403, body: JSON.stringify({ success: false, errors: [{ code: 10000, message: 'Authentication error' }], result: null }) };
 
     const { output, exitCode } = await run(['--env', 'production']);
 
     expect(exitCode).toBe(1);
-    expect(output).toContain('Cloudflare refused the token (403: Authentication error)');
-    expect(output).not.toContain(TOKEN);
+    expect(output).toContain('Cloudflare refused the credentials (403: Authentication error)');
+    expect(output).not.toContain(API_KEY);
+    expect(output).not.toContain(EMAIL);
   });
 
   it('fails on an answer it cannot read', async () => {
