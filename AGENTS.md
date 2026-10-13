@@ -24,11 +24,12 @@ billing state, deleting user data, product wording or pricing, and changing a ru
 - **Checks:** `pnpm run verify`, or some on some paths: `pnpm run verify comments,sizes <paths>`.
 - **Inner loop:** `pnpm exec tsc -p <project> --noEmit`, `pnpm exec vitest related --run <files>`,
   and `pnpm run verify <checks> <paths>`.
-- **Search** with `grep` and `find`, never `rg` or the Grep tool: they crash VS Code here.
+- **Search** with `grep` and `find`, never `rg` or the Grep or Glob tools: they crash VS Code here.
 - **Before a push:** the tests the change touches, browser specs through
   `node --import tsx scripts/run-at-low-priority.ts pnpm run test:e2e:full <specs>`.
-- **In the running product:** the skills `verify-web` (pages) and `verify-api` (the API, Run Keys
-  and MCP), in `.claude/skills/`. Proof goes under `tmp/agent/verify/`.
+- **Evidence:** a change a user sees, the skill `verify-web` (pages) or `verify-api` (API, Run
+  Keys, MCP) in `.claude/skills/`, with proof in `tmp/agent/verify/`; a build, routing or header
+  change, `pnpm run test:smoke` too; a deploy change, the deploy's checks on Staging.
 
 ## Codebase
 
@@ -76,15 +77,13 @@ billing state, deleting user data, product wording or pricing, and changing a ru
 - [`docs/quality.md`](docs/quality.md): a grade for each product area and layer, with the code it
   covers and the day it was graded. Re-grade a row when its tests, CI or docs change.
 - [`docs/tech-debt.md`](docs/tech-debt.md), and [`docs/harness-debt.md`](docs/harness-debt.md)
-  for checks, delivery and the harness: known debt, each with its issue and Size. Add what you
-  knowingly leave; remove what you pay off.
+  for checks and delivery: known debt with its issue and Size. Add what you leave; remove it paid.
 
 ## Decisions
 
 - [`docs/adr/`](docs/adr/): decisions that are hard to reverse, each with Why, Considered and
   Consequences. Read the ones the task touches. A record is superseded, never rewritten.
-- [`CONTEXT.md`](CONTEXT.md): terms that are easy to confuse, such as Personal and Organization,
-  Template Owner and Creator, or a guest run and a shared run.
+- [`CONTEXT.md`](CONTEXT.md): easily confused terms, such as Template Owner and Creator.
 
 ## Where this differs from SERP's standards
 
@@ -98,22 +97,23 @@ where one says otherwise, these win:
   squash-merging a prepared branch; a hotfix goes through `staging` too, until the owner decides
   otherwise ([ADR 0002](docs/adr/0002-keep-staging-and-main-and-promote-by-squash-merge.md)).
   GitHub links no issue into `staging`, so `Pull request` reads the body in place of PR Issue Link.
+- **A merge queue tests merged trees,** not a check on push with receipts, once an admin turns it
+  on ([`ci.md`](docs/agents/ci.md#checks-a-merge-can-wait-for)).
 - **`CI` runs a branch's pushes one at a time, in push order,** so deploys land in that order; a
   push still waiting gives way to a newer one ([`ci-deploys.md`](docs/agents/ci-deploys.md)).
 - **Branches are named `<type>/<issue>-<slug>`** ([`code.md`](docs/agents/code.md), Pull requests).
 - **Only the root `README.md` is a map;** others are leaves ([`code.md`](docs/agents/code.md#docs)).
+- **Edit and stop hooks** run the checks ([`agent-tooling.md`](docs/agents/agent-tooling.md)).
 - **Errors go to Workers Logs, not Sentry,** until the owner decides
   ([ADR 0006](docs/adr/0006-report-errors-to-workers-logs.md)).
 - **A deploy refuses pending migrations** rather than applying them
   ([ADR 0005](docs/adr/0005-deploys-refuse-pending-migrations.md)).
 - **Email goes through Resend or useSend,** not Cloudflare Email Sending, until the owner moves it
   ([`tech-debt.md`](docs/tech-debt.md), Accounts and email).
-- **`docs/references/` holds vendored third-party docs,** beside the standard layout
-  ([`ARCHITECTURE.md`](ARCHITECTURE.md), Stack).
+- **`docs/references/` holds vendored docs** ([`ARCHITECTURE.md`](ARCHITECTURE.md), Stack).
 
 ## This is NOT the Next.js you know
 
 Read the guide for the installed version in `node_modules/next/dist/docs/` before writing Next.js
 code, and heed its deprecation notices
 ([ADR 0003](docs/adr/0003-run-nextjs-on-cloudflare-workers-through-opennext.md)).
-`agentRules: false` in `next.config.ts` keeps `next dev` from writing its own copy into this file.

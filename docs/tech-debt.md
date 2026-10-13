@@ -74,6 +74,7 @@ maintenance).
 | Audit rows keep `ip_hash`, an unsalted SHA-256 of the client's IP address (`functions/api/utils/audit.ts`). | Hashing every IPv4 address recovers the address, so the hash hides little. A keyed hash fixes new rows; the rows already written keep theirs unless the owner decides to clear them. | No issue yet | medium |
 | Template video blocks embed YouTube from `www.youtube.com`, not `www.youtube-nocookie.com` (`src/utils/urlHelpers.ts`, `src/components/shared/VideoEmbed.tsx`). | YouTube can set its cookies as soon as the player loads, before anyone presses play ([`privacy.md`](product/privacy.md#videos-and-media-in-templates)). | No issue yet | small |
 | The sidebar writes a `sidebar_state` cookie that nothing reads (`src/components/ui/sidebar-provider.tsx`). | The browser sends it with every request for nothing ([`privacy.md`](product/privacy.md#cookies-and-browser-storage)). | No issue yet | small |
+| Workers Logs' invocation logs are on (`[observability] enabled = true` in `wrangler.toml`, with no `invocation_logs = false`): Cloudflare keeps each request's full URL and location, and possibly its headers with the visitor's IP address, for 3 to 7 days, and its docs list no fields ([`privacy.md`](product/privacy.md#server-logs)). | The privacy doc has to hedge about an IP address the API itself never logs. Turning them off loses the dashboard's per-request records, so it is the owner's call; reading one Staging invocation log would make the doc exact. | No issue yet | medium |
 
 ## Database
 

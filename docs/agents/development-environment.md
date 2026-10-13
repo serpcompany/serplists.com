@@ -89,6 +89,9 @@ Use `pnpm run dev:stop` to stop: killing only the launcher leaves Next.js and wo
 Windows and holding the port. The launcher itself stops the server's whole process tree on Ctrl+C,
 on `SIGTERM`, and when its terminal window closes (`SIGHUP` on Windows).
 
+`agentRules: false` in `next.config.ts` keeps `next dev` from writing its own copy of Next.js's
+agent rules into `AGENTS.md`.
+
 The session records the launcher's pid with its process start time. A launch or `dev:stop` trusts
 a recorded pid only while that pid still runs `scripts/dev-auto.ts` and started at the recorded
 time (within five seconds: `ps` reports whole seconds, and Node takes a moment to start), because
