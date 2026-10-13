@@ -138,7 +138,7 @@ the browser specs guard a change before it reaches Staging.
 - **D1 cost, B.** Rows-read budgets for the hot requests run on local D1 on every pull request,
   and [`d1-cost.md`](agents/d1-cost.md) holds the query rules and the measurements. Main gap:
   `pnpm run d1:profile`, at full scale, runs only by hand, and Organization run lists and catalog
-  misses still read in proportion to their tables (issue to come: D1 cost).
+  misses still read in proportion to their tables (#299).
 - **Layers and dead code, B.** dependency-cruiser holds a rule for every arrow `ARCHITECTURE.md`
   draws, with no baseline, and prints each rule's fix (`tests/unit/config/layer-rules.test.ts`);
   knip fails on unused files, exports and packages; each runs in `pnpm run verify`. Main gap:

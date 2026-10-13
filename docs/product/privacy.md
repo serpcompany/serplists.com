@@ -45,7 +45,7 @@ A tag added there collects data with no pull request, so whoever adds one update
 Scripts load only from Tag Manager (`www.googletagmanager.com`, which serves Google Analytics' tag
 too), Ahrefs and Cloudflare's beacon: the Content-Security-Policy blocks any other origin.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 - Check: Header tests, "allows every analytics script origin in script-src, and no wildcard, while
   connect-src lets the beacons report to their own hosts".
 
@@ -56,13 +56,13 @@ by default ([Google's list](https://support.google.com/analytics/answer/11397207
 Google keeps the data is a Google Analytics setting the owner keeps. To opt out, use Google's
 [opt-out add-on](https://tools.google.com/dlpage/gaoptout) or block `www.googletagmanager.com`.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 **Ahrefs Web Analytics.** The second tag adds Ahrefs' script, which sends Ahrefs each page view's
 full URL and referrer, to count visits; the script sets no cookie and uses no browser storage. How
 long Ahrefs keeps it is Ahrefs' setting, not known here. Blocking `analytics.ahrefs.com` stops it.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 **Never where the URL holds a secret.** The tags read the full page URL, so the container is
 skipped on a page opened at `/share/`, `/team-invites/` or `/reset-password`, or whose query has
@@ -76,12 +76,12 @@ page an email address. Tag Manager's `noscript` frame gets only the site's origi
 pages it serves; it counts visits and page speed without cookies. Whether it runs is a setting of
 the `serplists.com` zone, not of this repository.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 **Opting out.** The product has no setting or consent banner for any of these. Blocking the Tag
 Manager, Google Analytics, Ahrefs and Cloudflare Insights hosts stops them; pages work the same.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 **In-memory events.** `src/lib/analytics.ts` keeps up to 100 events in the tab's memory and prints
 them to the browser console: page views, Template views and, once a public Template's page has
@@ -195,7 +195,7 @@ which carry the visitor's IP address (`CF-Connecting-IP`). These and the API's l
 the Workers Free plan and 7 on Workers Paid, the same docs say, then go, and only people with
 access to SERP's Cloudflare account can read them.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 ## Accounts
 
@@ -203,7 +203,7 @@ access to SERP's Cloudflare account can read them.
 username and display name, the avatar, and what the person makes: Templates, Runs, Organizations and
 their memberships, and Run Keys, which are stored hashed. They are kept while the account exists.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 **Sessions.** Signing in sets Better Auth's session cookie (`better-auth.session_token`,
 `__Secure-` on https; httpOnly, SameSite=Lax). The session, stored in D1 with the browser's IP
@@ -222,7 +222,7 @@ address and the browser's user agent, and kept with the record.
 **Deletion.** The product has no way to delete an account yet. A person asks at
 support@serplists.com, the address on the Contact page.
 
-- No automated check yet (issue to come: unchecked product behaviors).
+- No automated check yet (#302).
 
 ## Email and billing
 

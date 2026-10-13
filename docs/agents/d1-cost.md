@@ -68,7 +68,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
     is more. A request that is unbounded by design today (the hotspots below) gets a budget
     that grows with the seeded rows it must read (every public Template, the user's runs, an
     Organization's runs), plus the same margin on what it reads beyond them, and its test name
-    says it is unbounded by design (issue to come: D1 cost).
+    says it is unbounded by design (#299).
   - The budgets bite: dropping `idx_templates_public_created_at` fails the catalog, the lists
     without a scope and both sitemaps; reading every template version instead of the newest
     50 fails the template history; dropping `idx_checklist_runs_template_owner` fails both
@@ -271,4 +271,4 @@ steps.
 `usage_analytics` is neither read nor written by the app; dropping it deletes data, so
 it needs a human decision.
 
-The fixes, in order, are tracked in the D1 cost issue (issue to come: D1 cost).
+The fixes, in order, are tracked in the D1 cost issue (#299).

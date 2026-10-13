@@ -31,7 +31,7 @@ const SYNTHETIC_DATASET_SCALE = 0.02;
 const SEEDED_PASSWORD = "password123";
 const ORGANIZATION = "team-seed-growth";
 const MARGIN = { rows: 2, share: 0.1 };
-const D1_COST_ISSUE = "the D1 cost issue (issue to come: D1 cost)";
+const D1_COST_ISSUE = "the D1 cost issue (#299)";
 
 const seededCountsSchema = z.object({
   publicTemplates: z.number(),

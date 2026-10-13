@@ -28,7 +28,7 @@ and `src/server` import `functions/`, client code never imports `src/server`, an
 module must be reachable from a route file in `src/app` or from `next.config.ts`, unused
 primitives in `components/ui/` included: code only a script uses lives in `scripts/lib`. What is
 left of that work, toasts and navigation inside feature code, is tracked in the UI decoupling
-issue (issue to come: UI decoupling).
+issue (#301).
 
 A TSX module in `src/` that exports a component exports nothing else. Next.js treats a
 module as a Fast Refresh boundary only when every export is a component, so an edit to a
