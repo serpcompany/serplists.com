@@ -99,11 +99,12 @@ jobs:
                doc is still accurate, change nothing in it.
             3. Re-grade each row listed under "Scores to re-grade" in docs/quality.md. Read the code
                in its Code column, with its tests, CI, and docs, and grade it again on the scale at
-               the top of docs/quality.md. Rewrite the row to match the code as it is now, and link
-               each gap to its issue or to the row of docs/tech-debt.md or docs/harness-debt.md
-               that covers it (add a row, with a Size, when none does). Set the row's Graded date to
-               today (UTC), even when its grade stays the same. Change no other row. Remove rows of
-               either debt file whose debt the code has paid off.
+               the top of docs/quality.md. Rewrite the row and its line under the table (the
+               evidence and the main gap) to match the code as it is now, and link each gap to its
+               issue or to the row of docs/tech-debt.md or docs/harness-debt.md that covers it (add
+               a row, with a Size, when none does). Set the row's Graded date to today (UTC), even
+               when its grade stays the same. Change no other row. Remove rows of either debt file
+               whose debt the code has paid off.
             4. Edit only Markdown: AGENTS.md, ARCHITECTURE.md, CONTEXT.md, README.md, docs/ except
                docs/adr/ (ADRs record decisions; never rewrite them), docs/api/ (written from code)
                and docs/references/ (third-party docs), and .claude/skills/. Never touch code,

@@ -427,9 +427,14 @@ jobs:
             messages
               .flatMap(entry => (entry?.type === 'assistant' ? entry.message?.content || [] : []))
               .filter(block => block?.type === 'tool_use' && ['Task', 'Agent'].includes(block.name)).length
+          const coverageLine = /^[\s>*_-]*Read (\d+) of (\d+) changed files?\b/m
+          const filesLeftUnread = summary => {
+            const [, read, total] = coverageLine.exec(summary)
+            return Number(total) - Number(read)
+          }
           const coverageProblem = (summary, changedFiles) => {
             if (!summary) return "Findings were posted but no summary, so the review doesn't say how much of the change it read."
-            const coverage = /^[\s>*_-]*Read (\d+) of (\d+) changed files?\b/m.exec(summary)
+            const coverage = coverageLine.exec(summary)
             if (!coverage) return 'The summary has no "Read <N> of <M> changed files." line, so it doesn\'t say how much of the change was read.'
             const [read, total] = [Number(coverage[1]), Number(coverage[2])]
             if (total !== changedFiles) return `The summary counts ${total} changed files, and the pull request changes ${changedFiles}.`
@@ -474,11 +479,12 @@ jobs:
               console.log(`::warning title=Claude review was denied tools::Claude was denied ${clean(denied.join(', '), 600)}. Allow it in claude_args if the review needs it.`)
             }
             const reviewers = reviewersStarted(messages)
-            if (reviewers < 3) {
-              fail(`Claude started ${reviewers} of the pr-review skill's three reviewers, so nothing read the whole change (docs/agents/ci-agents.md, Code review). Claude's last message: ${clean(result.result || '(none)', 400)}`)
-            }
             const unread = coverageProblem(summary?.body, review.changedFiles)
             if (unread) fail(`${unread} (docs/agents/ci-agents.md, Code review)`)
+            const left = filesLeftUnread(summary?.body)
+            if (left > 0 && reviewers < 3) {
+              fail(`Claude left ${left} changed file(s) unread and started ${reviewers} of the pr-review skill's three reviewers, so nothing read the whole change (docs/agents/ci-agents.md, Code review). Claude's last message: ${clean(result.result || '(none)', 400)}`)
+            }
             console.log(`Claude started ${reviewers} reviewers, and the workflow posted ${findings.length} finding(s) and the summary.`)
           }
           main().catch(error => fail(`The review check failed: ${error?.message}`))

@@ -103,14 +103,15 @@ would post, and posts only when you say so. How it's built, and why:
 - **The check fails unless the whole change was reviewed.** After the review, a script fails the
   job when Claude left no log, ended in an error, ended with subagents still running, or nothing
   was posted during the run, saying whether Claude wrote its summary; a denied tool fails it only
-  when nothing was posted. It also fails when Claude started fewer than the skill's three
-  reviewers, or when the summary posted during the run has no `Read <N> of <M> changed files.`
-  line, counts a different M than the pull request has, or leaves files unread without naming
-  them on a `Not read:` line. It counts only what the workflow posted, the summary and top-level
-  inline comments, and not an answer to an `@claude` request. It runs when the review step fails
-  too, and shows what Claude said, such as the API refusing the token (Claude's app and token,
-  below). It runs inline, as the job's other scripts do, and Claude's hooks are off, so nothing in
-  the job runs a script from the pull request with its token.
+  when nothing was posted. It also fails when the summary posted during the run has no
+  `Read <N> of <M> changed files.` line, counts a different M than the pull request has, leaves
+  files unread without naming them on a `Not read:` line, or leaves any unread with fewer than the
+  skill's three reviewers started. A review that read every changed file passes, however many
+  reviewers it started. It counts only what the workflow posted, the summary and top-level inline
+  comments, and not an answer to an `@claude` request. It runs when the review step fails too, and
+  shows what Claude said, such as the API refusing the token (Claude's app and token, below). It
+  runs inline, as the job's other scripts do, and Claude's hooks are off, so nothing in the job
+  runs a script from the pull request with its token.
 - **A pull request from a fork fails with a notice.** GitHub gives it no secrets, so Claude can't
   review it; the job says so and fails rather than passing with no review. A member reviews it, or
   pushes its branch to this repository and opens the pull request from there.
@@ -194,10 +195,11 @@ already broken on `staging` would stop a docs pull request that didn't break it.
   which the job checks before it checks anything out, Claude takes up to eight docs from the
   report, checks each against the code, and fixes what's no longer true, in Markdown only: never
   an ADR, a doc a tool writes, code, or a workflow. It re-grades each row under "Scores to
-  re-grade" and sets its Graded date, even when the grade stays the same, and updates the debt
-  files. It runs `pnpm run verify docs` and opens one pull request into `staging`
-  from `chore/doc-gardening-<date>`, with its body written to `tmp/pr-body.md`: each doc changed,
-  each row re-graded with its old and new grade, and the docs checked without changes.
+  re-grade", rewriting the row and the evidence and main gap in the line under its table, and
+  sets its Graded date, even when the grade stays the same, and updates the debt files. It runs
+  `pnpm run verify docs` and opens one pull request into `staging` from
+  `chore/doc-gardening-<date>`, with its body written to `tmp/pr-body.md`: each doc changed, each
+  row re-graded with its old and new grade, and the docs checked without changes.
 - **`code-gardening`**: unless a `chore/code-gardening-` pull request is still open, Claude fixes
   one item in one pull request into `staging`: the first `small` row of the debt files, or else
   one file near the size limit, split by responsibility. It passes over an item that needs a

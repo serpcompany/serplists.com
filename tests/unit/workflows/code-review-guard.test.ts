@@ -40,6 +40,11 @@ const cleanLog = [{ type: 'system', subtype: 'init' }, ...threeReviewers, result
 const summaryPosted = (coverage: string): PullRequest => ({
   issueComments: [{ login: REVIEW_BOT, at: minutesAfterStart(4), details: summaryOf(coverage) }],
 });
+const twoOfSixtyOneRead: PullRequest = { changedFiles: 61, ...summaryPosted('Read 2 of 61 changed files.\nNot read: the other 59, for lack of time.') };
+const fewerThanThreeReviewers: [string, unknown[], number][] = [
+  ['none', [result()], 0],
+  ['two', [reviewer('Bugs'), reviewer('Rules'), result()], 2],
+];
 const deniedView = deniedCommand('gh pr view 7 --comments');
 
 describe("the review's guard", () => {
@@ -97,20 +102,24 @@ describe("the review's guard", () => {
     expect(status).toBe(0);
   });
 
-  it('counts a reviewer whichever name the tool that starts it has', async () => {
+  it('counts a reviewer whichever name the tool that starts it has, when files were left unread', async () => {
     const log = [reviewer('Bugs', 'Agent'), reviewer('Rules', 'Agent'), reviewer('Docs'), result()];
 
-    expect((await runGuard(log, summaryPosted('Read 4 of 4 changed files.'))).status).toBe(0);
+    expect((await runGuard(log, twoOfSixtyOneRead)).status).toBe(0);
   });
 
-  it.each([
-    ['none', [result()], 'started 0 of'],
-    ['two', [reviewer('Bugs'), reviewer('Rules'), result()], 'started 2 of'],
-  ])('fails when Claude started %s of the three reviewers, though the summary was posted', async (_count, log, message) => {
+  it.each(fewerThanThreeReviewers)('passes when Claude read every changed file, having started %s of the three reviewers', async (_count, log) => {
     const { status, output } = await runGuard(log, summaryPosted('Read 4 of 4 changed files.'));
 
+    expect(output).not.toContain('::error');
+    expect(status).toBe(0);
+  });
+
+  it.each(fewerThanThreeReviewers)('fails when Claude left files unread, having started %s of the three reviewers', async (_count, log, started) => {
+    const { status, output } = await runGuard(log, twoOfSixtyOneRead);
+
     expect(status).not.toBe(0);
-    expect(output).toContain(message);
+    expect(output).toContain(`Claude left 59 changed file(s) unread and started ${started} of the pr-review skill's three reviewers`);
   });
 
   it.each<[string, PullRequest, string]>([

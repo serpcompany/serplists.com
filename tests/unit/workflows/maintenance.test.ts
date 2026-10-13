@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -110,6 +111,11 @@ describe('the Weekly maintenance workflow', () => {
     expect(docPrompt).toContain('--body-file tmp/pr-body.md');
     expect(docPrompt).not.toMatch(/Last verified|design-docs|docs:check|gh pr list/);
     expect(allowedTools(docGarden)).toEqual(expect.arrayContaining(['Bash(pnpm run verify docs:*)', 'Bash(gh pr create:*)', 'Bash(git:*)']));
+  });
+
+  it("has a re-graded row's evidence and main gap rewritten too, which docs/quality.md keeps in the line under its table", () => {
+    expect(readFileSync('docs/quality.md', 'utf8').replace(/\s+/g, ' ')).toContain('The line under each table gives the evidence for each grade and the main gap');
+    expect(docPrompt).toContain('Rewrite the row and its line under the table (the evidence and the main gap) to match the code as it is now');
   });
 
   it('pins the model, keeps subagents in the foreground, and leaves the MCP servers out', () => {
