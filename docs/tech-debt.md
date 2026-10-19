@@ -20,7 +20,6 @@ maintenance).
 
 | Debt | Why it matters | Issue | Size |
 | --- | --- | --- | --- |
-| TD-15: `GET /api/templates` with no `scope` or `teamId` still returns the public Templates and the user's own, unbounded and uncached, for browser tabs loaded before the scoped client shipped (`functions/api/handlers/template-reads.ts`). | Each such request reads in proportion to the catalog (19k rows at 20k Templates). The scoped client reached Production with #295 at the latest, so the request can now return the public catalog alone, and the branch can go. | No issue yet | small |
 | TD-16: Audit rows written before audit compaction still hold up to three full copies of a Run's or Template's content in `before_json`, `after_json` and `diff_json`, which history reads never return. Content has a technical limit (768KB a Template, 896KB a Run, `src/lib/schemas/contentLimits.ts`) derived from the 1MB save body, not a product decision; rows stored before it (Templates imported up to 2MB) can be over it. | The old copies cost storage, and a stored Template or Run over 1MB can't reach its save route at all. The cleanup is a production write the owner approves: null the old copies and compact `diff_json`, confirm the limit as a product limit, and decide row by row about content over it after one read-only query. | No issue yet | large |
 
 ## Accounts and email

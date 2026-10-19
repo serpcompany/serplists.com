@@ -129,20 +129,16 @@ const ROUTES: Route[] = [
     reason: "it is the visitor's catalog plus the session lookup",
   },
   {
-    name: "the template list without a scope that old tabs send, for a visitor",
+    name: "the template list without a scope, for a visitor",
     prepare: get("visitor", "templates"),
     budget: unbounded(EVERY_PUBLIC_TEMPLATE_AND_OWNER, publicTemplatesAndOwners, 1),
-    reason: "a visitor's list without a scope is the public catalog, uncached (TD-15)",
+    reason: "a list without a scope is the public catalog, edge-cached for 5 minutes",
   },
   {
-    name: "the template list without a scope that old tabs send, signed in",
+    name: "the template list without a scope, signed in",
     prepare: get("admin", "templates"),
-    budget: unbounded(
-      "every public Template, the user's Personal Templates and each live public one twice",
-      (n) => n.publicTemplates + n.adminPersonalTemplates + 2 * n.livePublicTemplates,
-      5,
-    ),
-    reason: "public OR the user's own, through two indexes, unbounded and uncached (TD-15)",
+    budget: unbounded(EVERY_PUBLIC_TEMPLATE_AND_OWNER, publicTemplatesAndOwners, 3),
+    reason: "it is the visitor's catalog plus the session lookup",
   },
   {
     name: "the Personal template list",
