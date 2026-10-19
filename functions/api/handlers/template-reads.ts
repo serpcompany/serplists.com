@@ -1,6 +1,6 @@
 import { Env } from '../types';
 import { decodeSlugPath } from '../utils/slug';
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { schema } from '../db';
 import { PUBLIC_REQUIRED_TOOLS_TEMPLATES_MAX, readRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { json, jsonError } from '../utils/response';
@@ -18,7 +18,7 @@ import {
   type PublicProfileOwner,
 } from '../utils/public-profile-owner';
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
-import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
+import { toPublicTemplate } from '../utils/template-public';
 import {
   findTemplateById,
   parseTemplateRow,
@@ -202,15 +202,10 @@ async function listCatalogOrPersonalTemplates(
   const scope = url.searchParams.get('scope');
   if (scope === 'personal' && !userId) return jsonError('Unauthorized', 401);
 
-  const ownPersonalTemplates = userId
-    ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id))
-    : undefined;
-  const isPublicCatalog = !ownPersonalTemplates || scope === 'public';
+  const isPublicCatalog = scope !== 'personal' || !userId;
   const listed = isPublicCatalog
     ? eq(templates.is_public, true)
-    : scope === 'personal'
-      ? ownPersonalTemplates
-      : or(eq(templates.is_public, true), ownPersonalTemplates);
+    : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id));
 
   const respond = async () => {
     const rows = await withRulesColumnFallback((includeRules) =>
@@ -219,9 +214,7 @@ async function listCatalogOrPersonalTemplates(
         .orderBy(desc(templates.created_at)),
     );
     return json(rows.map((template) =>
-      !isPublicCatalog && isOwnPersonalTemplateRow(template, userId)
-        ? parseTemplateRow(template)
-        : toPublicTemplate(parseTemplateRow(template)),
+      isPublicCatalog ? toPublicTemplate(parseTemplateRow(template)) : parseTemplateRow(template),
     ));
   };
 
