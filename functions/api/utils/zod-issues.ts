@@ -1,8 +1,7 @@
-import { z, type ZodError, type ZodIssue } from 'zod';
-
-const failedParseIssues = z.custom<ZodIssue>().array().nonempty();
+import type { ZodError, ZodIssue } from 'zod';
 
 export function firstIssueOf(error: ZodError): ZodIssue {
-  const [first] = failedParseIssues.parse(error.issues);
+  const [first] = error.issues;
+  if (!first) throw new Error('A failed parse reported no issues');
   return first;
 }

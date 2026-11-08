@@ -7,7 +7,7 @@ export const EDITOR_LOAD_LATEST_MESSAGE =
 export const EDITOR_UPLOAD_IN_PROGRESS_MESSAGE =
   'A file is still uploading. If you leave now, it will not be added to the template. Leave anyway?';
 
-export const EDITOR_SAVE_IN_PROGRESS_MESSAGE =
+const EDITOR_SAVE_IN_PROGRESS_MESSAGE =
   'Your template is still saving. If the save fails, your changes will be lost. Leave anyway?';
 
 export const EDITOR_REPLACE_DRAFT_MESSAGE =

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { text } from 'node:stream/consumers';
@@ -35,8 +35,12 @@ describe("this checkout's hook entry points", { timeout: 120_000 }, () => {
     mkdirSync(path.dirname(told), { recursive: true });
     writeFileSync(told, 'the report from before the fix');
 
-    await expect(runEntryPoint('stop-hook.ts', { changed: ['scripts/checks/rules.ts'], session })).resolves.toEqual({ status: 0, stderr: '' });
-    expect(existsSync(told)).toBe(false);
+    try {
+      await expect(runEntryPoint('stop-hook.ts', { changed: ['scripts/checks/rules.ts'], session })).resolves.toEqual({ status: 0, stderr: '' });
+      expect(existsSync(told)).toBe(false);
+    } finally {
+      rmSync(told, { force: true });
+    }
   });
 
   it('refuses input that is not what the hooks send', async () => {

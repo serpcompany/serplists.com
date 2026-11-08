@@ -2,7 +2,7 @@ import { act } from 'react';
 import { cleanup, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { THEME_CHANGE_EVENT, toggleDocumentTheme, useDocumentTheme } from '@/lib/theme';
+import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, toggleDocumentTheme, useDocumentTheme } from '@/lib/theme';
 import { renderSettled } from '../../support/renderInTheDom';
 
 function ThemeShown() {
@@ -42,10 +42,10 @@ describe('the theme a component reads from the page', () => {
       toggleDocumentTheme();
     });
 
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
     await fromAnotherTab(new StorageEvent('storage', { key: 'other-key', newValue: 'light', storageArea: window.localStorage }));
     expect(screen.getByText('dark')).toBeTruthy();
 
-    window.localStorage.clear();
     await fromAnotherTab(new Event('storage'));
     expect(screen.getByText('dark')).toBeTruthy();
 

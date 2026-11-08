@@ -112,6 +112,7 @@ export async function verifyApi(name: string, plan: unknown, extra: string[] = [
       .filter((folder) => /^\d{4}-\d{2}-\d{2}-/.test(folder) && folder.slice(11) === runName)
       .map((folder) => path.join(verifyFolders, folder));
     runFolders.push(...made);
+    if (made.length > 1) throw new Error(`Expected at most one verify folder for ${runName}, found ${made.length}`);
     return { ...result, seen, folder: made.join('') };
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
