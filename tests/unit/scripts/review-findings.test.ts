@@ -28,8 +28,11 @@ describe('review findings', () => {
     expect(titleOf(`**${'x'.repeat(200)}**`)).toHaveLength(100);
   });
 
-  it('are untitled when the finding has no text', () => {
-    expect(titleOf('')).toBe('');
+  it('show a finding with no text past its mark as untitled, so its link still has words to click', () => {
+    const [group] = groupFindings([finding('src/views/Pricing.tsx', 7, ''), finding('src/views/Pricing.tsx', 8, '**blocking**\n\n')]);
+
+    expect(group?.examples.map(({ title }) => title)).toEqual(['Untitled finding', 'Untitled finding']);
+    expect(group?.blocking).toBe(1);
   });
 
   it('count pull requests and blocking findings in each part, the most widespread first', () => {

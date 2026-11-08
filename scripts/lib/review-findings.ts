@@ -15,6 +15,7 @@ export type FindingGroup = {
 export const REPEATED = { findings: 3, pulls: 2 };
 const EXAMPLES_SHOWN = 3;
 const TITLE_LENGTH = 100;
+const UNTITLED = "Untitled finding";
 const FOLDERS_SPLIT_BY_SUBFOLDER = new Set(["src", "functions", "tests", "docs", "db", ".github", ".claude"]);
 
 export function partOf(path: string): string {
@@ -29,6 +30,7 @@ export function titleOf(body: string): string {
     .replace(/[[\]]/g, "")
     .replace(/^(?:blocking|suggestion)\b[\s:.,-]*/i, "")
     .trim();
+  if (!line) return UNTITLED;
   return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH - 1)}…` : line;
 }
 
