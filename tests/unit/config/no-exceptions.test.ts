@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -9,7 +8,7 @@ import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/ch
 import { walkFiles } from '../../../scripts/lib/repo-files';
 import { NAMING_CONVENTIONS } from '../../../scripts/eslint-rules/naming-conventions';
 import { onlyElement } from '../../support/elements';
-import { isError, rulesFor } from '../../support/eslintConfig';
+import { type ConfigFile, isError, repositoryESLint, rulesFor } from '../../support/eslintConfig';
 
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
@@ -39,7 +38,7 @@ const ruleOptions = z.tuple([z.unknown()]).rest(z.unknown());
 const sameNames = (left: string[], right: string[]) => [...left].sort().join() === [...right].sort().join();
 
 const packageScripts = z
-  .object({ scripts: z.object({ 'test:run': z.string(), 'test:local-d1': z.string() }).catchall(z.string()) })
+  .object({ scripts: z.object({ 'test:run': z.string() }).catchall(z.string()) })
   .parse(JSON.parse(readText('package.json'))).scripts;
 
 const workflowFiles = readdirSync(path.join(repoRoot, '.github/workflows'))
@@ -63,12 +62,12 @@ const authoredCodeFiles = filesGitTracksOrWouldTrack().filter(
   (file: string) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)),
 );
 const typeScriptFiles = authoredCodeFiles.filter((file: string) => /\.(ts|tsx|mts|cts)$/.test(file));
-const ESLINT_CONFIGS = ['eslint.config.ts', 'eslint.type-aware.config.ts'];
+const ESLINT_CONFIGS: ConfigFile[] = ['eslint.config.ts', 'eslint.type-aware.config.ts'];
 
 async function typeScriptFilesNotHeldTo(rule: string, options: unknown[]): Promise<string[]> {
   const relaxed: string[] = [];
   for (const configFile of ESLINT_CONFIGS) {
-    const eslint = new ESLint({ cwd: repoRoot, overrideConfigFile: configFile });
+    const eslint = repositoryESLint({ cwd: repoRoot, configFile });
     for (const file of typeScriptFiles) {
       const setting = (await rulesFor(eslint, file))[rule];
       const held = isError(setting) && JSON.stringify(ruleOptions.safeParse(setting).data?.slice(1)) === JSON.stringify(options);
@@ -108,7 +107,7 @@ const maxLinesOptions = z.tuple([
 
 describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   it('holds every authored JavaScript and TypeScript file to the same 500-line limit', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
+    const eslint = repositoryESLint({ cwd: repoRoot });
     const exempt: string[] = [];
     for (const file of authoredCodeFiles) {
       const rule = (await rulesFor(eslint, file))['max-lines'];
@@ -175,16 +174,16 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
     ).toEqual([]);
   });
 
-  it('runs every test file the unit run excludes in the local D1 run, and nothing else there', () => {
+  it('runs every test file in pnpm run test:run, the local D1 tests included as their own project', () => {
     expect(
-      testFileArguments(packageScripts['test:run'], '--exclude'),
-      'A test file excluded from pnpm run test:run must run in pnpm run test:local-d1, or no suite runs it. ' +
-        'Add it to test:local-d1, or stop excluding it.',
-    ).toEqual(testFileArguments(packageScripts['test:local-d1']));
+      [...testFileArguments(packageScripts['test:run'], '--exclude'), ...testFileArguments(packageScripts['test:run'])],
+      'pnpm run test:run runs every Vitest project over every test file, so its one coverage report holds them all. ' +
+        'Give a test that needs other settings its own project in vitest.config.ts rather than leaving it out.',
+    ).toEqual([]);
   });
 
   it('holds every TSX file in src/ to the fast-refresh rule as an error, allowing only the exports Next.js reads from a route module', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
+    const eslint = repositoryESLint({ cwd: repoRoot });
     const relaxed: string[] = [];
     for (const file of authoredCodeFiles.filter((name: string) => /^src\/.*\.tsx$/.test(name))) {
       const setting = (await rulesFor(eslint, file))['react-refresh/only-export-components'];
@@ -220,7 +219,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   });
 
   it('holds the UI primitives to the product vocabulary in their visible text', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
+    const eslint = repositoryESLint({ cwd: repoRoot });
     const result = onlyElement(
       await eslint.lintText('export const Label = () => <span>Switch Workspace</span>;', { filePath: 'src/components/ui/sample.tsx' }),
     );
@@ -231,7 +230,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   });
 
   it('lets only UserContentImage render <img> in src/, with no file exempt from the convention', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
+    const eslint = repositoryESLint({ cwd: repoRoot });
     const refusesImg = async (filePath: string) => {
       const result = onlyElement(await eslint.lintText('<img alt="" src={src} />;', { filePath }));
       return result.messages.some(
@@ -252,7 +251,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   });
 
   it('refuses skipped, todo, fixme and focused tests in Vitest and Playwright files', async () => {
-    const eslint = new ESLint({ cwd: repoRoot });
+    const eslint = repositoryESLint({ cwd: repoRoot });
     const refusals = async (code: string, filePath: string) => {
       const result = onlyElement(await eslint.lintText(code, { filePath }));
       return result.messages.filter((message) => message.ruleId === 'no-restricted-syntax').length;

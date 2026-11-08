@@ -1,10 +1,6 @@
 import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env';
-import { CHILD_COVERAGE_VARIABLE } from './support/childProcessCoverage';
 
 forgetGitRepositoryOverrides();
-
-const childCoverage = process.env[CHILD_COVERAGE_VARIABLE];
-if (childCoverage) process.env['NODE_V8_COVERAGE'] = childCoverage;
 
 const localStorageThatKeepsNothing = {
   getItem: () => null,

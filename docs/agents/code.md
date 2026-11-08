@@ -153,8 +153,8 @@ features (`no-exceptions.test.ts`); other terms are held by judgment
 ## Tests
 
 Tests check what code does, not how it is written, and every test runs. ESLint refuses a skipped,
-todo, fixme, conditional or `.only` test, and a file `test:run` leaves out runs in
-`test:local-d1` (`no-exceptions.test.ts`). A test that renders uses happy-dom
+todo, fixme, conditional or `.only` test, and `test:run` runs every test file, the local D1 tests
+as their own Vitest project (`no-exceptions.test.ts`). A test that renders uses happy-dom
 (`*.dom.test.tsx`), never a hand-written DOM, and other tests run in Node (`vitest.config.ts`,
 `test-environment.dom.test.tsx`). No test reads a code file under `src/` or `functions/` as text
 (`serplists/no-source-text-reads`): import the module, render the component or send the request,

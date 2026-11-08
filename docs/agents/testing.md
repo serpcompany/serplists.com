@@ -72,8 +72,8 @@
   - Scripts that run git in a directory they are given use `withoutGitRepositoryOverrides()`
     from `scripts/lib/git-env.ts`.
 - Every test runs. ESLint refuses `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `xit` and a
-  `.only` call in Vitest and Playwright files, and a test file excluded from `test:run` must
-  be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass
+  `.only` call in Vitest and Playwright files, and `test:run` excludes no test file: the local D1
+  tests are the `local-d1` project (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass
   yet is fixed or deleted, never skipped.
 - Tests are type-checked like the app; Vitest and Playwright strip types without checking
   them. `tests/tsconfig.json` extends the app's `tsconfig.json`, includes every TypeScript
@@ -589,9 +589,8 @@
     query.
   - `next/font/google` is compiled by the Next.js build, so `vitest.config.ts` resolves it
     to `nextFontGoogle.ts`, which returns the shape the root layout reads.
-- Coverage: `test:run` writes `coverage/unit`, the entry points it spawns `coverage/unit-children`
-  (`tests/support/childProcessCoverage.ts`), and `test:local-d1` writes `coverage/local-d1`
-  ([`code.md`](code.md#tests)). If you override `test.exclude`, keep `node_modules`, `dist`,
+- Coverage: `test:run` writes `coverage/tests` and `coverage/tests-children`
+  ([`checks.md`](checks.md#coverage)). If you override `test.exclude`, keep `node_modules`, `dist`,
   `playwright-report`, `test-results`, `tests/e2e/**`, and `tmp/**` excluded.
 - If production test accounts must be removed, inspect dependent rows first and
   clean auth, templates, runs, likes, analytics, entitlement, and Stripe records

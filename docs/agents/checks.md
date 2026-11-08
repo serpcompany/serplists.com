@@ -239,14 +239,16 @@ called, at its line. Fill a gap with a test that drives the code as its callers 
 should happen, or delete the code nothing needs. A test that only reaches a line is padding, which
 the `pr-review` skill's tests reviewer sends back.
 
-- **The reports**, as `coverage.reports` in `verify.json` lists them: `test:run` writes
-  `coverage/unit`, `test:local-d1` (`vitest.local-d1.config.ts`) writes `coverage/local-d1`, and
-  the process entry points the unit tests spawn write `coverage/unit-children`. For those,
-  `tests/support/childProcessCoverage.ts` gives each child of a test worker `NODE_V8_COVERAGE`,
-  and c8 reports the files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in
-  the child's environment. Two instrumentations of one file number its branches differently, so
-  a library module counts only from the tests that import it, and an entry point the children
-  report holds only from the processes that ran it: the teardown drops it from `coverage/unit`.
+- **The reports**, as `coverage.reports` in `verify.json` lists them: `test:run` runs every
+  project (node, dom and local-d1) in one run, which writes `coverage/tests`. Two runs number a
+  file's branches differently, since V8 reports blocks only for code that ran, so their lcov
+  records can't be merged: keep every suite in that one run, as a project of its own. The
+  process entry points the node and dom tests spawn write `coverage/tests-children`:
+  `tests/support/childProcessCoverage.ts` gives each child `NODE_V8_COVERAGE`, and c8 reports the
+  files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in the child's
+  environment. A library module counts only from the tests that import it, and an entry point the
+  children report holds only from the processes that ran it: the teardown drops it from
+  `coverage/tests`.
 - **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
   `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
   `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an

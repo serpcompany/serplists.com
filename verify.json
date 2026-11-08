@@ -42,9 +42,8 @@
   },
   "coverage": {
     "reports": [
-      "coverage/unit/lcov.info",
-      "coverage/unit-children/lcov.info",
-      "coverage/local-d1/lcov.info"
+      "coverage/tests/lcov.info",
+      "coverage/tests-children/lcov.info"
     ]
   }
 }

@@ -92,8 +92,8 @@ every job a pull request runs.
   2. `pnpm run typecheck:env`, the env contract.
   3. `pnpm run verify`, every repository check ([checks.md](checks.md)).
   4. `pnpm run lint` and `pnpm run typecheck`.
-  5. `pnpm run test:run`, the unit tests, and `pnpm run test:local-d1`, the tests on a local D1,
-     each writing its coverage.
+  5. `pnpm run test:run`: the unit tests and, as their own project, the tests on a local D1, in
+     one run that writes the coverage.
   6. `pnpm run test:coverage`, with `SERP_VERIFY_BASE: HEAD^1`: 100% line, branch and function
      coverage ([checks.md](checks.md#coverage)).
 - **`Drizzle schema parity`** (`db-parity`) runs `pnpm run check:db:drizzle-parity`: every

@@ -71,11 +71,8 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: Unit tests
+      - name: Unit and local D1 tests, with coverage
         run: pnpm run test:run
-
-      - name: Local D1 fixture integration
-        run: pnpm run test:local-d1
 
       - name: The coverage check, on both suites' reports
         env:

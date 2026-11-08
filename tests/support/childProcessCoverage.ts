@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { TestProject } from 'vitest/node';
 
@@ -16,6 +17,10 @@ const PROCESS_ENTRY_POINTS = [
 ];
 
 const LIBRARIES_THE_TESTS_IMPORT = ['scripts/*-lib.ts'];
+
+const require = createRequire(import.meta.url);
+
+const C8 = require.resolve('c8/bin/c8.js');
 
 const RECORD_END = 'end_of_record';
 
@@ -51,7 +56,7 @@ export default function recordChildProcessCoverage(project: TestProject): (() =>
     const report = spawnSync(
       process.execPath,
       [
-        path.join(root, 'node_modules/c8/bin/c8.js'),
+        C8,
         'report',
         `--temp-directory=${rawDirectory}`,
         `--reports-dir=${reportsDirectory}`,
