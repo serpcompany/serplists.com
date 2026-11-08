@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
+      packages: read
       contents: write
       pull-requests: write
       issues: write
@@ -122,9 +123,13 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+          registry-url: https://npm.pkg.github.com
+          scope: "@serpcompany"
 
       - name: Install dependencies without their scripts
         if: env.ANSWER == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
 
       - name: Give Claude the repository rules

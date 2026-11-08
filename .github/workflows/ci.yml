@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
+  packages: read
   contents: read
 
 env:
@@ -44,8 +45,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+          registry-url: https://npm.pkg.github.com
+          scope: "@serpcompany"
 
       - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: pnpm install --frozen-lockfile
 
       - name: Every fix commit adds a regression test
@@ -72,6 +77,11 @@ jobs:
       - name: Local D1 fixture integration
         run: pnpm run test:local-d1
 
+      - name: The coverage check, on both suites' reports
+        env:
+          SERP_VERIFY_BASE: HEAD^1
+        run: pnpm run test:coverage
+
   db-parity:
     name: Drizzle schema parity
     runs-on: ubuntu-latest
@@ -93,8 +103,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+          registry-url: https://npm.pkg.github.com
+          scope: "@serpcompany"
 
       - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: pnpm install --frozen-lockfile
 
       - name: Compare migrations with the Drizzle schema
@@ -116,6 +130,7 @@ jobs:
     needs: [quality, db-parity]
     if: github.event_name == 'push' && github.ref_name == 'staging'
     permissions:
+      packages: read
       contents: read
       actions: read
     uses: ./.github/workflows/deploy-staging.yml
@@ -129,6 +144,7 @@ jobs:
     needs: [quality, db-parity]
     if: github.event_name == 'push' && github.ref_name == 'main'
     permissions:
+      packages: read
       contents: read
       actions: read
     uses: ./.github/workflows/deploy-production.yml
