@@ -37,11 +37,6 @@ const PUBLIC_CATALOG_CACHE_SECONDS = 5 * 60;
 
 type ProfileTemplatesOwner = Pick<PublicProfileOwner, 'type' | 'id'>;
 
-function isMissingHistoryReadTableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /no such table: (audit_events|template_versions)/i.test(message);
-}
-
 async function canListOrganizationTemplates(env: Env, teamId: string, userId: string): Promise<boolean> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
   return membership !== null && canViewTeam(normalizeTeamRole(membership.role));
@@ -154,26 +149,18 @@ async function readTemplateHistory(
   }
   const subject = getTemplateSubject(template, userId);
 
-  try {
-    const [versionRows, eventRows] = await Promise.all([
-      selectTemplateVersionHistory(db, templateId, historyLimit),
-      selectAuditEventHistory(db, 'template', templateId, historyLimit),
-    ]);
-    const events = eventRows.map(serializeHistoryEvent);
+  const [versionRows, eventRows] = await Promise.all([
+    selectTemplateVersionHistory(db, templateId, historyLimit),
+    selectAuditEventHistory(db, 'template', templateId, historyLimit),
+  ]);
+  const events = eventRows.map(serializeHistoryEvent);
 
-    return json({
-      templateId,
-      subject,
-      versions: serializeTemplateVersionHistory(versionRows, events),
-      events,
-    });
-  } catch (error) {
-    if (isMissingHistoryReadTableError(error)) {
-      return json({ templateId, subject, versions: [], events: [] });
-    }
-
-    throw error;
-  }
+  return json({
+    templateId,
+    subject,
+    versions: serializeTemplateVersionHistory(versionRows, events),
+    events,
+  });
 }
 
 async function listOrganizationTemplates(env: Env, teamId: string, userId: string | null): Promise<Response> {

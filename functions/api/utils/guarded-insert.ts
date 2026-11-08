@@ -7,20 +7,13 @@ type Db = ReturnType<typeof createDb>;
 const DRIZZLE_TABLE_COLUMNS = Symbol.for('drizzle:Columns');
 
 function valueAsDrizzleInsertFillsIt(column: Column, value: unknown): unknown {
-  if (value !== undefined) return is(value, SQL) ? value : sql.param(value, column);
-  if (column.default !== undefined && column.default !== null) {
-    return is(column.default, SQL) ? column.default : sql.param(column.default, column);
-  }
-  const generated = column.defaultFn?.() ?? column.onUpdateFn?.();
-  if (generated !== undefined) return is(generated, SQL) ? generated : sql.param(generated, column);
-  return sql`null`;
+  if (value !== undefined) return sql.param(value, column);
+  if (column.default === undefined) return sql`null`;
+  return is(column.default, SQL) ? column.default : sql.param(column.default, column);
 }
 
 export function withoutColumns<TTable extends SQLiteTable>(table: TTable, omit: readonly string[]): TTable {
   if (omit.length === 0) return table;
-  if (!(DRIZZLE_TABLE_COLUMNS in table) || table[DRIZZLE_TABLE_COLUMNS] !== getTableColumns(table)) {
-    throw new Error('withoutColumns: unsupported Drizzle table layout');
-  }
   const columns = Object.fromEntries(
     Object.entries(getTableColumns(table)).filter(([key]) => !omit.includes(key)),
   );
@@ -39,8 +32,6 @@ export function allConditions(...conditions: (SQLWrapper | undefined)[]): SQL {
   return combined;
 }
 
-const isWritableColumn = (column: Column): boolean => !column.generated || column.generated.type === 'byDefault';
-
 export function insertRowWhere<TTable extends SQLiteTable>(
   db: Db,
   table: TTable,
@@ -51,7 +42,6 @@ export function insertRowWhere<TTable extends SQLiteTable>(
   const target = withoutColumns(table, options.omitColumns ?? []);
   const provided = values as Record<string, unknown>;
   const selected = Object.entries(getTableColumns(target) as Record<string, Column>)
-    .filter(([, column]) => isWritableColumn(column))
     .map(([key, column]) => sql`${valueAsDrizzleInsertFillsIt(column, provided[key])}`);
   return db.insert(target).select(sql`select ${sql.join(selected, sql`, `)} where ${condition}`);
 }

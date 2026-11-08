@@ -35,18 +35,6 @@ describe("getEntitlementsForUser", () => {
     expect(entitlements.limits.maxActiveRuns).toBe(3);
   });
 
-  it("defaults to free when entitlement override table is not migrated yet", async () => {
-    dbMocks.selectChain.limit.mockRejectedValueOnce(
-      new Error("D1_ERROR: no such table: entitlement_overrides"),
-    );
-
-    const env = apiEnv();
-    const entitlements = await getEntitlementsForUser(env, "user-1");
-
-    expect(entitlements.plan).toBe("free");
-    expect(entitlements.limits.maxTemplates).toBe(1);
-  });
-
   it("resolves user context through the existing user entitlement path", async () => {
     theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 

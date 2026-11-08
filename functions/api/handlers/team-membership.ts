@@ -68,11 +68,6 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
   if (!targetMember || !targetMemberId) {
     return jsonError("Member not found", 404);
   }
-  if (normalizeTeamRole(targetMember.role) === "owner") {
-    return jsonError("Member is already the Organization owner", 400, {
-      code: "owner_transfer_noop",
-    });
-  }
 
   const now = new Date().toISOString();
   const auditEvent = await buildAuditEventValues({

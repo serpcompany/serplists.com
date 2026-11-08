@@ -60,7 +60,7 @@ export async function handleSharedChecklist(
     return jsonError('No fields to update', 400);
   }
 
-  const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
+  const currentRevision = existingSharedRun.revision;
   if (expected_revision !== currentRevision) {
     return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
       code: 'edit_conflict',

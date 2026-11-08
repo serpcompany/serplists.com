@@ -8,8 +8,7 @@ export function truncateSlug(slug: string, max: number): string {
 }
 
 export function withSlugSuffix(base: string, suffix: string, max: number): string {
-  const head = truncateSlug(base, max - suffix.length - 1);
-  return head ? `${head}-${suffix}` : suffix;
+  return `${truncateSlug(base, max - suffix.length - 1)}-${suffix}`;
 }
 
 export function decodeSlugPath(segments: string[]): string | null {

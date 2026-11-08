@@ -121,9 +121,6 @@ export async function createTeamInvite(
 
   const token = createInviteToken();
   const tokenHash = await sha256Hex(token);
-  if (!tokenHash) {
-    return jsonError("Unable to create invite token", 500);
-  }
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const invite = {

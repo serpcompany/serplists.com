@@ -42,7 +42,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
 
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
-  const handlerPath = pathParts[0] === "api" ? pathParts.slice(1) : pathParts;
+  const handlerPath = pathParts.slice(1);
   if (handlerPath[0] !== "agent-keys" || handlerPath.length > 2) {
     return jsonError("Not found", 404);
   }

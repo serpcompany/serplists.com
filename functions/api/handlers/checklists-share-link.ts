@@ -15,7 +15,7 @@ export async function shareChecklistRun(
 ): Promise<Response> {
   const { checklistRuns } = schema;
 
-  if (!runId || runId === 'run') {
+  if (runId === 'run') {
     return jsonError('Checklist run ID required', 400);
   }
 

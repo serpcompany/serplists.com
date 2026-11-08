@@ -68,9 +68,7 @@ async function resolveTemplateRunSource(
     return { error: jsonError('Template not found', 404) };
   }
 
-  const sourceTeamId = typeof sourceTemplate.team_id === 'string' && sourceTemplate.team_id
-    ? sourceTemplate.team_id
-    : null;
+  const sourceTeamId = sourceTemplate.team_id || null;
   const sourceIsPublic = Boolean(sourceTemplate.is_public);
   const isPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
   const effectiveTeamId = isPrivateTeamTemplate ? sourceTeamId : requestedTeamId;
@@ -90,16 +88,13 @@ async function resolveTemplateRunSource(
   }
 
   const normalizedSections = normalizeSectionsPayload(parseJsonArray(sourceTemplate.items) ?? []);
-  if (normalizedSections.error) {
-    return { error: jsonError('Template content is invalid', 500) };
-  }
 
   return {
     source: {
       effectiveTeamId,
       sections: resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalizedSections.sections))),
-      title: sourceTemplate.title || '',
-      version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
+      title: sourceTemplate.title,
+      version: sourceTemplate.version,
     },
   };
 }

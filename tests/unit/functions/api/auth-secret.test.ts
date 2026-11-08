@@ -22,6 +22,15 @@ describe("resolveAuthSecret", () => {
     expect(secret).toBe("legacy-secret-with-32-characters!!!!!");
   });
 
+  it("treats a BETTER_AUTH_SECRET of only spaces as missing and falls back to JWT_SECRET", () => {
+    const secret = resolveAuthSecret({
+      BETTER_AUTH_SECRET: " ".repeat(40),
+      JWT_SECRET: "  legacy-secret-with-32-characters!!!!!  ",
+    });
+
+    expect(secret).toBe("legacy-secret-with-32-characters!!!!!");
+  });
+
   it("throws when neither secret is 32+ chars", () => {
     expect(() =>
       resolveAuthSecret({

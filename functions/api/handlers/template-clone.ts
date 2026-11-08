@@ -91,7 +91,7 @@ export async function cloneTemplate(
   const sourceTooLarge = contentTooLargeResponse('template', normalizeSectionsPayload(source.items).sections);
   if (sourceTooLarge) return sourceTooLarge;
 
-  const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
+  const isPublic = visibility !== 'private';
 
   const templateId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -101,9 +101,9 @@ export async function cloneTemplate(
     const clonedTemplate: TemplateInsertValues = {
       id: templateId,
       user_id: userId,
-      title: source.title || '',
+      title: source.title,
       description: source.description || '',
-      type: typeof source.type === 'string' ? source.type : 'checklist',
+      type: source.type,
       seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
       seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
       rules: typeof source.rules === 'string' ? source.rules : null,
@@ -135,8 +135,8 @@ export async function cloneTemplate(
         after: snapshot,
         metadata: {
           sourceTemplateId: sourceId,
-          sourceVersion: typeof source.version === 'number' ? source.version : null,
-          sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
+          sourceVersion: source.version,
+          sourceContentVersion: source.content_version,
         },
         request,
         env,
@@ -144,7 +144,7 @@ export async function cloneTemplate(
       }),
     };
   };
-  const title = source.title || '';
+  const title = source.title;
   const inserted = await insertTemplateWithUniqueSlug(db, {
     title, slug: await generateUniqueSlug(env, title, templateId), buildRows, capacity: cloneCapacity,
   });

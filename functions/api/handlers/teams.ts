@@ -62,18 +62,9 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return createTeam({ db, env, request, userId }, await readJsonOrNull(request));
   }
 
-  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[2] === "accept") {
-    const token = teamsSubpath[1];
-    if (!token) {
-      return jsonError("Invite token required", 400);
-    }
-
-    const found = await findInviteByToken(db, token);
-    if ("response" in found) {
-      return found.response;
-    }
-
-    const { invite } = found;
+  const [section, second, third, fourth] = teamsSubpath;
+  if (request.method === "POST" && section === "invites" && second && third === "accept") {
+    const invite = await findInviteByToken(db, second);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -94,13 +85,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
   }
 
-  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[3] === "accept") {
-    const inviteId = teamsSubpath[2];
-    if (!inviteId) {
-      return jsonError("Invite id required", 400);
-    }
-
-    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, inviteId)).limit(1);
+  if (request.method === "POST" && section === "invites" && second === "pending" && third && fourth === "accept") {
+    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, third)).limit(1);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }

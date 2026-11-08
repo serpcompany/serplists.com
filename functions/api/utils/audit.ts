@@ -41,7 +41,7 @@ export type TemplateVersionInput = {
   changedByUserId: string;
   subject: AuditSubject;
   snapshot: JsonValue;
-  changeSummary?: TemplateVersionAction;
+  changeSummary: TemplateVersionAction;
   createdAt?: string;
 };
 
@@ -56,15 +56,14 @@ function getClientIp(request?: Request): string | null {
     ?? request.headers.get("True-Client-IP")
     ?? request.headers.get("X-Forwarded-For");
 
-  return forwarded?.split(",")[0]?.trim() || null;
+  return forwarded?.replace(/,.*/s, "").trim() || null;
 }
 
 const AUDIT_IP_HASH_KEY_LABEL = "serplists:audit-ip-hash";
 
 async function keyedIpHash(ip: string, authSecret: string | undefined): Promise<string | null> {
   if (!authSecret) return null;
-  const ipHashKey = await hmacSha256Hex(authSecret, AUDIT_IP_HASH_KEY_LABEL);
-  return ipHashKey ? hmacSha256Hex(ipHashKey, ip) : null;
+  return hmacSha256Hex(await hmacSha256Hex(authSecret, AUDIT_IP_HASH_KEY_LABEL), ip);
 }
 
 async function getRequestAuditMetadata(request: Request | undefined, authSecret: string | undefined): Promise<{
@@ -106,7 +105,7 @@ export async function buildAuditEventValues(input: AuditEventInput): Promise<typ
 export async function buildTemplateVersionValues(
   input: TemplateVersionInput,
 ): Promise<typeof schema.templateVersions.$inferInsert> {
-  const snapshotJson = serializeJson(input.snapshot) ?? "{}";
+  const snapshotJson = JSON.stringify(input.snapshot);
 
   return {
     id: crypto.randomUUID(),
@@ -117,7 +116,7 @@ export async function buildTemplateVersionValues(
     subject_id: input.subject.id,
     snapshot_json: snapshotJson,
     content_hash: await sha256Hex(snapshotJson),
-    change_summary: input.changeSummary ?? null,
+    change_summary: input.changeSummary,
     created_at: input.createdAt ?? new Date().toISOString(),
   };
 }

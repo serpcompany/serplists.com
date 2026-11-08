@@ -28,7 +28,8 @@ const DRIZZLE_QUERY_PARAMS_SECTION = /\n?\s*params:/;
 const MAX_TEXT_LENGTH = 500;
 
 function scrub(text: string): string {
-  const withoutQueryParams = text.split(DRIZZLE_QUERY_PARAMS_SECTION)[0] ?? '';
+  const paramsAt = text.search(DRIZZLE_QUERY_PARAMS_SECTION);
+  const withoutQueryParams = paramsAt === -1 ? text : text.slice(0, paramsAt);
   return withoutQueryParams.replace(EMAIL_ADDRESS_PATTERN, '[email]').slice(0, MAX_TEXT_LENGTH);
 }
 

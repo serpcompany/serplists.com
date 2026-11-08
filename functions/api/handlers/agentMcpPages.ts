@@ -167,7 +167,6 @@ const CURSOR_AND_OFFSETS_RESERVE_BYTES = 512;
 const SEPARATOR_BYTES = 1;
 const JSON_STRING_QUOTES_BYTES = 2;
 const SHORT_ESCAPE_BYTES = 2;
-const UNICODE_ESCAPE_BYTES = 6;
 const SURROGATE_PAIR_UTF8_BYTES = 4;
 
 export const unitOf = (value: unknown): Unit => {
@@ -177,10 +176,6 @@ export const unitOf = (value: unknown): Unit => {
 
 function jsonStringBytes(codeUnit: number): number {
   if (codeUnit === 0x22 || codeUnit === 0x5c) return SHORT_ESCAPE_BYTES;
-  if (codeUnit < 0x20) {
-    const hasShortEscape = codeUnit === 0x08 || codeUnit === 0x09 || codeUnit === 0x0a || codeUnit === 0x0c || codeUnit === 0x0d;
-    return hasShortEscape ? SHORT_ESCAPE_BYTES : UNICODE_ESCAPE_BYTES;
-  }
   if (codeUnit < 0x80) return 1;
   return codeUnit < 0x800 ? 2 : 3;
 }
@@ -191,10 +186,7 @@ function partEndWithinBytes(json: string, from: number, maxBytes: number): numbe
   while (index < json.length) {
     const code = json.charCodeAt(index);
     const isSurrogatePair = code >= 0xd800 && code <= 0xdbff && (json.charCodeAt(index + 1) & 0xfc00) === 0xdc00;
-    const isLoneSurrogate = !isSurrogatePair && code >= 0xd800 && code <= 0xdfff;
-    const width = isSurrogatePair
-      ? SURROGATE_PAIR_UTF8_BYTES
-      : isLoneSurrogate ? UNICODE_ESCAPE_BYTES : jsonStringBytes(code);
+    const width = isSurrogatePair ? SURROGATE_PAIR_UTF8_BYTES : jsonStringBytes(code);
     if (bytes + width > maxBytes) break;
     bytes += width;
     index += isSurrogatePair ? 2 : 1;

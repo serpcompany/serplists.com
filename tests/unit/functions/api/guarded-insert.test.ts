@@ -28,6 +28,17 @@ describe('insertRowWhere', () => {
     expect(guarded.params).toEqual(plain.params);
   });
 
+  it('fills a column the row leaves out with its default, SQL defaults included, as a plain insert does', () => {
+    const run = { id: 'run-1', user_id: 'user-1', title: 'Run', items: '[]', started_at: 'now', created_at: 'now' };
+    const plain = drizzleWithoutD1.insert(schema.checklistRuns).values(run).toSQL();
+    const guarded = insertRowWhere(drizzleWithoutD1, schema.checklistRuns, run, sql`1 = 1`).toSQL();
+
+    expect(guarded.sql.slice(guarded.sql.indexOf(' select ') + 8, guarded.sql.lastIndexOf(' where '))).toBe(
+      plain.sql.slice(plain.sql.indexOf(' values (') + 9, -1),
+    );
+    expect(guarded.params).toEqual(plain.params);
+  });
+
   it('leaves omitted columns out of the statement, matching a plain insert of the rest', () => {
     const template = { id: 'template-1', user_id: 'user-1', title: 'T', items: '[]', created_at: 'now' };
     const plain = drizzleWithoutD1.insert(withoutColumns(schema.templates, ['rules'])).values(template).toSQL();

@@ -29,7 +29,7 @@ export async function restoreTemplate(
 ): Promise<Response> {
   const { templates, auditEvents } = schema;
 
-  if (!templateId || templateId === 'templates') {
+  if (templateId === 'templates') {
     return jsonError('Template ID required', 400);
   }
 

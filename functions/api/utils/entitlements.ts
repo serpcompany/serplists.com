@@ -25,11 +25,6 @@ export type Entitlements = {
   };
 };
 
-function isMissingOptionalBillingTableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /no such table: (entitlement_overrides|team_entitlement_overrides|stripe_subscriptions)/i.test(message);
-}
-
 function freeEntitlements(): Entitlements {
   return {
     plan: "free",
@@ -51,33 +46,24 @@ function userOverrideEntitlements(plan: string): Entitlements {
 }
 
 function teamOverrideEntitlements(plan: string): Entitlements {
-  if (plan === "team") return paidEntitlements("team", "team_override");
-  if (plan === "pro") return paidEntitlements("team", "team_override");
-  return freeEntitlements();
+  return plan === "team" || plan === "pro" ? paidEntitlements("team", "team_override") : freeEntitlements();
 }
 
 type Db = ReturnType<typeof createDb>;
 
 async function findActiveManualOverride(db: Db, userId: string, nowSeconds: number) {
   const { entitlementOverrides } = schema;
-  try {
-    const [override] = await db
-      .select()
-      .from(entitlementOverrides)
-      .where(
-        and(
-          eq(entitlementOverrides.user_id, userId),
-          or(isNull(entitlementOverrides.expires_at), gt(entitlementOverrides.expires_at, nowSeconds))
-        )
+  const [override] = await db
+    .select()
+    .from(entitlementOverrides)
+    .where(
+      and(
+        eq(entitlementOverrides.user_id, userId),
+        or(isNull(entitlementOverrides.expires_at), gt(entitlementOverrides.expires_at, nowSeconds))
       )
-      .limit(1);
-    return override;
-  } catch (error) {
-    if (!isMissingOptionalBillingTableError(error)) {
-      throw error;
-    }
-    return undefined;
-  }
+    )
+    .limit(1);
+  return override;
 }
 
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
@@ -95,27 +81,13 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
   }
 
   const { stripeSubscriptions } = schema;
-  type StripeSubscriptionRow = typeof stripeSubscriptions.$inferSelect;
+  const subs = await db
+    .select()
+    .from(stripeSubscriptions)
+    .where(and(eq(stripeSubscriptions.user_id, userId), inArray(stripeSubscriptions.price_id, stripe.proPriceIds)))
+    .orderBy(desc(stripeSubscriptions.updated_at));
 
-  let subs: StripeSubscriptionRow[];
-  try {
-    subs = await db
-      .select()
-      .from(stripeSubscriptions)
-      .where(and(eq(stripeSubscriptions.user_id, userId), inArray(stripeSubscriptions.price_id, stripe.proPriceIds)))
-      .orderBy(desc(stripeSubscriptions.updated_at));
-  } catch (error) {
-    if (!isMissingOptionalBillingTableError(error)) {
-      throw error;
-    }
-
-    return freeEntitlements();
-  }
-
-  const best = subs.find((s) => isPaidSubscriptionStatus(s.status)) ?? subs[0] ?? null;
-  const plan = best?.status && isPaidSubscriptionStatus(best.status) ? "pro" : "free";
-
-  return plan === "pro"
+  return subs.some((s) => isPaidSubscriptionStatus(s.status))
     ? paidEntitlements("pro", "user_subscription")
     : freeEntitlements();
 }
@@ -129,26 +101,16 @@ export async function getEntitlementsForContext(env: Env, context: EntitlementCo
   const { teamEntitlementOverrides } = schema;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
-  try {
-    const [override] = await db
-      .select()
-      .from(teamEntitlementOverrides)
-      .where(
-        and(
-          eq(teamEntitlementOverrides.team_id, context.teamId),
-          or(isNull(teamEntitlementOverrides.expires_at), gt(teamEntitlementOverrides.expires_at, nowSeconds))
-        )
+  const [override] = await db
+    .select()
+    .from(teamEntitlementOverrides)
+    .where(
+      and(
+        eq(teamEntitlementOverrides.team_id, context.teamId),
+        or(isNull(teamEntitlementOverrides.expires_at), gt(teamEntitlementOverrides.expires_at, nowSeconds))
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    if (override) {
-      return teamOverrideEntitlements(override.plan);
-    }
-  } catch (error) {
-    if (!isMissingOptionalBillingTableError(error)) {
-      throw error;
-    }
-  }
-
-  return freeEntitlements();
+  return override ? teamOverrideEntitlements(override.plan) : freeEntitlements();
 }

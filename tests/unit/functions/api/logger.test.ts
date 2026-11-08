@@ -1,7 +1,7 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { elementAt, firstOf } from '../../../support/elements';
-import { describeErrorForLog, log } from '@functions/api/utils/logger';
+import { describeErrorForLog, getClientIp, log } from '@functions/api/utils/logger';
 import { runWithRequestId } from '@functions/api/utils/request-context';
 import { logLineIn } from '../../../support/storedJson';
 
@@ -111,6 +111,30 @@ describe('log', () => {
     expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'error', message: 'env_validation_error', release: COMMIT });
     expect(logLineIn(firstOf(lines)).timestamp).not.toBe('x');
   });
+
+  it('writes debug lines to console.debug', () => {
+    const lines = capture('debug');
+    log('debug', 'cache_probe', { hit: false });
+
+    expect(logLineIn(firstOf(lines))).toMatchObject({ level: 'debug', message: 'cache_probe', hit: false });
+  });
+});
+
+describe('getClientIp', () => {
+  const requestWith = (headers: Record<string, string>) => new Request('https://serplists.com/api/health', { headers });
+
+  it('takes the address Cloudflare connected from over any forwarded one', () => {
+    expect(getClientIp(requestWith({ 'CF-Connecting-IP': '198.51.100.7', 'X-Forwarded-For': '203.0.113.5' }))).toBe('198.51.100.7');
+  });
+
+  it('takes the first X-Forwarded-For address when Cloudflare sent none', () => {
+    expect(getClientIp(requestWith({ 'X-Forwarded-For': ' 203.0.113.5 , 10.0.0.1' }))).toBe('203.0.113.5');
+  });
+
+  it('has no address when neither header names one', () => {
+    expect(getClientIp(requestWith({}))).toBeNull();
+    expect(getClientIp(requestWith({ 'X-Forwarded-For': ' , 10.0.0.1' }))).toBeNull();
+  });
 });
 
 describe('describeErrorForLog', () => {
@@ -137,6 +161,12 @@ describe('describeErrorForLog', () => {
       errorName: 'TypeError',
       errorMessage: 'bad value',
     });
+  });
+
+  it('logs a failed query whose database cause is not an Error as that cause in text', () => {
+    const error = new Error('Failed query: select 1', { cause: 'D1_ERROR: database is locked' });
+
+    expect(describeErrorForLog(error)).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: database is locked' });
   });
 
   it('bounds long messages and describes thrown non-errors', () => {

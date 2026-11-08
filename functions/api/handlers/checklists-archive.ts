@@ -22,7 +22,7 @@ export async function restoreChecklistRun(
 ): Promise<Response> {
   const { checklistRuns } = schema;
 
-  if (!checklistId || checklistId === 'checklists') {
+  if (checklistId === 'checklists') {
     return jsonError('Checklist ID required', 400);
   }
 

@@ -308,4 +308,16 @@ describe("Personal run key management handler", () => {
     expect(dbMocks.db.select).not.toHaveBeenCalled();
     expect(dbMocks.db.update).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["PUT", "http://localhost/api/agent-keys"],
+    ["POST", "http://localhost/api/agent-keys/key-1"],
+    ["DELETE", "http://localhost/api/agent-keys"],
+  ])("answers %s %s with 404 without touching any key", async (method, url) => {
+    const response = await handleAgentKeys(new Request(url, { method }), mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.insert).not.toHaveBeenCalled();
+    expect(dbMocks.db.update).not.toHaveBeenCalled();
+  });
 });

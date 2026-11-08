@@ -54,7 +54,7 @@ export async function updateChecklistRun(
   if ('response' in found) return found.response;
   const { run: existingRun } = found;
 
-  const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;
+  const currentRevision = existingRun.revision;
   if (typeof expected_revision === 'number' && expected_revision !== currentRevision) {
     return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
       code: 'edit_conflict',

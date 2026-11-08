@@ -9,17 +9,15 @@ export function urlOrigin(value: string | null | undefined): string | null {
 }
 
 export function parseAllowedOrigin(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
   let url: URL;
   try {
-    url = new URL(trimmed);
+    url = new URL(value.trim());
   } catch {
     return null;
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   if (!url.hostname || url.hostname.includes('*') || url.username || url.password) return null;
-  return url.origin === 'null' ? null : url.origin;
+  return url.origin;
 }
 
 export type OriginList = { origins: string[]; invalid: string[] };

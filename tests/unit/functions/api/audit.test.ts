@@ -304,6 +304,21 @@ describe("buildAuditEventValues records where a change came from, never the clie
     expect(other).not.toBe(await ipHashUnder(withAuthSecret));
   });
 
+  it.each([
+    ['True-Client-IP', { 'True-Client-IP': CLIENT_IP }],
+    ['the first X-Forwarded-For address', { 'X-Forwarded-For': `${CLIENT_IP}, 10.0.0.1` }],
+  ])('hashes the address from %s when Cloudflare sent none', async (_label, headers) => {
+    const values = await buildAuditEventValues(input({ request: new Request('https://serplists.com/api/teams', { headers }) }));
+
+    expect(values.ip_hash).toBe(await ipHashUnder(withAuthSecret));
+  });
+
+  it('records no address for an empty forwarded list, and the Cloudflare ray as the request id when there is no X-Request-Id', async () => {
+    const request = new Request('https://serplists.com/api/teams', { headers: { 'X-Forwarded-For': ' , 10.0.0.1', 'CF-Ray': 'ray-1' } });
+
+    expect(await buildAuditEventValues(input({ request }))).toMatchObject({ ip_hash: null, request_id: 'ray-1', user_agent: null });
+  });
+
   it('stores no IP hash without the auth secret, rather than a plain SHA-256', async () => {
     expect(await ipHashUnder({})).toBeNull();
   });

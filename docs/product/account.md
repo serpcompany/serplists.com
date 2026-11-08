@@ -115,8 +115,8 @@ and nothing changes.
 
 In production, a password found in a known breach is refused when it is set, never at sign-in.
 
-- Check: Auth config tests, "enables breached-password checks when setting production passwords"
-  and "does not check breached passwords on production sign-in".
+- Check: Auth config tests, "enables breached-password checks on production %s, which sets a
+  password" and "does not check breached passwords on production sign-in".
 
 ## Settings
 

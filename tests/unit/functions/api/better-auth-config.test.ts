@@ -186,8 +186,8 @@ describe("createBetterAuth config", () => {
     });
   });
 
-  it("enables breached-password checks when setting production passwords", () => {
-    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
+  it.each(["sign-up/email", "change-password", "reset-password"])("enables breached-password checks on production %s, which sets a password", (path) => {
+    createBetterAuth(productionEnvWith(), new Request(`https://serplists.com/api/auth/${path}`));
 
     const options = capturedOptions();
 

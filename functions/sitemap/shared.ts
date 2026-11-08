@@ -155,10 +155,9 @@ export function methodNotAllowed(): Response {
   });
 }
 
-export function parsePage(value: string | string[] | undefined): number | null {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  if (!candidate || !/^\d+$/.test(candidate)) return null;
-  const page = Number(candidate);
+export function parsePage(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const page = Number(value);
   return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
@@ -317,7 +316,7 @@ export function requestSupportsSitemap(method: string): boolean {
 
 export async function handleInMemoryPagedSitemap(
   request: Request,
-  pageValue: string | string[] | undefined,
+  pageValue: string,
   loadEntries: () => SitemapEntry[] | Promise<SitemapEntry[]>,
 ): Promise<Response> {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
@@ -437,7 +436,7 @@ export async function loadRowsOfTwoLists<Row>(
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  params: { readonly page?: string | string[] | undefined };
+  params: { readonly page: string };
   loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
@@ -450,7 +449,6 @@ export async function handlePagedDatabaseSitemap<Row>({
   toEntry,
   prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
-  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const page = parsePage(params.page);
   if (!page) return xmlResponse(request, renderUrlset([]), 404);
 
