@@ -44,9 +44,9 @@ describe('serveR2Object', () => {
   });
 
   it.each([
-    ['a cache revalidation by date', { 'If-Modified-Since': 'Thu, 01 Jan 2026 00:00:00 GMT' }, 304],
-    ['an If-Match for another version', { 'If-Match': '"etag-0"' }, 412],
-  ])('answers %s that R2 does not meet with %i and no body', async (_label, headers, status) => {
+    ['a cache revalidation by date', 304, { 'If-Modified-Since': 'Thu, 01 Jan 2026 00:00:00 GMT' }],
+    ['an If-Match for another version', 412, { 'If-Match': '"etag-0"' }],
+  ])('answers %s that R2 does not meet with %i and no body', async (_label, status, headers) => {
     const response = await serveR2Object(get(headers), new R2WhosePreconditionFails([file]), KEY, CACHE);
 
     expect(response.status).toBe(status);

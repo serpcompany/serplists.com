@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { SIGN_OUT_FAILED_MESSAGE } from '@/contexts/authSession';
 import { signOutAndLeave, signOutAndReturn } from '@/features/auth/signOut';
 
 import { deferred } from '../../../support/deferred';
@@ -39,7 +38,7 @@ describe('signOutAndLeave without a reason from the server', () => {
 
     await signOutAndLeave({ logout: async () => ({ ok: false }), onSignedOut: vi.fn(), onError });
 
-    expect(onError).toHaveBeenCalledWith(SIGN_OUT_FAILED_MESSAGE);
+    expect(onError).toHaveBeenCalledWith('Sign out failed. Check your connection and try again.');
   });
 });
 

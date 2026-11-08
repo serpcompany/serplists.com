@@ -9,7 +9,6 @@ import {
   resolveTemplateSaveFailureNotice,
   shouldLoadTemplateCountForLimit,
 } from "@/features/template-editor/templateEditorAccess";
-import { BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.";
@@ -43,13 +42,15 @@ describe("resolveTemplateSaveFailureNotice", () => {
     );
 
     expect(notice?.action).toBeNull();
-    expect(notice?.message).toContain(BILLING_UNAVAILABLE_MESSAGE);
+    expect(notice?.message).toBe(
+      "Template limit reached. Upgrade to create more templates. Billing is temporarily unavailable. Please contact support.",
+    );
   });
 
   it("says an upgrade is unavailable, with no action, when the server could not start checkout", () => {
     expect(
-      resolveTemplateSaveFailureNotice({ kind: "billing_unavailable", message: BILLING_UNAVAILABLE_MESSAGE }, personal),
-    ).toEqual({ title: "Upgrade unavailable", message: BILLING_UNAVAILABLE_MESSAGE, action: null });
+      resolveTemplateSaveFailureNotice({ kind: "billing_unavailable", message: "Checkout could not start." }, personal),
+    ).toEqual({ title: "Upgrade unavailable", message: "Checkout could not start.", action: null });
   });
 
   it("offers sign-in when the session ended", () => {
@@ -119,47 +120,26 @@ describe("template limit pre-check", () => {
 describe("findOtherContextDraft, for a tab that a confirmed sign-out returned to Personal with a draft kept in an Organization", () => {
   const orgDraft = { teamId: "org-1", savedAt: "2026-09-28T11:00:00.000Z" };
   const personalDraft = { teamId: null, savedAt: "2026-09-28T10:00:00.000Z" };
-  const canCreateIn = (teamId: string | null) => teamId === null || teamId === "org-1";
 
-  it("offers a draft kept in an Organization the user can still create templates in", () => {
-    expect(
-      findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: true, canCreateIn }),
-    ).toBe(orgDraft);
-  });
-
-  it("offers nothing for an Organization the user left or can no longer edit in", () => {
-    expect(
-      findOtherContextDraft([{ ...orgDraft, teamId: "org-2" }], {
-        activeTeamId: undefined,
-        workspaceReady: true,
-        canCreateIn,
-      }),
-    ).toBeNull();
+  it("offers a draft kept in an Organization", () => {
+    expect(findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: true })).toBe(orgDraft);
   });
 
   it("decides nothing while the Organization list is loading, since the tab may be about to move into the stored Organization", () => {
-    expect(
-      findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: false, canCreateIn }),
-    ).toBeNull();
+    expect(findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: false })).toBeNull();
   });
 
   it("offers a Personal draft from an Organization, and never the active context's own", () => {
-    expect(
-      findOtherContextDraft([orgDraft, personalDraft], { activeTeamId: "org-1", workspaceReady: true, canCreateIn }),
-    ).toBe(personalDraft);
-    expect(
-      findOtherContextDraft([personalDraft], { activeTeamId: undefined, workspaceReady: true, canCreateIn }),
-    ).toBeNull();
+    expect(findOtherContextDraft([orgDraft, personalDraft], { activeTeamId: "org-1", workspaceReady: true })).toBe(
+      personalDraft,
+    );
+    expect(findOtherContextDraft([personalDraft], { activeTeamId: undefined, workspaceReady: true })).toBeNull();
   });
 
-  it("offers the first (newest) draft that can be restored", () => {
-    const olderOrgDraft = { ...orgDraft, savedAt: "2026-09-28T09:00:00.000Z" };
+  it("offers the first (newest) draft from another context", () => {
+    const olderOrgDraft = { ...orgDraft, teamId: "org-2", savedAt: "2026-09-28T09:00:00.000Z" };
     expect(
-      findOtherContextDraft([{ ...orgDraft, teamId: "org-2" }, olderOrgDraft], {
-        activeTeamId: undefined,
-        workspaceReady: true,
-        canCreateIn,
-      }),
-    ).toBe(olderOrgDraft);
+      findOtherContextDraft([orgDraft, olderOrgDraft], { activeTeamId: undefined, workspaceReady: true }),
+    ).toBe(orgDraft);
   });
 });

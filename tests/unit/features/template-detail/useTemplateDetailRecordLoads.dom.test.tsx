@@ -103,7 +103,9 @@ describe('the record behind a template page', () => {
     apiMock.getTemplateById.mockReturnValue(deferred().promise);
     const page = await openTheRecord({ identifier: 'template-1', mode: 'private', userId: 'user-1' });
 
-    await act(async () => page.current().updateTemplate((current) => current));
+    await act(async () =>
+      page.current().updateTemplate((current) => (current === null ? null : { ...current, isPublic: true })),
+    );
 
     expect(queryClient.getQueryData(queryKeys.templateDetail('template-1', 'user-1'))).toBeUndefined();
     expect(page.current().loading).toBe(true);

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { nodeOptionsWithAFetchStandIn, type FetchAnswer } from '../../support/fetchStandIn';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
+import { withTheDatesAround } from '../../support/utcDates';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const workDir = aWorkDirRemovedAfterAll('small-clis-');
@@ -123,15 +124,18 @@ describe('pnpm run docs:references', { timeout: 60_000 }, () => {
     return { checkout, result };
   };
 
-  it("saves each pinned reference with its source and today's date, in LF line endings", () => {
-    const today = new Date().toISOString().slice(0, 10);
-
-    const { checkout, result } = updateReferences((url) => ({ status: 200, body: `# ${url}\r\nUse it like this.\r\n\r\n` }));
+  it("saves each pinned reference with its source and today's date, in LF line endings", async () => {
+    const {
+      result: { checkout, result },
+      dates,
+    } = await withTheDatesAround(() => updateReferences((url) => ({ status: 200, body: `# ${url}\r\nUse it like this.\r\n\r\n` })));
 
     expect(result.status).toBe(0);
     expect(result.stdout.split('\n').filter(Boolean)).toEqual(Object.keys(pinnedReferences).map((file) => `${file}: 0 KB`));
     for (const [file, url] of Object.entries(pinnedReferences)) {
-      expect(readFileSync(path.join(checkout, 'docs', 'references', file), 'utf8')).toBe(`Source: ${url} (fetched ${today})\n\n# ${url}\nUse it like this.\n`);
+      expect(dates.map((date) => `Source: ${url} (fetched ${date})\n\n# ${url}\nUse it like this.\n`)).toContain(
+        readFileSync(path.join(checkout, 'docs', 'references', file), 'utf8'),
+      );
     }
   });
 

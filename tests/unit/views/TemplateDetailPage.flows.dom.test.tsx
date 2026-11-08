@@ -19,6 +19,7 @@ import type { TemplateDetailActionResult } from '@/features/template-detail/temp
 import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
+import { deferred } from '../../support/deferred';
 import { pressTheButton } from '../../support/pressTheButton';
 import { handlerIn } from '../../support/elementTree';
 import { theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
@@ -119,6 +120,8 @@ describe('TemplateDetail copy of a Template the user cannot edit', () => {
 });
 
 describe('TemplateDetail visibility switch', () => {
+  const visibilitySwitch = () => screen.getByRole('switch');
+
   const flipTheSwitch = (isPublic: boolean) =>
     act(async () => {
       await handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange')(isPublic);
@@ -146,6 +149,31 @@ describe('TemplateDetail visibility switch', () => {
     await flipTheSwitch(false);
 
     expect(vi.mocked(toast.error).mock.calls).toEqual([['Template is in use'], ['Failed to update template visibility']]);
+  });
+
+  it('cannot be flipped again while a change is still saving', async () => {
+    const saved = deferred<TemplateDetailActionResult>();
+    setVisibility.mockReturnValue(saved.promise);
+    await openTheTemplate({ isPublic: false });
+    expect(visibilitySwitch().hasAttribute('disabled')).toBe(false);
+
+    let flipped: unknown;
+    await act(async () => {
+      flipped = handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange')(true);
+    });
+
+    expect(visibilitySwitch().hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      saved.resolve({ kind: 'ok' });
+      await flipped;
+    });
+    expect(visibilitySwitch().hasAttribute('disabled')).toBe(false);
+  });
+
+  it('cannot be flipped by a user who cannot edit the Template', async () => {
+    await openTheTemplate({ userId: 'user-9', ownerProfile: { username: 'alice' } });
+
+    expect(visibilitySwitch().hasAttribute('disabled')).toBe(true);
   });
 });
 

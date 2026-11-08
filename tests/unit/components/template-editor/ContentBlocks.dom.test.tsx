@@ -87,6 +87,7 @@ describe('the content blocks of a task in the template editor', () => {
     await act(async () => {
       fireEvent.keyDown(screen.getByLabelText('Sub-task 2'), { key: 'a' });
     });
+    expect(subItemsOfTheBlock()).toEqual(['Draft notes', '']);
     await clickTheButton('Add Sub-task');
     expect(subItemsOfTheBlock()).toEqual(['Draft notes', '', '']);
 

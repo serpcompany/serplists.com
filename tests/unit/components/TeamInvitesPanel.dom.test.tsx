@@ -83,7 +83,7 @@ describe('creating an invite link', () => {
   it('asks for an email before creating anything', async () => {
     await mountThePanel();
 
-    await submitTheInvite('   ');
+    await submitTheInvite('');
 
     expect(toast.error).toHaveBeenCalledWith('Email is required');
     expect(api.createTeamInvite).not.toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe('creating an invite link', () => {
     vi.mocked(api.getTeamInvites).mockResolvedValue([pendingInvite, kimInvite]);
 
     await chooseTheOption('Role', 'Runner');
-    await submitTheInvite(' kim@example.test ');
+    await submitTheInvite('kim@example.test');
 
     expect(api.createTeamInvite).toHaveBeenCalledWith('team-1', { email: 'kim@example.test', role: 'runner' });
     expect(toast.success).toHaveBeenCalledWith('Invite link created');

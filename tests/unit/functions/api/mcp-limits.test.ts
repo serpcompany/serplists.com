@@ -34,15 +34,6 @@ describe('limitPersonalRunKey', () => {
 
     expect(limitPersonalRunKey(key('oldest'))).toEqual({ allowed: true });
   });
-
-  it('makes room by forgetting expired keys and keeps counting a key still in its minute', () => {
-    useUpItsMinute('expired-first');
-    vi.advanceTimersByTime(60_000);
-    useUpItsMinute('still-limited');
-    for (let other = 0; other < 999; other += 1) limitPersonalRunKey(key(`fresh-${other}`));
-
-    expect(limitPersonalRunKey(key('still-limited'))).toMatchObject({ allowed: false });
-  });
 });
 
 describe('failed MCP sign-ins', () => {

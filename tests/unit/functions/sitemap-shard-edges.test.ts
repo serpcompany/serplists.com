@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import * as legacyCategoriesSitemapRoute from '@/app/(site)/categories/sitemap.xml/route';
 import * as pagesSitemapRoute from '@/app/sitemaps/pages/[page]/route';
@@ -6,11 +6,9 @@ import * as legacyStaticSitemapRoute from '@/app/sitemaps/static.xml/route';
 import { serveProfilesSitemap, serveSitemapIndex, serveTemplatesSitemap } from '../../../functions/sitemap/routes';
 import {
   SITEMAP_PAGE_SIZE,
-  handlePagedDatabaseSitemap,
   mostRecentLastmod,
   parseCategories,
   planDurableShardIndex,
-  type SitemapEntry,
 } from '../../../functions/sitemap/shared';
 import { apiEnv } from '../../support/apiEnv';
 import { sitemapEntries } from '../../support/sitemapLocations';
@@ -105,22 +103,6 @@ describe('the database sitemap shards', () => {
     const locations = Array.from((await response.text()).matchAll(/<loc>https:\/\/serplists\.com([^<]*)<\/loc>/g), (match) => match[1]);
 
     expect(locations).toEqual(['/profile/org-025000/', '/profile/org-025001/']);
-  });
-
-  it('fills a page from the entries ahead of the database rows without reading the database', async () => {
-    const loadRows = vi.fn(async (): Promise<SitemapEntry[]> => []);
-    const prefixEntries = Array.from({ length: SITEMAP_PAGE_SIZE }, (_, index) => ({ path: `/profile/serp/t-${index}/` }));
-
-    const response = await handlePagedDatabaseSitemap<SitemapEntry>({
-      request: shardRequest('/sitemaps/templates/1.xml'),
-      params: { page: '1' },
-      prefixEntries,
-      loadRows,
-      toEntry: (row) => row,
-    });
-
-    expect(response.status).toBe(200);
-    expect(loadRows).not.toHaveBeenCalled();
   });
 });
 

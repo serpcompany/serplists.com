@@ -450,9 +450,7 @@ export async function handlePagedDatabaseSitemap<Row>({
   const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
-  const rows = databaseLimit > 0
-    ? await loadRows({ limit: databaseLimit, offset: databaseOffset })
-    : [];
+  const rows = await loadRows({ limit: databaseLimit, offset: databaseOffset });
   const databaseEntries = rows
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);

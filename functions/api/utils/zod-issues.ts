@@ -1,5 +1,8 @@
-import type { ZodError, ZodIssue } from 'zod';
+import { z, type ZodError, type ZodIssue } from 'zod';
 
-export function firstIssueOf(error: ZodError, fallbackMessage: string): ZodIssue {
-  return error.issues[0] ?? { code: 'custom', path: [], message: fallbackMessage };
+const failedParseIssues = z.custom<ZodIssue>().array().nonempty();
+
+export function firstIssueOf(error: ZodError): ZodIssue {
+  const [first] = failedParseIssues.parse(error.issues);
+  return first;
 }

@@ -129,14 +129,17 @@ describe('the archive of deleted templates and runs', () => {
 
   it('loads both lists again when asked to retry', async () => {
     const archive = await openTheArchive();
+    apiMocks.getArchivedTemplates.mockResolvedValue([{ ...archivedTemplate, id: 'template-2', title: 'Retro' }]);
+    apiMocks.getArchivedChecklists.mockResolvedValue([]);
 
     await act(async () => {
       archive().refetchTemplates();
       archive().refetchRuns();
       await settle();
     });
+    await act(settle);
 
-    expect(apiMocks.getArchivedTemplates).toHaveBeenCalledTimes(2);
-    expect(apiMocks.getArchivedChecklists).toHaveBeenCalledTimes(2);
+    expect(archive().archivedTemplates.map((template) => template.title)).toEqual(['Retro']);
+    expect(archive().archivedRuns).toEqual([]);
   });
 });

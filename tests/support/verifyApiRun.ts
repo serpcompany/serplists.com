@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -18,6 +18,7 @@ const SECRET_THE_MCP_REFUSES = 'slrk_verify_api_secret_the_mcp_refuses';
 export const SLOW = 60_000;
 const plans = mkdtempSync(path.join(tmpdir(), 'verify-api-plans-'));
 const runFolders: string[] = [];
+const verifyFolders = path.join(repoRoot, 'tmp', 'agent', 'verify');
 
 afterAll(() => {
   rmSync(plans, { recursive: true, force: true });
@@ -104,11 +105,14 @@ export async function verifyApi(name: string, plan: unknown, extra: string[] = [
   const planFile = path.join(plans, `${name}.json`);
   if (plan !== undefined) writeFileSync(planFile, typeof plan === 'string' ? plan : JSON.stringify(plan));
   const runName = `test-${name}-${process.pid}`;
-  runFolders.push(path.join(repoRoot, 'tmp', 'agent', 'verify', `${new Date().toISOString().slice(0, 10)}-${runName}`));
   const base = extra.length > 0 ? extra : ['--base', `http://127.0.0.1:${listeningPort(server)}`];
   try {
     const result = await runTheScript([runName, planFile, ...base]);
-    return { ...result, seen, folder: runFolders[runFolders.length - 1] ?? '' };
+    const made = (existsSync(verifyFolders) ? readdirSync(verifyFolders) : [])
+      .filter((folder) => /^\d{4}-\d{2}-\d{2}-/.test(folder) && folder.slice(11) === runName)
+      .map((folder) => path.join(verifyFolders, folder));
+    runFolders.push(...made);
+    return { ...result, seen, folder: made.join('') };
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

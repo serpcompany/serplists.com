@@ -20,12 +20,14 @@ describe('completedRunTaskChangeResponse', () => {
     expect(completedRunTaskChangeResponse({ status: 'completed' }, 'in_progress', stored, unticked)).toBeNull();
   });
 
-  it('refuses unticking the second of two tasks stored with the same id', async () => {
+  it('refuses unticking either of two tasks stored with the same id', async () => {
     const stored = [section(task({ id: 'dup', isCompleted: true }), task({ id: 'dup', isCompleted: true }))];
-    const response = refusal(stored, [section(task({ id: 'dup', isCompleted: true }), task({ id: 'dup' }))]);
+    const secondUnticked = refusal(stored, [section(task({ id: 'dup', isCompleted: true }), task({ id: 'dup' }))]);
+    const firstUnticked = refusal(stored, [section(task({ id: 'dup' }), task({ id: 'dup', isCompleted: true }))]);
 
-    expect(response?.status).toBe(409);
-    expect(await response?.json()).toMatchObject({ code: 'run_completed' });
+    expect(secondUnticked?.status).toBe(409);
+    expect(await secondUnticked?.json()).toMatchObject({ code: 'run_completed' });
+    expect(firstUnticked?.status).toBe(409);
   });
 
   it('matches tasks stored without an id by their place in the run', () => {

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { readGuestRun, removeGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import type { CreateRun } from '@/features/template-detail/templateActionOutcome';
 import { ORGANIZATION_UPGRADE_MESSAGE } from '@/lib/access-flow';
-import { BILLING_UNAVAILABLE_MESSAGE, createApiError } from '@/lib/api-errors';
+import { createApiError } from '@/lib/api-errors';
 import { resetSectionsCompletion } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -177,7 +177,7 @@ describe('Save to account, offered once a guest signs up or logs in', () => {
     });
 
     expect(apiMocks.createBillingCheckout).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith(BILLING_UNAVAILABLE_MESSAGE);
+    expect(toast.error).toHaveBeenCalledWith('Billing is temporarily unavailable. Please contact support.');
     expect(page.current().isSaving).toBe(false);
     expect(readGuestRun(guestRunTemplate.id)?.title).toBe('Lake trip');
   });

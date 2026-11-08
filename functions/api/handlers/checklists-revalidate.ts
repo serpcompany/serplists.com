@@ -26,7 +26,7 @@ export async function revalidateChecklistRun(
     expected_revision: z.number().int().positive().optional(),
   }).safeParse(optionalBody);
   if (!revalidateBody.success) {
-    return invalidPayloadResponse(revalidateBody.error, 'Invalid revalidation payload');
+    return invalidPayloadResponse(revalidateBody.error);
   }
 
   const found = await findRunToUpdate(env, db, checklistId, userId, 'Checklist not found');

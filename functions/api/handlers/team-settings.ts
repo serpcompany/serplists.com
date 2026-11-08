@@ -48,7 +48,7 @@ export async function updateTeamSettings(
 
   const parsed = updateTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const team = await findActiveTeam(db, teamId);
@@ -73,7 +73,7 @@ export async function updateTeamSettings(
   if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
     const slug = publicHandleSchema.safeParse(parsed.data.slug);
     if (!slug.success) {
-      return jsonError(`slug: ${firstIssueOf(slug.error, "Invalid slug").message}`, 400);
+      return jsonError(`slug: ${firstIssueOf(slug.error).message}`, 400);
     }
     if (await isTeamSlugTaken(db, parsed.data.slug, teamId)) {
       return teamSlugInUseError();

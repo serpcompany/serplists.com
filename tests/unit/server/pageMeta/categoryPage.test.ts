@@ -81,6 +81,7 @@ describe('category page metadata', () => {
     const result = await loadCategoryPageSeo('outdoor');
 
     expect(result?.title).toBe('outdoor Templates');
+    expect(result?.description).toBe('1 template for outdoor. Templates filed under outdoor.');
     expect(result?.robots).toBeUndefined();
   });
 
@@ -98,6 +99,16 @@ describe('category page metadata', () => {
     const result = await loadCategoryPageSeo('moving-day');
 
     expect(result?.description).toBe('2 templates for Moving Day. Templates filed under Moving Day.');
+  });
+
+  it('counts the other templates when the catalog sends one it cannot read', async () => {
+    addPublicTemplate('moving-day', ['Moving Day']);
+    addPublicTemplate('unreadable-moving-day', ['Moving Day']);
+    d1.run(`UPDATE templates SET version = 'not a number' WHERE id = 'unreadable-moving-day'`);
+
+    const result = await loadCategoryPageSeo('moving-day');
+
+    expect(result?.description).toBe('1 template for Moving Day. Templates filed under Moving Day.');
   });
 
   it('keeps the site defaults for an address with no category slug in it', async () => {

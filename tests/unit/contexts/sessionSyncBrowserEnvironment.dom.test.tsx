@@ -44,9 +44,15 @@ describe("the browser's session sync environment", () => {
 
     await expect(heardByTheOtherTab).resolves.toEqual({ userId: 'user-1' });
     await expect(heardFromTheOtherTab).resolves.toEqual({ userId: null });
+    const stillOpenTab = new BroadcastChannel('serplists-auth');
+    openOtherTabs.push(stillOpenTab);
+    const heardByTheStillOpenTab = new Promise((resolve) => {
+      stillOpenTab.onmessage = (event: MessageEvent<unknown>) => resolve(event.data);
+    });
     channel.close();
     otherTab.postMessage({ userId: 'user-2' });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await expect(heardByTheStillOpenTab).resolves.toEqual({ userId: 'user-2' });
     expect(heard).toEqual([{ userId: null }]);
   });
 

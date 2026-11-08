@@ -1,10 +1,11 @@
 import { act } from 'react';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
 import type { ChecklistItem, ChecklistItemContent } from '@/types/checklist';
 
+import { onlyElement, present } from '../../../support/elements';
 import { renderSettled } from '../../../support/renderInTheDom';
 
 afterEach(cleanup);
@@ -15,6 +16,21 @@ const press = (element: HTMLElement) =>
   act(async () => {
     fireEvent.click(element);
   });
+
+const theSection = (title: string) =>
+  present(screen.getByRole('heading', { name: title }).closest('section'), `the ${title} section`);
+
+const theChevron = () => {
+  const shown = screen.queryAllByRole('button');
+  return onlyElement(screen.getAllByRole('button', { hidden: true }).filter((button) => !shown.includes(button)));
+};
+
+const expectNothingShownBesides = (section: HTMLElement, text: string) => {
+  expect(section.textContent).toBe(text);
+  expect(within(section).queryByRole('link')).toBeNull();
+  expect(within(section).queryByRole('img')).toBeNull();
+  expect(section.querySelector('video, iframe')).toBeNull();
+};
 
 const taskWith = (contents: ChecklistItemContent[]): ChecklistItem => ({
   id: 'task-1',
@@ -39,9 +55,7 @@ describe('a task on the public Template page', () => {
     expect(title.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByText('Heavy boxes first')).toBeTruthy();
 
-    const chevron = title.closest('.flex.items-start')?.querySelector('button[aria-hidden="true"]');
-    if (!(chevron instanceof HTMLElement)) throw new Error('No chevron beside the task');
-    await press(chevron);
+    await press(theChevron());
     expect(screen.queryByText('Heavy boxes first')).toBeNull();
   });
 
@@ -54,7 +68,8 @@ describe('a task on the public Template page', () => {
     await press(title);
 
     expect(title.hasAttribute('aria-expanded')).toBe(false);
-    expect(document.querySelector('.space-y-3')).toBeNull();
+    expect(screen.getAllByRole('button', { hidden: true })).toEqual([title]);
+    expectNothingShownBesides(theSection('Prepare'), 'Section 1Prepare1 taskLock up');
   });
 
   it('shows blocks with nothing in them as nothing', async () => {
@@ -75,9 +90,8 @@ describe('a task on the public Template page', () => {
       />,
     );
 
-    const blocks = [...document.querySelectorAll('.space-y-2 > div')];
-    expect(blocks).toHaveLength(7);
-    expect(blocks.map((block) => block.childElementCount)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(screen.getByRole('button', { name: 'Pack the van' }).getAttribute('aria-expanded')).toBe('true');
+    expectNothingShownBesides(theSection('Prepare'), 'Section 1Prepare1 taskPack the van');
   });
 
   it('shows embed text that holds no web address as text, and lists sub-steps', async () => {

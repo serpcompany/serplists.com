@@ -67,7 +67,7 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
 }
 
 async function upsertOverride(request: Request, env: Env): Promise<Response> {
-  const read = await readJsonPayload(request, overrideBodySchema, "Invalid override payload");
+  const read = await readJsonPayload(request, overrideBodySchema);
   if ("response" in read) return read.response;
   const { userId, email, plan, expiresAt } = read.payload;
   const note = read.payload.note ?? null;

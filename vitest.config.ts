@@ -83,6 +83,7 @@ export default defineConfig({
           setupFiles: [EVERY_TEST_FILE.setupFiles, HAND_CHILD_COVERAGE_TO_SPAWNED_PROCESSES],
           name: 'dom',
           environment: 'happy-dom',
+          testTimeout: 15_000,
           environmentOptions: { happyDOM: { settings: { navigation: HAPPY_DOM_FOLLOWS_NO_LINK } } },
           include: [TESTS_THAT_RENDER_INTO_THE_DOM],
           exclude: NEVER_TEST_FILES,

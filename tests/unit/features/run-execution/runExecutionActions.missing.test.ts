@@ -9,7 +9,7 @@ import {
   toggleRunItem,
   toggleRunSubItem,
 } from '@/features/run-execution/runExecutionActions';
-import { createRunSaver, RUN_CHANGED_ELSEWHERE_MESSAGE } from '@/features/run-execution/runSaver';
+import { createRunSaver } from '@/features/run-execution/runSaver';
 import { ApiError } from '@/lib/api-errors';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -33,6 +33,9 @@ const withATaskThatHasNoBlocks = (): ChecklistRun =>
 
 const withAFormBlockThatHasNoFields = (): ChecklistRun =>
   buildRun({ sections: [{ id: 'section-1', title: 'Intake', items: [{ id: 'item-form', title: 'Collect', contents: [{ id: 'form-1', type: 'form', value: '' }] }] }] });
+
+const RUN_CHANGED_ELSEWHERE =
+  'This run was changed somewhere else. The latest version is shown now; check it and try again.';
 
 describe('a change to a task the run no longer holds, as after its template was edited in another tab', () => {
   it('saves nothing and says the task was not found', async () => {
@@ -115,7 +118,7 @@ describe('renaming a run', () => {
       reload: async () => ({ kind: 'ok', mode: 'private', run: renamedElsewhere, selectedItemId: null }),
     });
 
-    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
+    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE });
     expect(dependencies.updateRun).toHaveBeenCalledTimes(1);
   });
 });
@@ -133,7 +136,7 @@ describe('an answer whose task was removed elsewhere before it saved', () => {
       reload: async () => ({ kind: 'ok', mode: 'private', run: buildRun({ revision: 2 }), selectedItemId: null }),
     });
 
-    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
+    expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE });
     expect(dependencies.updateRun).toHaveBeenCalledTimes(1);
   });
 });

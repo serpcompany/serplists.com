@@ -85,7 +85,7 @@ export function validateChangedTemplateFields(
     ),
   );
   const result = templatePayloadSchema.safeParse(changedFields);
-  return result.success ? null : describePayloadError(result.error, 'Invalid template payload');
+  return result.success ? null : describePayloadError(result.error);
 }
 
 const CONTENT_FIELDS = [

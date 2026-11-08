@@ -22,17 +22,26 @@ describe("Organization settings and activity, against SQLite", () => {
     expect(d1.rows("SELECT name FROM teams WHERE id = 'team-1'")).toEqual([{ name: "Acme" }]);
   });
 
-  it("lists activity with metadata that is not JSON as none, and reads a limit that is not a number as the default", async () => {
+  it("lists activity with metadata that is not JSON as none", async () => {
     addTeamAudit("audit-1", "{not json");
     addTeamAudit("audit-2", null);
 
-    const activity = await listAsUser("admin-user", "/team-1/activity?limit=many");
+    const activity = await listAsUser("admin-user", "/team-1/activity");
 
     expect(activity.status).toBe(200);
     expect(activity.data.map(({ id, metadata }) => ({ id, metadata }))).toEqual(arrayContaining([
       { id: "audit-1", metadata: null },
       { id: "audit-2", metadata: null },
     ]));
+  });
+
+  it("reads an activity limit that is not a number as the default of fifty events", async () => {
+    for (let event = 0; event < 60; event += 1) addTeamAudit(`audit-${event}`, null);
+
+    const activity = await listAsUser("admin-user", "/team-1/activity?limit=many");
+
+    expect(activity.status).toBe(200);
+    expect(activity.data).toHaveLength(50);
   });
 
   it("lists only active members to a member who cannot manage the Organization", async () => {

@@ -20,7 +20,7 @@ export async function updateChecklistRun(
 ): Promise<Response> {
   const { checklistRuns } = schema;
 
-  const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
+  const read = await readJsonPayload(request, checklistPayloadSchema);
   if ('response' in read) return read.response;
   const { body } = read;
 

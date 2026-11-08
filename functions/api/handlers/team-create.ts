@@ -30,7 +30,7 @@ export async function createTeam(
 
   const parsed = createTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const now = new Date().toISOString();

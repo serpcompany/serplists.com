@@ -72,7 +72,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   if (request.method === "POST" && !keyId) {
     const parsed = createKeyBodySchema.safeParse(await readJsonOrNull(request));
     if (!parsed.success) {
-      return invalidPayloadResponse(parsed.error, "Invalid key payload");
+      return invalidPayloadResponse(parsed.error);
     }
 
     const secret = await createPersonalRunKeySecret();

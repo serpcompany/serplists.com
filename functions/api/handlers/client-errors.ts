@@ -16,7 +16,7 @@ export async function handleClientErrors(request: Request, env: Env): Promise<Re
   if (refusal === 'unsupported_media_type') return jsonError('Send the error report as JSON.', 415, { code: refusal });
   if (refusal === 'origin_not_allowed') return jsonError('Origin not allowed', 403, { code: refusal });
 
-  const read = await readJsonPayload(request, clientErrorReportSchema, 'Invalid error report');
+  const read = await readJsonPayload(request, clientErrorReportSchema);
   if ('response' in read) return read.response;
 
   const report = scrubClientErrorReport(read.payload, new URL(request.url).origin);

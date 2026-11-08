@@ -94,7 +94,6 @@ export const findOtherContextDraft = <T extends { teamId: string | null }>(
   params: {
     activeTeamId?: string | undefined;
     workspaceReady: boolean;
-    canCreateIn: (teamId: string | null) => boolean;
   },
 ): T | null => {
   if (!params.workspaceReady) {
@@ -102,6 +101,6 @@ export const findOtherContextDraft = <T extends { teamId: string | null }>(
   }
   const activeTeamId = params.activeTeamId ?? null;
   return (
-    drafts.find((draft) => draft.teamId !== activeTeamId && params.canCreateIn(draft.teamId)) ?? null
+    drafts.find((draft) => draft.teamId !== activeTeamId) ?? null
   );
 };

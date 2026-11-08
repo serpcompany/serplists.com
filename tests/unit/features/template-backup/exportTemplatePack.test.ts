@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
-import {
-  EXPORT_PACK_UNREADABLE_MESSAGE,
-  exportTemplatePack,
-} from '@/features/template-backup/exportTemplatePack';
+import { exportTemplatePack } from '@/features/template-backup/exportTemplatePack';
 import { getAccessFailure } from '@/lib/api-errors';
 import { createSingleFlight } from '@/lib/utils/singleFlight';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
@@ -84,7 +81,7 @@ describe('exportTemplatePack', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(ZodError);
     const { message } = getAccessFailure(error, 'Failed to export templates');
-    expect(message).toBe(EXPORT_PACK_UNREADABLE_MESSAGE);
+    expect(message).toBe('The export could not be read. Try again.');
     expect(message).not.toMatch(/[{}[\]\n]/);
     expect(dependencies.download).not.toHaveBeenCalled();
   });
@@ -94,7 +91,7 @@ describe('exportTemplatePack with a server pack whose manifest is unreadable', (
   it('downloads nothing and gives the readable message', async () => {
     const dependencies = buildDependencies({ ...pack([{ title: 'Owned' }]), manifest: { skippedTemplates: 'none' } });
 
-    await expect(exportTemplatePack({ includePublic: false }, dependencies)).rejects.toThrow(EXPORT_PACK_UNREADABLE_MESSAGE);
+    await expect(exportTemplatePack({ includePublic: false }, dependencies)).rejects.toThrow('The export could not be read. Try again.');
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 });
@@ -209,7 +206,7 @@ describe('exportTemplatePack with public community templates, whose catalog rows
   it('downloads nothing, with a readable message, when the server pack cannot take the public templates', async () => {
     const dependencies = buildDependencies({ templates: [] }, [communityRow('with-tools')]);
 
-    await expect(exportCommunityTemplates(dependencies)).rejects.toThrow(EXPORT_PACK_UNREADABLE_MESSAGE);
+    await expect(exportCommunityTemplates(dependencies)).rejects.toThrow('The export could not be read. Try again.');
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 

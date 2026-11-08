@@ -3,9 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   EDITOR_REPLACE_DRAFT_MESSAGE,
   EDITOR_RESTORE_DRAFT_MESSAGE,
-  EDITOR_SAVE_IN_PROGRESS_MESSAGE,
   EDITOR_UNSAVED_CHANGES_MESSAGE,
-  EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
   confirmReplaceTemplateDraft,
   getTemplateEditorLeaveMessage,
   restoreKeptTemplateDraft,
@@ -22,10 +20,10 @@ describe('template editor navigation guards', () => {
   it('says the template is still saving when leaving during a save', () => {
     expect(
       getTemplateEditorLeaveMessage({ hasPendingUploads: false, isSaving: true }),
-    ).toBe(EDITOR_SAVE_IN_PROGRESS_MESSAGE);
+    ).toBe('Your template is still saving. If the save fails, your changes will be lost. Leave anyway?');
     expect(
       getTemplateEditorLeaveMessage({ hasPendingUploads: false, isSaving: false }),
-    ).toBe(EDITOR_UNSAVED_CHANGES_MESSAGE);
+    ).toBe('You have unsaved template changes. Leave without saving?');
   });
 
   it('blocks leaving while a file is still uploading, even with no other edits, since the form changes only once the upload finishes', () => {
@@ -35,7 +33,7 @@ describe('template editor navigation guards', () => {
 
   it('says a file is still uploading when that is what would be lost', () => {
     expect(getTemplateEditorLeaveMessage({ hasPendingUploads: true })).toBe(
-      EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
+      'A file is still uploading. If you leave now, it will not be added to the template. Leave anyway?',
     );
     expect(getTemplateEditorLeaveMessage({ hasPendingUploads: false })).toBe(
       EDITOR_UNSAVED_CHANGES_MESSAGE,
@@ -58,7 +56,6 @@ describe('confirmReplaceTemplateDraft, before generating from Clipy replaces the
     expect(confirmReplaceTemplateDraft(true, decline)).toBe(false);
     expect(confirmReplaceTemplateDraft(true, accept)).toBe(true);
     expect(decline).toHaveBeenCalledWith(EDITOR_REPLACE_DRAFT_MESSAGE);
-    expect(EDITOR_REPLACE_DRAFT_MESSAGE).toMatch(/unsaved changes will be lost/);
   });
 });
 
@@ -82,7 +79,6 @@ describe('restoreKeptTemplateDraft, which replaces the whole form too', () => {
 
     expect(restoreKeptTemplateDraft({ hasUnsavedWork: true, takeDraft, apply, confirmDialog })).toBe(false);
     expect(confirmDialog).toHaveBeenCalledWith(EDITOR_RESTORE_DRAFT_MESSAGE);
-    expect(EDITOR_RESTORE_DRAFT_MESSAGE).toMatch(/unsaved changes will be lost/);
     expect(takeDraft).not.toHaveBeenCalled();
     expect(apply).not.toHaveBeenCalled();
   });

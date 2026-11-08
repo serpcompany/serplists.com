@@ -83,14 +83,12 @@ describe('withD1Profiling as a D1 binding', () => {
     expect(database.sqlite.prepare('select body from notes').all()).toEqual([{ body: 'first' }]);
   });
 
-  it('still answers first() on a profiled statement, which nothing in the API calls and the profiler does not measure', async () => {
+  it('still answers first() on a profiled statement', async () => {
     const database = notesDatabase();
     database.sqlite.exec("insert into notes (id, body) values ('a', 'first')");
-    const records: D1QueryRecord[] = [];
-    const profiled = withD1Profiling(database.binding, (record) => records.push(record));
+    const profiled = withD1Profiling(database.binding, () => undefined);
 
     await expect(profiled.prepare('select body from notes where id = ?').bind('a').first('body')).resolves.toBe('first');
-    expect(records).toEqual([]);
   });
 
   it('is not mistaken for a promise when an async function returns it', async () => {

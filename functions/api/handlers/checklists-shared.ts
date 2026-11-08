@@ -52,7 +52,7 @@ export async function handleSharedChecklist(
     return jsonError('Shared run not found', 404);
   }
 
-  const read = await readJsonPayload(request, sharedRunUpdateSchema, 'Invalid checklist payload');
+  const read = await readJsonPayload(request, sharedRunUpdateSchema);
   if ('response' in read) return read.response;
 
   const { sections, status, expected_revision } = read.payload;

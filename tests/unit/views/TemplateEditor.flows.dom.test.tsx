@@ -1,7 +1,7 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import '../../support/mockedConsoleContext';
 import React, { act, useContext } from 'react';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { useFormContext } from 'react-hook-form';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
@@ -160,7 +160,9 @@ describe('TemplateEditor preview and outline', () => {
 
     await pressTheButton('Outline');
 
-    expect(screen.getByRole('dialog')).toBeDefined();
+    const outline = screen.getByRole('dialog', { name: 'Outline' });
+    expect(within(outline).getByText('Sections')).toBeDefined();
+    expect(within(outline).getByText('Section 1')).toBeDefined();
   });
 });
 

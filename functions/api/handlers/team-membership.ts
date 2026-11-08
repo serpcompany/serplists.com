@@ -39,7 +39,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid owner transfer payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const ownerMemberId = membership.id;
@@ -205,7 +205,7 @@ export async function updateTeamMember(
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid member payload");
+    return invalidPayloadResponse(parsed.error);
   }
   if (typeof parsed.data.role === "undefined" && typeof parsed.data.status === "undefined") {
     return jsonError("No fields to update", 400);

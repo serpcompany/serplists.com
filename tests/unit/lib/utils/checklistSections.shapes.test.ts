@@ -30,11 +30,18 @@ describe('sections read from a stored Template or Run', () => {
     expect(task?.title).toBe('');
   });
 
-  it('starts a sub-task block over with no sub-tasks when it holds none', () => {
+  it('starts every sub-task of a completed task over when the run starts again', () => {
+    const subItems = [
+      { id: 'pegs', title: 'Pegs', isCompleted: true },
+      { id: 'poles', title: 'Poles', isCompleted: false },
+    ];
     const [section] = resetSectionsCompletion([
-      { id: 's1', title: 'Shelter', items: [{ id: 'i1', title: 'Pack the tent', isCompleted: true, contents: [{ id: 'c1', type: 'subItems', value: '' }] }] },
+      { id: 's1', title: 'Shelter', items: [{ id: 'i1', title: 'Pack the tent', isCompleted: true, contents: [{ id: 'c1', type: 'subItems', value: '', subItems }] }] },
     ]);
 
-    expect(section?.items[0]).toMatchObject({ isCompleted: false, contents: [{ id: 'c1', type: 'subItems', value: '', subItems: [] }] });
+    expect(section?.items[0]).toMatchObject({
+      isCompleted: false,
+      contents: [{ id: 'c1', type: 'subItems', subItems: [{ id: 'pegs', title: 'Pegs', isCompleted: false }, { id: 'poles', title: 'Poles', isCompleted: false }] }],
+    });
   });
 });

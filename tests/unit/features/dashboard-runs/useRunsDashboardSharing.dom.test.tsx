@@ -150,9 +150,9 @@ describe("sharing from the runs list, where each Share replaces the run's token 
 
     await act(async () => {
       const first = list.current().shareRun('run-1');
-      await list.current().shareRun('run-1');
+      const second = list.current().shareRun('run-1');
       minted.resolve({ shareToken: 'token-only' });
-      await first;
+      await Promise.all([first, second]);
     });
 
     expect(createChecklistRunShare).toHaveBeenCalledTimes(1);

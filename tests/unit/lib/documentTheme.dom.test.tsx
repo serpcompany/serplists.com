@@ -36,13 +36,16 @@ describe('the theme a component reads from the page', () => {
     expect(screen.getByText('light')).toBeTruthy();
   });
 
-  it('goes back to the stored theme when another tab clears the site data, and ignores a storage event it cannot read', async () => {
+  it('goes back to the stored theme when another tab clears the site data, and keeps it when another tab changes something else', async () => {
     await renderSettled(<ThemeShown />);
     act(() => {
       toggleDocumentTheme();
     });
 
-    await fromAnotherTab(Object.assign(new Event('storage'), { key: 7, storageArea: null }));
+    await fromAnotherTab(new StorageEvent('storage', { key: 'other-key', newValue: 'light', storageArea: window.localStorage }));
+    expect(screen.getByText('dark')).toBeTruthy();
+
+    window.localStorage.clear();
     await fromAnotherTab(new Event('storage'));
     expect(screen.getByText('dark')).toBeTruthy();
 

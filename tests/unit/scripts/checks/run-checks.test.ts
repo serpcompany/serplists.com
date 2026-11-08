@@ -43,12 +43,20 @@ describe('running the repository checks on a checkout', { timeout: 120_000 }, ()
     expect(duplicates).toEqual({ name: 'duplicates', passed: true, report: [] });
   });
 
-  it("reports what became of actionlint on a workflow, with the rule, wherever it could or couldn't run", async () => {
+  it("fails a broken workflow naming the broken key where actionlint can run, and says it didn't run where it can't", async () => {
     const at = scratchRepository('run-checks', { '.github/workflows/broken.yml': 'on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    stepz: []\n' });
 
     const [linters] = await runChecks(['linters'], selectRun([], at));
+    const report = linters?.report ?? [];
 
-    expect(linters?.report[0]).toMatch(/^actionlint/);
-    expect(linters?.report.at(-1)).toBe(linterRule);
+    expect([
+      { passed: false, namesTheBrokenKey: true, ranNowhere: false },
+      { passed: !process.env['CI'], namesTheBrokenKey: false, ranNowhere: true },
+    ]).toContainEqual({
+      passed: linters?.passed,
+      namesTheBrokenKey: report.some((line) => line.includes('"stepz"')),
+      ranNowhere: report.some((line) => line.startsWith("actionlint didn't run")),
+    });
+    expect(report.at(-1)).toBe(linterRule);
   });
 });

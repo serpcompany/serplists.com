@@ -13,6 +13,12 @@ const config = `module.exports = {
       from: { path: "^src/screen\\\\.js$" },
       to: { path: "^src/transport\\\\.js$" },
     },
+    {
+      name: "the-api-does-not-call-the-app",
+      severity: "error",
+      from: { path: "^functions/" },
+      to: { path: "^src/" },
+    },
   ],
 };
 `;
@@ -37,10 +43,14 @@ describe('the dependency check', { timeout: 60_000 }, () => {
   });
 
   it('cruises all the code it covers when the run touches any of it', () => {
-    const at = project("import { send } from './transport.js';\nexport const screen = send;\n");
-    writeFiles(at, { 'functions/api.js': 'export const api = 1;\n', 'db/schema.js': 'export const schema = 1;\n', 'next.config.ts': 'export default {};\n' });
+    const at = project("import { load } from './feature.js';\nexport const screen = load;\n");
+    writeFiles(at, {
+      'functions/api.js': "import { send } from '../src/transport.js';\nexport const api = send;\n",
+      'db/schema.js': 'export const schema = 1;\n',
+      'next.config.ts': 'export default {};\n',
+    });
 
-    expect(checkDependencies(at, ['src/screen.js'])[0]).toBe('error screens-do-not-call-transport: src/screen.js → src/transport.js');
+    expect(checkDependencies(at, ['src/screen.js'])[0]).toBe('error the-api-does-not-call-the-app: functions/api.js → src/transport.js');
   });
 
   it('leaves a run alone whose paths hold none of the code it cruises', () => {

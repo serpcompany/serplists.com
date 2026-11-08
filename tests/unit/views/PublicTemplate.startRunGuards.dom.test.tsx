@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { cleanup } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -16,6 +16,7 @@ import {
 } from '../../support/publicTemplatePage';
 import { analytics } from '@/lib/analytics';
 import { navigation } from '../../support/nextNavigation';
+import { firstOf } from '../../support/elements';
 
 beforeAll(installNavigationWindow);
 afterAll(restoreNavigationWindow);
@@ -28,9 +29,11 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+const startRunButtons = () => screen.getAllByRole('button', { name: 'Start Run' });
+
 const pressStartRun = () =>
   act(async () => {
-    lastViewProps().onStartRun();
+    fireEvent.click(firstOf(startRunButtons()));
   });
 
 describe('PublicTemplate view tracking', () => {
@@ -47,11 +50,12 @@ describe('PublicTemplate view tracking', () => {
 });
 
 describe('PublicTemplate Start Run before a run can start', () => {
-  it('does nothing while the active Organization is still loading', async () => {
+  it('cannot be pressed while the active Organization is still loading', async () => {
     workspaceState.isWorkspaceLoading = true;
     await openThePublishedRouteInTheDom(publishedClipyTemplate);
     const addressBefore = navigation.url();
 
+    expect(startRunButtons().map((button) => button.hasAttribute('disabled'))).toEqual([true, true]);
     await pressStartRun();
 
     expect(lastDialogProps().open).toBe(false);

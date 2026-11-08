@@ -3,22 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readTemplateDraft, saveTemplateDraft } from '@/features/template-editor/templateDraftStore';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
-import { getResourcePermissions, type OrganizationRole } from '@/lib/organizationPermissions';
 
 import { renderSettled } from '../../../support/renderInTheDom';
 
 const workspace = vi.hoisted(() => ({
   activeTeamId: undefined as string | undefined,
-  roles: {} as Record<string, OrganizationRole>,
   selectWorkspace: vi.fn<(workspaceId: string) => void>(),
 }));
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
     activeTeamId: workspace.activeTeamId,
-    getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspace.roles[id]),
     isWorkspaceLoading: false,
     selectWorkspace: workspace.selectWorkspace,
-    teams: [{ id: 'team-acme', name: 'Acme' }, { id: 'team-beta', name: 'Beta' }],
+    teams: [
+      { id: 'team-acme', name: 'Acme', role: 'editor' },
+      { id: 'team-beta', name: 'Beta', role: 'viewer' },
+    ],
   }),
 }));
 
@@ -29,7 +29,6 @@ const halfWritten = buildTemplateEditorFormValues({ title: 'Launch plan' });
 beforeEach(() => {
   window.sessionStorage.clear();
   workspace.activeTeamId = undefined;
-  workspace.roles = { 'team-acme': 'editor', 'team-beta': 'viewer' };
   workspace.selectWorkspace.mockReset();
 });
 

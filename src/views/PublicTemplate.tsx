@@ -102,7 +102,7 @@ const PublicTemplate = () => {
   };
 
   const handleStartRunClick = () => {
-    if (!template || isWorkspaceLoading || !canRunTemplates) return;
+    if (!template || !canRunTemplates) return;
     if (!isAuthenticated && !guestRunPath) {
       navigateToLoginWithReturnPath(router.push);
       return;

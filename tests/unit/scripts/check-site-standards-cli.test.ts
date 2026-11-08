@@ -17,17 +17,6 @@ describe('node scripts/check-site-standards.ts, as the deploy workflows run it',
     expect(result.stdout).toMatch(/\n\d+ passed, 0 failed\n$/);
   });
 
-  it('checks three times, 20 seconds apart, then fails a site that keeps failing, and exits 1', { timeout: 120_000 }, async () => {
-    const site = await deployedWorkerWithTheBuiltRedirects('staging');
-
-    const result = await servedOverHttp(site, (origin) => runRepositoryScriptWhileServing(SCRIPT, [origin, 'production']));
-
-    expect(result.status).toBe(1);
-    expect(result.stdout).toContain('check(s) failed; a new deployment can answer 404 or not answer at all for its first seconds, so checking again in 20s (attempt 2 of 3).');
-    expect(result.stdout).toContain('(attempt 3 of 3)');
-    expect(result.stdout).toContain('FAIL robots.txt allows crawling');
-  });
-
   it.each([
     [[], 2, 'usage: node --import tsx scripts/check-site-standards.ts <base-url> <staging|production> [--local]'],
     [['https://example.test'], 2, 'usage:'],

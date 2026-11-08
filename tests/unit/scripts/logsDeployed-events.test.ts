@@ -54,10 +54,13 @@ describe('pnpm run logs:deployed console events', () => {
     expect(await result).toMatchObject({ output: 'No lines match.', exitCode: 0 });
   });
 
-  it('lets an event it cannot date fail the run, rather than reporting it as a usage problem', async () => {
-    const { result } = run(['--env', 'staging'], withEvents([consoleEvent('boom', {}), { timestamp: 9e15, source: 'boom', $metadata: {} }]));
+  it("fails the run with the connection's error when Cloudflare's answer breaks off, rather than reporting it as a usage problem or as no lines", async () => {
+    const brokenOff = new ReadableStream({
+      start: (controller) => controller.error(new Error('socket hang up')),
+    });
+    const fetchImpl = () => Promise.resolve(new Response(brokenOff, { status: 200 }));
 
-    await expect(result).rejects.toThrow(RangeError);
+    await expect(runDeployedLogQuery(['--env', 'staging'], { env: CREDENTIALS, nowMs: NOW, fetchImpl })).rejects.toThrow('socket hang up');
   });
 });
 

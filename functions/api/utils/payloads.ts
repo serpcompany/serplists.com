@@ -73,8 +73,8 @@ export const templateImportFieldsSchema = templatePayloadSchema
   .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true, requiredTools: true })
   .required({ title: true });
 
-export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
-  const issue = firstIssueOf(error, fallback);
+export function formatPayloadIssue(error: z.ZodError): string {
+  const issue = firstIssueOf(error);
   return `${issue.path.join(".") || "payload"}: ${issue.message}`;
 }
 
@@ -93,9 +93,8 @@ export const checklistPayloadSchema = z.object({
 
 export function describePayloadError(
   error: z.ZodError,
-  fallback: string,
 ): { message: string; details: { field?: string } } {
-  const issue = firstIssueOf(error, fallback);
+  const issue = firstIssueOf(error);
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
   return { message, details: field === undefined ? {} : { field } };

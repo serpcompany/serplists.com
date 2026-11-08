@@ -62,7 +62,7 @@ export async function reissueTeamInviteLink({
 
   const parsed = reissueInviteLinkBodySchema.safeParse(await readOptionalJson(request));
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const now = new Date().toISOString();

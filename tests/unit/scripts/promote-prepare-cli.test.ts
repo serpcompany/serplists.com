@@ -7,6 +7,7 @@ import { PROMOTION_BODY_FILE } from '../../../scripts/promote-prepare-lib';
 import { aGhStandIn, type GhAnswer } from '../../support/ghStandIn';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
+import { theUtcDayAfter, utcDate, withTheDatesAround } from '../../support/utcDates';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const workDir = aWorkDirRemovedAfterAll('promote-prepare-cli-');
@@ -16,7 +17,6 @@ const env = throwawayRepositoryEnvironment({
   GIT_COMMITTER_NAME: 'Throwaway Test',
   GIT_COMMITTER_EMAIL: 'throwaway@example.test',
 });
-const today = () => new Date().toISOString().slice(0, 10);
 
 function aCheckoutWithAThrowawayOrigin() {
   const folder = mkdtempSync(path.join(workDir, 'promotion-'));
@@ -54,13 +54,15 @@ const pullRequest = (number: number, body: string): Record<string, GhAnswer> => 
 });
 
 describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_000 }, () => {
-  it("writes the promotion PR's body with the issues the promoted pull requests close, and on a dry run pushes nothing", () => {
+  it("writes the promotion PR's body with the issues the promoted pull requests close, and on a dry run pushes nothing", async () => {
     const { checkout, originGit, commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     const promoted = commit({ 'README.md': 'one' }, 'feat: the first change (#1)');
     const staging = commit({ 'README.md': 'three' }, 'fix: the third change (#3)', [commit({ 'README.md': 'two' }, 'feat: the second change (#2)', [promoted])]);
     branches({ main: commit({ 'README.md': 'one' }, 'chore: promote staging to main (#4)'), staging });
 
-    const result = promote(['--dry-run'], { ...pullRequest(2, 'Closes #20\n\n## Why'), ...pullRequest(3, 'Closes #30\r\nCloses #20') });
+    const { result, dates } = await withTheDatesAround(() =>
+      promote(['--dry-run'], { ...pullRequest(2, 'Closes #20\n\n## Why'), ...pullRequest(3, 'Closes #30\r\nCloses #20') }),
+    );
 
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
@@ -71,7 +73,7 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
       `Promotes staging ${staging.slice(0, 7)} to main, with #2, #3.`,
     ]);
     expect(result.stdout).toContain(`Dry run: would push `);
-    expect(result.stdout).toContain(`to promote/staging-${today()}-${staging.slice(0, 7)}.`);
+    expect(result.stdout).toMatch(new RegExp(`to promote/staging-(?:${dates.join('|')})-${staging.slice(0, 7)}\\.`));
     expect(originGit('for-each-ref', '--format=%(refname)', 'refs/heads/promote')).toBe('');
   });
 
@@ -143,14 +145,16 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
     const promoted = commit({ 'README.md': 'one' }, 'feat: the first change');
     const staging = commit({ 'README.md': 'two' }, 'feat: the second change', [promoted]);
     branches({ main: commit({ 'README.md': 'one' }, 'chore: promote'), staging });
-    const branch = `promote/staging-${today()}-${staging.slice(0, 7)}`;
-    originGit('update-ref', `refs/heads/${branch}`, staging);
+    const today = utcDate();
+    const promotionBranches = [today, theUtcDayAfter(today)].map((date) => `promote/staging-${date}-${staging.slice(0, 7)}`);
+    for (const branch of promotionBranches) originGit('update-ref', `refs/heads/${branch}`, staging);
 
     const result = promote([]);
+    const pointedAt = promotionBranches.filter((branch) => result.stdout.includes(`${branch} already exists for staging ${staging.slice(0, 7)}. Open the promotion PR:`));
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain(`${branch} already exists for staging ${staging.slice(0, 7)}. Open the promotion PR:`);
-    expect(result.stdout).toContain(`gh pr create --base main --head ${branch}`);
-    expect(originGit('rev-parse', `refs/heads/${branch}`)).toBe(staging);
+    expect(pointedAt).toHaveLength(1);
+    expect(result.stdout).toContain(`gh pr create --base main --head ${pointedAt.join('')}`);
+    expect(originGit('for-each-ref', '--format=%(objectname)', 'refs/heads/promote')).toBe(`${staging}\n${staging}`);
   });
 });

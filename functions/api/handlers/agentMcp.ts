@@ -242,7 +242,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   if (payload.method === "initialize") {
     const initialize = initializeArgs.safeParse(payload.params);
     if (!initialize.success) {
-      return rpcError(id, -32602, firstIssueOf(initialize.error, "Invalid initialize parameters").message);
+      return rpcError(id, -32602, firstIssueOf(initialize.error).message);
     }
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,

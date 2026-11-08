@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   mapForeignKeyPragmaResults,
@@ -10,6 +11,7 @@ import {
   splitSchemaQueryResults,
 } from '../../../scripts/lib/d1-schema-pragmas';
 import { readSqlOnlySchema } from '../../../scripts/lib/sql-only-schema';
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 const folder = mkdtempSync(path.join(tmpdir(), 'sql-only-schema-'));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
@@ -42,8 +44,15 @@ describe('reading what Wrangler answered', () => {
 });
 
 describe('readSqlOnlySchema', () => {
-  it('reads the checked-in triggers', () => {
-    expect(readSqlOnlySchema().triggers.length).toBeGreaterThan(0);
+  it('reads the triggers the migrations leave, each on its table', () => {
+    const migrated = z
+      .array(z.object({ name: z.string(), tbl_name: z.string() }))
+      .parse(new SqliteD1().sqlite.prepare("SELECT name, tbl_name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").all());
+
+    expect(migrated.length).toBeGreaterThan(0);
+    expect(readSqlOnlySchema().triggers.map(({ name, table }) => ({ name, table }))).toEqual(
+      migrated.map(({ name, tbl_name }) => ({ name, table: tbl_name })),
+    );
   });
 
   it('names the first field a malformed manifest gets wrong', () => {
