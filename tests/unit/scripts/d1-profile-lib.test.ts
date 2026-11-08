@@ -158,6 +158,9 @@ describe('pristine snapshot', () => {
     writeFileSync(path.join(snapshotPath, 'meta.json'), '{"scale":"one"}');
     expect(readSnapshotMeta(snapshotPath)).toBeNull();
 
+    writeFileSync(path.join(snapshotPath, 'meta.json'), '{"scale":1,"datasetK');
+    expect(readSnapshotMeta(snapshotPath)).toBeNull();
+
     expect(readSnapshotMeta(path.join(root, 'missing'))).toBeNull();
   });
 });

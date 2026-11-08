@@ -20,6 +20,11 @@ const testSources: Record<string, string> = {
     "describe('template reads', () => {",
     "  it('returns the public catalog when no scope is given', () => {});",
     "  it.each([1, 2])('reads page %s', () => {});",
+    "  it.each`page${1}`('reads the tagged page $page', () => {});",
+    "  it(titleFromAVariable, () => {});",
+    "  it.only.call(undefined, 'not a test call');",
+    "  cases[0]('not a test either');",
+    '  it();',
     '});',
   ].join('\n'),
   [CARD]: "it('names the Organization that owns a Template', () => {});",
@@ -57,6 +62,8 @@ describe('the tests a product doc can name', () => {
     expect(hasTitle(titles, 'a runner sees a read-only notice on a shared Run')).toBe(true);
     expect(hasTitle(titles, 'a step is not a test')).toBe(false);
     expect(hasTitle(testTitles(READS, testSources[READS] ?? ''), 'reads page %s')).toBe(true);
+    expect(hasTitle(testTitles(READS, testSources[READS] ?? ''), 'reads the tagged page $page')).toBe(true);
+    expect(testTitles(READS, testSources[READS] ?? '')).toHaveLength(4);
   });
 
   it('may leave out a Playwright tag and wrap across lines', () => {
@@ -69,6 +76,9 @@ describe('the tests a product doc can name', () => {
 describe('a check line', () => {
   it('names one abbreviation and one or more quoted titles joined by a comma or "and", wrapped or not', () => {
     expect(quotedTitles('"one", "two, with a comma" and "three says "hi"".')).toEqual(['one', 'two, with a comma', 'three says "hi"']);
+    expect(quotedTitles('no quoted title')).toBeUndefined();
+    expect(quotedTitles('"one", two')).toBeUndefined();
+    expect(quotedTitles('"never closed')).toBeUndefined();
     expect(checkLines(proseLines('- Check: Templates spec, "a runner sees"\n  and "an editor can save".'))).toEqual([
       { line: 1, abbreviation: 'Templates spec', titles: ['a runner sees', 'an editor can save'] },
     ]);

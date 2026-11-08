@@ -277,6 +277,17 @@ describe("the session file", () => {
     });
   });
 
+  it("is no session when the file is missing or is not JSON", () => {
+    withSessionPath((sessionPath) => {
+      expect(readDevSession(sessionPath)).toBeNull();
+
+      mkdirSync(path.dirname(sessionPath), { recursive: true });
+      writeFileSync(sessionPath, '{"port": 3001,');
+
+      expect(readDevSession(sessionPath)).toBeNull();
+    });
+  });
+
   it("is removed by the launcher that wrote it, and only by that one", () => {
     withSessionPath((sessionPath) => {
       writeDevSession({ port: 3001, pid: 1111, startedAt: 1_000 }, sessionPath);
@@ -301,6 +312,13 @@ describe("isProcessAlive", () => {
 
   it("treats a process we may not signal (EPERM) as not ours, since the launcher runs as the current user", () => {
     expect(isProcessAlive(1234, failingKill("EPERM"))).toBe(false);
+  });
+
+  it("is false, without signalling anything, for a pid no process can have", () => {
+    const kill = vi.fn(() => true);
+
+    expect([null, 0, -1, 1.5].map((pid) => isProcessAlive(pid, kill))).toEqual([false, false, false, false]);
+    expect(kill).not.toHaveBeenCalled();
   });
 });
 

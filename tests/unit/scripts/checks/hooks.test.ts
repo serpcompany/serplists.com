@@ -96,6 +96,20 @@ describe('the edit hook', { timeout: 60_000 }, () => {
     expect(result.stderr).toContain(JSON.stringify(path.join(checkout, 'probe.ts')));
   });
 
+  it('finds a relative file_path from the folder the hook was started in when the call names no cwd', () => {
+    const result = hook('hook.mjs', { tool_input: { file_path: 'scripts/checks/rules.ts' } });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  });
+
+  it.each([
+    ['no input at all', ''],
+    ['a call without a tool input', '{}'],
+    ['an edit that names no file', '{"tool_input":{"file_path":""}}'],
+  ])('leaves alone %s', (_what, input) => {
+    const result = spawnSync(process.execPath, [path.join(root, 'tools', 'checks', 'hook.mjs')], { input, encoding: 'utf8', env: throwawayRepositoryEnvironment() });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  });
+
   it('asks for an install where the owning checkout has none, except in a GitHub Actions job', () => {
     const checkout = otherCheckout('hook.ts', false);
     const result = edit(path.join(checkout, 'probe.ts'));
@@ -152,6 +166,14 @@ describe('the stop hook', { timeout: 60_000 }, () => {
     const result = hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('checked by its own checkout: {"changed":["new.ts","probe.ts"],"session":"session-1"}');
+  });
+
+  it('runs the checks with no session when the call names none it can use', () => {
+    const checkout = committed(otherCheckout('stop-hook.ts', true));
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    const result = hook('stop-hook.mjs', { cwd: checkout, session_id: 7 });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('checked by its own checkout: {"changed":["probe.ts"]}');
   });
 
   it('passes a checkout without packages while nothing has changed', () => {

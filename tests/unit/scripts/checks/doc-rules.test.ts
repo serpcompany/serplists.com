@@ -24,6 +24,8 @@ describe('heading anchors', () => {
   it('read the anchor from a link, decoded and in lower case', () => {
     expect(anchorOf('ci-agents.md#Code-Review')).toBe('code-review');
     expect(anchorOf('ci.md')).toBeNull();
+    expect(anchorOf('ci.md#Deploy%20Steps')).toBe('deploy steps');
+    expect(anchorOf('ci.md#100%-Coverage')).toBe('100%-coverage');
   });
 });
 
@@ -147,6 +149,9 @@ describe('skills', () => {
       'has no description, which is how an agent knows when to use it',
     ]);
     expect(skillProblems(path, '# No frontmatter\n', [path])).toEqual([
+      'has no YAML frontmatter between --- lines, which Claude Code reads the skill from',
+    ]);
+    expect(skillProblems(path, skill('name: [verify-web'), [path])).toEqual([
       'has no YAML frontmatter between --- lines, which Claude Code reads the skill from',
     ]);
   });

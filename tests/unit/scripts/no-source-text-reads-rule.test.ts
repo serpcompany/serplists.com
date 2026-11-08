@@ -24,6 +24,14 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
     inATest('importing a module to run it', "import { applyStoredTheme } from '@/lib/theme';"),
     inATest('importing a fixture as raw text', "import schema from '../../fixtures/sitemap.xsd?raw';"),
     inATest('listing the browser specs, which are tests', "readdirSync(path.join(repoRoot, 'tests/e2e'));"),
+    inATest('reading standard input', "readFileSync(0, 'utf8');"),
+    inATest('a path destructured from options the test cannot know', "const { file } = options; readFileSync(file, 'utf8');"),
+    inATest('importing a module a factory call returns', "createRequire(import.meta.url)('./fixture.json');"),
+    inATest('importing source modules with import.meta.glob to run them', "import.meta.glob('/src/**/*.tsx', { eager: true });"),
+    inATest('globbing fixtures as raw text', "import.meta.glob('../../fixtures/*.xsd', { query: '?raw', import: 'default' });"),
+    inATest('a raw import from a package', "import css from 'some-package/dist/theme.css?raw';"),
+    inATest('a raw import of a source-named file outside the repository', "import outside from '../../../../elsewhere/src/a.ts?raw';"),
+    inATest('a dynamic import of a computed specifier', 'await import(modulePath);'),
     inATest(
       'reading a file whose path the test cannot know',
       "const read = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8'); read(process.argv[2]);",
@@ -93,6 +101,42 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
       errors: [reads('functions/api/db.ts')],
     },
     { ...inATest('a dynamic ?raw import', "await import('@functions/api/db.ts?raw');"), errors: [reads('functions/api/db.ts')] },
+    {
+      ...inATest('a path concatenated to the repository root', "readFileSync(repoRoot + '/src/lib/theme.ts', 'utf8');"),
+      errors: [reads('src/lib/theme.ts')],
+    },
+    {
+      ...inATest(
+        'a path a URL names through fileURLToPath',
+        "readFileSync(fileURLToPath(new URL('../../../src/app/layout.tsx', import.meta.url)), 'utf8');",
+      ),
+      errors: [reads('src/app/layout.tsx')],
+    },
+    {
+      ...inATest(
+        'a path from a loop over spread names and a literal',
+        "for (const page of [...pages, 'src/app/b/page.tsx']) readFileSync(page, 'utf8');",
+      ),
+      errors: [reads('src/app/b/page.tsx')],
+    },
+    {
+      ...inATest(
+        'a path a function declaration receives',
+        "function readSource(file: string) { return readFileSync(path.join(root, file), 'utf8'); } readSource('functions/api/db.ts');",
+      ),
+      errors: [reads('functions/api/db.ts')],
+    },
+    {
+      ...inATest('a raw import.meta.glob in the older as: raw form', "import.meta.glob('/functions/**/*.ts', { as: 'raw' });"),
+      errors: [reads('functions/**/*.ts')],
+    },
+    {
+      ...inATest(
+        'each source pattern of a raw import.meta.glob',
+        "import.meta.glob(['/src/lib/*.ts', '../../fixtures/*.xsd', '@functions/api/*.ts'], { query: '?raw' });",
+      ),
+      errors: [reads('src/lib/*.ts'), reads('functions/api/*.ts')],
+    },
     {
       ...inATest('a raw import.meta.glob', "import.meta.glob('/src/**/*.tsx', { query: '?raw', import: 'default' });"),
       errors: [reads('src/**/*.tsx')],

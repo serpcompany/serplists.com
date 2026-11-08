@@ -304,3 +304,31 @@ describe('the Pull request workflow', () => {
     });
   });
 });
+
+describe('the checks when the workflow leaves a field out', () => {
+  it('refuses to run without the name of a check', async () => {
+    const { status, output } = await runAgainstAGitHubStandIn({ script: SCRIPT, args: [] }, { GITHUB_REPOSITORY: REPOSITORY }, github());
+
+    expect(status).toBe(1);
+    expect(output).toContain('::error::Run it as: node tools/checks/pull-request.mjs base, title, issue-link, fix-test or evidence.');
+  });
+
+  it.each([
+    ['title', {}, '"" is not a Conventional Commit.'],
+    ['issue-link', {}, 'The body is empty.'],
+    ['evidence', {}, 'The body has no "## Evidence" section.'],
+    ['base', { PR_BASE: 'main' }, 'A pull request into main from  is not a promotion.'],
+  ])('fails %s with nothing to read', async (name, env, message) => {
+    const { status, output } = await check(name, env);
+
+    expect(status).toBe(1);
+    expect(output).toContain(message);
+  });
+
+  it('passes fix-test for a pull request with no branch or title, which is not a fix', async () => {
+    const { status, requests } = await check('fix-test', {});
+
+    expect(status).toBe(0);
+    expect(requests).toEqual([]);
+  });
+});

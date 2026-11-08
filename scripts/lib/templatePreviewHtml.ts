@@ -54,16 +54,12 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
     return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
   }
 
-  if (content.type === "embed") {
-    const embedLink = getEmbedLinkUrl(content.value);
-    const embedBody = embedLink
-      ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
-      : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(content.value)}</pre>`;
-    return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url">${embedBody}</div></div>`;
-  }
-
-  const unhandled: never = content;
-  return unhandled;
+  const embed: Extract<typeof content, { type: "embed" }> = content;
+  const embedLink = getEmbedLinkUrl(embed.value);
+  const embedBody = embedLink
+    ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
+    : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(embed.value)}</pre>`;
+  return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(embed.value))}</div><div class="embed-url">${embedBody}</div></div>`;
 };
 
 export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) => {

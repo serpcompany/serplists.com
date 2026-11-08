@@ -91,6 +91,12 @@ describe('the commits staging has had since the last promotion', () => {
     ]);
   });
 
+  it("lists nothing when main was last given the files of staging's newest commit", () => {
+    git('update-ref', 'refs/remotes/origin/main', commit('four', 'chore: promote staging to main (#6)'));
+
+    expect(stagingSubjectsSinceTheLastPromotion(git)).toEqual([]);
+  });
+
   it('lists every commit staging has had when main never had its files', () => {
     git('update-ref', 'refs/remotes/origin/main', history.unrelated);
 

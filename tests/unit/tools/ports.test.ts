@@ -179,6 +179,26 @@ describe('the ports of a checkout', () => {
     expect(claims(main)).toEqual(['0', '1', 'notes.txt']);
   });
 
+  it('a claim that cannot be read is passed over, and its block left taken', () => {
+    const main = repository();
+    mkdirSync(path.join(claimsFolder(main), '1'), { recursive: true });
+    expect(portsOf(worktree(main, 'one'))).toEqual(portsFor(2));
+    expect(claims(main)).toEqual(['1', '2']);
+  });
+
+  it('fails, asking for a prune, when every block is held by a worktree that is still there', () => {
+    const main = repository();
+    mkdirSync(claimsFolder(main), { recursive: true });
+    for (let slot = 1; slot <= lastSlot; slot += 1) writeFileSync(path.join(claimsFolder(main), String(slot)), `${main}\n`);
+    const result = ports(worktree(main, 'one'), ['--json']);
+    expect(result.status).toBe(1);
+    expect(result.stderr.trim()).toBe(`Every block of ports is taken (${claimsFolder(main)}). Run "node tools/checks/ports.mjs prune".`);
+  }, SLOW);
+
+  it('prune has nothing to give up outside every repository', () => {
+    expect(ports(scratch(), ['prune']).stdout.trim()).toBe('Nothing to give up.');
+  });
+
   it('are one block when a worktree asks several times at once, and differ between worktrees', async () => {
     const main = repository();
     const trees = ['a', 'b', 'c', 'd'].map((name) => worktree(main, name));

@@ -138,6 +138,16 @@ describe('the commit-msg hook: check-fix-commits --commit-msg', { timeout: 60_00
   });
 });
 
+describe('check-fix-commits without a range or a message file', { timeout: 60_000 }, () => {
+  it('prints how to call it and exits 2, so a hook or workflow that passes neither fails', () => {
+    const { status, output } = runCheck(aRepository(), []);
+
+    expect(status).toBe(2);
+    expect(output).toContain('Usage: node --import tsx scripts/check-fix-commits.ts --range <base>..<head>');
+    expect(output).toContain('--commit-msg <message file>');
+  });
+});
+
 describe('where the rule runs', () => {
   it('checks each commit message in the Lefthook commit-msg hook', () => {
     const hooks = z

@@ -98,6 +98,31 @@ describe('resolveBaselineTarget against wrangler.toml', () => {
     });
     expect(target.ok).toBe(false);
   });
+
+  it('refuses a remote baseline when wrangler.toml names no production database_id', () => {
+    const withoutIds = readD1Databases(['[[d1_databases]]', 'binding = "DB"', 'preview_database_id = "s-1"'].join('\n'));
+
+    expect(
+      resolveBaselineTarget({ ...parseBaselineArgs(['--remote', '--database', 'DB', '--preview'], {}), d1: withoutIds }),
+    ).toEqual({ ok: false, error: 'wrangler.toml has no production D1 database_id.' });
+  });
+
+  it('resolves --allow-production for a database only the production environment names', () => {
+    const productionOnly = readD1Databases(
+      [
+        "d1_databases = [{ binding = 'DB', database_name = 'app', database_id = 'p-1', preview_database_id = 's-1' }]",
+        "env.production.d1_databases = [{ binding = 'ARCHIVE', database_name = 'archive', database_id = 'p-2' }]",
+      ].join('\n'),
+    );
+
+    expect(
+      resolveBaselineTarget({ ...parseBaselineArgs(['--remote', '--database', 'archive', '--allow-production'], {}), d1: productionOnly }),
+    ).toEqual({ ok: true, environment: 'production', databaseId: 'p-2', label: 'PRODUCTION archive (p-2)' });
+  });
+
+  it('leaves the database name empty, for the script to refuse, when neither --database nor D1_DATABASE_NAME names one', () => {
+    expect(parseBaselineArgs(['--through', 'latest'], {}).databaseName).toBe('');
+  });
 });
 
 describe('readD1Databases', () => {

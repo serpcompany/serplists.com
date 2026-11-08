@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizePortableTemplate } from '@/lib/templates/portableTemplateNormalization';
 import { renderTemplatePreviewHtml } from '@/../scripts/lib/templatePreviewHtml';
 import { launchChecklistTemplate as template } from '../../fixtures/launchChecklistTemplate';
+import { mediaTemplate } from '../../fixtures/mediaTemplate';
 
 describe('templatePreviewHtml', () => {
   it('renders an html preview with card-like media blocks', () => {
@@ -54,5 +55,21 @@ describe('templatePreviewHtml', () => {
     expect(html).toContain('<ul class="form-options"><li>Basic</li><li>Pro</li></ul>');
     expect(html).toContain('Number, optional, 1 to 9');
     expect(html).not.toContain('embed-card');
+  });
+});
+
+describe('templatePreviewHtml media blocks', () => {
+  it('titles the page with the SEO title and shows each image, video, file and embed with its name and size', () => {
+    const html = renderTemplatePreviewHtml(mediaTemplate);
+
+    expect(html).toContain('<title>Media Kit for launches</title>');
+    expect(html).toContain('<div class="eyebrow">recipe</div>');
+    expect(html).toContain('<div class="meta-row">Tags: press</div>');
+    expect(html).toContain('<img src="https://example.com/logo.png" alt="Template image" />');
+    expect(html).toContain('<a href="https://example.com/intro.mp4">intro.mp4</a>');
+    expect(html).toContain('<a href="https://example.com/teaser.mp4">https://example.com/teaser.mp4</a>');
+    expect(html).toContain('<div class="file-name">kit.zip</div><div class="card-meta"><a href="https://example.com/kit.zip">Open file</a> <span>· 2.5 MB</span>');
+    expect(html).toContain('<div class="file-name">https://example.com/notes.txt</div><div class="card-meta"><a href="https://example.com/notes.txt">Open file</a></div>');
+    expect(html).toContain('<div class="card-label">YouTube</div>');
   });
 });

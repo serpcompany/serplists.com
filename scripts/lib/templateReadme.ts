@@ -56,12 +56,8 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
     return lines.join("\n\n");
   }
 
-  if (content.type === "embed") {
-    return `**${inferEmbedProvider(content.value)}**\n\n${content.value}`;
-  }
-
-  const unhandled: never = content;
-  return unhandled;
+  const embed: Extract<typeof content, { type: "embed" }> = content;
+  return `**${inferEmbedProvider(embed.value)}**\n\n${embed.value}`;
 };
 
 export const renderTemplateReadme = (template: PortableChecklistTemplate) => {

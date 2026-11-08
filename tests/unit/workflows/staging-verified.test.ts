@@ -91,3 +91,33 @@ describe('the staging-verified action, which lets Production deploy only files S
     expect(output).toContain('/actions/workflows/ci.yml/runs returned 403');
   });
 });
+
+describe('the staging-verified action, given answers it cannot read', () => {
+  const answering = (path: string, body: unknown): Route => (request) =>
+    request.path === path ? { status: 200, body } : github([stagingRun(238, TREE, [finished(DEPLOY, 'success')])])(request);
+  const gateWith = (route: Route, env: Record<string, string> = {}) =>
+    runAgainstAGitHubStandIn(
+      { script: '.github/actions/staging-verified/staging-verified.cjs' },
+      { GITHUB_REPOSITORY: REPOSITORY, GITHUB_SHA: MAIN_COMMIT, WORKFLOW: 'ci.yml', JOB: DEPLOY, BRANCH: 'staging', ...env },
+      route,
+    );
+
+  it.each<[string, string, unknown, string]>([
+    ['a commit without a tree', `/repos/${REPOSITORY}/git/commits/${MAIN_COMMIT}`, { sha: MAIN_COMMIT }, `GitHub named no tree for commit ${MAIN_COMMIT}`],
+    ['runs that are not a list', RUNS, { total_count: 0 }, 'GitHub listed no runs of ci.yml'],
+    ['jobs that are not a list', `/repos/${REPOSITORY}/actions/runs/7238/jobs`, { total_count: 0 }, 'GitHub listed no jobs for run 238'],
+  ])('fails, deploying nothing, on %s', async (_case, path, body, message) => {
+    const { status, output } = await gateWith(answering(path, body));
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(`::error title=Couldn't tell whether Staging deployed these files::${message}`);
+  });
+
+  it('fails without asking GitHub when it is not told which branch Staging deploys', async () => {
+    const { status, output, requests } = await gateWith(github([]), { BRANCH: '' });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('WORKFLOW, JOB, BRANCH and GITHUB_SHA must be set.');
+    expect(requests).toEqual([]);
+  });
+});

@@ -84,3 +84,37 @@ describe('the deploy-failed action, which tells people a deploy failed', () => {
     expect(output).toContain("::error title=Couldn't report the failed deploy::POST /issues returned 403");
   });
 });
+
+describe('the deploy-failed action, given less than a deploy run sets', () => {
+  const reportWith = (env: Record<string, string>, route: Route = github([])) =>
+    runAgainstAGitHubStandIn({ script: '.github/actions/deploy-failed/deploy-failed.cjs' }, { GITHUB_REPOSITORY: REPOSITORY, ...env }, route);
+
+  it("links the run's first attempt on github.com when the run names neither", async () => {
+    const { status, requests } = await reportWith({ ENVIRONMENT: 'staging', GITHUB_RUN_ID: '37590564112', GITHUB_SHA: COMMIT });
+    const opened = openedIssue.parse(sentJson(requests.find((request) => request.method === 'POST')));
+
+    expect(status).toBe(0);
+    expect(opened.body).toContain(`The staging deploy of 07ec182 failed: https://github.com/${REPOSITORY}/actions/runs/37590564112/attempts/1`);
+  });
+
+  it.each([
+    ['no environment', { GITHUB_RUN_ID: '1', GITHUB_SHA: COMMIT }, 'ENVIRONMENT must be staging or production, not "".'],
+    ['no commit', { ENVIRONMENT: 'production', GITHUB_RUN_ID: '1' }, 'GITHUB_REPOSITORY, GITHUB_RUN_ID and GITHUB_SHA must be set.'],
+  ])('fails without asking GitHub when it is given %s', async (_case, env, message) => {
+    const { status, output, requests } = await reportWith(env);
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(message);
+    expect(requests).toEqual([]);
+  });
+
+  it('fails when GitHub lists the open issues as something other than a list', async () => {
+    const { status, output } = await reportWith(
+      { ENVIRONMENT: 'staging', GITHUB_RUN_ID: '1', GITHUB_SHA: COMMIT },
+      () => ({ status: 200, body: { message: 'not a list' } }),
+    );
+
+    expect(status).not.toBe(0);
+    expect(output).toContain("::error title=Couldn't report the failed deploy::GitHub listed no issues");
+  });
+});

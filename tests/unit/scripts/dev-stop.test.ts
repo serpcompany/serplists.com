@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer, type Server } from 'node:net';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -89,5 +90,65 @@ describe('dev:stop', { timeout: 60_000 }, () => {
     expect(result.output).toContain(`Stopped dev session (pid ${launcher.pid})`);
     expect(await waitUntil(() => !isRunning(launcher.pid))).toBe(true);
     expect(result.sessionLeft).toBe(false);
+  });
+});
+
+describe('dev:stop with nothing to stop', { timeout: 60_000 }, () => {
+  it('says no dev session is running when the checkout records none', () => {
+    const result = spawnSync(devStop.command, devStop.args, { cwd: mkdtempSync(path.join(workDir, 'checkout-')), encoding: 'utf8' });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('No dev session is running.');
+  });
+
+  it('clears a session that recorded no process', () => {
+    const result = runDevStopInACheckoutHoldingOnly({ port: 3001, pid: null, startedAt: null });
+
+    expect(result.status).toBe(0);
+    expect(result.output.trim()).toBe('Dev session was not running; cleared tmp/dev-session.json.');
+    expect(result.sessionLeft).toBe(false);
+  });
+});
+
+describe('dev:all', { timeout: 60_000 }, () => {
+  const devAll = buildScriptInvocation(path.join(process.cwd(), 'scripts', 'dev-auto.ts'));
+
+  it('points at the session already running instead of starting a second server', async () => {
+    const launcher = await startIdleProcessReportingWhatTheLauncherRecords('dev-auto.ts');
+    const cwd = mkdtempSync(path.join(workDir, 'checkout-'));
+    mkdirSync(path.join(cwd, 'tmp'));
+    writeFileSync(path.join(cwd, 'tmp', 'dev-session.json'), JSON.stringify({ port: 3017, pid: launcher.pid, startedAt: launcher.startedAt }));
+
+    const result = spawnSync(devAll.command, devAll.args, { cwd, encoding: 'utf8' });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`dev:all is already running at http://localhost:3017 (pid ${launcher.pid}, recorded in tmp/dev-session.json).`);
+    expect(isRunning(launcher.pid)).toBe(true);
+  });
+
+  const holdingTheDefaultPort = async <T>(run: () => T): Promise<T> => {
+    const holder: Server = createServer();
+    const held = await new Promise<boolean>((resolve) => {
+      holder.once('error', () => resolve(false));
+      holder.listen({ host: '127.0.0.1', port: 3000 }, () => resolve(true));
+    });
+    try {
+      return run();
+    } finally {
+      if (held) await new Promise<void>((closed) => holder.close(() => closed()));
+    }
+  };
+
+  it('moves off a busy port 3000, then fails with the reason, starting no server, when it cannot record its session', async () => {
+    const cwd = mkdtempSync(path.join(workDir, 'checkout-'));
+    writeFileSync(path.join(cwd, 'tmp'), 'a file where the tmp folder belongs');
+
+    const result = await holdingTheDefaultPort(() => spawnSync(devAll.command, devAll.args, { cwd, encoding: 'utf8' }));
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toMatch(/dev:all: port 3000 is busy, using \d+\./);
+    expect(result.stdout).toMatch(/App and API: http:\/\/localhost:\d+ \(API at http:\/\/localhost:\d+\/api\)/);
+    expect(result.stderr).toMatch(/EEXIST|ENOTDIR/);
+    expect(result.stdout).not.toContain('Logs:');
   });
 });

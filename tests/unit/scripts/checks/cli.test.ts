@@ -17,6 +17,12 @@ describe('pnpm run verify', { timeout: 60_000 }, () => {
     expect(result.stderr).toContain('Unknown check spelling. Run any of: comments, docs, sizes, secrets, duplicates, deadcode, dependencies, linters, generated');
   });
 
+  it('refuses a list that names no check, rather than running none', () => {
+    const result = verify(',', 'scripts/checks');
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('Unknown check ,. Run any of: comments, docs,');
+  });
+
   it('refuses paths that hold no repository file, rather than passing having checked nothing', () => {
     const result = verify('sizes', 'scripts/no-such-folder');
     expect(result.status).toBe(2);
