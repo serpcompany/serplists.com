@@ -6,7 +6,7 @@ export const NEAR_LIMIT_LINES = lineLimit - 50;
 export const QUALITY_FILE = "docs/quality.md";
 export const DEBT_FILES = ["docs/tech-debt.md", "docs/harness-debt.md"];
 
-type MarkdownTable = { heading: string; header: string[]; rows: string[][] };
+type MarkdownTable = { heading: string; header: string[]; rows: [string, ...string[]][] };
 
 const cellsOf = (line: string): string[] => line.split("|").slice(1, -1).map((cell) => cell.trim());
 
@@ -26,7 +26,8 @@ export function markdownTables(text: string): MarkdownTable[] {
       current = { heading, header: cellsOf(line), rows: [] };
       tables.push(current);
     } else {
-      current.rows.push(cellsOf(line));
+      const [first, ...rest] = cellsOf(line);
+      if (first) current.rows.push([first, ...rest]);
     }
   }
   return tables;
@@ -68,7 +69,7 @@ export function scoresToRegrade(text: string, times: ReadonlyMap<string, number>
     const graded = header.indexOf("Graded");
     if (code === -1 || graded === -1) continue;
     for (const row of rows) {
-      const area = row[0] ?? "";
+      const area = row[0];
       const gradedOn = row[graded] ?? "";
       const gradedDayEnd = Date.parse(`${gradedOn}T00:00:00Z`) / 1000 + DAY_SECONDS;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(gradedOn) || Number.isNaN(gradedDayEnd)) {
@@ -109,7 +110,7 @@ export function summarizeDebt(text: string): DebtSummary {
     const issue = header.indexOf("Issue");
     return tableRows.map((row) => ({
       size: size === -1 ? "" : (row[size] ?? ""),
-      item: { section: heading, debt: firstSentence(row[0] ?? ""), issue: issue === -1 ? "" : (row[issue] ?? "") },
+      item: { section: heading, debt: firstSentence(row[0]), issue: issue === -1 ? "" : (row[issue] ?? "") },
     }));
   });
   const bySize: Record<Size, number> = { small: 0, medium: 0, large: 0 };

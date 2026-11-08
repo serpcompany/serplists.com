@@ -5,19 +5,21 @@ import { docsToReverify, filesNearLimit, namedFiles, scoresToRegrade, summarizeD
 const day = (date: string) => Date.parse(`${date}T12:00:00Z`) / 1000;
 
 describe('the maintenance report on tables with short rows', () => {
-  it('reads a quality row cut short of its Code column as having no code to re-grade, and a row with no cells as an unnamed ungraded one', () => {
-    const quality = ['| Area | Graded | Code |', '| --- | --- | --- |', '| Search | 2026-09-30 |', '| Runs | 2026-09-30 | runs, no code spans |', '|'].join('\n');
+  it('reads a quality row cut short of its Code column as having no code to re-grade, and skips a stray row with no cells', () => {
+    const quality = ['| Area | Graded | Code |', '| --- | --- | --- |', '| Search | 2026-09-30 |', '| Runs | 2026-09-30 | runs, no code spans |', '|', '| |'].join('\n');
 
-    expect(scoresToRegrade(quality, new Map([['src/search.ts', day('2026-10-03')]]))).toEqual({ stale: [], ungraded: [''] });
+    expect(scoresToRegrade(quality, new Map([['src/search.ts', day('2026-10-03')]]))).toEqual({ stale: [], ungraded: [] });
   });
 
-  it('reads a debt row cut short of its Issue and Size columns as unsized, with no issue', () => {
-    const debt = ['## Code', '', '| Debt | Issue | Size |', '| --- | --- | --- |', '| A short row. |', '|'].join('\n');
+  it('reads a debt row cut short of its Issue and Size columns as unsized, with no issue, and skips a stray row with no cells', () => {
+    const debt = ['## Code', '', '| Debt | Issue | Size |', '| --- | --- | --- |', '| A short row. |', '|', '| | #12 | small |'].join('\n');
 
-    expect(summarizeDebt(debt).unsized).toEqual([
-      { section: 'Code', debt: 'A short row.', issue: '' },
-      { section: 'Code', debt: '', issue: '' },
-    ]);
+    expect(summarizeDebt(debt)).toEqual({
+      open: 1,
+      bySize: { small: 0, medium: 0, large: 0 },
+      firstSmall: null,
+      unsized: [{ section: 'Code', debt: 'A short row.', issue: '' }],
+    });
   });
 });
 
