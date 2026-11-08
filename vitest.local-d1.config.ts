@@ -4,6 +4,8 @@ import everyTestFile from './vitest.config';
 
 const { coverage, ...test } = everyTestFile.test ?? {};
 
+if (coverage?.provider !== 'v8') throw new Error('vitest.config.ts must measure coverage with the v8 provider');
+
 export default defineConfig({
   ...everyTestFile,
   test: {
