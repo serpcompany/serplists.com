@@ -6,10 +6,4 @@ export const EMBED_FRAME_ORIGINS = [
 
 const embedFrameOrigins: ReadonlySet<string> = new Set(EMBED_FRAME_ORIGINS);
 
-export const isEmbedFrameOrigin = (url: string): boolean => {
-  try {
-    return embedFrameOrigins.has(new URL(url).origin);
-  } catch {
-    return false;
-  }
-};
+export const isEmbedFrameOrigin = (url: string): boolean => embedFrameOrigins.has(new URL(url).origin);

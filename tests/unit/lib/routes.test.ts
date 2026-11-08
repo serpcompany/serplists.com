@@ -8,6 +8,7 @@ import {
 import {
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
+  buildCanonicalPublicTemplateRunPath,
   buildConsoleArchivePath,
   buildConsoleHomePath,
   buildConsoleRunPath,
@@ -112,6 +113,7 @@ describe('routes', () => {
     expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides/');
     expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
     expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
+    expect(findCategoryNameByLegacySlug(categories, '  ')).toBeNull();
   });
 
   it('redirects legacy category-only template queries to canonical category routes', () => {
@@ -250,6 +252,13 @@ describe('routes', () => {
         ownerProfile: { username: 'alice' },
       }),
     ).toBe('/profile/alice/template-1/');
+  });
+
+  it("builds a public Template's guest run path under its public page, and none without one", () => {
+    expect(buildCanonicalPublicTemplateRunPath({ ...baseTemplate, slug: 'launch', ownerProfile: { username: 'alice' } })).toBe(
+      '/profile/alice/launch/run/',
+    );
+    expect(buildCanonicalPublicTemplateRunPath(baseTemplate)).toBeNull();
   });
 
   it('reports which templates have a public URL for discovery', () => {

@@ -10,6 +10,7 @@ import {
   UNREADABLE_RESPONSE_MESSAGE,
 } from '@/lib/api-errors';
 import { getAuthStatus } from '@/lib/auth-client';
+import { AuthStatusError } from '@/lib/auth/authErrors';
 import { TEMPLATE_UPDATE_RESPONSE_ERROR } from '@/lib/templateUpdateResult';
 import { anyInstanceOf, objectContaining } from '../../support/asymmetricMatchers';
 
@@ -80,5 +81,13 @@ describe('API client answers, each parsed with the schema its endpoint passes', 
     serverAnswers({ accountRegistrationAvailable: true, emailAuthAvailable: 'yes', emailVerificationRequired: false });
 
     await expect(getAuthStatus()).rejects.toBeInstanceOf(ZodError);
+  });
+
+  it('refuses an auth status the server turned down, with its status and how long to wait', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 429, headers: { 'Retry-After': '30' } }));
+
+    const refused = getAuthStatus();
+    await expect(refused).rejects.toBeInstanceOf(AuthStatusError);
+    await expect(refused).rejects.toMatchObject({ status: 429, retryAfterSeconds: 30 });
   });
 });

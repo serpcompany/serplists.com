@@ -15,7 +15,7 @@ describe('AUDIT_ACTIONS, which every history view has a label for', () => {
   });
 
   it('lists every template version change summary', () => {
-    expectTypeOf<TemplateVersionInput['changeSummary']>().toEqualTypeOf<TemplateVersionAction | undefined>();
+    expectTypeOf<TemplateVersionInput['changeSummary']>().toEqualTypeOf<TemplateVersionAction>();
     expectTypeOf<TemplateVersionAction>().toEqualTypeOf<(typeof TEMPLATE_VERSION_ACTIONS)[number]>();
   });
 

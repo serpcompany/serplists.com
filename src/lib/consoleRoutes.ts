@@ -130,7 +130,7 @@ const parseSection = (segments: readonly string[]): ConsoleSection | null => {
 };
 
 const decodedSegments = (pathname: string): string[] | null => {
-  const path = pathname.split(/[?#]/, 1)[0] ?? '';
+  const path = pathname.replace(/[?#].*$/s, '');
   if (!path.startsWith('/')) return null;
   const segments = path.slice(1).replace(/\/$/, '').split('/');
   try {

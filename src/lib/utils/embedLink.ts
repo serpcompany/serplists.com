@@ -1,7 +1,7 @@
 const NOT_IN_A_URL = /[\s<>"]/;
 
 export function absoluteHttpUrl(value: string): string {
-  const trimmed = typeof value === "string" ? value.trim() : "";
+  const trimmed = value.trim();
   if (!trimmed || NOT_IN_A_URL.test(trimmed)) {
     return "";
   }
@@ -26,7 +26,7 @@ const ATTRIBUTE_ENTITIES: Record<string, string> = {
 };
 
 const decodeAttribute = (value: string): string =>
-  value.replace(/&(?:amp|quot|#39|#x27|lt|gt);/gi, (entity) => ATTRIBUTE_ENTITIES[entity.toLowerCase()] ?? entity);
+  value.replace(/&(?:amp|quot|#39|#x27|lt|gt);/gi, (entity) => String(ATTRIBUTE_ENTITIES[entity.toLowerCase()]));
 
 const withHttpsWhenProtocolRelative = (src: string): string => (src.startsWith("//") ? `https:${src}` : src);
 
@@ -36,11 +36,11 @@ export function getEmbedLinkUrl(value: string): string {
     return direct;
   }
 
-  const match = typeof value === "string" ? value.match(FIRST_IFRAME_SRC_ATTRIBUTE) : null;
+  const match = value.match(FIRST_IFRAME_SRC_ATTRIBUTE);
   if (!match) {
     return "";
   }
 
-  const src = decodeAttribute((match[1] ?? match[2] ?? match[3] ?? "").trim());
+  const src = decodeAttribute(String(match[1] ?? match[2] ?? match[3]).trim());
   return absoluteHttpUrl(withHttpsWhenProtocolRelative(src));
 }

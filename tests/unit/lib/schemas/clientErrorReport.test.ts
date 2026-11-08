@@ -110,6 +110,18 @@ describe('scrubClientErrorReport, which runs in the browser before a report is s
     expect(scrubbedPath(`/${'p/'.repeat(500)}`)).toHaveLength(200);
   });
 
+  it('stops at a frame whose address cannot be read as a URL', () => {
+    expect(framesOf(v8Frames(`a (${CHUNK}:1:2)`, 'b (https://[::1/x.js:3:4)', `c (${CHUNK}:5:6)`))).toEqual([
+      'at a (/_next/static/chunks/0a1b2c3d.js:1:2)',
+    ]);
+  });
+
+  it('still keeps the first frames of a stack far longer than any it logs', () => {
+    const stack = `${v8Frames(`a (${CHUNK}:1:2)`)}\n${'x'.repeat(30_000)}`;
+
+    expect(framesOf(stack)).toEqual(['at a (/_next/static/chunks/0a1b2c3d.js:1:2)']);
+  });
+
   it('gives the same report when the API scrubs what the browser already scrubbed', () => {
     const once = scrubbed({ stack: v8Frames(`a (${CHUNK}:1:2)`, 'b (moz-extension://0b2c9d1e/c.js:3:4)', 'https://cdn.example.com/x/y.js?q=1:5:6') });
 

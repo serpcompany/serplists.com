@@ -6,22 +6,17 @@ const ZONELESS_DATE_TIME =
 const EPOCH_MILLISECONDS = /^\d{10,}$/;
 const ECMA_FRACTION_DIGITS = 3;
 
-const buildDateTime = (
-  [, date, time, seconds, fraction]: RegExpExecArray,
-  zone: string | undefined,
-): string | null => {
-  if (!date || !time || !zone) {
-    return null;
-  }
+const buildDateTime = ([, date, time, seconds, fraction]: RegExpExecArray, zone: string): string => {
+  const dateAndTime = `${String(date)}T${String(time)}`;
   if (seconds === undefined) {
-    return `${date}T${time}${zone}`;
+    return `${dateAndTime}${zone}`;
   }
 
   const milliseconds =
     fraction === undefined
       ? ''
       : `.${fraction.slice(0, ECMA_FRACTION_DIGITS).padEnd(ECMA_FRACTION_DIGITS, '0')}`;
-  return `${date}T${time}:${seconds}${milliseconds}${zone}`;
+  return `${dateAndTime}:${seconds}${milliseconds}${zone}`;
 };
 
 export const toEcmaDateTimeString = (value: string): string | null => {
@@ -33,7 +28,7 @@ export const toEcmaDateTimeString = (value: string): string | null => {
 
   const zoned = ZONED_DATE_TIME.exec(trimmed);
   if (zoned) {
-    return buildDateTime(zoned, zoned[5]);
+    return buildDateTime(zoned, String(zoned[5]));
   }
 
   const zoneless = ZONELESS_DATE_TIME.exec(trimmed);

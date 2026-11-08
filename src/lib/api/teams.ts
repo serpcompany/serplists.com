@@ -10,7 +10,6 @@ import { teamActivityEventSchema } from "@/lib/schemas/historyResponses";
 import {
   acceptedTeamInviteSchema,
   incomingTeamInviteSchema,
-  teamDetailSchema,
   teamInviteSchema,
   teamMemberSchema,
   teamSummarySchema,
@@ -44,10 +43,6 @@ export const teamsApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-  },
-
-  async getTeam(teamId: string) {
-    return apiRequest(`/teams/${encodeURIComponent(teamId)}`, teamDetailSchema);
   },
 
   async updateTeam(

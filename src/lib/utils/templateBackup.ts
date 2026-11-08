@@ -60,9 +60,7 @@ const withImportedLinkSources = (sections: ChecklistSection[]): ChecklistSection
     ),
   }));
 
-const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
-  const parsed = parseJsonArray(input);
-  if (!parsed) return null;
+const sectionsFromEntries = (parsed: unknown[], templateTitle: string): ChecklistSection[] => {
   if (parsed.length === 0) return [];
   const sections = isSectionsShape(parsed) ? parsed : [sectionHoldingLegacyItems(parsed)];
   const invalidEntry = findInvalidImportSectionEntry(sections);
@@ -70,6 +68,11 @@ const coerceSections = (input: unknown, templateTitle: string): ChecklistSection
     throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
   return withImportedLinkSources(normalizeSections(sections));
+};
+
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
+  const parsed = parseJsonArray(input);
+  return parsed ? sectionsFromEntries(parsed, templateTitle) : null;
 };
 
 const normalizeImportTemplate = (
@@ -111,10 +114,7 @@ const normalizePortableTemplate = (
   template: PortableChecklistTemplate,
   now = new Date().toISOString(),
 ): ChecklistTemplate => {
-  const sections = coerceSections(template.sections, template.title);
-  if (!sections) {
-    throw new Error(`Template "${template.title}" has invalid sections`);
-  }
+  const sections = sectionsFromEntries(template.sections, template.title);
 
   return {
     id: generateTempId("portable"),
@@ -153,7 +153,7 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
     template.sections.forEach((section) => {
       section.items.forEach((item) => {
         item.contents?.forEach((content) => {
-          const value = typeof content.value === "string" ? content.value : "";
+          const { value } = content;
           const isUpload =
             content.uploadType === "upload" ||
             value.includes("/api/uploads/file") ||
@@ -288,10 +288,7 @@ export const parseTemplatesFromData = (
 const readFileText = (file: File): Promise<string> =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Failed to read file"));
-    };
+    reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
@@ -322,7 +319,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof ZodError) {
       throw new Error(`Template validation failed: ${formatValidationError(error)}`);
     }
-    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
+    throw new Error(formatValidationError(error));
   }
 };
 

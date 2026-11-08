@@ -34,8 +34,7 @@ function readAuthError(error: unknown): AuthErrorBody | null {
     return { status: error.status, retryAfterSeconds: error.retryAfterSeconds };
   }
   if (error instanceof Error || typeof error !== 'object' || error === null) return null;
-  const parsed = authErrorBodySchema.safeParse(error);
-  return parsed.success ? parsed.data : null;
+  return authErrorBodySchema.parse(error);
 }
 
 function rateLimitMessage(retryAfterSeconds?: number): string {

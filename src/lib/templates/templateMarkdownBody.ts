@@ -18,11 +18,13 @@ export type TemplateMarkdownBody = {
   sections: TemplateMarkdownSection[];
 };
 
+const leadingBacktickRun = (line: string): number => {
+  const text = line.trimStart();
+  return text.length - text.replace(/^`+/, "").length;
+};
+
 const longestLeadingBacktickRun = (value: string): number =>
-  value.split("\n").reduce((longest, line) => {
-    const run = /^\s*(`*)/.exec(line)?.[1]?.length ?? 0;
-    return Math.max(longest, run);
-  }, 0);
+  value.split("\n").reduce((longest, line) => Math.max(longest, leadingBacktickRun(line)), 0);
 
 export const renderTemplateMarkdownBlock = (type: string, value: string): string => {
   const fence = "`".repeat(Math.max(MIN_FENCE_LENGTH, longestLeadingBacktickRun(value) + 1));
@@ -38,7 +40,7 @@ export const escapeTemplateMarkdownDescription = (description: string): string =
 const unescapeDescriptionLine = (line: string): string =>
   ESCAPED_STRUCTURAL_LINE.test(line) ? line.slice(1) : line;
 
-const capturedText = (match: RegExpExecArray, group: number): string => match[group] ?? "";
+const capturedText = (match: RegExpExecArray, group: number): string => String(match[group]);
 
 export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody => {
   const lines = body.split("\n")[Symbol.iterator]();

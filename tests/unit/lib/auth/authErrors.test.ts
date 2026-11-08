@@ -87,6 +87,7 @@ describe('isEmailNotVerifiedError', () => {
   it('does not match other errors', () => {
     expect(isEmailNotVerifiedError({ error: 'Too many requests', status: 429 })).toBe(false);
     expect(isEmailNotVerifiedError(null)).toBe(false);
+    expect(isEmailNotVerifiedError({ status: 403 })).toBe(false);
   });
 });
 

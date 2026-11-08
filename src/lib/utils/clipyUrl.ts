@@ -23,19 +23,15 @@ export function clipyVideoId(parsed: URL): string | null {
 }
 
 export function withSerpListsClipyRef(value: string): string {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== 'https:' || !CLIPY_HOSTS.has(parsed.hostname)) {
-      return value;
-    }
-
-    parsed.hostname = 'clipy.online';
-    parsed.searchParams.set('ref', CLIPY_REFERRER);
-    parsed.searchParams.set('utm_source', CLIPY_UTM_SOURCE);
-    return parsed.toString();
-  } catch {
+  const parsed = new URL(value);
+  if (parsed.protocol !== 'https:' || !CLIPY_HOSTS.has(parsed.hostname)) {
     return value;
   }
+
+  parsed.hostname = 'clipy.online';
+  parsed.searchParams.set('ref', CLIPY_REFERRER);
+  parsed.searchParams.set('utm_source', CLIPY_UTM_SOURCE);
+  return parsed.toString();
 }
 
 export function getOutboundLinkProps(value: string) {

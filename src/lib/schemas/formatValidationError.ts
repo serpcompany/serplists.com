@@ -47,13 +47,13 @@ const issueDepth = (error: z.ZodError): number =>
   Math.max(0, ...error.issues.map((issue) => issue.path.length));
 
 const issuesOfDeepestUnionBranch = (issue: z.ZodIssue): z.ZodIssue[] => {
-  if (issue.code !== z.ZodIssueCode.invalid_union || issue.unionErrors.length === 0) {
+  if (issue.code !== z.ZodIssueCode.invalid_union) {
     return [issue];
   }
   const deepest = issue.unionErrors.reduce((best, candidate) =>
     issueDepth(candidate) > issueDepth(best) ? candidate : best,
   );
-  return deepest.issues.length > 0 ? deepest.issues.flatMap(issuesOfDeepestUnionBranch) : [issue];
+  return deepest.issues.flatMap(issuesOfDeepestUnionBranch);
 };
 
 const formatIssue = (issue: z.ZodIssue): string => {
@@ -64,7 +64,6 @@ const formatIssue = (issue: z.ZodIssue): string => {
 
 export const formatZodIssues = (error: z.ZodError, maxIssues = MAX_ISSUES): string => {
   const lines = Array.from(new Set(error.issues.flatMap(issuesOfDeepestUnionBranch).map(formatIssue)));
-  if (lines.length === 0) return "Invalid data";
   const shown = lines.slice(0, maxIssues).join("; ");
   const hidden = lines.length - maxIssues;
   return hidden > 0 ? `${shown} (and ${hidden} more)` : shown;

@@ -98,8 +98,9 @@ describe('getVideoEmbedSource', () => {
     expect(getVideoEmbedSource(input)).toEqual({ kind: 'link', url });
   });
 
-  it('rejects non-web protocols', () => {
+  it('rejects non-web protocols, and text that is not an address', () => {
     expect(getVideoEmbedSource('javascript:alert(1)')).toBeNull();
+    expect(getVideoEmbedSource('Watch the launch recording')).toBeNull();
     expect(getVideoEmbedSource('<iframe src="data:text/html,hi"></iframe>')).toBeNull();
   });
 
@@ -159,6 +160,13 @@ describe('getVideoEmbedSource for YouTube links', () => {
     }
   });
 
+  it.each([
+    ['a start that is not a time', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=soon'],
+    ['a start at zero', 'https://youtu.be/dQw4w9WgXcQ?t=0'],
+  ])('starts the video at the beginning for %s', (_label, link) => {
+    expect(getVideoEmbedSource(link)).toEqual({ kind: 'iframe', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' });
+  });
+
   it('reads the id from a URL object or string', () => {
     expect(getYoutubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
     expect(getYoutubeVideoId(new URL('https://www.youtube.com/shorts/dQw4w9WgXcQ'))).toBe('dQw4w9WgXcQ');
@@ -188,6 +196,10 @@ describe('Clipy outbound links', () => {
     expect(withSerpListsClipyRef('https://example.com/video/demo?ref=old')).toBe(
       'https://example.com/video/demo?ref=old',
     );
+  });
+
+  it('opens text that is not an address in a new tab as it is, with no referral', () => {
+    expect(getOutboundLinkProps('launch recording')).toEqual({ href: 'launch recording', target: '_blank', rel: 'noopener noreferrer' });
   });
 
   it('marks Clipy anchors as new-tab nofollow links', () => {

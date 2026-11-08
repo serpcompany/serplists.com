@@ -52,4 +52,10 @@ describe('the in-memory analytics', () => {
     expect(window.location.href).toContain('?q=launch');
     expect(sends()).toEqual([0, 0, 0]);
   });
+
+  it('keeps a rejection that carries no reason with an empty message', () => {
+    window.dispatchEvent(new Event('unhandledrejection'));
+
+    expect(analytics.getEvents().at(-1)?.properties).toMatchObject({ message: '', context: 'unhandled_promise_rejection' });
+  });
 });

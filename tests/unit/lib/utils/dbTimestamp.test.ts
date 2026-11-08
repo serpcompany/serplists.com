@@ -45,6 +45,15 @@ describe('parseDbTimestamp', () => {
     expect(parseDbTimestamp('2025-12-26')?.toISOString()).toBe('2025-12-26T00:00:00.000Z');
   });
 
+  it('reads a Date as a copy of it, so changing the result leaves the Date as it was', () => {
+    const stored = new Date('2025-12-26T09:18:30.000Z');
+    const read = parseDbTimestamp(stored);
+
+    read?.setUTCFullYear(2030);
+    expect(stored.toISOString()).toBe('2025-12-26T09:18:30.000Z');
+    expect(parseDbTimestamp(new Date(Number.NaN))).toBeNull();
+  });
+
   it('accepts epoch milliseconds', () => {
     const epoch = Date.UTC(2025, 11, 26, 9, 18, 30);
 
