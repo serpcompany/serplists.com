@@ -34,6 +34,13 @@ describe('sign out', () => {
     expect(session.signedIn).toBe(true);
   });
 
+  it('keeps the user signed in after a bad request that carries no message', async () => {
+    const { logout, session } = logoutAsAuthProviderBuildsIt(async () => ({ data: null, error: { status: 400 } }));
+
+    await expect(logout()).resolves.toMatchObject({ ok: false });
+    expect(session.signedIn).toBe(true);
+  });
+
   it('keeps the user signed in, without an unhandled rejection, when the request throws', async () => {
     const { logout, session } = logoutAsAuthProviderBuildsIt(async () => {
       throw new TypeError('Failed to fetch');
@@ -45,6 +52,7 @@ describe('sign out', () => {
 
   it.each([
     ['no session cookie', { status: 400, code: 'FAILED_TO_GET_SESSION', message: 'Failed to get session' }],
+    ['no session cookie, named only in the message', { status: 400, message: 'Failed to get session' }],
     ['an expired session', { status: 401, message: 'Unauthorized' }],
   ])('treats %s as already signed out', async (_name, error) => {
     const { logout, session } = logoutAsAuthProviderBuildsIt(async () => ({ data: null, error }));

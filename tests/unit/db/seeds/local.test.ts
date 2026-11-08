@@ -14,6 +14,7 @@ import {
 import { TEST_TEMPLATE_IDS, TEST_USER_IDS } from "../../../../db/seeds/local-test-data/ids";
 import * as schema from "../../../../db/schema/index";
 import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed";
+import { D1DatabaseThatThrows } from "../../../support/apiEnv";
 import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
@@ -315,6 +316,25 @@ describe("setup on a database seeded before the sample- test slugs", () => {
 });
 
 describe("readLocalSeedStatus", () => {
+  it("finds nothing seeded in a database the migrations have not created yet", async () => {
+    const unmigrated = drizzle(new SqliteD1({ schemaSql: [] }).binding, { schema });
+
+    expect(await readLocalSeedStatus(unmigrated)).toEqual({
+      testData: false,
+      officialTemplates: false,
+      officialLogin: false,
+      legacyTestSlugs: false,
+    });
+  });
+
+  it("fails on any other database error instead of reading it as an empty database", async () => {
+    const locked = drizzle(new D1DatabaseThatThrows(() => {
+      throw new Error("D1_ERROR: database is locked");
+    }), { schema });
+
+    await expect(readLocalSeedStatus(locked)).rejects.toThrow("database is locked");
+  });
+
   it("finds seed-test unfinished until the last row it inserts is there, since it runs without a transaction and a seed cut short must be finished by the next setup", async () => {
     const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     local.exec("CREATE TABLE inserted_rows (seq INTEGER PRIMARY KEY, source TEXT NOT NULL, row_key INTEGER NOT NULL)");

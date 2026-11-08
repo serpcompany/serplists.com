@@ -39,6 +39,7 @@ describe("applyTemplateSaveDefaults on a Form block", () => {
     const text: ChecklistItemContent = { id: "text-1", type: "text", value: "Read the brief" };
 
     expect(savedContents([formOf([{ id: "field_a", label: "", kind: "text", required: false }]), text])).toEqual([text]);
+    expect(savedContents([{ id: "form-2", type: "form", value: "" }, text])).toEqual([text]);
   });
 
   it("keeps a minimum and maximum only on a number, and options only on a choice", () => {

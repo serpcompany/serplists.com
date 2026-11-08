@@ -1,4 +1,4 @@
-import { SECRET_THE_API_ROUTER_VALIDATES, serveTheSiteFrom, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
+import { createEdgeCache, SECRET_THE_API_ROUTER_VALIDATES, serveTheSiteFrom, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/page';
@@ -38,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('profile page metadata', () => {
@@ -100,5 +101,16 @@ describe('profile page metadata for a profile that is not there', () => {
 
     expect(await loadProfilePageSeo('johndoe')).toEqual({ kind: 'unavailable' });
     expect(await generateMetadata(params('johndoe'))).toEqual({});
+  });
+
+  it('keeps the site defaults, and logs, when the cached profile is not one it can read', async () => {
+    addUser('user-1', 'johndoe', 'John Doe');
+    const edgeCache = createEdgeCache();
+    edgeCache.entries.set('https://serplists.com/__page-meta/v2/profiles/johndoe', Response.json({ title: 'John Doe' }));
+    vi.stubGlobal('caches', { default: edgeCache.cache });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(await loadProfilePageSeo('johndoe')).toEqual({ kind: 'unavailable' });
+    expect(String(errors.mock.calls[0]?.[0])).toContain('profile_page_meta_failed');
   });
 });

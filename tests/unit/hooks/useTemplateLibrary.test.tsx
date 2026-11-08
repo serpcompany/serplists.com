@@ -17,10 +17,10 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 
 type Library = ReturnType<typeof useTemplateLibrary>;
 
-const renderFirstPassWithoutEffects = (): Library => {
+const renderFirstPassWithoutEffects = (templateType?: 'checklist' | 'recipe'): Library => {
   let captured: Library | undefined;
   const Probe = () => {
-    captured = useTemplateLibrary();
+    captured = useTemplateLibrary(undefined, templateType);
     return null;
   };
   renderToStaticMarkup(<Probe />);
@@ -102,6 +102,22 @@ describe('useTemplateLibrary', () => {
     expect(allCategories).toEqual([...allCategories].sort());
   });
 
+  it('lists only the templates of the type the library page shows', () => {
+    const recipe: ChecklistTemplate = { ...databaseTemplate, id: 'db-bread', slug: 'bread', title: 'Bread', type: 'recipe' };
+    const checklist: ChecklistTemplate = { ...databaseTemplate, type: 'checklist' };
+    mockUseTemplateLists.mockReturnValue({
+      templates: [checklist, recipe],
+      templatesLoading: false,
+      catalogPending: false,
+      catalogError: false,
+      refetchCatalog: vi.fn(),
+    });
+
+    expect(renderFirstPassWithoutEffects('recipe').templates.map((template) => template.id)).toEqual(['db-bread']);
+    expect(renderFirstPassWithoutEffects('checklist').templates.map((template) => template.id)).toEqual(['db-moving']);
+    expect(renderFirstPassWithoutEffects().templates).toHaveLength(2);
+  });
+
   it('leaves out public templates that have no public URL because their owner has no username', () => {
     const orphan = (id: string, ownerProfile?: ChecklistTemplate['ownerProfile']): ChecklistTemplate => ({
       ...databaseTemplate,
@@ -129,7 +145,6 @@ describe('useTemplateLibrary', () => {
     const ids = library.templates.map((template) => template.id);
 
     expect(ids).toEqual([...repoTemplates.map((template) => template.id), databaseTemplate.id]);
-    expect(library.filteredTemplates.map((template) => template.id)).toEqual(ids);
     expect(library.allCategories).not.toContain('orphaned');
   });
 });

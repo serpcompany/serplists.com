@@ -56,6 +56,14 @@ describe('template list queries', () => {
     clients.splice(0).forEach((client) => client.clear());
   });
 
+  it("keeps a signed-out visitor's workspace list out of every user's cache entry, and never fetches it", () => {
+    const fetchList = vi.fn(() => async () => []);
+    const queries = buildTemplateListQueries({ ready: true, catalogReady: true, workspaceScopeId: 'personal', fetchList });
+
+    expect(queries.workspace.queryKey).toEqual(['templates', 'visitor', 'personal']);
+    expect(queries.workspace.enabled).toBe(false);
+  });
+
   it('fetches nothing on pages that do not read template lists', async () => {
     expect(await requestsFromTheProviderAndAPage({})).toEqual([]);
     expect(await requestsFromTheProviderAndAPage({ userId: 'user-1', activeTeamId: 'team-1' })).toEqual([]);

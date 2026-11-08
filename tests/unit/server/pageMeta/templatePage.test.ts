@@ -133,6 +133,13 @@ describe('template page metadata for a template that is not there, an address th
     expect(metadata.openGraph?.url).toBeUndefined();
   };
 
+  it('keeps a blank owner or template segment out of search without reading D1', async () => {
+    serverContext.env = { DB: unreachableD1 };
+
+    expect((await loadTemplatePageSeo(' ', 'reviewed-clipy-checklist')).kind).toBe('not_found');
+    expect((await loadTemplatePageSeo('alice', ' ')).kind).toBe('not_found');
+  });
+
   it('keeps a missing template out of search', async () => {
     await expectNotFound('alice', 'no-such-template');
   });

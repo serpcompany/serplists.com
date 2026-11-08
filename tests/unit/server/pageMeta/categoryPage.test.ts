@@ -90,6 +90,21 @@ describe('category page metadata', () => {
     expect(await loadCategoryPageSeo('moving-day')).toBeNull();
   });
 
+  it('counts a stored template whose items are not JSON, which the API reads as empty', async () => {
+    addPublicTemplate('moving-day', ['Moving Day']);
+    addPublicTemplate('broken-moving-day', ['Moving Day']);
+    d1.run(`UPDATE templates SET items = 'not json' WHERE id = 'broken-moving-day'`);
+
+    const result = await loadCategoryPageSeo('moving-day');
+
+    expect(result?.description).toBe('2 templates for Moving Day. Templates filed under Moving Day.');
+  });
+
+  it('keeps the site defaults for an address with no category slug in it', async () => {
+    expect(await loadCategoryPageSeo('***')).toBeNull();
+    expect(d1.queries).toEqual([]);
+  });
+
   it('keeps the site defaults for a category nothing uses, and lets the page decide', async () => {
     expect(await loadCategoryPageSeo('not-a-real-category')).toBeNull();
     expect(await generateMetadata(params('not-a-real-category'))).toEqual({});
@@ -118,6 +133,20 @@ describe('category page metadata when the catalog cannot be read', () => {
 });
 
 describe('category page metadata cache', () => {
+  it('names a built-in category without a count, and logs, when the cached summary is not one it can read', async () => {
+    const edgeCache = createEdgeCache();
+    edgeCache.entries.set('https://serplists.com/__page-meta/v1/categories', Response.json([{ slug: 'engineering' }]));
+    vi.stubGlobal('caches', { default: edgeCache.cache });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await loadCategoryPageSeo('engineering');
+
+    expect(result?.description).toBe(
+      'Templates for Engineering & Development. Checklists for code reviews, deployments, and development workflows',
+    );
+    expect(String(errors.mock.calls[0]?.[0])).toContain('category_page_meta_failed');
+  });
+
   it('counts the catalog once per host and 5 minutes for every category page', async () => {
     addPublicTemplate('code-review', ['Engineering']);
     const edgeCache = createEdgeCache();
