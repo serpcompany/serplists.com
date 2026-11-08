@@ -5,19 +5,14 @@ import { formatAuditAction, getAuditActorName, RUN_HISTORY_LABELS } from '@/lib/
 import { selectRunHistoryPreview } from '@/features/run-execution/runHistory';
 import type { RunExecutionHistoryState } from '@/features/run-execution/useRunExecutionModel';
 
-const formatRunHistoryTime = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleString('en-US', {
+const formatRunHistoryTime = (value: string): string =>
+  new Date(value).toLocaleString('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-};
 
-export function RunHistorySection({ history }: { history?: RunExecutionHistoryState }) {
-  const runHistoryEntries = selectRunHistoryPreview(history?.data, history?.showingAll);
+export function RunHistorySection({ history }: { history: RunExecutionHistoryState }) {
+  const runHistoryEntries = selectRunHistoryPreview(history.data, history.showingAll);
 
   return (
     <section className="flex flex-col gap-4 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10">
@@ -34,10 +29,10 @@ export function RunHistorySection({ history }: { history?: RunExecutionHistorySt
           time: formatRunHistoryTime(entry.createdAt),
         }))}
         errorLabel="Run history is unavailable right now."
-        isError={Boolean(history?.isError)}
-        isLoading={Boolean(history?.isLoading)}
+        isError={history.isError}
+        isLoading={history.isLoading}
         loadingLabel="Loading run history..."
-        viewAll={history ? { onViewAll: history.onViewAll, showingAll: history.showingAll } : undefined}
+        viewAll={{ onViewAll: history.onViewAll, showingAll: history.showingAll }}
       />
     </section>
   );

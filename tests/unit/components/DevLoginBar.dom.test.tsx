@@ -1,20 +1,24 @@
 import { navigation } from '../../support/mockedNextNavigation';
-import React from 'react';
+import React, { act } from 'react';
+import { fireEvent, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
 import { aSignOutTheServerAnswersLater, expectTheControlToLeaveOnlyOnceSignedOut } from '../../support/signOutControl';
 
 const auth = vi.hoisted(() => ({
-  logout: (): Promise<{ ok: boolean }> => Promise.resolve({ ok: true }),
+  login: vi.fn<(email: string, password: string) => Promise<{ ok: boolean; error?: string }>>(),
+  logout: (): Promise<{ ok: boolean; error?: string }> => Promise.resolve({ ok: true }),
   user: null as { email: string; name: string } | null,
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ login: vi.fn(), logout: () => auth.logout(), user: auth.user }),
+  useAuth: () => ({ login: auth.login, logout: () => auth.logout(), user: auth.user }),
 }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 theInMemoryBrowserAsTheWindow();
 let unmountThePreviousBar: () => void = () => {};
@@ -63,5 +67,90 @@ describe("DevLoginBar, which shows the page's port and so renders only after mou
     } finally {
       auth.user = null;
     }
+  });
+});
+
+describe('DevLoginBar quick logins', () => {
+  const mountOnTheLoginPage = async () => {
+    unmountThePreviousBar();
+    navigation.reset('/login/');
+    const { unmount } = await renderSettled(<DevLoginBar />);
+    unmountThePreviousBar = unmount;
+  };
+
+  const press = (name: string) =>
+    act(async () => {
+      fireEvent.click(screen.getByRole('button', { name }));
+    });
+
+  afterEach(() => {
+    auth.user = null;
+    auth.login.mockReset();
+    auth.logout = () => Promise.resolve({ ok: true });
+    vi.clearAllMocks();
+  });
+
+  it('signs in as a test user and goes to the dashboard', async () => {
+    auth.login.mockResolvedValue({ ok: true });
+    await mountOnTheLoginPage();
+
+    await press('John (Free)');
+
+    expect(auth.login).toHaveBeenCalledWith('john@test.com', 'password123');
+    expect(toast.success).toHaveBeenCalledWith('Logged in as John (Free)');
+    expect(navigation.pathname()).toBe('/dashboard/');
+  });
+
+  it("shows the server's reason, or how to reset the dev passwords, when a sign-in fails", async () => {
+    auth.login.mockResolvedValueOnce({ ok: false, error: 'Invalid email or password' }).mockResolvedValueOnce({ ok: false });
+    await mountOnTheLoginPage();
+
+    await press('Jane (Pro)');
+    await press('Jane (Pro)');
+
+    expect(vi.mocked(toast.error).mock.calls).toEqual([
+      ['Invalid email or password'],
+      ['Login failed. If this dev password was changed locally, run pnpm run db:reset:test-user-passwords.'],
+    ]);
+    expect(navigation.pathname()).toBe('/login/');
+  });
+
+  it('points to the dev server log when the sign-in request throws', async () => {
+    auth.login.mockRejectedValue(new TypeError('Failed to fetch'));
+    await mountOnTheLoginPage();
+
+    await press('Bob (Free)');
+
+    expect(toast.error).toHaveBeenCalledWith('Login error - check the dev server log (tmp/logs/dev-all.log).');
+  });
+
+  it('names the signed-in user by email when they have no name, and says why Logout failed', async () => {
+    auth.user = { email: 'admin@test.com', name: '' };
+    auth.logout = () => Promise.resolve({ ok: false, error: 'Sign-out failed' });
+    await mountOnTheLoginPage();
+
+    expect(screen.getByText('admin@test.com')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Admin (Pro)' }).hasAttribute('disabled')).toBe(true);
+    await press('Logout');
+
+    expect(toast.error).toHaveBeenCalledWith('Sign-out failed');
+  });
+
+  it('hides behind a small button and comes back from it', async () => {
+    await mountOnTheLoginPage();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Hide Dev Bar'));
+    });
+    expect(screen.queryByText(/DEV MODE/)).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Show Dev Login Bar'));
+    });
+
+    expect(screen.getByText(/DEV MODE/)).toBeTruthy();
+  });
+
+  it('stays hidden on the public Template Library', async () => {
+    expect(await textAfterMountingAt('/templates/')).toBe('');
   });
 });

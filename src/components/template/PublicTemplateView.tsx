@@ -103,10 +103,6 @@ export function PublicTemplateView({
   const updatedDate = formatLocalDate(lastUpdated);
 
   const handleShare = async () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     if (await copyTextToClipboard(window.location.href)) {
       toast.success('Link copied to clipboard');
       return;

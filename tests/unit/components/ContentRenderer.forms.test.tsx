@@ -37,6 +37,18 @@ describe('a Form block shown read-only on the Template pages, the editor preview
     expect(text).not.toContain('Answer:');
   });
 
+  it('numbers a field and an option that were saved without a label', () => {
+    const html = renderToStaticMarkup(
+      <ContentRenderer
+        contents={[formBlock([{ id: 'field-plan', label: ' ', kind: 'select', required: false, options: [{ id: 'option-a', label: '' }] }])]}
+        disabled
+      />,
+    );
+
+    expect(textOf(html)).toContain('Field 1 Dropdown');
+    expect(textOf(html)).toContain('Option 1');
+  });
+
   it("shows a run's answers by option label, and an uploaded file as a link that opens in a new tab", () => {
     const html = renderToStaticMarkup(
       <ContentRenderer

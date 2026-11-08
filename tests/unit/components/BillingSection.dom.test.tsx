@@ -2,10 +2,14 @@ import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 
 import { BillingSection } from '@/components/account/BillingSection';
 import { api } from '@/lib/api';
+import { ApiError } from '@/lib/api-errors';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 import { expectOneCallOnlyAfterABackForwardRestore } from '../../support/pageRestore';
@@ -44,6 +48,8 @@ const draftMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/template-editor/templateDraftStore', () => draftMock);
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), message: vi.fn(), success: vi.fn() } }));
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -287,5 +293,167 @@ describe('BillingSection after Back restores the page from the back/forward cach
     );
 
     await expectOneCallOnlyAfterABackForwardRestore(navigation.window, vi.mocked(api.getBillingStatus));
+  });
+});
+
+describe('BillingSection actions in the browser', () => {
+  theInMemoryBrowserAsTheWindow();
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  const personalStatusKey = ['billing', 'status', 'user-1', 'personal'];
+
+  const mountAt = async (url: string, billingData: { billingEnabled?: boolean; plan: 'free' | 'pro'; subscriptionStatus?: string; canManageBilling?: boolean }) => {
+    workspaceMock.value = { activeTeamId: undefined, isTeamWorkspace: false };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(personalStatusKey, billingData);
+    navigation.reset(url);
+    const rendered = await renderSettled(
+      <QueryClientProvider client={queryClient}>
+        <BillingSection />
+      </QueryClientProvider>,
+    );
+    return { queryClient, ...rendered };
+  };
+
+  const proSubscriber = { billingEnabled: true, plan: 'pro' as const, subscriptionStatus: 'active', canManageBilling: true };
+
+  const press = (name: string | RegExp) =>
+    act(async () => {
+      fireEvent.click(screen.getByRole('button', { name }));
+    });
+
+  it('opens Stripe Checkout from Upgrade to Pro and says it is opening until the page leaves', async () => {
+    vi.mocked(api.createBillingCheckout).mockResolvedValue({ url: 'https://checkout.stripe.test/session' });
+    await mountAt('/dashboard/settings/', { billingEnabled: true, plan: 'free' });
+
+    await press(/^Upgrade to Pro/);
+
+    expect(navigation.documentLoads).toContainEqual({ kind: 'assign', href: 'https://checkout.stripe.test/session' });
+    expect(screen.getByRole('button', { name: 'Opening checkout...' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows why checkout did not open, and reloads the plan when the account already subscribed elsewhere', async () => {
+    vi.mocked(api.createBillingCheckout).mockRejectedValue(
+      new ApiError({ status: 409, message: 'You already have a Pro subscription', code: 'already_subscribed' }),
+    );
+    await mountAt('/dashboard/settings/', { billingEnabled: true, plan: 'free' });
+
+    await press(/^Upgrade to Pro/);
+
+    expect(toast.error).toHaveBeenCalledWith('You already have a Pro subscription');
+    await waitFor(() => expect(api.getBillingStatus).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: /^Upgrade to Pro/ }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('keeps the plan as loaded when checkout failed for another reason', async () => {
+    vi.mocked(api.createBillingCheckout).mockRejectedValue(new ApiError({ status: 503, message: 'Stripe is down' }));
+    await mountAt('/dashboard/settings/', { billingEnabled: true, plan: 'free' });
+
+    await press(/^Upgrade to Pro/);
+
+    expect(toast.error).toHaveBeenCalledWith('Stripe is down');
+    expect(api.getBillingStatus).not.toHaveBeenCalled();
+  });
+
+  it('opens the billing portal from Manage subscription', async () => {
+    vi.mocked(api.createBillingPortal).mockResolvedValue({ url: 'https://billing.stripe.test/portal' });
+    await mountAt('/dashboard/settings/', proSubscriber);
+
+    await press('Manage subscription');
+
+    expect(navigation.documentLoads).toContainEqual({ kind: 'assign', href: 'https://billing.stripe.test/portal' });
+    expect(screen.getByRole('button', { name: 'Opening billing...' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows why the portal did not open, and reloads the plan when Stripe has no customer for the account', async () => {
+    vi.mocked(api.createBillingPortal).mockRejectedValue(
+      new ApiError({ status: 409, message: 'No billing account yet', code: 'billing_customer_missing' }),
+    );
+    await mountAt('/dashboard/settings/', proSubscriber);
+
+    await press('Manage subscription');
+
+    expect(toast.error).toHaveBeenCalledWith('No billing account yet');
+    await waitFor(() => expect(api.getBillingStatus).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the plan as loaded when the portal failed for another reason', async () => {
+    vi.mocked(api.createBillingPortal).mockRejectedValue(new ApiError({ status: 503, message: 'Portal is down' }));
+    await mountAt('/dashboard/settings/', proSubscriber);
+
+    await press('Manage subscription');
+
+    expect(toast.error).toHaveBeenCalledWith('Portal is down');
+    expect(api.getBillingStatus).not.toHaveBeenCalled();
+  });
+
+  it('turns Upgrade off and says so while billing is unavailable', async () => {
+    await mountAt('/dashboard/settings/', { billingEnabled: false, plan: 'free' });
+
+    expect(screen.getByRole('button', { name: 'Upgrade unavailable' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Billing checkout is currently unavailable.')).toBeTruthy();
+  });
+
+  it('says a canceled checkout was canceled and drops the billing parameter from the address', async () => {
+    await mountAt('/dashboard/settings/?billing=cancel&tab=plan#billing', { billingEnabled: true, plan: 'free' });
+
+    expect(toast.message).toHaveBeenCalledWith('Upgrade canceled.');
+    expect(navigation.url()).toBe('/dashboard/settings/?tab=plan#billing');
+  });
+
+  it('welcomes a new Pro subscriber once the plan shows Pro after checkout', async () => {
+    vi.mocked(api.getBillingStatus).mockResolvedValueOnce({ billingEnabled: true, plan: 'pro' });
+    await mountAt('/dashboard/settings/?billing=success', { billingEnabled: true, plan: 'free' });
+
+    expect(toast.message).toHaveBeenCalledWith('Payment received. Activating Pro…');
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Welcome to Pro!'));
+    expect(navigation.url()).toBe('/dashboard/settings/');
+  });
+
+  it('says the payment is still processing when Pro has not appeared after every check', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.mocked(api.getBillingStatus).mockResolvedValue({ billingEnabled: true, plan: 'free' });
+    await mountAt('/dashboard/settings/?billing=success', { billingEnabled: true, plan: 'free' });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+
+    expect(toast.info).toHaveBeenCalledWith('Your payment is processing. Pro will appear here shortly.');
+    expect(navigation.url()).toBe('/dashboard/settings/');
+  });
+
+  it('stops checking for Pro once the user leaves Billing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.mocked(api.getBillingStatus).mockResolvedValue({ billingEnabled: true, plan: 'free' });
+    const { unmount } = await mountAt('/dashboard/settings/?billing=success', { billingEnabled: true, plan: 'free' });
+
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('offers Retry when a refresh of a loaded plan failed, and keeps the plan', async () => {
+    vi.mocked(api.getBillingStatus).mockRejectedValue(new ApiError({ status: 503, message: 'Down' }));
+    const { queryClient } = await mountAt('/dashboard/settings/', proSubscriber);
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: personalStatusKey });
+    });
+    await screen.findByText("Couldn't refresh billing status.");
+    vi.mocked(api.getBillingStatus).mockResolvedValue({ billingEnabled: true, plan: 'pro' });
+
+    await press('Retry');
+
+    await waitFor(() => expect(screen.queryByText("Couldn't refresh billing status.")).toBeNull());
+    expect(screen.getByText('Pro')).toBeTruthy();
   });
 });

@@ -45,15 +45,28 @@ describe('RequireAuth', () => {
     expect(html).not.toContain('Protected page');
   });
 
-  it('sends a signed-out visitor to Log in with the page, its query and its hash as the way back', async () => {
-    authState.sessionStatus = 'unauthenticated';
+  const mountInTheBrowser = async (sessionStatus: SessionStatus) => {
+    authState.sessionStatus = sessionStatus;
     navigation.reset('/dashboard/runs/?status=active#recent');
+    return renderSettled(
+      <RequireAuth>
+        <div>Protected page</div>
+      </RequireAuth>,
+    );
+  };
+
+  it('keeps a signed-in user on the page in the browser', async () => {
     await onTheInMemoryBrowser(async () => {
-      await renderSettled(
-        <RequireAuth>
-          <div>Protected page</div>
-        </RequireAuth>,
-      );
+      const { container } = await mountInTheBrowser('authenticated');
+
+      expect(container.textContent).toBe('Protected page');
+      expect(navigation.log).toEqual([]);
+    });
+  });
+
+  it('sends a signed-out visitor to Log in with the page, its query and its hash as the way back', async () => {
+    await onTheInMemoryBrowser(async () => {
+      await mountInTheBrowser('unauthenticated');
 
       expect(navigation.log[0]).toEqual({
         kind: 'replace',

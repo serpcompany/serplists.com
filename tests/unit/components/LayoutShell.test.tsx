@@ -6,10 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Layout } from '@/components/Layout';
 
 const logout = vi.fn().mockResolvedValue({ ok: true });
+const auth = vi.hoisted(() => ({ user: null as { id: string; email: string; name: string; username?: string } | null }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
-    user: null,
+    user: auth.user,
     logout,
   }),
 }));
@@ -129,6 +130,38 @@ describe('Layout shell selection', () => {
     expect(html).toContain('Profile child');
     expect(html).toMatch(/<header[^>]*><div class="[^"]*max-w-6xl flex h-14 items-center[^"]*"/);
     expect(html).toContain('Build repeatable checklists');
+  });
+
+  it('frames a shared run with the header but no footer', () => {
+    const html = renderLayout('/share/token-1/', 'Shared run');
+
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('Shared run');
+    expect(html).not.toContain('Build repeatable checklists');
+  });
+
+  it("names the signed-in user and their handle on the console sidebar's account menu", () => {
+    auth.user = { id: 'user-1', email: 'alice@example.test', name: 'Alice', username: 'alice' };
+    try {
+      const html = renderLayout('/dashboard/templates', 'Console child');
+
+      expect(html).toContain('>Alice<');
+      expect(html).toContain('>@alice<');
+    } finally {
+      auth.user = null;
+    }
+  });
+
+  it('offers a signed-in visitor the account menu instead of Log in', () => {
+    auth.user = { id: 'user-1', email: 'alice@example.test', name: 'Alice' };
+    try {
+      const html = renderLayout('/templates', 'Discovery child');
+
+      expect(html).toContain('aria-label="Account menu"');
+      expect(html).not.toContain('>Log in<');
+    } finally {
+      auth.user = null;
+    }
   });
 });
 

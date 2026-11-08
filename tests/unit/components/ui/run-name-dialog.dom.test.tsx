@@ -76,3 +76,14 @@ describe('RunNameDialog wording, the same wherever a Run starts: My Templates, t
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
+
+describe('RunNameDialog Cancel', () => {
+  it('closes the dialog without starting a Run', async () => {
+    const onOpenChange = vi.fn();
+    const dialog = await openDialog({ onOpenChange });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

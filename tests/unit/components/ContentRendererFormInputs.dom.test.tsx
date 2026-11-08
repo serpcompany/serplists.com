@@ -230,6 +230,44 @@ describe('a Form block on the Run page', () => {
     expect(form.onFormAnswerChange).not.toHaveBeenCalled();
   });
 
+  it('shows a saved number answer in its field', async () => {
+    await renderForm([textField({ id: 'field-seats', label: 'Seats', kind: 'number', answer: 12 })]);
+
+    expect(screen.getByRole('spinbutton', { name: 'Seats' })).toHaveProperty('value', '12');
+  });
+
+  it('marks a required multiple choice with nothing chosen once completing was refused', async () => {
+    const form = await renderForm([
+      textField({ id: 'field-channels', label: 'Channels', kind: 'multiSelect', options: [{ id: 'email', label: 'Email' }, { id: 'chat', label: 'Chat' }] }),
+    ]);
+    expect(screen.getByRole('checkbox', { name: 'Email' }).getAttribute('aria-invalid')).toBeNull();
+
+    await form.rerenderWithCheck(1);
+
+    expect(screen.getByRole('checkbox', { name: 'Email' }).getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('checkbox', { name: 'Chat' }).getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('moves focus only to the first form that blocks the task, leaving a later one alone', async () => {
+    const shown = (formCheck: number) => (
+      <ContentRenderer
+        contents={[
+          { id: 'form-1', type: 'form', value: '', fields: [textField({ id: 'field-name', label: 'Client name' })] },
+          { id: 'form-2', type: 'form', value: '', fields: [textField({ id: 'field-site', label: 'Website' })] },
+        ]}
+        formCheck={formCheck}
+        onFormAnswerChange={vi.fn<AnswerChange>()}
+      />
+    );
+    const rendered = await renderSettled(shown(0));
+
+    await act(async () => {
+      rendered.rerender(shown(1));
+    });
+
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Client name' }));
+  });
+
   it('shows the form read-only, with its answers, when the run cannot be changed', async () => {
     await renderSettled(
       <ContentRenderer

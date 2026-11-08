@@ -108,25 +108,23 @@ export function RunRowActions({
         </Link>
       )}
 
-      {actions.canShare || actions.canDelete ? (
+      {actions.canShare ? (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button aria-label="Run options" size="icon-sm" variant="ghost" />}>
             <MoreHorizontal />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {actions.canShare ? (
-              <DropdownMenuItem onClick={onShare}>
-                <Share2 />
-                Share Run
-              </DropdownMenuItem>
-            ) : null}
-            {actions.canShare && run.isPublic && onStopSharing ? (
+            <DropdownMenuItem onClick={onShare}>
+              <Share2 />
+              Share Run
+            </DropdownMenuItem>
+            {run.isPublic && onStopSharing ? (
               <DropdownMenuItem disabled={isStoppingShare} onClick={onStopSharing}>
                 <Link2Off />
                 Stop sharing
               </DropdownMenuItem>
             ) : null}
-            {actions.canShare && actions.canDelete ? <DropdownMenuSeparator /> : null}
+            {actions.canDelete ? <DropdownMenuSeparator /> : null}
             {actions.canDelete ? (
               <DropdownMenuItem onClick={onDelete} variant="destructive">
                 <Trash2 />

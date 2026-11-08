@@ -9,25 +9,25 @@ import {
 import React, { act } from 'react';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow } from '../../../support/renderInTheDom';
+import { inputNamed, openTheMenu, renderSettled, theInMemoryBrowserAsTheWindow, typeInto } from '../../../support/renderInTheDom';
+import { chooseTheOption } from '../../../support/selectOptions';
+import { matchMediaWhere } from '../../../support/matchMedia';
+import { deferred } from '../../../support/deferred';
 import { toast } from 'sonner';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
+import { api } from '@/lib/api';
 import { createApiError } from '@/lib/api-errors';
 import { PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('@/lib/api', () => ({ api: { createChecklistRunShare: vi.fn() } }));
 
 const display = { wide: false };
 
 theInMemoryBrowserAsTheWindow({
-  matchMedia: (query: string) => ({
-    matches: display.wide && query === '(min-width: 90rem)',
-    media: query,
-    addEventListener() {},
-    removeEventListener() {},
-  }),
+  matchMedia: matchMediaWhere((query) => display.wide && query === '(min-width: 90rem)'),
 });
 
 const run: ChecklistRun = {
@@ -49,7 +49,7 @@ beforeEach(() => {
 async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
   navigation.reset('/');
   await renderSettled(
-    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} />,
+    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} onRetryLoad={vi.fn()} />,
   );
 }
 
@@ -119,6 +119,7 @@ async function openTheRunsAt(url: string) {
     <RunsDashboardView
       getRunPermissions={() => PERSONAL_PERMISSIONS}
       onDeleteRun={vi.fn()}
+      onRetryLoad={vi.fn()}
       runs={runs}
       workspaceTemplates={templates}
     />,
@@ -177,7 +178,7 @@ describe('the runs table on a wide screen', () => {
     display.wide = true;
     navigation.reset('/dashboard/runs/');
     await renderSettled(
-      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
+      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} onRetryLoad={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
     );
   }
 
@@ -216,5 +217,173 @@ describe('the runs table on a wide screen', () => {
     expect(old.getAllByText('—')).toHaveLength(2);
     expect(old.getByRole('link', { name: 'View' })).toBeTruthy();
     expect(old.getByText('Completed')).toBeTruthy();
+  });
+});
+
+const staleShared: ChecklistRun = { ...runOf('run-stale', 'tpl-a', 'Audit One'), isStale: true, isPublic: true };
+const stalePrivate: ChecklistRun = { ...runOf('run-old', 'tpl-b', 'Launch One'), isStale: true };
+
+type RunsPageHandlers = Partial<
+  Pick<React.ComponentProps<typeof RunsDashboardView>, 'loadError' | 'onRevalidateRun' | 'onStopSharingRun'>
+> & { onRetryLoad?: () => void };
+
+async function openTheRunsWithActions(shownRuns: ChecklistRun[], handlers: RunsPageHandlers = {}) {
+  navigation.reset('/dashboard/runs/');
+  await renderSettled(
+    <RunsDashboardView
+      getRunPermissions={() => PERSONAL_PERMISSIONS}
+      onDeleteRun={vi.fn()}
+      runs={shownRuns}
+      workspaceTemplates={templates}
+      onRetryLoad={vi.fn()}
+      {...handlers}
+    />,
+  );
+}
+
+const press = (name: string) =>
+  act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }));
+  });
+
+const chooseInTheMenu = async (item: string) => {
+  const items = await openTheMenu('Run options');
+  const chosen = items.find((candidate) => candidate.textContent === item);
+  if (!chosen) throw new Error(`Run options has no ${item}`);
+  await act(async () => {
+    fireEvent.click(chosen);
+  });
+};
+
+describe("a run's actions on the runs page", () => {
+  it('revalidates a stale private run, saying so while it runs', async () => {
+    const revalidating = deferred<void>();
+    const onRevalidateRun = vi.fn(() => revalidating.promise);
+    await openTheRunsWithActions([stalePrivate], { onRevalidateRun });
+
+    await press('Revalidate');
+    expect(screen.getByRole('button', { name: 'Revalidating...' }).hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      revalidating.resolve();
+    });
+
+    expect(onRevalidateRun).toHaveBeenCalledWith(stalePrivate);
+    expect(toast.success).toHaveBeenCalledWith('Run revalidated against the latest template');
+  });
+
+  it('stops sharing a stale shared run from its row and from the menu', async () => {
+    const stopping = deferred<void>();
+    const onStopSharingRun = vi.fn(() => stopping.promise);
+    await openTheRunsWithActions([staleShared], { onStopSharingRun });
+
+    await press('Stop sharing to update');
+    expect(screen.getByRole('button', { name: 'Stopping...' }).hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      stopping.resolve();
+    });
+    onStopSharingRun.mockResolvedValue(undefined);
+    await chooseInTheMenu('Stop sharing');
+
+    expect(onStopSharingRun.mock.calls).toEqual([['run-stale'], ['run-stale']]);
+    expect(toast.success).toHaveBeenCalledWith('Sharing stopped. The old link no longer works.');
+  });
+
+  it('shows the compact revalidate and stop sharing buttons in the table on a wide screen', async () => {
+    display.wide = true;
+    const onRevalidateRun = vi.fn(async () => undefined);
+    const onStopSharingRun = vi.fn(async () => undefined);
+    await openTheRunsWithActions([staleShared, stalePrivate], { onRevalidateRun, onStopSharingRun });
+
+    await act(async () => {
+      fireEvent.click(within(rowOf('Launch One')).getByRole('button', { name: 'Revalidate' }));
+      fireEvent.click(within(rowOf('Audit One')).getByRole('button', { name: 'Stop sharing to update' }));
+    });
+
+    expect(onRevalidateRun).toHaveBeenCalledWith(stalePrivate);
+    expect(onStopSharingRun).toHaveBeenCalledWith('run-stale');
+  });
+
+  it('makes a share link from Share Run and shows it in the share dialog', async () => {
+    vi.mocked(api.createChecklistRunShare).mockResolvedValue({ id: 'share-1', shareToken: 'token-1', sharePath: '/share/token-1/' });
+    await openTheRunsWithActions([runOf('run-1', 'tpl-a', 'Audit One')]);
+
+    await chooseInTheMenu('Share Run');
+
+    expect(api.createChecklistRunShare).toHaveBeenCalledWith('run-1');
+    const [dialog] = await screen.findAllByRole('dialog');
+    if (!dialog) throw new Error('Share Run opened no dialog');
+    expect(within(dialog).getByRole('textbox').getAttribute('value')).toMatch(/\/share\/token-1\/?$/);
+  });
+
+  it('deletes the run once when Delete is pressed again while its dialog closes', async () => {
+    const onDeleteRun = vi.fn(async () => undefined);
+    await renderRuns(onDeleteRun);
+    await openTheMenu('Run options');
+    const { dialog } = await openTheDeleteDialogWithNoneOpenBefore();
+
+    await clickInTheDialog(dialog, 'Delete');
+    await clickInTheDialog(dialog, 'Delete');
+    await theDialogsToClose();
+
+    expect(onDeleteRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the run when the delete dialog is canceled', async () => {
+    const onDeleteRun = vi.fn(async () => undefined);
+    await renderRuns(onDeleteRun);
+
+    await openTheMenu('Run options');
+    await openAndConfirm('Delete', 'Cancel');
+    await theDialogsToClose();
+
+    expect(onDeleteRun).not.toHaveBeenCalled();
+  });
+
+  it('offers Retry when the runs failed to load', async () => {
+    const onRetryLoad = vi.fn();
+    await openTheRunsWithActions([], { loadError: new Error('HTTP 503'), onRetryLoad });
+
+    await press('Retry');
+
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the runs page's search and filters", () => {
+  it('says nothing matched a search, without offering the library', async () => {
+    await openTheRunsAt('/dashboard/runs/');
+
+    await typeInto(inputNamed('Search'), 'nothing like this');
+
+    expect(screen.getByText('No runs found')).toBeTruthy();
+    expect(screen.getByText('Try adjusting your search or filters')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Browse the Template Library' })).toBeNull();
+  });
+
+  it('points to the library when there are no runs at all', async () => {
+    await openTheRunsWithActions([]);
+
+    expect(screen.getByText('Start a run from one of your templates')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Browse the Template Library' })).toBeTruthy();
+  });
+
+  it('filters by status and by Template, keeping the Template in the URL', async () => {
+    await openTheRunsAt('/dashboard/runs/');
+
+    await chooseTheOption('Template', 'Beta Launch');
+    expect(navigation.url()).toBe('/dashboard/runs/?template=tpl-b');
+    expect(shownRunTitles()).toEqual(['Launch One']);
+
+    await chooseTheOption('Template', 'All templates');
+    await chooseTheOption('Status', 'Completed');
+    expect(navigation.url()).toBe('/dashboard/runs/');
+    expect(screen.getByText('No runs found')).toBeTruthy();
+  });
+
+  it('names a Template it cannot find as unknown in the Template filter', async () => {
+    await openTheRunsAt('/dashboard/runs/?template=tpl-gone');
+
+    expect(screen.getByRole('combobox', { name: 'Template' }).textContent).toContain('Unknown template');
+    expect(screen.getByText('Runs started from Unknown template appear here.')).toBeTruthy();
   });
 });

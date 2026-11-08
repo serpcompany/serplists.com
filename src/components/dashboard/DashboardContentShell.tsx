@@ -91,7 +91,7 @@ export function DashboardPageBody({ children, className }: DashboardPageBodyProp
 interface DashboardEmptyStateProps {
   action?: ReactNode;
   description: ReactNode;
-  icon?: ReactNode;
+  icon: ReactNode;
   title: ReactNode;
   titleAs?: 'h1' | 'h2' | 'h3' | undefined;
 }
@@ -106,7 +106,7 @@ export function DashboardEmptyState({
   return (
     <Empty className="border" data-dashboard-empty-state="true">
       <EmptyHeader>
-        {icon ? <EmptyMedia variant="icon">{icon}</EmptyMedia> : null}
+        <EmptyMedia variant="icon">{icon}</EmptyMedia>
         <EmptyTitle>
           <Title>{title}</Title>
         </EmptyTitle>

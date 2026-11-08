@@ -67,6 +67,7 @@ const rendered = {
         getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
         onDeleteRun={vi.fn()}
         onRevalidateRun={vi.fn()}
+        onRetryLoad={vi.fn()}
         runs={[run]}
       />,
     ),

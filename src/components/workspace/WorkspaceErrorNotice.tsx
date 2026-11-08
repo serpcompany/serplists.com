@@ -14,8 +14,7 @@ export function WorkspaceErrorNotice({
   message,
   onContinueInPersonal,
   onRetry,
-}: Pick<WorkspaceErrorActions, 'onRetry'> &
-  Partial<Pick<WorkspaceErrorActions, 'onContinueInPersonal'>> & {
+}: WorkspaceErrorActions & {
     className?: string;
     id: string;
     message: string;
@@ -35,11 +34,9 @@ export function WorkspaceErrorNotice({
           <Button onClick={onRetry} size="sm" type="button">
             Retry
           </Button>
-          {onContinueInPersonal ? (
-            <Button onClick={onContinueInPersonal} size="sm" type="button" variant="outline">
-              Continue in Personal
-            </Button>
-          ) : null}
+          <Button onClick={onContinueInPersonal} size="sm" type="button" variant="outline">
+            Continue in Personal
+          </Button>
         </div>
       </AlertDescription>
     </Alert>

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 type CtaBannerProps = {
   actions: ReactNode;
   className?: string;
-  description?: ReactNode;
+  description: ReactNode;
   titleAs?: 'h2' | 'h3';
   title: ReactNode;
 };
@@ -21,7 +21,7 @@ export function CtaBanner({ actions, className, description, title, titleAs: Tit
     >
       <div className="flex max-w-2xl flex-col gap-2">
         <Title className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">{title}</Title>
-        {description ? <p className="text-sm text-muted-foreground sm:text-base">{description}</p> : null}
+        <p className="text-sm text-muted-foreground sm:text-base">{description}</p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>
     </div>
