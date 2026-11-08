@@ -139,6 +139,21 @@ describe('a task whose form blocks it', () => {
     expect(result).toMatchObject({ code: FORM_INCOMPLETE_CODE, message: "Finish this task's form first. Website: Enter a URL that starts with http:// or https://." });
   });
 
+  it('names only what is missing for a required field with no label', async () => {
+    const unlabelled: ChecklistItem = {
+      id: 'item-form',
+      title: 'Collect details',
+      contents: [{ id: 'form-1', type: 'form', value: '', fields: [{ id: 'field-code', label: '  ', kind: 'text', required: true }] }],
+    };
+
+    const result = await toggleRunItem(
+      { isCompleted: true, itemId: 'item-form', run: runWith(unlabelled) },
+      { apiClient: runExecutionApiClient(), updateRun: savingRun() },
+    );
+
+    expect(result).toMatchObject({ message: "Finish this task's form first. Fill in this field." });
+  });
+
   it('can still be unticked, and is completed once its required fields are answered', async () => {
     const updateRun = savingRun();
     const dependencies = { apiClient: runExecutionApiClient(), updateRun };

@@ -34,13 +34,9 @@ export const getApiClient = (
 ): RunExecutionApiClient => dependencies.apiClient ?? api;
 
 export const persistRun = async (
-  params: RunExecutionMutationParams & { includeTitle?: boolean },
+  params: { includeTitle?: boolean; run: ChecklistRun; shareToken?: string | undefined },
   dependencies: RunExecutionDependencies,
 ): Promise<ChecklistRun> => {
-  if (!params.run) {
-    throw new Error('Run not found.');
-  }
-
   const apiClient = getApiClient(dependencies);
   const progress = calculateSectionsProgress(params.run.sections);
   const nextRun = { ...params.run, progress };

@@ -301,7 +301,7 @@ export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
         save: (run) => saveRunFormAnswer({ answer, fieldId, itemId, run, shareToken }, dependencies),
       };
     },
-    key: `answer:${itemId}:${fieldId}:${JSON.stringify(answer ?? null)}`,
+    key: `answer:${itemId}:${fieldId}:${JSON.stringify(answer)}`,
   }),
   complete: {
     bind: (current: ChecklistRun): RunSave => ({

@@ -41,6 +41,7 @@ const renderRuns = (runs: ChecklistRun[]) => {
       getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
       onDeleteRun={vi.fn()}
       onRevalidateRun={vi.fn()}
+      onRetryLoad={vi.fn()}
       runs={runs}
     />,
   );

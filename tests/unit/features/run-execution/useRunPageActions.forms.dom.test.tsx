@@ -74,3 +74,50 @@ describe('the run page when a task is refused for its form', () => {
     expect(toast.error).toHaveBeenCalledWith('Unable to save your answer.');
   });
 });
+
+describe('the run page after a save', () => {
+  it('offers to complete the run once the last Sub-task is ticked', async () => {
+    const page = saves();
+    page.toggleSubItem.mockResolvedValue({ kind: 'ok', shouldPromptComplete: true });
+    const { result } = renderHook(() => useRunPageActions(page));
+
+    act(() => result.current.toggleSubItem('item-1', 0, 1, true));
+    await settle();
+
+    expect(page.toggleSubItem).toHaveBeenCalledWith('item-1', 0, 1, true);
+    expect(result.current.completeDialog.open).toBe(true);
+  });
+
+  it('keeps the notes editor open only for notes that were not saved, and says why', async () => {
+    const page = saves();
+    page.saveItemNotes
+      .mockResolvedValueOnce({ kind: 'ok' })
+      .mockResolvedValueOnce({ kind: 'ignored' })
+      .mockResolvedValueOnce({ kind: 'error', message: 'This run changed elsewhere.' })
+      .mockResolvedValueOnce({ kind: 'not_found' });
+    const { result } = renderHook(() => useRunPageActions(page));
+
+    const outcomes = [];
+    for (const notes of ['Saved', 'Superseded', 'Conflicted', 'Gone']) {
+      outcomes.push(await result.current.saveNotes('item-1', notes));
+    }
+
+    expect(outcomes).toEqual([true, false, false, false]);
+    expect(vi.mocked(toast.error).mock.calls).toEqual([['This run changed elsewhere.'], ['Unable to save task notes.']]);
+  });
+
+  it('says completion could not be saved, and keeps the dialog open, when the server gives no reason', async () => {
+    const page = saves();
+    page.completeRun.mockResolvedValue({ kind: 'error', message: '' });
+    const { result } = renderHook(() => useRunPageActions(page));
+    act(() => result.current.openCompleteDialog());
+
+    act(() => result.current.completeDialog.onComplete());
+    await settle();
+
+    expect(toast.error).toHaveBeenCalledWith('Unable to save completion. Please try again.');
+    expect(result.current.completeDialog.open).toBe(true);
+    expect(result.current.completeDialog.completing).toBe(false);
+  });
+});
+

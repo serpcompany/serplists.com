@@ -8,7 +8,9 @@ import {
   countRunExecutionItems,
   getInitialSelectedItemId,
   getNextSelectedItemId,
+  getSelectedRunItem,
   getSelectionAfterToggle,
+  findRunSubItem,
   mapChecklistRuns,
   mapChecklistToRun,
 } from '@/features/run-execution/runExecutionMappers';
@@ -421,5 +423,35 @@ describe("a run's provenance and timestamps from the API", () => {
       provenance: { origin: 'mcp', startedBy, agentKeyName: 'Codex', authorizedBy: startedBy },
     });
     expect(mapChecklistToRun(apiRunSchema.parse({ id: 'run-2', items: '[]' }), 'run-2').provenance).toBeUndefined();
+  });
+});
+
+describe('where a run opens', () => {
+  it('opens on the first task once every task is done, and on none for a run with no tasks or no run', () => {
+    expect(getInitialSelectedItemId(run(['a', 'b', 'c', 'd']))).toBe('a');
+    expect(getInitialSelectedItemId(buildRun({ sections: [{ id: 's1', title: 'Empty', items: [] }] }))).toBeNull();
+    expect(getInitialSelectedItemId(null)).toBeNull();
+  });
+});
+
+describe('finding the task or Sub-task a click names', () => {
+  it('finds no task for an id the run does not hold, or with nothing selected', () => {
+    expect(getSelectedRunItem(run([]), 'c')?.section.id).toBe('s2');
+    expect(getSelectedRunItem(run([]), 'gone')).toBeNull();
+    expect(getSelectedRunItem(run([]), null)).toBeNull();
+  });
+
+  it('finds a Sub-task by its id when the block at the clicked place holds no Sub-tasks', () => {
+    const task: ChecklistItem = {
+      id: 'task-1',
+      title: 'Pack',
+      contents: [
+        { id: 'note', type: 'text', value: 'Check the list' },
+        { id: 'steps', type: 'subItems', value: '', subItems: [{ id: 'sub-tent', title: 'Tent' }] },
+      ],
+    };
+
+    expect(findRunSubItem(task, { contentIndex: 0, subItemId: 'sub-tent', subItemIndex: 0 })?.title).toBe('Tent');
+    expect(findRunSubItem(task, { contentIndex: 0, subItemIndex: 0 })).toBeUndefined();
   });
 });

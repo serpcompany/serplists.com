@@ -46,6 +46,12 @@ describe("resolveTemplateSaveFailureNotice", () => {
     expect(notice?.message).toContain(BILLING_UNAVAILABLE_MESSAGE);
   });
 
+  it("says an upgrade is unavailable, with no action, when the server could not start checkout", () => {
+    expect(
+      resolveTemplateSaveFailureNotice({ kind: "billing_unavailable", message: BILLING_UNAVAILABLE_MESSAGE }, personal),
+    ).toEqual({ title: "Upgrade unavailable", message: BILLING_UNAVAILABLE_MESSAGE, action: null });
+  });
+
   it("offers sign-in when the session ended", () => {
     expect(
       resolveTemplateSaveFailureNotice(

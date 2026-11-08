@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRun } from '@/types/checklist';
 
+import { deferred } from '../../../support/deferred';
 import { navigation } from '../../../support/nextNavigation';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../../support/renderInTheDom';
 
 const { createChecklistRunShare } = vi.hoisted(() => ({ createChecklistRunShare: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: { createChecklistRunShare } }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 
@@ -18,6 +20,7 @@ beforeEach(() => {
   navigation.reset('https://serplists.com/dashboard/runs/');
   let minted = 0;
   createChecklistRunShare.mockReset();
+  toast.error.mockReset();
   createChecklistRunShare.mockImplementation(async () => ({ shareToken: `token-${++minted}` }));
 });
 
@@ -33,10 +36,10 @@ const listedRun = (id: string, isPublic: boolean): ChecklistRun => ({
   isPublic,
 });
 
-async function mountRunsList(initial: ChecklistRun[]) {
+async function mountRunsList(initial: ChecklistRun[], onStopSharingRun = async (_runId: string) => undefined) {
   let state: ReturnType<typeof useRunsDashboardSharing> | undefined;
   function Probe({ runs }: { runs: ChecklistRun[] }) {
-    state = useRunsDashboardSharing({ runs, onStopSharingRun: async () => undefined });
+    state = useRunsDashboardSharing({ runs, onStopSharingRun });
     return null;
   }
   const { rerender } = await renderSettled(<Probe runs={initial} />);
@@ -138,5 +141,47 @@ describe("sharing from the runs list, where each Share replaces the run's token 
 
     expect(list.current().sharedLink).toBeNull();
     expect(list.current().isShareDialogOpen).toBe(false);
+  });
+
+  it('makes one link for a double click on Share', async () => {
+    const minted = deferred<{ shareToken: string }>();
+    createChecklistRunShare.mockReturnValue(minted.promise);
+    const list = await mountRunsList([listedRun('run-1', false)]);
+
+    await act(async () => {
+      const first = list.current().shareRun('run-1');
+      await list.current().shareRun('run-1');
+      minted.resolve({ shareToken: 'token-only' });
+      await first;
+    });
+
+    expect(createChecklistRunShare).toHaveBeenCalledTimes(1);
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-only/');
+  });
+
+  it('says why a link could not be made and opens no dialog', async () => {
+    createChecklistRunShare.mockRejectedValue(new Error('This run was deleted'));
+    const list = await mountRunsList([listedRun('run-1', false)]);
+
+    await list.share('run-1');
+
+    expect(toast.error).toHaveBeenCalledWith('This run was deleted');
+    expect(list.current().sharedLink).toBeNull();
+    expect(list.current().isShareDialogOpen).toBe(false);
+  });
+
+  it('keeps the link and says why when Stop sharing fails', async () => {
+    const list = await mountRunsList([listedRun('run-1', false)], async () => {
+      throw new Error('You cannot stop sharing this run');
+    });
+    await list.share('run-1');
+
+    await act(async () => {
+      await list.current().stopSharing('run-1');
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('You cannot stop sharing this run');
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1/');
+    expect(list.current().stoppingShareRunId).toBeNull();
   });
 });

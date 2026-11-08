@@ -148,7 +148,7 @@ export const resolveTemplateSaveFeedback = (params: {
 };
 
 const buildLoadResult = (
-  template?: Partial<ChecklistTemplate>,
+  template?: ChecklistTemplate,
   storedSections: unknown = template?.sections,
 ): TemplateEditorLoadResult => ({
   initialValues: buildTemplateEditorFormValues({ ...template, sections: storedSections }),
@@ -158,7 +158,7 @@ const buildLoadResult = (
   ownerSlug: template?.id
     ? resolvePublicTemplateOwnerSlug({
         id: template.id,
-        userId: template.userId ?? "",
+        userId: template.userId,
         ownerProfile: template.ownerProfile,
         owner: template.owner,
         ownerType: template.ownerType,
@@ -166,7 +166,7 @@ const buildLoadResult = (
       })
     : undefined,
   ownership: template?.id
-    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic ?? false }
+    ? { userId: template.userId, teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic }
     : undefined,
 });
 
@@ -190,7 +190,7 @@ export const loadTemplateEditorData = async (
   dependencies?: Pick<TemplateEditorModelDependencies, "apiClient">,
 ): Promise<TemplateEditorLoadResult> => {
   if (!options.id) {
-    return buildLoadResult(buildDefaultTemplateEditorTemplate());
+    return buildLoadResult();
   }
 
   try {

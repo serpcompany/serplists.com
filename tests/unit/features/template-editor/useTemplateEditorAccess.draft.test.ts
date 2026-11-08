@@ -33,6 +33,7 @@ const options = {
   getValues: () => formValues,
   allowLeave: vi.fn(),
   guardLeave: vi.fn(),
+  getVersion: () => undefined,
 };
 
 const saved: SaveTemplateResult = { success: true, errors: [] };

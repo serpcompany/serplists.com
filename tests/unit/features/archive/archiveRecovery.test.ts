@@ -48,6 +48,12 @@ describe('parseArchiveItems', () => {
     ]);
   });
 
+  it('names an untitled run and leaves its date blank when the row has none', () => {
+    expect(parseArchiveItems([{ id: 7, title: '' }], 'run')).toEqual([
+      { id: '7', kind: 'run', title: 'Untitled run', archivedAt: '' },
+    ]);
+  });
+
   it('rejects a response that is not a list instead of showing an empty archive', () => {
     expect(() => parseArchiveItems({ error: 'boom' }, 'run')).toThrow();
   });

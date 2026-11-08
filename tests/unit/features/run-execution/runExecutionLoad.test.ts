@@ -6,6 +6,13 @@ import { loadRunExecutionData } from '@/features/run-execution/runExecutionLoad'
 import { runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
 
 describe('run execution model loading', () => {
+  it('finds no run, and asks the API for none, on a page whose address names no run', async () => {
+    const apiClient = runExecutionApiClient();
+
+    expect(await loadRunExecutionData({}, { apiClient, updateRun: vi.fn() })).toEqual({ kind: 'not_found', mode: 'private' });
+    expect(apiClient.getChecklistById).not.toHaveBeenCalled();
+  });
+
   it('loads a private run from the API by its id', async () => {
     const apiClient = {
       ...runExecutionApiClient(),

@@ -5,7 +5,8 @@ import { renderSettled } from '../../../support/renderInTheDom';
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 type ShownRun = { runId: string; isPublic: boolean };
 
@@ -35,6 +36,7 @@ async function mountShareLink(initial: ShownRun) {
   };
   return {
     createShare,
+    stopSharing,
     current,
     render,
     closeDialog: async () => {
@@ -104,5 +106,31 @@ describe("the run page share link, which each Share replaces and stopping sharin
 
     expect(page.createShare).toHaveBeenCalledTimes(2);
     expect(page.current().shareUrl).toBe('https://serplists.com/share/token-2');
+  });
+
+  it('says why a link could not be made, and opens no dialog', async () => {
+    const page = await mountShareLink({ runId: 'run-1', isPublic: false });
+    page.createShare.mockResolvedValueOnce({ kind: 'error', message: '' });
+
+    await page.share();
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to create share link for this run.');
+    expect(page.current().isShareDialogOpen).toBe(false);
+    expect(page.current().shareUrl).toBe('');
+  });
+
+  it('forgets the link once sharing stops, and keeps it when stopping fails', async () => {
+    const page = await aRunSharedOnceWithTheDialogClosed();
+    page.stopSharing.mockResolvedValueOnce({ kind: 'error', message: 'Offline' });
+
+    await act(async () => {
+      expect(await page.current().stopSharing()).toEqual({ kind: 'error', message: 'Offline' });
+    });
+    expect(page.current().shareUrl).toBe('https://serplists.com/share/token-1');
+
+    await act(async () => {
+      expect(await page.current().stopSharing()).toEqual({ kind: 'ok' });
+    });
+    expect(page.current().shareUrl).toBe('');
   });
 });

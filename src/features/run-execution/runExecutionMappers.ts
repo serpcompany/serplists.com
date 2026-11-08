@@ -75,14 +75,7 @@ export const mapChecklistToRun = (
 };
 
 export const mapChecklistRuns = (checklists: ApiRun[]): ChecklistRun[] =>
-  checklists.map((checklist) => {
-    try {
-      return mapChecklistToRun(checklist, checklist.id);
-    } catch (error) {
-      console.error('Unable to read run content', { runId: checklist.id, error });
-      return mapChecklistToRun({ ...checklist, items: '[]', sections: undefined, retired_items: '[]' }, checklist.id);
-    }
-  });
+  checklists.map((checklist) => mapChecklistToRun(checklist, checklist.id));
 
 export const cloneRunSections = (
   sections: ChecklistRun['sections'],

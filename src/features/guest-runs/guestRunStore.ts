@@ -67,7 +67,7 @@ const toRun = (stored: StoredGuestRun): ChecklistRun => {
   };
 };
 
-const writeGuestRun = (run: ChecklistRun, storage: StringStorage): void => {
+const writeGuestRun = (run: ChecklistRun, revision: number, storage: StringStorage): ChecklistRun => {
   const stored: StoredGuestRun = {
     id: run.id,
     templateId: run.templateId,
@@ -75,25 +75,31 @@ const writeGuestRun = (run: ChecklistRun, storage: StringStorage): void => {
     status: run.status,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
-    revision: run.revision ?? 1,
+    revision,
     sections: run.sections,
   };
   storage.setItem(guestRunKey(run.templateId), JSON.stringify({ format: FORMAT, run: stored }));
   notifyGuestRunReaders();
+  return { ...run, revision };
+};
+
+const readStoredGuestRun = (templateId: string, storage: StringStorage): StoredGuestRun | null => {
+  const raw = storage.getItem(guestRunKey(templateId));
+  if (!raw) return null;
+  try {
+    const parsed = storedGuestRunSchema.safeParse(JSON.parse(raw));
+    return parsed.success && parsed.data.run.templateId === templateId ? parsed.data.run : null;
+  } catch {
+    return null;
+  }
 };
 
 export const readGuestRun = (
   templateId: string,
   storage: StringStorage = safeLocalStorage,
 ): ChecklistRun | null => {
-  const raw = storage.getItem(guestRunKey(templateId));
-  if (!raw) return null;
-  try {
-    const parsed = storedGuestRunSchema.safeParse(JSON.parse(raw));
-    return parsed.success && parsed.data.run.templateId === templateId ? toRun(parsed.data.run) : null;
-  } catch {
-    return null;
-  }
+  const stored = readStoredGuestRun(templateId, storage);
+  return stored ? toRun(stored) : null;
 };
 
 export const readGuestRunStatus = (
@@ -118,25 +124,21 @@ export const startGuestRun = (
     progress: 0,
     sections: resetSectionsCompletion(template.sections),
     startedAt: startedAt.toISOString(),
-    revision: 1,
     userId: '',
   };
-  writeGuestRun(run, storage);
-  return run;
+  return writeGuestRun(run, 1, storage);
 };
 
 export const saveGuestRun = (
   run: ChecklistRun,
   storage: StringStorage = safeLocalStorage,
 ): ChecklistRun => {
-  const stored = readGuestRun(run.templateId, storage);
+  const stored = readStoredGuestRun(run.templateId, storage);
   if (stored?.id !== run.id || stored.revision !== run.revision) {
     throw new ApiError({ status: 409, code: 'edit_conflict', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
   }
 
-  const saved: ChecklistRun = { ...run, revision: (stored.revision ?? 1) + 1 };
-  writeGuestRun(saved, storage);
-  return saved;
+  return writeGuestRun(run, stored.revision + 1, storage);
 };
 
 export const removeGuestRun = (templateId: string, storage: StringStorage = safeLocalStorage): void => {
