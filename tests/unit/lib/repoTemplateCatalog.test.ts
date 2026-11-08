@@ -87,6 +87,28 @@ describe("repo template catalog", () => {
     expect(repoTemplates.map(({ id }) => id)).toEqual(repoTemplates.map(({ slug }) => `repo:${slug}`));
   });
 
+  it("keeps every template of a pack that gives them no slug, each with an id that holds across loads", () => {
+    const slugless = (title: string) => ({ title, visibility: "public", sections: [{ title: "Prep", items: [{ title: "Check" }] }] });
+    const source = {
+      "../data/public-template-packs/launch.json": {
+        default: {
+          kind: "serplists-template-pack",
+          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+          exportedAt: "2026-03-22T00:00:00.000Z",
+          templates: [slugless("Launch prep"), slugless("Launch day")],
+        },
+      },
+    };
+
+    const ids = normalizeRepoTemplateSources(source).map(({ id, title }) => ({ id, title }));
+
+    expect(ids).toEqual([
+      { id: "repo:launch-2", title: "Launch day" },
+      { id: "repo:launch-1", title: "Launch prep" },
+    ]);
+    expect(normalizeRepoTemplateSources(source).map(({ id }) => id)).toEqual(ids.map(({ id }) => id));
+  });
+
   it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
@@ -231,6 +253,16 @@ describe("repo template catalog", () => {
       },
     });
     expect(isRepoTemplate(templates[0])).toBe(true);
+  });
+
+  it("keeps the id of a backup template that already names itself a repo template", () => {
+    const templates = normalizeRepoTemplateSources({
+      "../data/public-template-packs/camping.json": {
+        templates: [{ id: "repo:camping", title: "Camping", sections: [{ id: "s1", title: "Shelter", items: [{ id: "i1", title: "Tent" }] }] }],
+      },
+    });
+
+    expect(templates.map(({ id }) => id)).toEqual(["repo:camping"]);
   });
 
   it("accepts portable template pack sources", () => {
