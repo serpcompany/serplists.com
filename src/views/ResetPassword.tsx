@@ -42,13 +42,8 @@ const ResetPassword = () => {
     removeResetTokenFromUrl();
   }, [search]);
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent, resetToken: string) => {
     event.preventDefault();
-
-    if (!token) {
-      toast.error("Reset token is missing or invalid.");
-      return;
-    }
 
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
@@ -64,7 +59,7 @@ const ResetPassword = () => {
     setIsSubmitting(true);
     try {
       const result = await submitPasswordReset({
-        resetPassword: () => authClient.resetPassword({ newPassword: password, token }),
+        resetPassword: () => authClient.resetPassword({ newPassword: password, token: resetToken }),
         signOutLocally: logout,
         isSignedIn: isAuthenticated,
       });
@@ -97,7 +92,7 @@ const ResetPassword = () => {
       description="Choose a new password for your account."
       footer={<BackToSignInFooter />}
     >
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={(event) => handleSubmit(event, token)}>
         <FieldGroup>
           <LabeledInput
             id="password"

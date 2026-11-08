@@ -61,14 +61,14 @@ function GuestRunWorkspace({ template, templatePath }: { template: ChecklistTemp
   const loginPath = withReturnPath(buildLoginPath(), runPath);
 
   useEffect(() => {
-    if (!notFound || loading) {
+    if (!notFound) {
       return;
     }
 
     toast.error('Run not found');
     allowLeave();
     router.replace(templatePath);
-  }, [allowLeave, loading, notFound, router, templatePath]);
+  }, [allowLeave, notFound, router, templatePath]);
 
   if (loading || !run) {
     return <RunLoadingState />;

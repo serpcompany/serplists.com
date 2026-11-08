@@ -1414,7 +1414,7 @@ existing content, invent nothing):
   [Organization Settings](#organization-settings); "Open templates" (declined) → My Templates
   in the current context; "Open settings" (an invite error) → [Account
   Settings](#account-settings).
-- **STATES:** no token ("This invite link is missing a token."); "Checking your session...";
+- **STATES:** "Checking your session...";
   signed out; "Loading invite..."; the invite; "Responding..."; accepted; already a member
   ("You're already a member of <Organization>." with the same two buttons); declined ("Invite
   declined. You did not join <Organization>.", "Open templates"); a different account ("You're

@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import '../../support/mockedAuthPageEdges';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,14 +9,6 @@ import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ register: vi.fn() }),
-}));
-
-vi.mock('@/lib/auth-client', () => ({
-  getAuthStatus: vi.fn(),
-}));
-
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 const renderAt = (url: string) => {

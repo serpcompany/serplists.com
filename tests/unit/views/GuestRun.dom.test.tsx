@@ -6,7 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
-import { readGuestRun, saveGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
+import { readGuestRun, removeGuestRun, saveGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import GuestRun from '@/views/GuestRun';
 
@@ -129,6 +129,15 @@ describe('the guest run page of a public Template', () => {
     expect(readGuestRun(guestRunTemplate.id)).toBeNull();
   });
 
+  it('sends a signed-in user to the Template Library when the Template has no public owner address', async () => {
+    Object.assign(authState, { isAuthenticated: true, user: { id: 'user-1' } });
+    templateRecord.template = { ...guestRunTemplate, ownerProfile: { username: '  ' } };
+
+    await openTheRunPage();
+
+    expect(navigation.url()).toBe('/templates/');
+  });
+
   it('waits for the session check before deciding whether to start a run', async () => {
     authState.isLoading = true;
 
@@ -149,6 +158,22 @@ describe('the guest run page of a public Template', () => {
     await waitFor(() => {
       expect(subTaskAt(contentAt(taskAt(storedRun(), 0, 0), 0), 0).isCompleted).toBe(true);
     });
+  });
+
+  it('says the run is gone and goes back to the Template page when it was deleted in another tab', async () => {
+    startGuestRun(guestRunTemplate, 'Lake trip');
+    await openTheRunPage();
+    removeGuestRun(guestRunTemplate.id);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Poles' }));
+    });
+
+    await waitFor(() => {
+      expect(navigation.url()).toBe(TEMPLATE_PAGE);
+    });
+    expect(toast.error).toHaveBeenCalledWith('Run not found');
+    expect(readGuestRun(guestRunTemplate.id)).toBeNull();
   });
 
   it('completes the run on the page, which stays open and shows it completed', async () => {
