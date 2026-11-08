@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { TestProject } from 'vitest/node';
 
@@ -16,6 +16,27 @@ const PROCESS_ENTRY_POINTS = [
 ];
 
 const LIBRARIES_THE_TESTS_IMPORT = ['scripts/*-lib.ts'];
+
+const RECORD_END = 'end_of_record';
+
+function recordsOf(lcov: string): string[] {
+  return lcov
+    .split(RECORD_END)
+    .map((record) => record.trim())
+    .filter((record) => record.length > 0);
+}
+
+function sourceOf(record: string, root: string): string {
+  const line = record.split(/\r?\n/).find((each) => each.startsWith('SF:')) ?? 'SF:';
+  return path.resolve(root, line.slice(3));
+}
+
+function leaveEntryPointsToTheirProcesses(inProcessReport: string, processReport: string, root: string): void {
+  if (!existsSync(inProcessReport) || !existsSync(processReport)) return;
+  const measuredAsProcesses = new Set(recordsOf(readFileSync(processReport, 'utf8')).map((record) => sourceOf(record, root)));
+  const kept = recordsOf(readFileSync(inProcessReport, 'utf8')).filter((record) => !measuredAsProcesses.has(sourceOf(record, root)));
+  writeFileSync(inProcessReport, kept.map((record) => `${record}\n${RECORD_END}\n`).join(''));
+}
 
 export default function recordChildProcessCoverage(project: TestProject): (() => void) | undefined {
   const { coverage, root } = project.globalConfig;
@@ -43,5 +64,6 @@ export default function recordChildProcessCoverage(project: TestProject): (() =>
     );
     rmSync(rawDirectory, { recursive: true, force: true });
     if (report.status !== 0) throw new Error(`c8 could not write the child processes' coverage to ${reportsDirectory}`);
+    leaveEntryPointsToTheirProcesses(path.join(coverage.reportsDirectory, 'lcov.info'), path.join(reportsDirectory, 'lcov.info'), root);
   };
 }

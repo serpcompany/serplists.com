@@ -244,8 +244,9 @@ the `pr-review` skill's tests reviewer sends back.
   the process entry points the unit tests spawn write `coverage/unit-children`. For those,
   `tests/support/childProcessCoverage.ts` gives each child of a test worker `NODE_V8_COVERAGE`,
   and c8 reports the files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in
-  the child's environment. Library modules count only from tests that import them, since two
-  instrumentations of one file number its branches differently.
+  the child's environment. Two instrumentations of one file number its branches differently, so
+  a library module counts only from the tests that import it, and an entry point the children
+  report holds only from the processes that ran it: the teardown drops it from `coverage/unit`.
 - **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
   `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
   `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an
