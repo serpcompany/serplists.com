@@ -132,6 +132,10 @@ const Templates = () => {
   };
 
   const handleDeleteTemplate = async () => {
+    if (!templateToDelete) {
+      return;
+    }
+
     setIsDeletingTemplate(true);
     try {
       await model.removeTemplate(templateToDelete);
