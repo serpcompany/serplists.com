@@ -3,7 +3,7 @@ import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { hasCanonicalPublicTemplatePath } from "@/lib/routes";
 import { getPredefinedCategories } from "@/utils/categories";
 
-export const useTemplateLibrary = (_category?: string, templateType?: "checklist" | "recipe") => {
+export const useTemplateLibrary = (templateType?: "checklist" | "recipe") => {
   const {
     templates: contextTemplates,
     catalogPending,

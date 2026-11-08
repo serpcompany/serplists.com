@@ -26,7 +26,7 @@ const loadRun = async (
   }
 
   try {
-    const run = mapChecklistToRun(await fetchRun(key), key);
+    const run = mapChecklistToRun(await fetchRun(key));
     return {
       kind: 'ok',
       mode,

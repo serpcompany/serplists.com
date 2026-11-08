@@ -127,6 +127,17 @@ describe('a Form block on the Run page', () => {
     expect(form.onFormAnswerChange).toHaveBeenLastCalledWith(1, 'field-due', '2026-10-06');
   });
 
+  it('saves no answer for a number too large to store, and keeps what was typed in the field', async () => {
+    const form = await renderForm([textField({ id: 'field-seats', label: 'Seats', kind: 'number', required: false })]);
+    const seats = screen.getByRole('spinbutton', { name: 'Seats' });
+
+    await typeInto(seats, '1e999');
+    await blur(seats);
+
+    expect(form.onFormAnswerChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('spinbutton', { name: 'Seats' })).toHaveProperty('value', '1e999');
+  });
+
   it('saves a long text answer, and clearing a field saves no answer', async () => {
     const form = await renderForm([textField({ id: 'field-summary', label: 'Summary', kind: 'longText', required: false, answer: 'Draft' })]);
     const summary = screen.getByRole('textbox', { name: 'Summary' });

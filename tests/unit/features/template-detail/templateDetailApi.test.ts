@@ -46,4 +46,12 @@ describe("sharing a template someone else created", () => {
     expect(getProfileById).toHaveBeenCalledWith('user-2');
     expect(shown).toBe(someoneElsesTemplate);
   });
+
+  it("links to the Creator's username when the Creator has no name", async () => {
+    const getProfileById = vi.fn().mockResolvedValue({ id: 'user-2', username: 'bob', full_name: null });
+
+    const shown = await resolveShareOwnerTemplate(someoneElsesTemplate, { userId: 'user-1', username: 'alice' }, { getProfileById });
+
+    expect(shown.ownerProfile).toEqual({ username: 'bob', full_name: undefined });
+  });
 });

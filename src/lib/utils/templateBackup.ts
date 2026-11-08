@@ -177,10 +177,14 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
+export type ExportedPortableTemplatePack = PortableTemplatePack & {
+  manifest: NonNullable<PortableTemplatePack["manifest"]> & { assetWarnings: number };
+};
+
 export const exportPortableTemplatesToJSON = (
   templates: ChecklistTemplate[],
   exportedBy?: string
-): PortableTemplatePack => {
+): ExportedPortableTemplatePack => {
   const warnings = collectAssetWarnings(templates);
   const results = templates.map((template) => parsePortableTemplate({
     title: template.title,

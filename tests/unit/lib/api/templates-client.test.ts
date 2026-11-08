@@ -94,6 +94,21 @@ describe('the Template requests the app sends, answered by the API', { timeout: 
     expect(idsOf(await api.getPublicTemplatesForOrganization('acme-launch'))).toEqual([template.id]);
   });
 
+  it("keeps an Organization's archive apart from Personal, and sends its imports to the Organization's plan", async () => {
+    const template = await aPublicTemplateOf('owner');
+    const organization = await api.createTeam({ name: 'Acme Launch', slug: 'acme-launch' });
+    const loaded = await api.getTemplateById(template.id);
+    await api.transferTemplate(template.id, { teamId: organization.id, expectedVersion: loaded.version ?? 0 });
+
+    await api.deleteTemplate(template.id);
+
+    expect(idsOf(await api.getArchivedTemplates({ teamId: organization.id }))).toEqual([template.id]);
+    expect(await api.getArchivedTemplates()).toEqual([]);
+    await expect(api.importTemplateBackup({ teamId: organization.id, templates: [] })).rejects.toThrow(
+      'Upgrade this Organization to use template import/export.',
+    );
+  });
+
   it('copies a public Template into the Personal Templates of a visitor on Pro, and asks others to upgrade', async () => {
     const template = await aPublicTemplateOf('owner');
 

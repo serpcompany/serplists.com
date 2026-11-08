@@ -1,4 +1,4 @@
-import { count, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { sitemapProfileRevisions, teams, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
@@ -12,8 +12,6 @@ import {
   catalogPageEntry,
   handleInMemoryPagedSitemap,
   handlePagedDatabaseSitemap,
-  isValidTemplateSlug,
-  isValidUsername,
   loadRowsOfTwoLists,
   loadCategoryEntries,
   methodNotAllowed,
@@ -36,15 +34,15 @@ export const shardPageParam = (fileName: string): string =>
 type Db = ReturnType<typeof createDb>;
 
 type ProfileRow = {
-  handle: string | null;
+  handle: string;
   created_at: string;
   updated_at: string | null;
   profile_revision: string | null;
 };
 
 type TemplateRow = {
-  handle: string | null;
-  slug: string | null;
+  handle: string;
+  slug: string;
   created_at: string;
   updated_at: string | null;
   owner_updated_at: string | null;
@@ -52,7 +50,7 @@ type TemplateRow = {
 
 const selectListedUsers = (db: Db) => db
   .select({
-    handle: users.username,
+    handle: sql<string>`trim(${users.username})`,
     created_at: users.created_at,
     updated_at: users.updated_at,
     profile_revision: sitemapProfileRevisions.revised_at,
@@ -64,7 +62,7 @@ const selectListedUsers = (db: Db) => db
 
 const selectListedOrganizations = (db: Db) => db
   .select({
-    handle: teams.slug,
+    handle: sql<string>`trim(${teams.slug})`,
     created_at: teams.created_at,
     updated_at: teams.updated_at,
     profile_revision: sql<string | null>`null`,
@@ -73,8 +71,7 @@ const selectListedOrganizations = (db: Db) => db
   .where(listedOrganizationCondition)
   .orderBy(teams.id);
 
-const countListedUsers = async (db: Db): Promise<number> =>
-  (await db.select({ total: count() }).from(users).where(validUsernameCondition)).at(0)?.total ?? 0;
+const countListedUsers = async (db: Db): Promise<number> => await db.$count(users, validUsernameCondition);
 
 const loadListedProfiles = (db: Db, page: SitemapRowPage): Promise<ProfileRow[]> => loadRowsOfTwoLists(
   { load: ({ limit, offset }) => selectListedUsers(db).limit(limit).offset(offset), count: () => countListedUsers(db) },
@@ -83,28 +80,18 @@ const loadListedProfiles = (db: Db, page: SitemapRowPage): Promise<ProfileRow[]>
 );
 
 const selectListedTemplates = (db: Db) =>
-  selectPublicTemplatesOfListedOwners(db, { handle: templateOwnerHandle, slug: templates.slug }, validTemplateSlugCondition)
+  selectPublicTemplatesOfListedOwners(db, { handle: sql<string>`trim(${templateOwnerHandle})`, slug: sql<string>`trim(${templates.slug})` }, validTemplateSlugCondition)
     .orderBy(templates.id);
 
-function profileEntry(row: ProfileRow): SitemapEntry | null {
-  const handle = row.handle?.trim() ?? '';
-  return isValidUsername(handle) ? {
-    path: `/profile/${encodeURIComponent(handle)}/`,
-    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
-  } : null;
-}
+const profileEntry = (row: ProfileRow): SitemapEntry => ({
+  path: `/profile/${encodeURIComponent(row.handle)}/`,
+  lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
+});
 
-function templateEntry(row: TemplateRow): SitemapEntry | null {
-  const handle = row.handle?.trim() ?? '';
-  const slug = row.slug?.trim() ?? '';
-  return isValidUsername(handle) && isValidTemplateSlug(slug) ? {
-    path: `/profile/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}/`,
-    lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
-  } : null;
-}
-
-const entriesOf = <Row>(rows: Row[], toEntry: (row: Row) => SitemapEntry | null): SitemapEntry[] =>
-  rows.flatMap((row) => toEntry(row) ?? []);
+const templateEntry = (row: TemplateRow): SitemapEntry => ({
+  path: `/profile/${encodeURIComponent(row.handle)}/${encodeURIComponent(row.slug)}/`,
+  lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
+});
 
 function templateCatalogEntries(revisions: SitemapRevisions): SitemapEntry[] {
   const landingPage = catalogPageEntry('/templates/');
@@ -119,8 +106,8 @@ export const serveSitemapIndex = (context: SitemapContext): Promise<Response> =>
 
 async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
   const db = createDb(env);
-  const profiles = entriesOf([...await selectListedUsers(db), ...await selectListedOrganizations(db)], profileEntry);
-  const databaseTemplates = entriesOf(await selectListedTemplates(db), templateEntry);
+  const profiles = [...await selectListedUsers(db), ...await selectListedOrganizations(db)].map(profileEntry);
+  const databaseTemplates = (await selectListedTemplates(db)).map(templateEntry);
   const categoryEntries = await loadCategoryEntries(env);
   const templateEntries = [...templateCatalogEntries(revisions), ...databaseTemplates];
   const entries = [

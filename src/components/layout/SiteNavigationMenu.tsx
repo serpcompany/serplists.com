@@ -7,7 +7,7 @@ import { NavigationMenu as NavigationMenuPrimitive } from '@base-ui/react/naviga
 import {
   publicHeaderItems,
   type PublicHeaderItem,
-  type PublicSiteLink,
+  type PublicMenuLink,
 } from '@/components/layout/publicSiteLinks';
 import { Link } from '@/components/navigation/Link';
 import {
@@ -27,10 +27,10 @@ const isHeaderItemActive = (pathname: string, item: PublicHeaderItem): boolean =
     : item.links.some((link) => isPathWithin(pathname, link.href)) ||
       (item.sectionPath !== undefined && isPathWithin(pathname, item.sectionPath));
 
-function MenuLink({ link, pathname }: { link: PublicSiteLink; pathname: string }) {
+function MenuLink({ link, pathname }: { link: PublicMenuLink; pathname: string }) {
   const id = useId();
   const labelId = `${id}-label`;
-  const descriptionId = link.description ? `${id}-description` : undefined;
+  const descriptionId = `${id}-description`;
 
   return (
     <li>
@@ -45,11 +45,9 @@ function MenuLink({ link, pathname }: { link: PublicSiteLink; pathname: string }
           <div className="leading-none font-medium" id={labelId}>
             {link.label}
           </div>
-          {link.description ? (
-            <div className="line-clamp-2 text-muted-foreground" id={descriptionId}>
-              {link.description}
-            </div>
-          ) : null}
+          <div className="line-clamp-2 text-muted-foreground" id={descriptionId}>
+            {link.description}
+          </div>
         </div>
       </NavigationMenuLink>
     </li>

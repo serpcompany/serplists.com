@@ -16,9 +16,7 @@ export const createRunExecutionShare = async (
   try {
     const result = await apiClient.createChecklistRunShare(run.id);
     dependencies.onShared?.(run.id);
-    const origin =
-      dependencies.origin ??
-      (typeof window !== 'undefined' ? window.location.origin : '');
+    const origin = dependencies.origin ?? window.location.origin;
 
     return {
       kind: 'ok',

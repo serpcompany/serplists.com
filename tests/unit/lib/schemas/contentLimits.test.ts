@@ -125,7 +125,7 @@ const runAsPostChecklistsStoresIt = (stored: Sections): Sections =>
   storedSections.parse(resetRunCompletionState(sanitizeStoredSections(normalizeSectionsPayload(stored).sections)));
 
 function runRenameSaveBody(runSections: Sections) {
-  const run = mapChecklistToRun({ id: "run-1", title: sixByteJsonEscapes(RUN_TITLE_MAX), items: JSON.stringify(runSections), revision: 1 }, "run-1");
+  const run = mapChecklistToRun({ id: "run-1", title: sixByteJsonEscapes(RUN_TITLE_MAX), items: JSON.stringify(runSections), revision: 1 });
   return { sections: run.sections, body: buildRunUpdatePayload(run, { includeTitle: true }) };
 }
 

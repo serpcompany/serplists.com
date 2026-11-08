@@ -20,7 +20,7 @@ type Library = ReturnType<typeof useTemplateLibrary>;
 const renderFirstPassWithoutEffects = (templateType?: 'checklist' | 'recipe'): Library => {
   let captured: Library | undefined;
   const Probe = () => {
-    captured = useTemplateLibrary(undefined, templateType);
+    captured = useTemplateLibrary(templateType);
     return null;
   };
   renderToStaticMarkup(<Probe />);

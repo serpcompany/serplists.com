@@ -19,6 +19,7 @@ import { useTrackTemplateEditorUpload } from "@/features/template-editor/pending
 import {
   createTemplateEditorContent,
   findTemplateEditorContentPath,
+  type TemplateEditorContentPath,
   type TemplateEditorContentType,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
@@ -62,12 +63,8 @@ export function ContentEditor({
     );
   }
 
-  function handleMediaValueChange(contentId: string, value: string): void {
-    const path = findTemplateEditorContentPath(getValues("sections"), contentId);
-    if (!path) {
-      return;
-    }
-
+  function handleMediaValueChange(contentIndex: number, value: string): void {
+    const path: TemplateEditorContentPath = `sections.${sectionIndex}.items.${itemIndex}.contents.${contentIndex}`;
     const current = getValues(path);
     const next = withMediaValue(current, value);
     if (next !== current) {
@@ -114,7 +111,7 @@ export function ContentEditor({
             fileName={content.fileName}
             onFileChange={(change) => handleFileChange(content.id, change)}
             onUploadStart={trackUpload}
-            onValueChange={(value) => handleMediaValueChange(content.id, value)}
+            onValueChange={(value) => handleMediaValueChange(contentIndex, value)}
             type={content.type}
             value={content.value}
           />

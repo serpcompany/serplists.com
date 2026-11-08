@@ -9,7 +9,6 @@ import {
   users,
 } from '../../db/schema/index';
 import { createDb } from '../api/db';
-import { isPublicHandle } from '../../src/lib/schemas/publicHandle';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
@@ -44,8 +43,8 @@ type InventoryMetadata = {
   implementationLastmod?: string;
 };
 
-const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).filter(
-  (template) => template.slug?.trim(),
+const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).flatMap(
+  ({ slug, ...template }) => (slug?.trim() ? [{ ...template, slug }] : []),
 );
 
 const staticPages = bundledTemplateCatalog.staticPages as StaticPage[];
@@ -179,12 +178,9 @@ function paginateEntries<T>(entries: T[], page: number): T[] {
 }
 
 export function bundledTemplateEntries(): SitemapEntry[] {
-  return bundledTemplates.flatMap((template) => {
-    const slug = template.slug ?? '';
-    return isValidTemplateSlug(slug)
-      ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod: template.lastmod }]
-      : [];
-  });
+  return bundledTemplates.flatMap(({ slug, lastmod }) =>
+    isValidTemplateSlug(slug) ? [{ path: `/profile/serp/${encodeURIComponent(slug)}/`, lastmod }] : [],
+  );
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
@@ -198,8 +194,6 @@ export function catalogPageEntry(path: '/templates/' | '/categories/'): SitemapE
   if (!entry) throw new Error(`Missing generated sitemap metadata for ${path}`);
   return entry;
 }
-
-export const isValidUsername = isPublicHandle;
 
 export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);

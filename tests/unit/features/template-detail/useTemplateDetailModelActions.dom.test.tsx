@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateRun, CreateTemplate } from '@/features/template-detail/templateActionOutcome';
@@ -120,6 +120,40 @@ describe('the actions on a template page', () => {
     expect(shared).toEqual({ kind: 'ok', shareUrl: `${window.location.origin}/profile/alice/quarterly-audit/` });
     expect(apiMock.updateTemplate).toHaveBeenCalledWith('template-7', { is_public: true, expected_version: 2 });
     expect(page().template).toMatchObject({ isPublic: true, version: 3 });
+  });
+
+  it('keeps showing the template opened while an earlier share was still saving', async () => {
+    let finishSaving = () => {};
+    apiMock.updateTemplate.mockImplementation(
+      () => new Promise((resolve) => {
+        finishSaving = () => resolve({ success: true, id: 'template-7', version: 3, slug: 'quarterly-audit' });
+      }),
+    );
+    apiMock.getTemplateById.mockImplementation(async (id: string) =>
+      id === 'template-8' ? { ...storedTemplate, id: 'template-8', title: 'Annual Review', slug: 'annual-review' } : { ...server },
+    );
+    const page = await mountQueryHook(() => {
+      const [identifier, open] = useState('template-7');
+      return { model: useTemplateDetailModel({ ...onTheTemplatePage, identifier }), open };
+    });
+    unmounts.push(page.unmount);
+    await act(settle);
+
+    const sharing = page.current().model.shareTemplate();
+    act(() => page.current().open('template-8'));
+    await vi.waitFor(async () => {
+      await act(settle);
+      expect(page.current().model.template?.title).toBe('Annual Review');
+    });
+
+    await act(async () => {
+      finishSaving();
+      await sharing;
+      await settle();
+    });
+
+    expect(await sharing).toEqual({ kind: 'ok', shareUrl: `${window.location.origin}/profile/alice/quarterly-audit/` });
+    expect(page.current().model.template).toMatchObject({ id: 'template-8', title: 'Annual Review', isPublic: false });
   });
 
   it('moves the template into an Organization and shows it there', async () => {

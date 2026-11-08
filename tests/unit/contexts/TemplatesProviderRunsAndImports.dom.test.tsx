@@ -8,6 +8,7 @@ import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 
 const apiMock = vi.hoisted(() => ({
   createChecklist: vi.fn<(payload: Record<string, unknown>) => Promise<{ id: string }>>(),
+  createTemplate: vi.fn<(payload: Record<string, unknown>) => Promise<{ id: string; slug?: string }>>(),
   getChecklists: vi.fn(),
   getTemplates: vi.fn(),
   importTemplateBackup: vi.fn(),
@@ -129,6 +130,16 @@ describe('TemplatesProvider createRun given only a template id', () => {
     expect(payload).not.toHaveProperty('template_id');
   });
 
+  it('starts a template that has no version yet at version 1', async () => {
+    apiMock.createChecklist.mockResolvedValue({ id: 'run-4' });
+    const template = launchChecklist({ version: undefined });
+    const { context } = renderTemplatesProvider();
+
+    const run = await context.createRun({ templateId: 'template-1', template });
+
+    expect(run).toMatchObject({ id: 'run-4', templateVersion: 1 });
+  });
+
   it('refuses a template id that is in neither list', async () => {
     const { context } = renderTemplatesProvider();
 
@@ -137,7 +148,28 @@ describe('TemplatesProvider createRun given only a template id', () => {
   });
 });
 
+describe('TemplatesProvider createTemplate', () => {
+  it('creates a template with no categories or tags when the form gave none', async () => {
+    apiMock.createTemplate.mockResolvedValue({ id: 'template-9', slug: 'quick-list' });
+    const { context } = renderTemplatesProvider();
+
+    const created = await context.createTemplate({ title: 'Quick list', sections: [], isPublic: false });
+
+    expect(firstOf(apiMock.createTemplate.mock.calls)[0]).toMatchObject({ title: 'Quick list', is_public: false, categories: [], tags: [] });
+    expect(created).toMatchObject({ id: 'template-9', slug: 'quick-list', isPublic: false, categories: [], tags: [], description: '' });
+  });
+});
+
 describe('TemplatesProvider importTemplates', () => {
+  it("keeps each imported template's own visibility unless the import says otherwise", async () => {
+    apiMock.importTemplateBackup.mockResolvedValue({ total: 1, imported: 1, failed: [] });
+    const { context } = renderTemplatesProvider();
+
+    await context.importTemplates([launchChecklist()]);
+
+    expect(firstOf(apiMock.importTemplateBackup.mock.calls)[0]).toMatchObject({ options: { visibility: 'preserve' } });
+  });
+
   it(`refuses more than ${MAX_TEMPLATES_PER_IMPORT} templates in one file without sending any`, async () => {
     const { context } = renderTemplatesProvider();
     const tooMany = Array.from({ length: MAX_TEMPLATES_PER_IMPORT + 1 }, (_, index) => launchChecklist({ id: `template-${index}` }));

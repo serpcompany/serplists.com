@@ -25,7 +25,7 @@ import {
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { resolvePublicTemplateOwnerName } from '@/lib/repoTemplateCatalog';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
-import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
+import { formatLocalDate, parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
@@ -99,8 +99,7 @@ export function PublicTemplateView({
   const [isSaved, setIsSaved] = useState(false);
   const ownerName = resolvePublicTemplateOwnerName(template) || 'Template Library';
   const TypeIcon = template.type === 'recipe' ? List : FileText;
-  const lastUpdated = template.updatedAt || template.createdAt;
-  const updatedDate = formatLocalDate(lastUpdated);
+  const updatedAt = parseDbTimestamp(template.updatedAt || template.createdAt);
 
   const handleShare = async () => {
     if (await copyTextToClipboard(window.location.href)) {
@@ -185,9 +184,9 @@ export function PublicTemplateView({
           ) : (
             <div className="flex items-center gap-2">{owner}</div>
           )}
-          {updatedDate ? (
+          {updatedAt ? (
             <p>
-              Updated <time dateTime={normalizeDbTimestamp(lastUpdated) ?? undefined}>{updatedDate}</time>
+              Updated <time dateTime={updatedAt.toISOString()}>{formatLocalDate(updatedAt)}</time>
             </p>
           ) : null}
           {template.categories?.length ? (
