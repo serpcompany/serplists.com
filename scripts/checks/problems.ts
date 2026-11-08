@@ -6,7 +6,7 @@ export interface Problem {
 
 export const located = ({ path, line, problem }: Problem) => `${path}${line === undefined ? "" : `:${line}`}  ${problem}`;
 
-export const excerpt = (text: string) => {
-  const firstLine = (text.split("\n", 1)[0] ?? "").trim();
-  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine;
+export const lineExcerpt = (text: string, line: number) => {
+  const shown = text.split(/\r?\n/).slice(line - 1, line).join("").trim();
+  return shown.length > 80 ? `${shown.slice(0, 77)}...` : shown;
 };

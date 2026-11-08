@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { failureReport, runChecks, selectRun } from '../../../../scripts/checks/checks';
-import { duplicateRule } from '../../../../scripts/checks/rules';
+import { deadCodeRule, duplicateRule, linterRule } from '../../../../scripts/checks/rules';
 import { scratchRepository } from './scratch';
 
 const repeatedBlock = Array.from({ length: 12 }, (_, index) => `  total += values[${index}] * weights[${index}] + offsets[${index}];`).join('\n');
@@ -26,5 +26,29 @@ describe('running the repository checks on a checkout', { timeout: 120_000 }, ()
     expect(report).toMatch(/^\nduplicates\nscripts\/first\.ts:1-\d+ /);
     expect(report).toContain('scripts/second.ts');
     expect(report.endsWith(duplicateRule)).toBe(true);
+  });
+
+  it('fails the dead code check with the rule, and runs no duplicate search on a checkout without code folders', async () => {
+    const at = scratchRepository('run-checks', {
+      'package.json': JSON.stringify({ name: 'scratch', private: true, type: 'module', main: 'index.ts' }),
+      'index.ts': 'export const start = 1;\n',
+      'orphan.ts': 'export const orphan = 2;\n',
+    });
+
+    const [deadcode, duplicates] = await runChecks(['deadcode', 'duplicates'], selectRun([], at));
+
+    expect(deadcode?.passed).toBe(false);
+    expect(deadcode?.report).toContain('orphan.ts');
+    expect(deadcode?.report.at(-1)).toBe(deadCodeRule);
+    expect(duplicates).toEqual({ name: 'duplicates', passed: true, report: [] });
+  });
+
+  it("reports what became of actionlint on a workflow, with the rule, wherever it could or couldn't run", async () => {
+    const at = scratchRepository('run-checks', { '.github/workflows/broken.yml': 'on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    stepz: []\n' });
+
+    const [linters] = await runChecks(['linters'], selectRun([], at));
+
+    expect(linters?.report[0]).toMatch(/^actionlint/);
+    expect(linters?.report.at(-1)).toBe(linterRule);
   });
 });

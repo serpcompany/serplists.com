@@ -22,7 +22,7 @@ export function scriptCommand(at: string, name: string): { script: string; args:
   const command = manifest.parse(JSON.parse(readFileSync(path.join(at, "package.json"), "utf8"))).scripts[name] ?? "";
   const match = NODE_WITH_TSX.exec(command);
   if (!match?.[1]) throw new Error(`package.json's "${name}" script must be "node --import tsx <script> [arguments]" for the generated check to run it.`);
-  return { script: match[1], args: (match[2] ?? "").split(" ").filter(Boolean) };
+  return { script: match[1], args: command.split(" ").slice(4) };
 }
 
 export function staleGenerator(at: string, check: string, fix: string): string | undefined {

@@ -9,6 +9,7 @@ import path from "node:path";
 import net, { type ListenOptions } from "node:net";
 import { z } from "zod";
 import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings";
+import { errorMessage } from "./lib/error-message";
 import { type ProcessInfo, readProcessInfo } from "./lib/process-info";
 import { buildToolInvocation, type Invocation, killPidTree } from "./lib/run-tool";
 
@@ -251,12 +252,12 @@ export async function stopDevSession({
   session,
   isOwned = isOwnedDevProcess,
   killTree = killPidTree,
-  removeSession = () => removeDevSession(),
+  sessionPath = DEV_SESSION_PATH,
 }: {
   session: { pid: number | null; startedAt: number | null };
   isOwned?: OwnershipCheck;
   killTree?: (pid: number) => void;
-  removeSession?: () => void;
+  sessionPath?: string;
 }): Promise<{ stopped: number[]; skipped: number[]; failed: Array<{ pid: number; message: string }> }> {
   const result: { stopped: number[]; skipped: number[]; failed: Array<{ pid: number; message: string }> } = {
     stopped: [],
@@ -274,12 +275,12 @@ export async function stopDevSession({
           killTree(pid);
           result.stopped.push(pid);
         } catch (error) {
-          result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+          result.failed.push({ pid, message: errorMessage(error) });
         }
       }
     }
   } finally {
-    removeSession();
+    removeDevSession(sessionPath);
   }
 
   return result;

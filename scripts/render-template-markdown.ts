@@ -3,6 +3,7 @@ import path from "node:path";
 import { portableChecklistTemplateSchema } from "../src/lib/schemas/checklistSchema";
 import { normalizePortableTemplate } from "../src/lib/templates/portableTemplateNormalization";
 import { renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
+import { errorMessage } from "./lib/error-message";
 
 const run = async () => {
   const [inputArg, outputArg] = process.argv.slice(2);
@@ -28,6 +29,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 });

@@ -1,4 +1,4 @@
-import type { SiteRequest } from '../../scripts/check-site-standards';
+import type { SiteRequest } from '../../scripts/check-site-standards-lib';
 import { loadBuiltRoutes, workerRedirect } from './builtRoutes';
 import { whileServingLocally } from './localHttpServer';
 

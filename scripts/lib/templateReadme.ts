@@ -23,10 +23,9 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
   }
 
   if (content.type === "subItems") {
-    const subItems = content.subItems ?? [];
     return [
       "Sub-items:",
-      ...subItems.map((subItem) => `- [ ] ${subItem.title}`),
+      ...content.subItems.map((subItem) => `- [ ] ${subItem.title}`),
     ].join("\n");
   }
 

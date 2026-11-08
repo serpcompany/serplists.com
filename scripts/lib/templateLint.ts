@@ -17,6 +17,7 @@ import {
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
 import { normalizeEol } from "./line-endings";
+import { errorMessage } from "./error-message";
 import { findTemplateFormIssues } from "./templateFormLint";
 
 export type TemplateLintIssue = {
@@ -84,7 +85,7 @@ const checkMarkdownRoundTrip = (details: TemplateSourceDetails, filePath: string
       : issue("Generated Markdown imports as a different template");
   } catch (error) {
     return issue(
-      `Generated Markdown does not import: ${error instanceof Error ? error.message : "unknown parse error"}`,
+      `Generated Markdown does not import: ${errorMessage(error)}`,
     );
   }
 };
@@ -148,7 +149,7 @@ export const lintSingleTemplateSource = async (filePath: string): Promise<Templa
     return [{
       filePath,
       code: "parse-error",
-      message: error instanceof Error ? error.message : "Unknown template parse error",
+      message: errorMessage(error),
     }];
   }
 };
@@ -196,7 +197,7 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
     issues.push({
       filePath: `${jsonPath} <-> ${markdownPath}`,
       code: "pair-parse-error",
-      message: error instanceof Error ? error.message : "Failed to lint template pair",
+      message: errorMessage(error),
     });
   }
 
@@ -212,13 +213,11 @@ export const lintYamlTemplateBundle = async (
     markdownPath?: string | undefined;
   }
 ): Promise<TemplateLintIssue[]> => {
-  const yamlExtension = detectTemplateSourceExtension(path.basename(yamlPath));
-  if (!yamlExtension) return unsupportedFileType(yamlPath);
   const issues: TemplateLintIssue[] = [];
 
   try {
     const yamlSource = await readSourceWithLfEndings(yamlPath);
-    const yamlDetails = parseSingleTemplateSource(yamlSource, yamlExtension);
+    const yamlDetails = parseSingleTemplateSource(yamlSource, ".yaml");
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
     issues.push(...checkMarkdownRoundTrip(yamlDetails, paths.markdownPath ?? yamlPath));
@@ -270,7 +269,7 @@ export const lintYamlTemplateBundle = async (
     issues.push({
       filePath: yamlPath,
       code: "yaml-bundle-parse-error",
-      message: error instanceof Error ? error.message : "Failed to lint YAML template bundle",
+      message: errorMessage(error),
     });
   }
 

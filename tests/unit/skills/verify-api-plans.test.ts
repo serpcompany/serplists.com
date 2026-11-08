@@ -53,6 +53,7 @@ describe('the verify-api plan steps', () => {
   it.each([
     ['a step not run yet', [{ api: 'GET /api/templates/{$2.id}' }], '{$2.id} names step 2, which hasn\'t run yet.'],
     ['a path the answer lacks', [{ api: 'GET /api/templates' }, { tool: 'get_template', arguments: { templateId: '{$1.0.slug}' } }], "Step 1's answer has nothing at 0.slug."],
+    ['a path through a number', [{ api: 'GET /api/templates' }, { api: 'GET /api/templates/{$1.0.count.digits}' }], "Step 1's answer has nothing at 0.count.digits."],
     [
       'a reference that leaves the step no route',
       [{ tool: 'start_run', expect: 'limit_reached' }, { api: 'GET /api/runs/{$1.message}' }],
@@ -66,6 +67,14 @@ describe('the verify-api plan steps', () => {
     expect(run.seen.map((request) => `${request.method} ${request.path}`)).toEqual(
       arrayContaining(['DELETE /api/agent-keys/key-1', 'POST /api/auth/sign-out']),
     );
+  }, SLOW);
+
+  it('reports an MCP endpoint that refuses the Run Key, in the doctor and in each MCP step', async () => {
+    const run = await verifyApi('mcp-refused', { permissions: ['templates:write'], steps: [{ tool: 'list_templates', expect: 'HTTP 404' }] });
+
+    expect(run.status).toBe(0);
+    expect(proof(run.folder, 'doctor.txt')).toContain('mcp: initialize answered 404');
+    expect(requestLines(run.folder)[0]).toBe('01 as expected: HTTP 404 (expected HTTP 404) MCP list_templates, request request-5');
   }, SLOW);
 
   it('stops before making a key when the user cannot sign in', async () => {

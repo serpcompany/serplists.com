@@ -13,6 +13,7 @@ const testSources: Record<string, string> = {
     "test.describe('duplicating', () => {",
     "  test('@smoke duplicating a template names the copy with Copy', async () => {});",
     "  test(`a runner sees a read-only notice on ${'a Run'}`, async () => {});",
+    "  test(`${'An owner'} shares ${'a Run'} by link`, async () => {});",
     "  test.step('a step is not a test', async () => {});",
     '});',
   ].join('\n'),
@@ -61,6 +62,8 @@ describe('the tests a product doc can name', () => {
     expect(hasTitle(titles, 'duplicating')).toBe(true);
     expect(hasTitle(titles, 'a runner sees a read-only notice on a shared Run')).toBe(true);
     expect(hasTitle(titles, 'a step is not a test')).toBe(false);
+    expect(hasTitle(titles, 'A viewer shares the Run by link')).toBe(true);
+    expect(hasTitle(titles, 'A viewer shares the Run by email')).toBe(false);
     expect(hasTitle(testTitles(READS, testSources[READS] ?? ''), 'reads page %s')).toBe(true);
     expect(hasTitle(testTitles(READS, testSources[READS] ?? ''), 'reads the tagged page $page')).toBe(true);
     expect(testTitles(READS, testSources[READS] ?? '')).toHaveLength(4);

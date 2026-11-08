@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { runChecks, selectRun } from '../../../../scripts/checks/checks';
+import { root } from '../../../../scripts/checks/files';
 import { CLOUDFLARE_TYPES, generatorChecks, staleGeneratedFiles } from '../../../../scripts/checks/generated';
 import { generatedRule } from '../../../../scripts/checks/rules';
 import { stringMatching } from '../../../support/asymmetricMatchers';
-import { scratchRepository } from './scratch';
+import { scratchRepository, writeFiles } from './scratch';
 
 const WRANGLER_TOML = ['name = "scratch-worker"', 'main = ".open-next/worker.js"', 'compatibility_date = "2025-01-01"', '', '[vars]', 'SITE_URL = "http://localhost:3000"', ''].join('\n');
 
@@ -38,6 +41,14 @@ describe('the generated files check on a checkout', { timeout: 120_000 }, () => 
         ],
       },
     ]);
+  });
+
+  it("passes a checkout whose generators pass and whose Worker types are what wrangler types writes, as this repository's are", () => {
+    const fromThisRepository = (file: string) => readFileSync(path.join(root, file), 'utf8');
+    const at = scratchCheckout(() => 0, fromThisRepository('wrangler.toml'));
+    writeFiles(at, { '.dev.vars.example': fromThisRepository('.dev.vars.example'), [CLOUDFLARE_TYPES]: fromThisRepository(CLOUDFLARE_TYPES) });
+
+    expect(staleGeneratedFiles(at)).toEqual([]);
   });
 
   it('stops with what wrangler said when it cannot write the types', () => {

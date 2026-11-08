@@ -28,6 +28,10 @@ describe('review findings', () => {
     expect(titleOf(`**${'x'.repeat(200)}**`)).toHaveLength(100);
   });
 
+  it('are untitled when the finding has no text', () => {
+    expect(titleOf('')).toBe('');
+  });
+
   it('count pull requests and blocking findings in each part, the most widespread first', () => {
     const groups = groupFindings([
       finding('functions/api/handlers/a.ts', 7),

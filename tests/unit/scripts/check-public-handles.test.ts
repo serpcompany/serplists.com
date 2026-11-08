@@ -1,11 +1,17 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
-import { execTool } from '../../../scripts/lib/run-tool';
+import { readD1Databases } from '../../../scripts/d1-baseline-migrations-lib';
+import { execTool, REPO_ROOT } from '../../../scripts/lib/run-tool';
+import { runAgainstACloudflareD1StandIn } from '../../support/cloudflareD1StandIn';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const workDir = aWorkDirRemovedAfterAll('check-public-handles-');
+const STAGING_ID = readD1Databases(readFileSync(path.join(REPO_ROOT, 'wrangler.toml'), 'utf8')).topLevel.find((entry) => entry.binding === 'DB')?.preview_database_id ?? '';
 const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CLOUDFLARE_API_TOKEN: undefined, CLOUDFLARE_API_KEY: undefined };
 const WRANGLER_TOML = [
   'name = "handles-check"',
@@ -44,5 +50,29 @@ describe('pnpm run check:public-handles:local', { timeout: 120_000 }, () => {
     ]);
     expect(renamed.status).toBe(0);
     expect(renamed.stdout.trim()).toBe('Public handles on local: 3 usernames and Organization slugs checked, 0 collision(s), 0 outside the handle rule.');
+  });
+});
+
+describe('pnpm run check:public-handles:staging, against a D1 API stand-in', { timeout: 120_000 }, () => {
+  it('reads the staging database through --preview and names the collision it holds', async () => {
+    const staging = new DatabaseSync(':memory:');
+    staging.exec("CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT); INSERT INTO users VALUES ('u-1', 'acme'); INSERT INTO teams VALUES ('t-1', 'acme');");
+
+    const run = await runAgainstACloudflareD1StandIn('scripts/check-public-handles.ts', { args: ['--staging'], databases: { [STAGING_ID]: staging } });
+
+    expect(run.status).toBe(1);
+    expect(run.stdout).toContain('Public handles on staging: 2 usernames and Organization slugs checked, 1 collision(s)');
+    expect(new Set(run.calls.map((call) => call.databaseId))).toEqual(new Set([STAGING_ID]));
+  });
+
+  it('checks no handles, and says so, when D1 answers the query with no result set', async () => {
+    const run = await runAgainstACloudflareD1StandIn('scripts/check-public-handles.ts', {
+      args: ['--staging'],
+      databases: {},
+      failWith: { status: 200, body: { success: true, errors: [], messages: [], result: [] } },
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout.trim()).toBe('Public handles on staging: 0 usernames and Organization slugs checked, 0 collision(s), 0 outside the handle rule.');
   });
 });

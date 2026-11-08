@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { checkDependencies, cruise } from '../../../../scripts/checks/dependencies';
-import { scratchRepository } from './scratch';
+import { scratchRepository, writeFiles } from './scratch';
 
 const RULE_COMMENT = 'Screens never call the transport: move the request into the feature that owns it.';
 const config = `module.exports = {
@@ -34,6 +34,13 @@ describe('the dependency check', { timeout: 60_000 }, () => {
 
   it('passes imports the rules allow', () => {
     expect(cruise(project("import { load } from './feature.js';\nexport const screen = load;\n"), '.dependency-cruiser.cjs', ['src'])).toEqual([]);
+  });
+
+  it('cruises all the code it covers when the run touches any of it', () => {
+    const at = project("import { send } from './transport.js';\nexport const screen = send;\n");
+    writeFiles(at, { 'functions/api.js': 'export const api = 1;\n', 'db/schema.js': 'export const schema = 1;\n', 'next.config.ts': 'export default {};\n' });
+
+    expect(checkDependencies(at, ['src/screen.js'])[0]).toBe('error screens-do-not-call-transport: src/screen.js → src/transport.js');
   });
 
   it('leaves a run alone whose paths hold none of the code it cruises', () => {

@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { findComments } from '../../../scripts/check-no-comments-lib';
+import { commentCheckOf, filesGitTracksOrWouldTrack, findComments } from '../../../scripts/check-no-comments-lib';
 
 const commentLines = (file: string, source: string[]) => findComments(file, source.join('\n')).map(({ line }) => line);
 
@@ -107,5 +110,41 @@ describe('configuration files', () => {
 
   it('reads past an escaped quote in a quoted dotenv value', () => {
     expect(commentLines('.env.example', ['A="say \\"# not\\"" # one', 'B="open'])).toEqual([1]);
+  });
+});
+
+describe('quoting the scanners read past', () => {
+  it('reads past an escaped quote in a TOML basic string', () => {
+    expect(commentLines('wrangler.toml', ['a = "say \\"hi\\" # not" # one'])).toEqual([1]);
+  });
+
+  it('finds a comment after a subshell, after a << that starts no heredoc, and after a run block that ends in $', () => {
+    const workflow = ['jobs:', '  check:', '    steps:', '      - run: |', '          (cd app && make) # five', '          cat << ; echo # six', '      - run: echo $'];
+    expect(commentLines('.github/workflows/ci.yml', workflow)).toEqual([5, 6]);
+  });
+});
+
+describe('what the comment check cannot read', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('names no check for a format it does not know, so the coverage test can name the file', () => {
+    expect(commentCheckOf('assets/model.glb')).toBeNull();
+  });
+
+  it('fails on a workflow that is not YAML', () => {
+    expect(() => findComments('.github/workflows/ci.yml', 'jobs: [unclosed\n')).toThrow(/^YAML could not be parsed: /);
+  });
+
+  it('fails to list the files of a folder that is no repository, or where git is not installed', () => {
+    const folder = mkdtempSync(path.join(tmpdir(), 'comment-check-outside-'));
+    try {
+      expect(() => filesGitTracksOrWouldTrack(folder)).toThrow(/^git ls-files failed: .*not a git repository/i);
+      vi.stubEnv('PATH', '');
+      expect(() => filesGitTracksOrWouldTrack(folder)).toThrow(/ENOENT/);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 });

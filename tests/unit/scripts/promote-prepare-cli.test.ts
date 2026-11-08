@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { PROMOTION_BODY_FILE } from '../../../scripts/promote-prepare';
+import { PROMOTION_BODY_FILE } from '../../../scripts/promote-prepare-lib';
 import { aGhStandIn, type GhAnswer } from '../../support/ghStandIn';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';

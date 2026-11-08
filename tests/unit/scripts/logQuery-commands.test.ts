@@ -92,6 +92,13 @@ describe('logs:query slow, routes and request', () => {
     expect(rows.find((row) => row.includes('/dashboard'))).toMatch(/\/dashboard\s+-\s+5$/);
   });
 
+  it("keeps only Next.js's page lines for --source next", () => {
+    expect(runLogQuery(['slow', '--source', 'next', '--file', problemLog], now).output.split('\n')).toEqual([
+      stringMatching(/^DURATION\s+STATUS\s+METHOD\s+ROUTE\s+REQUEST\s+LINE$/),
+      stringMatching(/^80ms\s+200\s+GET\s+\/dashboard\s+-\s+5$/),
+    ]);
+  });
+
   it('says no requests match when the filter leaves none', () => {
     expect(runLogQuery(['slow', '--status', '404', '--file', problemLog], now).output).toBe('No requests match.');
     expect(runLogQuery(['routes', '--status', '404', '--file', problemLog], now).output).toBe('No requests match.');

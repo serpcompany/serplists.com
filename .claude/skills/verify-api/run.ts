@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { RUN_KEY_PERMISSIONS } from "../../../src/lib/schemas/runKeyPermissions";
 import { isOwnedDevProcess, readDevSession, stopDevSession } from "../../../scripts/dev-auto-lib";
+import { errorMessage } from "../../../scripts/lib/error-message";
 import { DEV_LOG_PATH } from "../../../scripts/lib/log-mirror";
 import { buildScriptInvocation, killProcessTree, REPO_ROOT } from "../../../scripts/lib/run-tool";
 
@@ -111,7 +112,7 @@ const interpolated = (text: string, answers: readonly unknown[]) =>
 function resolved(value: unknown, answers: readonly unknown[]): unknown {
   if (typeof value === "string") {
     const whole = WHOLE_REFERENCE.exec(value);
-    return whole ? referenced(answers, whole[1] ?? "", whole[2] ?? "") : interpolated(value, answers);
+    return whole ? referenced(answers, String(whole[1]), String(whole[2])) : interpolated(value, answers);
   }
   const list = listSchema.safeParse(value);
   if (list.success) return list.data.map((item) => resolved(item, answers));
@@ -138,7 +139,7 @@ async function signIn(base: string, plan: Plan): Promise<string> {
   });
   const cookie = answer.headers
     .getSetCookie()
-    .map((line) => line.split(";")[0] ?? "")
+    .map((line) => line.replace(/;.*$/, ""))
     .filter(Boolean)
     .join("; ");
   if (!answer.ok || !cookie) {
@@ -226,7 +227,7 @@ async function doctor(server: Server, plan: Plan, secret: string, health: Answer
 }
 
 async function run(name: string, plan: Plan, server: Server, folder: string): Promise<number> {
-  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), text.endsWith("\n") ? text : `${text}\n`);
+  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), `${text}\n`);
   const health = await call(server.base, "GET", "/api/health", {});
   const cookie = await signIn(server.base, plan);
   const lines: string[] = [];
@@ -269,7 +270,7 @@ function readPlan(planFile: string): Plan | string {
   try {
     json = JSON.parse(readFileSync(path.resolve(planFile), "utf8"));
   } catch (error) {
-    return `${planFile} can't be read as JSON: ${error instanceof Error ? error.message : String(error)}`;
+    return `${planFile} can't be read as JSON: ${errorMessage(error)}`;
   }
   const plan = planSchema.safeParse(json);
   if (plan.success) return plan.data;
@@ -307,6 +308,6 @@ async function main(argv: readonly string[]): Promise<number> {
 try {
   process.exitCode = await main(process.argv.slice(2));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exitCode = 1;
 }

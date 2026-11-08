@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { type Git, issuesClosedBy, promotionBody, pullRequestOf, stagingSubjectsSinceTheLastPromotion } from '../../../scripts/promote-prepare';
+import { type Git, issuesClosedBy, promotionBody, pullRequestOf, stagingSubjectsSinceTheLastPromotion } from '../../../scripts/promote-prepare-lib';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
@@ -53,6 +53,12 @@ describe("the promotion pull request's body", () => {
     const body = promotionBody(STAGING, ['docs: a typo (#298)'], bodyOf);
 
     expect(body.split('\n')[0]).toBe('No issue: none of the promoted pull requests closes one.');
+  });
+
+  it('names no pull request when every promoted commit was pushed straight to staging', () => {
+    const body = promotionBody(STAGING, ['chore: pushed straight to staging'], bodyOf);
+
+    expect(body.split('\n').slice(0, 3)).toEqual(['No issue: none of the promoted pull requests closes one.', '', 'Promotes staging 07ec182 to main.']);
   });
 });
 

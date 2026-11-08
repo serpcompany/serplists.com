@@ -1,5 +1,5 @@
 const repositoryApi = () =>
-  `${process.env.GITHUB_API_URL || "https://api.github.com"}/repos/${process.env.GITHUB_REPOSITORY}`;
+  `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}`;
 
 async function request(method, path, body) {
   const response = await fetch(`${repositoryApi()}${path}`, {
@@ -25,6 +25,6 @@ function fail(title, message) {
   process.exit(1);
 }
 
-const failWhenItThrows = (title, main) => main().catch((error) => fail(title, error?.message ?? error));
+const failWhenItThrows = (title, main) => main().catch((error) => fail(title, error.message));
 
 module.exports = { get, post, fail, failWhenItThrows };

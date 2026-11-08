@@ -42,6 +42,13 @@ describe('the generated files check', () => {
     expect(() => scriptCommand(at, 'thing:check')).toThrow(/must be "node --import tsx <script> \[arguments\]"/);
   });
 
+  it('refuses a generator check package.json does not define, and reads one with no arguments', () => {
+    const at = scratchFolder('generated');
+    writeFiles(at, { 'package.json': '{ "scripts": { "thing:check": "node --import tsx scripts/thing.ts" } }\n' });
+    expect(() => scriptCommand(at, 'other:check')).toThrow(`package.json's "other:check" script must be`);
+    expect(scriptCommand(at, 'thing:check')).toEqual({ script: 'scripts/thing.ts', args: [] });
+  });
+
   it('compares the Worker types it regenerates line by line, line endings aside', () => {
     expect(firstDifferentLine('a\nb\nc\n', 'a\r\nb\r\nc\r\n')).toBeUndefined();
     expect(firstDifferentLine('a\nb\nc\n', 'a\nB\nc\n')).toBe(2);

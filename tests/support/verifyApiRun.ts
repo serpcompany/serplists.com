@@ -14,6 +14,7 @@ const repoRoot = process.cwd();
 const script = path.join(repoRoot, '.claude', 'skills', 'verify-api', 'run.ts');
 export const SECRET = 'slrk_verify_api_test_secret';
 export const COOKIE = 'session=verify-api-test-cookie';
+const SECRET_THE_MCP_REFUSES = 'slrk_verify_api_secret_the_mcp_refuses';
 export const SLOW = 60_000;
 const plans = mkdtempSync(path.join(tmpdir(), 'verify-api-plans-'));
 const runFolders: string[] = [];
@@ -58,6 +59,9 @@ function answer(request: IncomingMessage, body: string, response: ServerResponse
     return body.includes('"password123"') ? send(200, { ok: true }, { 'set-cookie': `${COOKIE}; Path=/; HttpOnly` }) : send(401, {});
   }
   if (route === 'POST /api/auth/sign-out') return send(200, { success: true });
+  if (route === 'POST /api/agent-keys' && signedIn && body.includes('"templates:write"')) {
+    return send(201, { key: { id: 'key-1', permissions: ['templates:write'] }, secret: SECRET_THE_MCP_REFUSES });
+  }
   if (route === 'POST /api/agent-keys' && signedIn) {
     return send(201, { key: { id: 'key-1', permissions: ['templates:read', 'runs:read', 'runs:write'] }, secret: SECRET });
   }

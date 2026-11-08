@@ -51,7 +51,7 @@ const isPromotion = (env) =>
 const listed = (paths) => paths.map((path) => `- ${path}`).join("\n");
 
 async function get(path) {
-  const api = `${process.env.GITHUB_API_URL || "https://api.github.com"}/repos/${process.env.GITHUB_REPOSITORY}`;
+  const api = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}`;
   const response = await fetch(`${api}${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -131,7 +131,7 @@ async function changedFiles(number) {
 async function fixTest(env) {
   const branch = env.PR_BRANCH ?? "";
   if (!branch.startsWith("fix/") && !FIX_TITLE.test(env.PR_TITLE ?? "")) return passes("Not a fix.");
-  const changed = await changedFiles(env.PR_NUMBER ?? "");
+  const changed = await changedFiles(env.PR_NUMBER);
   const tests = changed.filter(isTest);
   if (tests.length > 0) return passes(`Changes a test:\n${listed(tests)}`);
   return fails("A fix changes no test.", `Changes no test:\n${listed(changed)}\n\n${FIX_RULE}`);
@@ -167,7 +167,7 @@ async function run(name, env) {
   try {
     return await check(env);
   } catch (error) {
-    return fails(`The ${name} check couldn't finish.`, error instanceof Error ? error.message : String(error));
+    return fails(`The ${name} check couldn't finish.`, error.message);
   }
 }
 

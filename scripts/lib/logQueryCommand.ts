@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { errorMessage } from "./error-message";
 import { buildFilter, filterOptionSpec, linesCommand, parseLimit, QueryError, result, usageError, type CommandResult } from "./logCommandParts";
 import { parseLogText, requestRecords, type LogEntry } from "./logEntries";
 import { formatEntry, formatTable, milliseconds } from "./logFormat";
@@ -177,7 +178,7 @@ export function runLogQuery(argv: string[], nowMs: number): CommandResult {
     try {
       parsed = parseArgs({ args, allowPositionals: true, options: optionSpec });
     } catch (error) {
-      throw usageError(error instanceof Error ? error.message : String(error));
+      throw usageError(errorMessage(error));
     }
     const { values: options, positionals } = parsed;
     if (options.help) return result(usage);

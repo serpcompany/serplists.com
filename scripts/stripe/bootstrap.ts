@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorMessage } from "../lib/error-message";
 import { loadLocalEnv, resolveLiveSecretKey, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env";
 import { bootstrapUsage, describePrice, dryRunReplySchema, ensurePrice, type StripeRequest } from "./_bootstrap-lib";
 import { stripeListOf, stripeProductSchema, type StripeReplySchema } from "./_stripe-objects";
@@ -233,6 +234,6 @@ async function main() {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err));
+  console.error(errorMessage(err));
   process.exit(1);
 });

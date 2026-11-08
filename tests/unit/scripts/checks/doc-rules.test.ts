@@ -88,6 +88,7 @@ describe('pnpm script names', () => {
   it('name a script package.json lacks, in both forms', () => {
     expect(missing('pnpm deploy:preview')).toEqual(['deploy:preview']);
     expect(missing('pnpm run lint:all')).toEqual(['lint:all']);
+    expect(missing('pnpm --filter web lint:web && pnpm --filter=web lint:all && pnpm --silent')).toEqual(['lint:web', 'lint:all']);
   });
 
   it('skip placeholders, and read only the pnpm run form in prose', () => {

@@ -5,6 +5,7 @@ import {
   buildPortableTemplatePackJsonSchema,
 } from "./lib/portableTemplateJsonSchema";
 import { matchesGeneratedText } from "./lib/line-endings";
+import { errorMessage } from "./lib/error-message";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);
 const nextJson = `${JSON.stringify(buildPortableTemplatePackJsonSchema(), null, 2)}\n`;
@@ -37,6 +38,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 });

@@ -16,6 +16,13 @@ describe('finding a command in a package', () => {
     expect(binOfPackageHolding(path.join(at, 'node_modules', 'inner', 'lib', 'index.js'), 'jscpd')).toBe(path.join(at, 'bin', 'jscpd.js'));
   });
 
+  it('takes the one command of a package whose bin is a single script, whatever the command is called', () => {
+    const at = scratchFolder('tools');
+    writeFiles(at, { 'package.json': JSON.stringify({ name: 'knip', bin: 'bin/knip.js' }), 'lib/index.js': '' });
+
+    expect(binOfPackageHolding(path.join(at, 'lib', 'index.js'), 'knip')).toBe(path.join(at, 'bin', 'knip.js'));
+  });
+
   it('says no package holds the command when none above the file names it', () => {
     const at = scratchFolder('tools');
     writeFiles(at, { 'lib/index.js': '', 'package.json': JSON.stringify({ name: 'no-bins' }) });

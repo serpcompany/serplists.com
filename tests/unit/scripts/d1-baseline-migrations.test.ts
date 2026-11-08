@@ -10,9 +10,11 @@ import { runAgainstACloudflareD1StandIn } from "../../support/cloudflareD1StandI
 const SCRIPT = "scripts/d1-baseline-migrations.ts";
 const repoRoot = process.cwd();
 const migrationNames = readdirSync(path.join(repoRoot, "db", "migrations")).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
-const stagingId = readD1Databases(readFileSync(path.join(repoRoot, "wrangler.toml"), "utf8")).topLevel.find(
+const configuredDb = readD1Databases(readFileSync(path.join(repoRoot, "wrangler.toml"), "utf8")).topLevel.find(
   (entry) => entry.binding === "DB",
-)?.preview_database_id ?? "";
+);
+const stagingId = configuredDb?.preview_database_id ?? "";
+const productionId = configuredDb?.database_id ?? "";
 const appliedRowSchema = z.object({ name: z.string() });
 
 const baseline = (args: string[], databases: Record<string, DatabaseSync> = {}) =>
@@ -33,6 +35,20 @@ describe("pnpm run db:migrations:baseline:staging (scripts/d1-baseline-migration
     expect(new Set(run.calls.map((call) => call.databaseId))).toEqual(new Set([stagingId]));
     const applied = staging.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => appliedRowSchema.parse(row).name);
     expect(applied).toEqual(migrationNames.slice(0, 3));
+  });
+
+  it("records every migration on the production database's id, without --preview, only when --allow-production says so", async () => {
+    const production = new DatabaseSync(":memory:");
+
+    const run = await baseline(["--remote", "--allow-production", "--database", "serp-checklists-db", "--through", "latest", "--execute"], {
+      [productionId]: production,
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(`Baselining ${migrationNames.length} migration(s) through latest on PRODUCTION serp-checklists-db (${productionId}):`);
+    expect(new Set(run.calls.map((call) => call.databaseId))).toEqual(new Set([productionId]));
+    const applied = production.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => appliedRowSchema.parse(row).name);
+    expect(applied).toEqual(migrationNames);
   });
 
   it("only lists what it would record without --execute", async () => {

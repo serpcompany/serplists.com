@@ -86,6 +86,16 @@ describe("pnpm run db:migrations:check:staging and :prod, against a D1 API stand
     expect(run.calls).not.toEqual([]);
   });
 
+  it("blocks the deployment when Wrangler succeeds but prints neither verdict, as it does with WRANGLER_LOG=error", async () => {
+    const run = await check(["--database", "DB", "--label", "production"], {
+      [STAND_IN_PRODUCTION_ID]: databaseThatApplied(migrationNames),
+    }, { env: { WRANGLER_LOG: "error" } });
+
+    expect(run.status).toBe(1);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("production D1 migration status was not recognized; deployment is blocked (DB).");
+  });
+
   it("needs --database", async () => {
     const run = await check(["--label", "staging"], {});
 

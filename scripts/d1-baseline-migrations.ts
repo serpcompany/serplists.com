@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseBaselineArgs, readD1Databases, resolveBaselineTarget } from "./d1-baseline-migrations-lib";
+import { errorMessage } from "./lib/error-message";
 import { execTool } from "./lib/run-tool";
 
 const MIGRATION_FILE_PATTERN = /^\d{4}_.+\.sql$/;
@@ -23,17 +24,17 @@ function selectThroughMigration(migrationFiles: string[], throughMigration: stri
     (fileName) =>
       fileName === throughMigration || fileName.startsWith(throughMigration),
   );
-  if (matches.length === 0) {
+  const [selected, ...others] = matches;
+  if (selected === undefined) {
     throw new Error(`No migration matched --through ${throughMigration}`);
   }
-  if (matches.length > 1) {
+  if (others.length > 0) {
     throw new Error(
       `--through ${throughMigration} matched multiple migrations: ${matches.join(", ")}`,
     );
   }
 
-  const selectedIndex = migrationFiles.indexOf(matches[0] ?? "");
-  return migrationFiles.slice(0, selectedIndex + 1);
+  return migrationFiles.slice(0, migrationFiles.indexOf(selected) + 1);
 }
 
 function sqlString(value: string): string {
@@ -119,7 +120,7 @@ let selectedMigrations: string[];
 try {
   selectedMigrations = selectThroughMigration(getMigrationFiles(), throughMigration);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 }
 

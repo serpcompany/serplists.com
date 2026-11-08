@@ -13,6 +13,7 @@ import { parseEnvFile } from "./lib/env-file";
 import { currentProcessStartedAt } from "./lib/process-info";
 import { DEV_LOG_PATH, mirrorOutputToLog } from "./lib/log-mirror";
 import { describeSpawnError, killProcessTree } from "./lib/run-tool";
+import { errorMessage } from "./lib/error-message";
 
 async function main() {
   const baseEnv = { ...parseEnvFile(".dev.vars"), ...process.env };
@@ -72,6 +73,6 @@ async function main() {
 
 main().catch((error: unknown) => {
   releaseDevSession({ pid: process.pid });
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 });

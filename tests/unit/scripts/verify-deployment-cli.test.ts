@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SIGN_IN_PATH } from '../../../scripts/verify-deployment';
+import { SIGN_IN_PATH } from '../../../scripts/verify-deployment-lib';
 import { stringContaining } from '../../support/asymmetricMatchers';
 import { whileServingLocally } from '../../support/localHttpServer';
 import { runRepositoryScript, runRepositoryScriptWhileServing } from '../../support/repositoryScriptRun';

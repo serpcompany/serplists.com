@@ -30,6 +30,10 @@ describe('jscpd over the folders that hold code', { timeout: 60_000 }, () => {
     ]);
   });
 
+  it('stops with what jscpd said when it writes no report, as for a folder that is not there', () => {
+    expect(() => findDuplicates(scratchFolder('duplicates'), ['src'])).toThrow(/^jscpd wrote no report \(exit 1\): [^]*ENOENT/);
+  });
+
   it('passes code that says each thing once', () => {
     expect(duplicatesIn({ 'src/only.ts': repeated('uniqueRows'), 'src/other.ts': 'export const greeting = (name: string) => `Hello, ${name}`;\n' })).toEqual([]);
   });

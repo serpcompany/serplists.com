@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { firstOf } from "../../support/elements";
 import { listeningPort } from "../../support/listeningPort";
 import {
@@ -365,28 +365,35 @@ describe("isOwnedDevProcess", () => {
 
 describe("stopDevSession", () => {
   const session = { port: 3001, pid: 1111, startedAt: 1_000 };
+  const sessions = mkdtempSync(path.join(tmpdir(), "dev-stop-sessions-"));
+  afterAll(() => rmSync(sessions, { recursive: true, force: true }));
+  const aRecordedSession = () => {
+    const sessionPath = path.join(mkdtempSync(path.join(sessions, "checkout-")), "dev-session.json");
+    writeDevSession(session, sessionPath);
+    return sessionPath;
+  };
 
   it("kills the recorded launcher's process tree and clears the session", async () => {
     const isOwned = vi.fn(async () => true);
     const killTree = vi.fn();
-    const removeSession = vi.fn();
+    const sessionPath = aRecordedSession();
 
-    const result = await stopDevSession({ session, isOwned, killTree, removeSession });
+    const result = await stopDevSession({ session, isOwned, killTree, sessionPath });
 
     expect(isOwned).toHaveBeenCalledWith(1111, 1_000);
     expect(killTree).toHaveBeenCalledWith(1111);
-    expect(removeSession).toHaveBeenCalledTimes(1);
+    expect(existsSync(sessionPath)).toBe(false);
     expect(result).toEqual({ stopped: [1111], skipped: [], failed: [] });
   });
 
-  it("skips a pid that is no longer the launcher, and reports a failed kill", async () => {
-    const removeSession = vi.fn();
-
-    expect(await stopDevSession({ session, isOwned: async () => false, killTree: vi.fn(), removeSession })).toEqual({
+  it("skips a pid that is no longer the launcher, and reports a failed kill, clearing the session both times", async () => {
+    const skippedPath = aRecordedSession();
+    expect(await stopDevSession({ session, isOwned: async () => false, killTree: vi.fn(), sessionPath: skippedPath })).toEqual({
       stopped: [],
       skipped: [1111],
       failed: [],
     });
+    const failedPath = aRecordedSession();
     expect(
       await stopDevSession({
         session,
@@ -394,14 +401,14 @@ describe("stopDevSession", () => {
         killTree: () => {
           throw new Error("Access is denied.");
         },
-        removeSession,
+        sessionPath: failedPath,
       }),
     ).toEqual({ stopped: [], skipped: [], failed: [{ pid: 1111, message: "Access is denied." }] });
-    expect(removeSession).toHaveBeenCalledTimes(2);
+    expect([existsSync(skippedPath), existsSync(failedPath)]).toEqual([false, false]);
   });
 
   it("clears the session even when the ownership check throws", async () => {
-    const removeSession = vi.fn();
+    const sessionPath = aRecordedSession();
 
     await expect(
       stopDevSession({
@@ -410,9 +417,9 @@ describe("stopDevSession", () => {
           throw new Error("boom");
         },
         killTree: vi.fn(),
-        removeSession,
+        sessionPath,
       }),
     ).rejects.toThrow("boom");
-    expect(removeSession).toHaveBeenCalledTimes(1);
+    expect(existsSync(sessionPath)).toBe(false);
   });
 });

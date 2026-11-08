@@ -125,6 +125,11 @@ typescriptRuleTester().run('navigate-while-visit-is-current', navigateWhileVisit
       errors: [ungatedCallback('router.replace')],
     },
     {
+      name: 'a move in a .then() callback inside a function called where it is written',
+      code: '(() => {\n  load().then(() => router.push(next));\n})();',
+      errors: [ungatedCallback('router.push')],
+    },
+    {
       name: 'a move in a .then() callback after an await, reported once',
       code: handler('await save();\nrefresh().then(() => router.push(next));'),
       errors: [ungated('router.push')],

@@ -10,7 +10,8 @@ type Wrapper = { name: string; index: number; variable: Scope.Variable; target: 
 const FILE_READERS = new Set(["readFileSync", "readFile", "createReadStream"]);
 const FOLDER_READERS = new Set(["readdirSync", "readdir", "opendirSync", "opendir", "globSync", "glob"]);
 const PATH_BUILDERS = new Set(["join", "resolve", "normalize"]);
-const SOURCE_FOLDERS = new Set(["src", "functions"]);
+const SOURCE_FOLDERS: ReadonlySet<string | undefined> = new Set(["src", "functions"]);
+const LEADING_SEGMENTS: ReadonlySet<string | undefined> = new Set(["", ".", ".."]);
 const SOURCE_ALIASES: ReadonlyArray<readonly [string, string]> = [
   ["@/", "src/"],
   ["@functions/", "functions/"],
@@ -66,12 +67,13 @@ function loopSource(sourceCode: SourceCode, variable: Scope.Variable | null): ES
   return loop?.type === "ForOfStatement" && loop.left === definition.parent ? loop.right : null;
 }
 
-const pathFunction = (node: ESTree.Node | null): ESTree.ArrowFunctionExpression | null =>
-  node?.type === "ArrowFunctionExpression" &&
-  node.body.type !== "BlockStatement" &&
-  node.params.every((param) => param.type === "Identifier")
-    ? node
-    : null;
+type PathFunction = { body: ESTree.Expression; params: ESTree.Identifier[] };
+
+function pathFunction(node: ESTree.Node | null): PathFunction | null {
+  if (node?.type !== "ArrowFunctionExpression" || node.body.type === "BlockStatement") return null;
+  const params = node.params.flatMap((param) => (param.type === "Identifier" ? [param] : []));
+  return params.length === node.params.length ? { body: node.body, params } : null;
+}
 
 const combine = (parts: readonly string[][]) =>
   parts.reduce<string[]>(
@@ -121,7 +123,7 @@ function createEvaluator(sourceCode: SourceCode) {
         const scope = sourceCode.getScope(local.body);
         const inner: Bindings = new Map(bindings);
         local.params.forEach((param, index) => {
-          const variable = param.type === "Identifier" ? findVariable(scope, param.name) : null;
+          const variable = findVariable(scope, param.name);
           if (variable) inner.set(variable, next(node.arguments[index]));
         });
         return next(local.body, inner);
@@ -141,10 +143,10 @@ const firstSourcePath = (texts: readonly string[], options: { folderIsSource: bo
 function sourcePathNamedBy(text: string, { folderIsSource }: { folderIsSource: boolean }): string | null {
   const segments = text.replace(/\\/g, "/").split("/");
   let start = 0;
-  while (start < segments.length && ["", ".", ".."].includes((segments[start] ?? "").replaceAll(UNKNOWN, ""))) start += 1;
-  if (start >= segments.length || !SOURCE_FOLDERS.has(segments[start] ?? "")) return null;
+  while (LEADING_SEGMENTS.has(segments[start]?.replaceAll(UNKNOWN, ""))) start += 1;
+  if (!SOURCE_FOLDERS.has(segments[start])) return null;
   const named = segments.slice(start).join("/").replaceAll(UNKNOWN, "*");
-  const last = segments.at(-1) ?? "";
+  const last = segments.slice(-1).join("");
   const knownEnd = last.slice(last.lastIndexOf(UNKNOWN) + 1);
   if (last.includes(UNKNOWN) && !NAMED_FILE.test(knownEnd)) return named;
   if (!NAMED_FILE.test(knownEnd)) return folderIsSource ? named : null;

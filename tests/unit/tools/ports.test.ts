@@ -154,6 +154,13 @@ describe('the ports of a checkout', () => {
     expect(ports(main, ['delete']).stdout).toContain('This checkout uses the main ports');
   }, SLOW);
 
+  it('delete and prune have nothing to give up in a repository whose worktrees never asked for a block', () => {
+    const main = repository();
+    const fresh = worktree(main, 'fresh');
+    expect(ports(fresh, ['delete']).stdout.trim()).toBe('Nothing to give up.');
+    expect(ports(main, ['prune']).stdout.trim()).toBe('Nothing to give up.');
+  }, SLOW);
+
   it("prune gives up a block whose worktree's folder is gone, and no other", () => {
     const { main, one, other } = twoWorktreesWithTheirBlocks();
     rmSync(one, { recursive: true, force: true });
@@ -285,6 +292,7 @@ describe('a command run with a role', () => {
   it("ends with the command's own status, and fails when the command can't start", () => {
     const main = repository();
     expect(ports(main, ['run', 'dev', '--', 'node', helper(main, 'exit-7.mjs', 'process.exit(7);')]).status).toBe(7);
+    expect(ports(main, ['run', 'dev', '--', 'node', helper(main, 'killed.mjs', "process.kill(process.pid, 'SIGKILL');")]).status).toBe(1);
     const absent = ports(main, ['run', 'dev', '--', 'serplists-no-such-command']);
     expect(absent.status).not.toBe(0);
     expect(absent.stdout).toBe('');

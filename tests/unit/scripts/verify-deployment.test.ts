@@ -3,7 +3,7 @@ import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment';
+import { SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment-lib';
 import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 import { listeningPort } from '../../support/listeningPort';
 
@@ -133,6 +133,14 @@ describe('the smoke test of a new deployment', () => {
     expect(exitCode).toBe(1);
     expect(output).toContain(`::error::GET ${BASE_URL}/api/templates answered ${status}, not 200`);
     expect(callsTo(calls, 'GET /api/templates')).toHaveLength(6);
+  });
+
+  it('fails when the release page keeps answering something other than 200', async () => {
+    const { exitCode, output, calls } = await smokeTest({ 'GET /about/': [{ status: 500 }] });
+
+    expect(exitCode).toBe(1);
+    expect(output).toContain(`::error::GET ${BASE_URL}/about/ answered 500, not 200`);
+    expect(callsTo(calls, 'GET /about/')).toHaveLength(6);
   });
 
   it('fails when /api/health answers something other than 200', async () => {

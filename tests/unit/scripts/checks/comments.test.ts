@@ -55,6 +55,15 @@ describe('the comment check', { timeout: 60_000 }, () => {
     ).toEqual([]);
   });
 
+  it('shows the first 77 characters of a long line that holds a comment, with the line ending left off', async () => {
+    const longLine = `export const message = '${'x'.repeat(80)}'; // why`;
+
+    expect(await commentsIn({ 'src/long.ts': `${longLine}\r\n`, 'config.yml': 'a: 1\r\n  # why\r\n' })).toEqual([
+      `src/long.ts:1  ${longLine.slice(0, 77)}...`,
+      'config.yml:2  # why (YAML)',
+    ]);
+  });
+
   it('fails a file it cannot parse, rather than passing it unread', async () => {
     const problems = await commentsIn({ 'src/broken.ts': 'export const = ;\n', 'src/broken.css': '.a { content: "unclosed }\n' });
     expect(problems).toEqual([

@@ -4,7 +4,7 @@ import {
   checkSiteStandards,
   checkSiteStandardsUntilItPasses,
   SMOKE_TEST_HEADER,
-} from '../../../scripts/check-site-standards';
+} from '../../../scripts/check-site-standards-lib';
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 import { deployedWorkerWithTheBuiltRedirects } from '../../support/siteFollowingTheStandards';
 
@@ -41,6 +41,22 @@ describe('check-site-standards', () => {
     });
     expect(stagingAsProduction.failed).toBeGreaterThan(0);
     expect(stagingAsProduction.lines).toContain('FAIL robots.txt allows crawling');
+  });
+
+  it('fails a page sitemap that lists an unslashed or non-canonical page URL, naming it', async () => {
+    const site = await deployedWorkerWithTheBuiltRedirects('production');
+    const unslashed = '<urlset><url><loc>https://serplists.com/about</loc></url><url><loc>https://serplists.com/</loc></url></urlset>';
+
+    const result = await checkSiteStandards({
+      baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+      siteEnv: 'production',
+      request: async (url, options) =>
+        new URL(url).pathname === '/sitemaps/pages/1.xml' ? { status: 200, location: null, headers: {}, body: unslashed } : site(url, options),
+    });
+
+    expect(result.lines.filter((line) => line.startsWith('FAIL'))).toEqual([
+      'FAIL /sitemaps/pages/1.xml lists 2 slashed page URLs; not canonical: https://serplists.com/about',
+    ]);
   });
 
   it.each([403, 404, 503])('fails a site whose Template list answers %i, as an access policy or a missing binding would make it', async (templatesStatus) => {

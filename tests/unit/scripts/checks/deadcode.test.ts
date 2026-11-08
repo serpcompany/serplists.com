@@ -20,4 +20,8 @@ describe('the dead code check', { timeout: 60_000 }, () => {
   it('passes code that is all used', () => {
     expect(findDeadCode(project({}))).toEqual([]);
   });
+
+  it('stops with what knip said when it cannot finish, rather than passing or reporting its error as dead code', () => {
+    expect(() => findDeadCode(project({ 'knip.json': '{ not json\n' }))).toThrow(/^knip could not finish \(exit 2\): [^]*knip\.json/);
+  });
 });

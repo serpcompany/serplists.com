@@ -75,7 +75,7 @@ describe('parseLogText', () => {
   });
 
   it('skips output that is not a log line, including JSON without a level and event', () => {
-    const entries = parseLogText(['ready in 2.1s', '{"compiled":true}', '{ not json', apiLine({ message: 'health' })].join('\n'));
+    const entries = parseLogText(['ready in 2.1s', '{"compiled":true}', '{ not json', '{ braces but not json }', apiLine({ message: 'health' })].join('\n'));
 
     expect(entries.map((entry) => entry.event)).toEqual(['health']);
   });
@@ -115,7 +115,9 @@ describe('filters', () => {
 
     expect(parseSince('15m', now)).toBe(Date.parse('2026-09-30T18:45:00.000Z'));
     expect(parseSince('2026-09-30T18:00:00Z', now)).toBe(Date.parse('2026-09-30T18:00:00.000Z'));
+    expect(parseSince('2d', now)).toBe(Date.parse('2026-09-28T19:00:00.000Z'));
     expect(() => parseSince('yesterday', now)).toThrow('--since');
+    expect(() => parseSince('1.5h', now)).toThrow('--since');
   });
 
   it('matches a path as plain text, or as a /regex/', () => {
