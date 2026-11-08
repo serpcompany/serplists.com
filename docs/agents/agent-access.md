@@ -126,13 +126,12 @@ out of one over its model's budget: 10,000 tokens plus 20%, which it counts at 4
 or 48,000 bytes. 32KB is 8,192 of Codex's tokens, and about 16,000 real ones even at 2 bytes
 a token (JSON dense with ids, or text in other scripts). The tool descriptions name the bound.
 
-Every page is built to fit and checked again, so a mistake can only fail a read. The
-dispatcher checks each result once more. A read over the bound fails with
-`result_too_large`. A write over it is logged (`mcp_result_too_large`) and returned anyway:
-it has already committed, and an agent retries a failure (a retried `start_run` makes a
-second run).
+Every page is built to fit: it packs whole entries into the room its frame and cursor leave,
+and splits an entry too large for that room into parts. A read that cannot fit even one part
+fails with `result_too_large`.
 
-So a write never reports failure after it commits. Its result shrinks instead: the whole run
+A write never reports failure after it commits, since an agent retries a failure (a retried
+`start_run` makes a second run). Its result shrinks instead: the whole run
 or template when it fits, otherwise its fields with `sectionsOmitted` (`taskOmitted` from
 `update_run`), down to its id, title, and version or revision. `start_run` builds its result
 before it writes. A template write reads the template back, and when that read fails

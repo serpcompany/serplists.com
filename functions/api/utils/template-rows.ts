@@ -11,11 +11,8 @@ import { normalizeSectionsPayload } from './payloads';
 import { normalizeStringArray } from '../../../src/lib/schemas/jsonArrays';
 import { readRequiredTools } from '../../../src/lib/schemas/requiredTools';
 import { withStableTemplateIdentities } from './template-identities';
-import { isMissingRulesColumnError } from './template-writes';
 
 export type TemplateDb = ReturnType<typeof createDb>;
-
-type QueryResult<T> = PromiseLike<T> | T;
 
 type TemplateRow = typeof schema.templates.$inferSelect;
 type TemplateOwnerColumns = Pick<TemplateRow, 'owner_type' | 'team_id' | 'user_id'> & {
@@ -54,7 +51,7 @@ export function templateOwnerOf(template: TemplateOwnerColumns): TemplateOwner {
   };
 }
 
-export function getTemplateSelectColumns(includeRules: boolean, includeRequiredTools = false) {
+export function getTemplateSelectColumns(includeRequiredTools = false) {
   const { templates } = schema;
 
   return {
@@ -68,7 +65,7 @@ export function getTemplateSelectColumns(includeRules: boolean, includeRequiredT
     type: templates.type,
     seo_title: templates.seo_title,
     seo_description: templates.seo_description,
-    ...(includeRules ? { rules: templates.rules } : {}),
+    rules: templates.rules,
     ...(includeRequiredTools ? { required_tools: templates.required_tools } : {}),
     owner_type: templates.owner_type,
     team_id: templates.team_id,
@@ -84,25 +81,9 @@ export function getTemplateSelectColumns(includeRules: boolean, includeRequiredT
   };
 }
 
-export async function withRulesColumnFallback<T>(
-  operation: (includeRules: boolean) => QueryResult<T>,
-): Promise<T> {
-  try {
-    return await operation(true);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    return operation(false);
-  }
-}
-
 export async function findTemplateById(db: TemplateDb, templateId: string) {
   const { templates } = schema;
-  const [template] = await withRulesColumnFallback((includeRules) =>
-    db.select(getTemplateSelectColumns(includeRules, true)).from(templates).where(eq(templates.id, templateId)).limit(1),
-  );
+  const [template] = await db.select(getTemplateSelectColumns(true)).from(templates).where(eq(templates.id, templateId)).limit(1);
   return template;
 }
 
@@ -161,6 +142,6 @@ export function selectWithTemplateOwner<Fields extends SelectedFields>(db: Templ
     .leftJoin(teams, and(eq(templates.owner_type, 'team'), eq(teams.id, templates.team_id)));
 }
 
-export function selectTemplatesWithOwner(env: Env, includeRules = true, includeRequiredTools = false) {
-  return selectWithTemplateOwner(createDb(env), getTemplateSelectColumns(includeRules, includeRequiredTools));
+export function selectTemplatesWithOwner(env: Env, includeRequiredTools = false) {
+  return selectWithTemplateOwner(createDb(env), getTemplateSelectColumns(includeRequiredTools));
 }

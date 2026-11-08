@@ -106,6 +106,17 @@ describe('Uploads Handler file types', () => {
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 
+  it('stores a file named without an extension under a key without one, offering it for download by its name', async () => {
+    const { env, response } = await uploadAs('template-files', 'checklist', 'text/csv');
+
+    expect(response.status).toBe(200);
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
+      stringMatching(/^template-files\/user-123\/[0-9a-f-]+$/),
+      anything(),
+      objectContaining({ httpMetadata: objectContaining({ contentDisposition: 'attachment; filename="checklist"' }) }),
+    );
+  });
+
   it('tells browsers not to guess the type of a stored file', async () => {
     const env = uploadEnv([{ key: 'template-images/u/a.png', bytes: new Uint8Array([1]), contentType: 'image/png', etag: 'etag' }]);
 

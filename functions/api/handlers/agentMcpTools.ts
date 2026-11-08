@@ -111,7 +111,7 @@ export function parseToolArguments<Arguments>(
     message: issue.message,
   }));
   const message = issues.map(({ path, message: text }) => (path ? `${path}: ${text}` : text)).join("; ");
-  throw new ToolError(message || "Invalid arguments", "invalid_arguments", { issues });
+  throw new ToolError(message, "invalid_arguments", { issues });
 }
 
 const nullClearsAFormAnswer: NullIsAValue = (args, name) => name === "answer" && args["operation"] === "set_form_answer";
@@ -268,10 +268,6 @@ export const toolDefinitions = [
   },
 ] as const;
 
-export function isReadOnlyTool(name: string): boolean {
-  return toolDefinitions.some((tool) => tool.name === name && tool.annotations.readOnlyHint);
-}
-
 type ToolName = (typeof toolDefinitions)[number]["name"];
 
 const toolPermissions: Record<ToolName, RunKeyPermission> = {
@@ -285,12 +281,15 @@ const toolPermissions: Record<ToolName, RunKeyPermission> = {
   update_run: "runs:write",
 };
 
-export function toolPermission(name: string): RunKeyPermission | undefined {
-  const tool = toolDefinitions.find((definition) => definition.name === name);
-  return tool ? toolPermissions[tool.name] : undefined;
+export function toolNamed(name: string): ToolName | undefined {
+  return toolDefinitions.find((definition) => definition.name === name)?.name;
+}
+
+export function toolPermission(tool: ToolName): RunKeyPermission {
+  return toolPermissions[tool];
 }
 
 export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {
-  const permission = toolPermission(name);
-  return permission !== undefined && permissions.includes(permission);
+  const tool = toolNamed(name);
+  return tool !== undefined && permissions.includes(toolPermission(tool));
 }

@@ -1,5 +1,4 @@
 import {
-  bounded,
   boundedText,
   byteSize,
   continuePage,
@@ -71,13 +70,13 @@ function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: RetiredEn
   const longestCursor = encodeCursor({ t: paged.id, v: paged.version, ...cursorScope, u: entries.length, o: Number.MAX_SAFE_INTEGER });
   const frame = { run: paged.ref, retiredItems: [], retiredCount: entries.length, firstRetired: entries.length, nextCursor: longestCursor };
   const packed = pack(entries.map(unitOf), start, roomForUnits(frame));
-  return bounded({
+  return {
     run: paged.ref,
     retiredItems: entries.slice(packed.first, packed.first + packed.count),
     retiredCount: entries.length,
     firstRetired: packed.first,
     ...partAndNextCursor(paged, packed, cursorScope, (unit) => ({ of: "retiredItem", index: unit })),
-  });
+  };
 }
 
 function retiredHolds(view: RunView, scope: SectionAndTaskIds): boolean {

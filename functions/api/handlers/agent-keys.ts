@@ -75,12 +75,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       return invalidPayloadResponse(parsed.error, "Invalid key payload");
     }
 
-    let secret: Awaited<ReturnType<typeof createPersonalRunKeySecret>>;
-    try {
-      secret = await createPersonalRunKeySecret();
-    } catch {
-      return jsonError("Unable to create personal run key", 500);
-    }
+    const secret = await createPersonalRunKeySecret();
 
     const record = {
       id: crypto.randomUUID(),

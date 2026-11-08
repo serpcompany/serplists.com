@@ -60,4 +60,11 @@ describe("saves the run accepts", () => {
     const [section] = storedSectionsIn(storedRun().items);
     expect(section?.items).toEqual([objectContaining({ id: "task-1", isCompleted: true })]);
   });
+
+  it("saves sections over stored content that cannot be read", async () => {
+    database.run("UPDATE checklist_runs SET items = 'not json' WHERE id = 'run-1'");
+
+    expect(await save({ sections: storedSectionsIn(STORED_ITEMS), expected_revision: 1 })).toBeNull();
+    expect(storedSectionsIn(storedRun().items).map(({ id }) => id)).toEqual(["section-1"]);
+  });
 });

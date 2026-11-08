@@ -59,7 +59,6 @@ export async function startRun(
   const limit = await assertActiveRunCapacity(env, owner);
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
-  if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
   const sections = resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)));
   assertRunContentFits(sections);
 
@@ -79,7 +78,7 @@ export async function startRun(
     started_by_user_id: identity.userId,
     created_at: now,
     updated_at: now,
-    template_version: typeof template.content_version === "number" ? template.content_version : 1,
+    template_version: template.content_version,
     revision: 1,
     retired_items: "[]",
   };
@@ -158,7 +157,7 @@ export async function updateRun(
   const args = parseUpdateRunArguments(rawArguments);
 
   const existing = await getOwnedRun(env, identity.userId, args.runId);
-  const currentRevision = typeof existing.revision === "number" ? existing.revision : 1;
+  const currentRevision = existing.revision;
   if (args.expectedRevision !== currentRevision) {
     throw new ToolError("Run changed since it was loaded; fetch it again before updating", "edit_conflict", {
       expectedRevision: args.expectedRevision,

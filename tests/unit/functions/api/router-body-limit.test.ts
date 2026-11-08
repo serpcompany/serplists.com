@@ -174,6 +174,7 @@ describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
   it.each([
     ['no Content-Length', {}],
     ['a malformed Content-Length', { 'Content-Length': 'lots' }],
+    ['a Content-Length too large to count exactly', { 'Content-Length': '99999999999999999999' }],
   ])('refuses an upload streamed with %s before the handler parses it, since counting it would buffer up to 51MB', async (_label, headers) => {
     const response = await send(
       request('POST', 'uploads', {

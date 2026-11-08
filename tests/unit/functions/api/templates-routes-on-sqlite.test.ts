@@ -59,6 +59,19 @@ describe("template routes that name no Template", () => {
   });
 });
 
+describe("template writes whose body is not JSON", () => {
+  it.each([
+    ["POST", "templates"],
+    ["POST", "templates/template-1/transfer"],
+    ["PUT", "templates/template-1"],
+  ])("answer %s /api/%s with 400 and change no Template", async (method, path) => {
+    const request = new Request(`http://localhost/api/${path}`, { method, body: "{not json" });
+
+    expect(await refusal(request)).toEqual({ status: 400, error: "Invalid JSON payload" });
+    expect(templateDeletedAt(database, "template-1")).toEqual([{ deleted_at: null }]);
+  });
+});
+
 describe("deleting and restoring a Template the user may not change", () => {
   it.each([
     ["DELETE", "templates/template-missing", "Template not found or unauthorized"],

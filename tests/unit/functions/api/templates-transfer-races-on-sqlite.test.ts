@@ -42,6 +42,18 @@ describe("moving a Personal Template to an Organization when another write lands
     expect(templateOwner()).toEqual([{ owner_type: "user", team_id: null, version: 2 }]);
   });
 
+  it("answers 409 naming no version when the Template is removed meanwhile", async () => {
+    database.beforeNextBatch(async () => {
+      database.run("DELETE FROM templates WHERE id = 'template-1'");
+    });
+
+    expect(await transfer({ teamId: "team-1", expected_version: 1 })).toMatchObject({
+      status: 409,
+      body: { code: "edit_conflict", details: { expectedVersion: 1, currentVersion: null } },
+    });
+    expect(templateOwner()).toEqual([]);
+  });
+
   it("answers with the Template limit when the Free Organization fills up meanwhile", async () => {
     database.beforeNextBatch(async () => {
       insertOrganizationTemplate(database, { id: "template-team", deletedAt: null });

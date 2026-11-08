@@ -25,7 +25,7 @@ import {
   newTemplateResponse,
   type NewTemplateRows,
 } from '../utils/template-insert';
-import { getTemplateSelectColumns, withRulesColumnFallback, type TemplateDb } from '../utils/template-rows';
+import { getTemplateSelectColumns, type TemplateDb } from '../utils/template-rows';
 import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
 
 const cloneOptionsSchema = z.object({
@@ -77,13 +77,11 @@ export async function cloneTemplate(
     if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, currentCount);
   }
 
-  const [source] = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules, true))
-      .from(templates)
-      .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
-      .limit(1),
-  );
+  const [source] = await db
+    .select(getTemplateSelectColumns(true))
+    .from(templates)
+    .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
+    .limit(1);
 
   if (!source || !source.is_public) {
     return jsonError('Template not found', 404);
@@ -106,7 +104,7 @@ export async function cloneTemplate(
       type: source.type,
       seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
       seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
-      rules: typeof source.rules === 'string' ? source.rules : null,
+      rules: source.rules,
       required_tools: toStoredRequiredTools(readRequiredTools(source.required_tools)),
       items: withStableItemsColumn(source.items),
       version: 1,

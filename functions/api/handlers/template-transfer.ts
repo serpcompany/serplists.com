@@ -5,7 +5,7 @@ import type { Env } from '../types';
 import { schema } from '../db';
 import { buildAuditEventValues, buildTemplateVersionValues, type AuditSubject } from '../utils/audit';
 import { getEntitlementsForContext } from '../utils/entitlements';
-import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
 import { batchWriteMissed } from '../utils/guarded-writes';
 import { json, jsonError } from '../utils/response';
 import { assertTeamTemplateCreateAccess, canViewPrivateTemplate } from '../utils/template-permissions';
@@ -103,8 +103,7 @@ export async function transferTemplate(
     eq(templates.version, currentVersion),
   ];
   if (capacity) stillTransferable.push(templateCapacityAvailableSql(capacity));
-  const guard = and(...stillTransferable);
-  if (!guard) return jsonError('Template not found', 404);
+  const guard = allConditions(...stillTransferable);
 
   const versionValues = await buildTemplateVersionValues({
     templateId,

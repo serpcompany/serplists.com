@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
-import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
+import { reconcileRunSections, summarizeRetiredEntries } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
 import { objectContaining } from '../../../support/asymmetricMatchers';
 
@@ -124,5 +124,29 @@ describe('retired run work', () => {
     expect(taskIn(sectionsOf(result), 0, 0)).toEqual(objectContaining({ id: 'item-dns', isCompleted: false }));
     expect(taskIn(sectionsOf(result), 0, 0)).not.toHaveProperty('notes');
     expect(result.retired.slice(0, unreadable.length)).toEqual(unreadable);
+  });
+});
+
+describe('the summary of work a Template change retires from a run', () => {
+  it('names a removed Sub-task and an untitled task, under a section and task that have no titles', () => {
+    const tent = { id: 'st1', title: 'Tent', isCompleted: true };
+    const untitled = { id: 't2', isCompleted: true };
+    const previous = [{
+      id: 's1',
+      title: 'Camp',
+      items: [{ id: 't1', title: 'Pack', contents: [{ type: 'subItems', value: '', subItems: [tent] }] }, untitled],
+    }];
+    const template = [{ id: 's1', items: [{ id: 't1' }] }];
+
+    const { newlyRetired } = reconcileRunSections(previous, template, []);
+
+    expect(newlyRetired).toEqual([
+      { kind: 'subItem', sectionId: 's1', itemId: 't1', subItem: tent },
+      { kind: 'item', sectionId: 's1', item: untitled },
+    ]);
+    expect(summarizeRetiredEntries(newlyRetired)).toEqual([
+      { kind: 'subItem', id: 'st1', title: 'Tent' },
+      { kind: 'item', id: 't2', title: '' },
+    ]);
   });
 });

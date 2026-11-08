@@ -67,6 +67,9 @@ const withOptionIds = (field: FormFieldRecord): FormFieldRecord =>
 const optionsNeedIds = (field: FormFieldRecord): boolean =>
   Array.isArray(field.options) && JSON.stringify(withOptionIds(field).options) !== JSON.stringify(field.options);
 
+const SECTION_WITHOUT_ID = 'Every template section requires a stable id';
+const itemWithoutId = (sectionId: string) => `Every item in section ${sectionId} requires a stable id`;
+
 export function validateStableTemplateIdentities(sections: unknown[]): string | null {
   const sectionIds = new Set<string>();
   const itemIds = new Set<string>();
@@ -74,25 +77,27 @@ export function validateStableTemplateIdentities(sections: unknown[]): string | 
   const fieldIds = new Set<string>();
 
   for (const section of sections) {
+    if (!isSectionRecord(section)) return SECTION_WITHOUT_ID;
     const sectionId = getId(section);
-    if (!sectionId) return 'Every template section requires a stable id';
+    if (!sectionId) return SECTION_WITHOUT_ID;
     if (sectionIds.has(sectionId)) return `Duplicate section id: ${sectionId}`;
     sectionIds.add(sectionId);
 
-    for (const item of isSectionRecord(section) ? getArray(section.items) : []) {
+    for (const item of getArray(section.items)) {
+      if (!isTaskRecord(item)) return itemWithoutId(sectionId);
       const itemId = getId(item);
-      if (!itemId) return `Every item in section ${sectionId} requires a stable id`;
+      if (!itemId) return itemWithoutId(sectionId);
       if (itemIds.has(itemId)) return `Duplicate item id: ${itemId}`;
       itemIds.add(itemId);
 
-      for (const subItem of isTaskRecord(item) ? getSubItems(item) : []) {
+      for (const subItem of getSubItems(item)) {
         const subItemId = getId(subItem);
         if (!subItemId) return `Every sub-item in item ${itemId} requires a stable id`;
         if (subItemIds.has(subItemId)) return `Duplicate sub-item id: ${subItemId}`;
         subItemIds.add(subItemId);
       }
 
-      for (const field of isTaskRecord(item) ? getFormFields(item) : []) {
+      for (const field of getFormFields(item)) {
         const fieldId = getId(field);
         if (!fieldId) return `Every form field in item ${itemId} requires a stable id`;
         if (fieldIds.has(fieldId)) return `Duplicate form field id: ${fieldId}`;
@@ -143,27 +148,18 @@ function matchSiblingIdentities<Sibling extends ChecklistNodeRecord>(
     usedPrevious.add(previousIndex);
   });
 
-  matches.forEach((match, currentIndex) => {
-    if (match.id) return;
+  return matches.map((match, currentIndex) => {
+    if (match.id) return { record: match.record, id: match.id, previousIndex: match.previousIndex };
     if (
       previousRaw[currentIndex]
       && !usedPrevious.has(currentIndex)
       && !getId(previousRaw[currentIndex])
     ) {
-      match.id = getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex);
-      match.previousIndex = currentIndex;
       usedPrevious.add(currentIndex);
-      return;
+      return { record: match.record, id: getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex), previousIndex: currentIndex };
     }
-    match.id = getId(match.record) ?? fallbackId(currentIndex);
-    match.previousIndex = null;
+    return { record: match.record, id: getId(match.record) ?? fallbackId(currentIndex), previousIndex: null };
   });
-
-  return matches.map((match, index) => ({
-    record: match.record,
-    id: match.id ?? fallbackId(index),
-    previousIndex: match.previousIndex,
-  }));
 }
 
 const previousAt = <Sibling>(previous: Sibling[], previousIndex: number | null): Sibling | undefined =>
@@ -304,8 +300,7 @@ function stableRecordAt<Stable>(stable: Stable[], index: number, kind: 'section'
 }
 
 export function withStableItemsColumn(items: string): string {
-  const { sections, error } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
-  if (error) return items;
+  const { sections } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
   const stableSections = withStableTemplateIdentities(sections);
   return stableSections === sections ? items : JSON.stringify(stableSections);
 }

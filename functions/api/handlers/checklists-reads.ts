@@ -33,7 +33,7 @@ async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checkl
   if (!checklist || !(await canViewRunHistory(env, checklist, userId))) {
     return jsonError('Checklist not found', 404);
   }
-  const subject = getRunSubject(checklist, userId);
+  const subject = getRunSubject(checklist);
 
   const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
   const hideActor = await findHiddenShareLinkActors(env, {

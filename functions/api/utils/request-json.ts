@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { jsonError } from './response';
+import { firstIssueOf } from './zod-issues';
 
 type Refusal = { response: Response };
 
@@ -13,7 +14,7 @@ export async function readJsonBody(request: Request): Promise<{ body: unknown } 
 }
 
 export function invalidPayloadResponse(error: z.ZodError, fallbackMessage: string): Response {
-  return jsonError(error.issues[0]?.message || fallbackMessage, 400);
+  return jsonError(firstIssueOf(error, fallbackMessage).message, 400);
 }
 
 export async function readJsonPayload<Payload>(

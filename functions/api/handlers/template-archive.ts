@@ -66,7 +66,7 @@ export async function restoreTemplate(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(existingTemplate, userId),
+    subject: getTemplateSubject(existingTemplate),
     resource: { type: 'template', id: templateId },
     action: 'template.restored',
     before: existingTemplate,
@@ -130,7 +130,7 @@ export async function archiveTemplate(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(existingTemplate, userId),
+    subject: getTemplateSubject(existingTemplate),
     resource: { type: 'template', id: templateId },
     action: 'template.deleted',
     before: existingTemplate,

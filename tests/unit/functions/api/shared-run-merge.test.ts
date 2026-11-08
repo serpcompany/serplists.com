@@ -77,6 +77,21 @@ describe('mergeSharedRunState', () => {
     expect(elementAt(items, 1).completed).toBe(true);
   });
 
+  it('reads Sub-task states only from the content blocks a guest sends as objects', () => {
+    const merged = merge([{ id: 's1', items: [{ id: 'i1', contents: ['d1', { type: 'subItems', subItems: [{ id: 'd1', isCompleted: true }] }] }] }]);
+
+    expect(subTaskAt(firstOf(firstOf(merged).items), 0).isCompleted).toBe(true);
+  });
+
+  it('leaves a stored section with no task list, and a stored task that is not an object, as they are', () => {
+    const notes = { id: 's0', title: 'Notes' };
+    const storedRun = [{ id: 's1', title: 'Section', items: ['Legacy line', { id: 'i1', title: 'Task one', isCompleted: false }] }, notes];
+
+    expect(mergeSharedRunState(copy(storedRun), guest([{ id: 's1', items: [{ id: 'i1', isCompleted: true }] }]))).toEqual({
+      sections: [{ id: 's1', title: 'Section', items: ['Legacy line', { id: 'i1', title: 'Task one', isCompleted: true }] }, notes],
+    });
+  });
+
   it('normalizes a legacy completed flag to isCompleted', () => {
     const merged = merge([{ id: 's1', items: [{ id: 'i2', isCompleted: false }] }]);
     const item = elementAt(firstOf(merged).items, 1);

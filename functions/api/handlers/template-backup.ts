@@ -37,7 +37,6 @@ import { generateUniqueSlug, insertTemplateWithUniqueSlug } from '../utils/templ
 import {
   getTemplateSelectColumns,
   parseTemplateRow,
-  withRulesColumnFallback,
   type TemplateDb,
 } from '../utils/template-rows';
 import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
@@ -112,13 +111,11 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
     ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, backupTeamId), isNull(templates.deleted_at))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
 
-  const rows = await withRulesColumnFallback((includeRules) =>
-    db
-      .select(getTemplateSelectColumns(includeRules, true))
-      .from(templates)
-      .where(whereClause)
-      .orderBy(desc(templates.created_at)),
-  );
+  const rows = await db
+    .select(getTemplateSelectColumns(true))
+    .from(templates)
+    .where(whereClause)
+    .orderBy(desc(templates.created_at));
 
   const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 

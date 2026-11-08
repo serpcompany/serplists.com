@@ -52,6 +52,7 @@ describe('completedRunTaskChangeResponse', () => {
   it('ignores sections and tasks that are not records, and a task list that is not a list', () => {
     const stored = [section(task({ id: 't1', isCompleted: true }))];
 
-    expect(refusal(stored, ['not a section', { id: 's2', title: 'Odd', items: 'none' }, section('not a task', task({ id: 't1', isCompleted: true }))])).toBeNull();
+    expect(refusal(stored, [section('not a task', task({ id: 't1', isCompleted: true })), 'not a section', { id: 's2', title: 'Odd', items: 'none' }])).toBeNull();
+    expect(refusal(stored, [section('not a task', task({ id: 't1' })), 'not a section', { id: 's2', title: 'Odd', items: 'none' }])?.status).toBe(409);
   });
 });

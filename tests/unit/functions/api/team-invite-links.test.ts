@@ -139,6 +139,20 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
+  it("refuses a body that is not JSON and replaces nothing", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([membership("admin")]);
+    const request = new Request("http://localhost/api/teams/team-1/invites/invite-1/link", {
+      method: "POST",
+      headers: { Origin: "https://app.serplists.test" },
+      body: "{role",
+    });
+
+    const response = await handleTeams(request, mockEnv);
+
+    expect(response.status).toBe(400);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
   it.each(["editor", "runner", "viewer"])("forbids %s members", async (role) => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([membership(role)]);
 

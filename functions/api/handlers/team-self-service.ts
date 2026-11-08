@@ -98,11 +98,11 @@ export async function previewTeamInvite({
   const preview = {
     teamId: invite.teamId,
     teamName: invite.teamName,
-    teamSlug: invite.teamSlug ?? null,
+    teamSlug: invite.teamSlug,
     role: normalizeTeamRole(invite.role, "viewer"),
     expiresAt: invite.expires_at,
-    inviterName: invite.inviterName ?? null,
-    inviterEmail: invite.inviterEmail ?? null,
+    inviterName: invite.inviterName,
+    inviterEmail: invite.inviterEmail,
   };
 
   if (invite.accepted_at) {

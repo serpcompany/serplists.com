@@ -221,7 +221,7 @@ export async function updateTemplateForUser(
     ? and(sameVersionInOwnerScope, stillPrivate)
     : sameVersionInOwnerScope;
 
-  const subject = getTemplateSubject(existingTemplate, userId);
+  const subject = getTemplateSubject(existingTemplate);
   const updatedTemplate = {
     ...existingTemplate,
     ...templateValues,

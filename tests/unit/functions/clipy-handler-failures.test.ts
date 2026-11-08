@@ -19,6 +19,9 @@ function generateWith(fetch: typeof globalThis.fetch, request = clipyRequest()) 
 
 const answering = (response: Response) => vi.fn<typeof globalThis.fetch>().mockResolvedValue(response);
 
+const imagesIn = (draft: z.infer<typeof draftBody>['draft']) =>
+  draft.sections.flatMap((section) => section.items.flatMap((item) => item.contents.filter(({ type }) => type === 'image').map(({ value }) => value)));
+
 async function refusal(response: Response) {
   return { status: response.status, code: (await readJson(response, apiErrorBody)).code };
 }
@@ -33,6 +36,15 @@ function streamOf(bytes: number) {
 }
 
 describe('Clipy template generation when the request or Clipy fails', () => {
+  it('answers a method other than POST with 405 before fetching Clipy', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const response = await generateWith(fetch, new Request('http://localhost/api/templates/generate-from-clipy'));
+
+    expect(response.status).toBe(405);
+    expect((await readJson(response, apiErrorBody)).error).toBe('Method Not Allowed');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('answers a request body that is not JSON with 400 before fetching Clipy', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     const request = new Request('http://localhost/api/templates/generate-from-clipy', { method: 'POST', body: 'not json' });
@@ -114,5 +126,36 @@ describe('Clipy drafts from recordings with long or unusable parts', () => {
     const contentTypes = draft.sections.flatMap((section) => section.items.flatMap((item) => item.contents.map(({ type }) => type)));
     expect(contentTypes).not.toContain('image');
     expect(JSON.stringify(draft)).not.toContain('### Transcript');
+  });
+
+  it('cuts a title that is one long word where it reaches the limit', async () => {
+    const context = completeClipyContext();
+    const title = 'Supercalifragilisticexpialidocious'.repeat(3);
+
+    const { draft } = await readJson(await generateWith(answering(Response.json({ ...context, clip: { ...context.clip, title } }))), draftBody);
+
+    expect(draft.seoTitle.length).toBeLessThanOrEqual(70);
+    expect(draft.seoTitle).toMatch(/^Supercalifragilistic\S+… Checklist$/);
+  });
+
+  it('shows no key moments when the recording lists them in something other than a list', async () => {
+    const response = await generateWith(answering(Response.json({ ...completeClipyContext(), keyMoments: { moments: 'none' } })));
+
+    expect(imagesIn((await readJson(response, draftBody)).draft)).toEqual([]);
+  });
+
+  it('gives each step the moment that matches it, then the earliest unused moment, and no more than it has steps', async () => {
+    const frame = (name: string) => `https://cdn.clipy.online/key-moments/demo/${name}.jpg`;
+    const moments = [
+      { tMs: 5_000, caption: 'Opens settings page', frameUrl: frame('settings') },
+      { tMs: 1_000, caption: 'Waves hello', frameUrl: frame('wave') },
+      { tMs: 1_000, caption: 'Points at screen', frameUrl: frame('point') },
+      { tMs: 9_000, caption: 'Smiles', frameUrl: frame('smile') },
+    ];
+    const context = { ...completeClipyContext(), summary: { tldr: 'Change a setting.', keyPoints: ['Open settings page', 'Save changes'] }, keyMoments: { moments } };
+
+    const { draft } = await readJson(await generateWith(answering(Response.json(context))), draftBody);
+
+    expect(imagesIn(draft)).toEqual([frame('settings'), frame('wave')]);
   });
 });

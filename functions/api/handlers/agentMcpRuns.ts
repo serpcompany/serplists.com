@@ -130,8 +130,8 @@ export function summarizeRun(run: RunSummaryFields) {
     title: run.title,
     status: run.status ?? "in_progress",
     progress: typeof run.progress === "number" ? run.progress : 0,
-    revision: typeof run.revision === "number" ? run.revision : 1,
-    templateVersion: typeof run.template_version === "number" ? run.template_version : 1,
+    revision: run.revision,
+    templateVersion: run.template_version,
     startedAt: run.started_at,
     completedAt: run.completed_at,
     createdAt: run.created_at,
@@ -306,7 +306,7 @@ export function updateRunAuditDiff(
   const diff: RunAuditDiff = {
     ...change,
     progress: { from: typeof existing.progress === "number" ? existing.progress : 0, to: updates.progress },
-    revision: { from: typeof existing.revision === "number" ? existing.revision : 1, to: updates.revision },
+    revision: { from: existing.revision, to: updates.revision },
   };
   if (change.operation === "set_task_notes") {
     delete diff.notes;

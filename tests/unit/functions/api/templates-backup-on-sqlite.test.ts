@@ -73,6 +73,44 @@ describe("template import for a Pro user", () => {
     expect(importedTemplates()).toEqual([{ title: "Fine", is_public: 0 }]);
   });
 
+  it("makes every imported Template public when the import asks for it, whatever the file says", async () => {
+    const response = await importInto({
+      templates: [{ title: "Unshared", is_public: false, sections: [] }, { title: "Unmarked", sections: [] }],
+      options: { visibility: "public" },
+    });
+
+    expect((await readJson(response, importSummary)).imported).toBe(2);
+    expect(importedTemplates()).toEqual([{ title: "Unmarked", is_public: 1 }, { title: "Unshared", is_public: 1 }]);
+  });
+
+  it("refuses a file that is not JSON, and imports nothing", async () => {
+    const response = await handleTemplates(new Request("http://localhost/api/templates/backup", { method: "POST", body: "[{" }), apiEnvOn(database));
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe("Invalid JSON payload");
+    expect(importedTemplates()).toEqual([]);
+  });
+
+  it("refuses a file whose Templates are not a list, and imports nothing", async () => {
+    const response = await importInto({ templates: "Shared one" });
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe("Expected array, received string");
+    expect(importedTemplates()).toEqual([]);
+  });
+
+  it("backs up a Template that has no slug and was never edited with an empty slug, updated when it was created", async () => {
+    const response = await handleTemplates(apiRequest("templates/backup?format=backup"), apiEnvOn(database));
+    const backup = await readJson(response, z.object({
+      exportedBy: z.unknown(),
+      templates: z.array(z.object({ id: z.string(), slug: z.unknown(), createdAt: z.unknown(), updatedAt: z.unknown() }).passthrough()),
+    }).passthrough());
+
+    expect(backup.exportedBy).toBe("user-1@example.test");
+    expect(backup.templates.map(({ id, slug, createdAt, updatedAt }) => ({ id, slug, updated: updatedAt === createdAt })))
+      .toEqual([{ id: "template-1", slug: "", updated: true }]);
+  });
+
   it("answers a method it does not serve with 405", async () => {
     const response = await handleTemplates(apiRequest("templates/backup", "PUT", {}), apiEnvOn(database));
 

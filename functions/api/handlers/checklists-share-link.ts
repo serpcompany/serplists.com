@@ -34,7 +34,7 @@ export async function shareChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(run, userId),
+    subject: getRunSubject(run),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_created',
     before: run,
@@ -84,7 +84,7 @@ export async function stopSharingChecklistRun(
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(run, userId),
+    subject: getRunSubject(run),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_revoked',
     before: run,

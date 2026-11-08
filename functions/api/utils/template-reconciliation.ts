@@ -8,6 +8,7 @@ import {
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
+  subTaskRecordsIn,
   taskRecordsIn,
   type ChecklistNodeRecord,
   type FormFieldRecord,
@@ -110,8 +111,7 @@ function freshRunState(value: TaskRecord): TaskRecord {
   return next;
 }
 
-const resetSubItems = (subItems: unknown[]): unknown[] =>
-  subItems.map((subItem) => (isSubTaskRecord(subItem) ? freshRunState(subItem) : subItem));
+const resetSubItems = (subItems: unknown[]): unknown[] => subTaskRecordsIn(subItems).map(freshRunState);
 
 function resetTaskState(item: unknown): unknown {
   if (!isTaskRecord(item)) return item;
@@ -183,9 +183,10 @@ function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claime
 }
 
 function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
-  const previousItems = getArray(section.items);
-  const kept = withoutClaimed(previousItems, items.claimed)
-    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed, fields.claimed) : item));
+  const previousItems = taskRecordsIn(section.items);
+  const kept = previousItems
+    .filter((item) => !items.claimed.has(item))
+    .map((item) => withoutMovedSubItems(item, subItems.claimed, fields.claimed));
   if (previousItems.length > 0 && kept.length === 0) return null;
   return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
     ? section
@@ -389,13 +390,14 @@ export function findNonObjectTemplateEntry(sections: unknown[]): string | null {
       const contents = getArray(item.contents);
       const contentIndex = contents.findIndex((content) => !isRecord(content));
       if (contentIndex >= 0) return `Content block ${contentIndex + 1} of ${task} must be an object`;
-      const subItemLists = [item.subItems, ...contents.map((content) => (isContentRecord(content) ? content.subItems : undefined))];
+      const contentRecords = contents.filter(isContentRecord);
+      const subItemLists = [item.subItems, ...contentRecords.map((content) => content.subItems)];
       for (const subItems of subItemLists) {
         const subItemIndex = getArray(subItems).findIndex((subItem) => !isRecord(subItem));
         if (subItemIndex >= 0) return `Sub-task ${subItemIndex + 1} of ${task} must be an object with a title`;
       }
-      for (const content of contents) {
-        const fieldIndex = getArray(isContentRecord(content) ? content.fields : undefined).findIndex((field) => !isRecord(field));
+      for (const content of contentRecords) {
+        const fieldIndex = getArray(content.fields).findIndex((field) => !isRecord(field));
         if (fieldIndex >= 0) return `Form field ${fieldIndex + 1} of ${task} must be an object with a label and a kind`;
       }
     }

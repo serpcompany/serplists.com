@@ -147,6 +147,14 @@ describe("Personal run key management handler", () => {
     ]);
   });
 
+  it("rejects a body that is not JSON without minting a secret", async () => {
+    const response = await handleAgentKeys(new Request("http://localhost/api/agent-keys", { method: "POST", body: "{name" }), mockEnv);
+
+    expect(response.status).toBe(400);
+    expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
+    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
+  });
+
   it("rejects blank and oversized names without minting a secret", async () => {
     await expectEachRefusedWithoutMintingASecret(["   ", "x".repeat(81)].map((name) => ({ name })));
   });

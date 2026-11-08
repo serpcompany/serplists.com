@@ -10,8 +10,10 @@ const section = (id: string | undefined, ...items: unknown[]) => ({ ...(id === u
 describe('validateStableTemplateIdentities', () => {
   it.each([
     ['a section with no id', [section(undefined)], 'Every template section requires a stable id'],
+    ['a section that is not an object', ['Launch'], 'Every template section requires a stable id'],
     ['two sections with one id', [section('s1'), section('s1')], 'Duplicate section id: s1'],
     ['a task with no id', [section('s1', task(undefined))], 'Every item in section s1 requires a stable id'],
+    ['a task that is not an object', [section('s1', 'Ship')], 'Every item in section s1 requires a stable id'],
     ['two tasks with one id', [section('s1', task('t1')), section('s2', task('t1'))], 'Duplicate item id: t1'],
     ['a Sub-task with no id', [section('s1', task('t1', [subTasks({ title: 'Draft' })]))], 'Every sub-item in item t1 requires a stable id'],
     [

@@ -19,12 +19,11 @@ const inviteTeamMemberBodySchema = z.object({
 });
 
 function isInvitePending(invite: {
-  accepted_at?: string | null;
-  expires_at?: string | null;
-  revoked_at?: string | null;
+  accepted_at: string | null;
+  expires_at: string;
+  revoked_at: string | null;
 }): boolean {
   if (invite.accepted_at || invite.revoked_at) return false;
-  if (!invite.expires_at) return false;
   return Date.parse(invite.expires_at) > Date.now();
 }
 

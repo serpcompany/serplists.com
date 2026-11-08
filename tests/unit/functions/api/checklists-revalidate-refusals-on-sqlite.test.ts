@@ -52,6 +52,15 @@ describe("revalidating a run against its Template, refused before anything is wr
       .toEqual([{ items: JSON.stringify([{ id: "s1", title: "Launch", items: [] }]), retired_items: "[]" }]);
   });
 
+  it("empties a run whose Template's stored content cannot be read, retiring what the run held", async () => {
+    database.run("UPDATE checklist_runs SET items = ? WHERE id = 'run-1'", JSON.stringify([{ id: "s1", title: "Launch", items: [] }]));
+    database.run("UPDATE templates SET items = 'not json' WHERE id = 'template-1'");
+
+    expect(await revalidate({ expected_revision: 1 })).toBeNull();
+    expect(database.rows("SELECT items, retired_items FROM checklist_runs WHERE id = 'run-1'"))
+      .toEqual([{ items: "[]", retired_items: JSON.stringify([{ kind: "section", section: { id: "s1", title: "Launch", items: [] } }]) }]);
+  });
+
   it("revalidates a request with no body against the current revision", async () => {
     database.run("UPDATE templates SET content_version = 2 WHERE id = 'template-1'");
 

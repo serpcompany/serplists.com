@@ -23,7 +23,6 @@ import {
   findTemplateById,
   parseTemplateRow,
   selectTemplatesWithOwner,
-  withRulesColumnFallback,
   type TemplateDb,
 } from '../utils/template-rows';
 import {
@@ -42,8 +41,8 @@ async function canListOrganizationTemplates(env: Env, teamId: string, userId: st
   return membership !== null && canViewTeam(normalizeTeamRole(membership.role));
 }
 
-export function selectPublicProfileTemplates(env: Env, owner: ProfileTemplatesOwner, includeRules: boolean) {
-  return selectTemplatesWithOwner(env, includeRules)
+export function selectPublicProfileTemplates(env: Env, owner: ProfileTemplatesOwner) {
+  return selectTemplatesWithOwner(env)
     .where(publicTemplatesOfProfileOwners(owner.type, [owner.id]))
     .orderBy(desc(schema.templates.created_at));
 }
@@ -61,7 +60,7 @@ async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response>
   const owner = await findProfileTemplatesOwner(env, url);
   if (owner instanceof Response) return owner;
 
-  const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, owner, includeRules));
+  const rows = await selectPublicProfileTemplates(env, owner);
   return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row))));
 }
 
@@ -97,11 +96,9 @@ async function listPublicRequiredTools(db: TemplateDb, url: URL): Promise<Respon
 
 async function readActiveTemplate(env: Env, userId: string | null, matches: SQL): Promise<Response> {
   const { templates } = schema;
-  const [template] = await withRulesColumnFallback((includeRules) =>
-    selectTemplatesWithOwner(env, includeRules, true)
-      .where(and(matches, isNull(templates.deleted_at)))
-      .limit(1),
-  );
+  const [template] = await selectTemplatesWithOwner(env, true)
+    .where(and(matches, isNull(templates.deleted_at)))
+    .limit(1);
 
   const body = template ? await serializeTemplateForViewer(env, template, userId) : null;
   return body ? json(body) : jsonError('Template not found', 404);
@@ -121,11 +118,9 @@ async function listArchivedTemplates(env: Env, url: URL, userId: string | null):
     ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id));
 
-  const rows = await withRulesColumnFallback((includeRules) =>
-    selectTemplatesWithOwner(env, includeRules)
-      .where(and(ownedByContext, isNotNull(templates.deleted_at)))
-      .orderBy(desc(templates.updated_at)),
-  );
+  const rows = await selectTemplatesWithOwner(env)
+    .where(and(ownedByContext, isNotNull(templates.deleted_at)))
+    .orderBy(desc(templates.updated_at));
 
   return json(rows.map((row) => parseTemplateRow(row)));
 }
@@ -147,7 +142,7 @@ async function readTemplateHistory(
   if (!template || !(await canViewPrivateTemplate(env, template, userId))) {
     return jsonError('Template not found', 404);
   }
-  const subject = getTemplateSubject(template, userId);
+  const subject = getTemplateSubject(template);
 
   const [versionRows, eventRows] = await Promise.all([
     selectTemplateVersionHistory(db, templateId, historyLimit),
@@ -170,11 +165,9 @@ async function listOrganizationTemplates(env: Env, teamId: string, userId: strin
     return jsonError('Organization not found', 404);
   }
 
-  const rows = await withRulesColumnFallback((includeRules) =>
-    selectTemplatesWithOwner(env, includeRules)
-      .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
-      .orderBy(desc(templates.created_at)),
-  );
+  const rows = await selectTemplatesWithOwner(env)
+    .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
+    .orderBy(desc(templates.created_at));
 
   return json(rows.map((row) => parseTemplateRow(row)));
 }
@@ -200,11 +193,9 @@ async function listCatalogOrPersonalTemplates(
       : or(eq(templates.is_public, true), ownPersonalTemplates);
 
   const respond = async () => {
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(and(listed, isNull(templates.deleted_at)))
-        .orderBy(desc(templates.created_at)),
-    );
+    const rows = await selectTemplatesWithOwner(env)
+      .where(and(listed, isNull(templates.deleted_at)))
+      .orderBy(desc(templates.created_at));
     return json(rows.map((template) =>
       !isPublicCatalog && isOwnPersonalTemplateRow(template, userId)
         ? parseTemplateRow(template)

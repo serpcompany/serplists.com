@@ -121,14 +121,11 @@ export function creationOf(firstEventText: string | null): Creation {
   const event = firstEventSchema.safeParse(parseJson(firstEventText));
   if (!event.success || event.data.action !== 'checklist_run.created') return UNKNOWN_CREATION;
   const metadata = creationMetadataSchema.safeParse(parseJson(event.data.metadata));
-  const source = metadata.success ? metadata.data.source : undefined;
+  if (!metadata.success) return UNKNOWN_CREATION;
+  const { source, personalRunKeyName } = metadata.data;
   if (source === 'web') return { origin: 'web', agentKeyName: null, authorizedBy: null };
   if (source === 'mcp') {
-    return {
-      origin: 'mcp',
-      agentKeyName: (metadata.success ? metadata.data.personalRunKeyName : undefined) ?? null,
-      authorizedBy: actorOf(event.data.actor),
-    };
+    return { origin: 'mcp', agentKeyName: personalRunKeyName ?? null, authorizedBy: actorOf(event.data.actor) };
   }
   return UNKNOWN_CREATION;
 }

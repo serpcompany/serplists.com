@@ -73,6 +73,16 @@ describe("JSON-RPC messages the handler answers without running a tool", () => {
     expect(body.id).toBeNull();
   });
 
+  it.each([
+    ["an envelope of another JSON-RPC version, answered with its id", JSON.stringify({ jsonrpc: "1.0", id: 7, method: "ping" }), 7],
+    ["a body that is not an object, answered with no id", JSON.stringify([{ jsonrpc: "2.0", id: 7, method: "ping" }]), null],
+  ])("answers %s as an invalid request", async (_label, body, id) => {
+    const answer = await readJson(await handleAgentMcp(rawMcpRequest(body), env), errorWithItsId);
+
+    expect(answer.error).toMatchObject({ code: -32600, message: "Invalid Request" });
+    expect(answer.id).toBe(id);
+  });
+
   it("acknowledges a notification sent without the protocol version and runs nothing", async () => {
     const response = await handleAgentMcp(
       rawMcpRequest(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }), headersWithout("MCP-Protocol-Version")),
@@ -80,6 +90,19 @@ describe("JSON-RPC messages the handler answers without running a tool", () => {
     );
 
     expect(response.status).toBe(202);
+  });
+
+  it("runs a tool called with no arguments as one called with none set", async () => {
+    const body = await toolBody(await handleAgentMcp(rpc({ id: 8, method: "tools/call", params: { name: "list_templates" } }), env));
+
+    expect(body.result.isError).toBeUndefined();
+    expect(body.result.structuredContent).toEqual({ templates: [] });
+  });
+
+  it("refuses tool arguments that are not an object with -32602", async () => {
+    const body = await rpcErrorBody(await handleAgentMcp(rpc({ id: 9, method: "tools/call", params: { name: "get_run", arguments: "run-1" } }), env));
+
+    expect(body.error).toMatchObject({ code: -32602, message: "Expected object, received string", data: { code: "invalid_arguments" } });
   });
 
   it("answers a method it does not serve with -32601", async () => {

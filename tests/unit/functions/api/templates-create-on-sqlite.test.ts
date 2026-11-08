@@ -39,9 +39,22 @@ describe("creating a Template, refused before anything is written", () => {
     expect((await readJson(response, apiErrorBody)).error).toBe(error);
     expect(createdTemplates()).toEqual([]);
   });
+
+  it("answers 404 for a Template in an Organization the user is not a member of", async () => {
+    const response = await create({ title: "Launch", teamId: "team-elsewhere" });
+
+    expect(response.status).toBe(404);
+    expect((await readJson(response, apiErrorBody)).error).toBe("Organization not found");
+    expect(createdTemplates()).toEqual([]);
+  });
 });
 
 describe("Templates the API creates", () => {
+  it("creates an untitled Template from a body that names no title", async () => {
+    expect((await create({ sections: [] })).status).toBe(200);
+    expect(createdTemplates()).toMatchObject([{ title: "" }]);
+  });
+
   it("takes the slug from the one requested and the sections from the older items key", async () => {
     const response = await create({ title: "Launch", slug: "  launch-plan ", items: [{ id: "s1", title: "A", items: [] }] });
 
