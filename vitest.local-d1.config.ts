@@ -11,6 +11,6 @@ export default defineConfig({
     projects: ['./vitest.local-d1.config.ts'],
     globalSetup: [],
     testTimeout: 20_000,
-    coverage: { ...coverage, reportsDirectory: 'coverage/local-d1' },
+    coverage: { ...coverage, all: false, reportsDirectory: 'coverage/local-d1' },
   },
 });
