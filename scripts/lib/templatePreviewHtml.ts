@@ -32,7 +32,7 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
   }
 
   if (content.type === "subItems") {
-    const items = (content.subItems ?? [])
+    const items = content.subItems
       .map((subItem) => `<li><span class="checkbox" aria-hidden="true"></span><span>${escapeHtml(subItem.title)}</span></li>`)
       .join("");
     return `<div class="content-block card"><div class="card-label">Checklist</div><ul class="subitem-list">${items}</ul></div>`;
@@ -51,7 +51,8 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
   }
 
   if (content.type === "file") {
-    return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
+    const fileSize = formatBytes(content.fileSize);
+    return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${fileSize ? ` <span>· ${escapeHtml(fileSize)}</span>` : ""}</div></div>`;
   }
 
   const embed: Extract<typeof content, { type: "embed" }> = content;

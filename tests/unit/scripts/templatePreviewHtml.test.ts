@@ -72,4 +72,16 @@ describe('templatePreviewHtml media blocks', () => {
     expect(html).toContain('<div class="file-name">https://example.com/notes.txt</div><div class="card-meta"><a href="https://example.com/notes.txt">Open file</a></div>');
     expect(html).toContain('<div class="card-label">YouTube</div>');
   });
+
+  it('shows no size for a file whose size is not a byte count, and categories without tags', () => {
+    const html = renderTemplatePreviewHtml(normalizePortableTemplate({
+      title: 'Downloads',
+      categories: ['SEO'],
+      sections: [{ title: 'Files', items: [{ title: 'Get the kit', contents: [{ type: 'file', value: 'https://example.com/kit.zip', fileSize: -1 }] }] }],
+    }));
+
+    expect(html).toContain('<a href="https://example.com/kit.zip">Open file</a></div>');
+    expect(html).not.toContain('<span>·');
+    expect(html).toContain('<div class="meta-row">Categories: SEO</div>');
+  });
 });
