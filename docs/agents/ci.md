@@ -15,7 +15,12 @@ Every job runs on `ubuntu-latest`, has a time limit, and reads the repository's 
 unless its section says otherwise. A job that installs sets up pnpm from `packageManager` in
 `package.json` and the Node that `.node-version` names, caches the pnpm store through
 `actions/setup-node`, and installs with `pnpm install --frozen-lockfile`, which fails when the
-lockfile is out of date. A job that runs the checks or builds sets `BETTER_AUTH_SECRET` to
+lockfile is out of date. `@serpcompany/verify` is a private GitHub Packages package, so that
+`setup-node` sends the `@serpcompany` scope to `https://npm.pkg.github.com`, the install step
+passes the job's own token as `NODE_AUTH_TOKEN`, and the job (and a reusable workflow's caller)
+grants `packages: read`. The package's settings must give this repository Read under Manage Actions
+access, an owner's step
+([SERP's Workflows](https://github.com/serpcompany/serp/blob/main/packages/verify/docs/workflows.md#installing-the-package-in-ci)). A job that runs the checks or builds sets `BETTER_AUTH_SECRET` to
 `ci-build-placeholder-secret-32-chars-minimum`, a placeholder that is not a secret, because the env
 contract wants 32 characters. `tests/unit/workflows/workflow-rules.test.ts` holds every workflow
 to the time limits and the Node version.
@@ -87,7 +92,10 @@ every job a pull request runs.
   2. `pnpm run typecheck:env`, the env contract.
   3. `pnpm run verify`, every repository check ([checks.md](checks.md)).
   4. `pnpm run lint` and `pnpm run typecheck`.
-  5. `pnpm run test:run`, the unit tests, and `pnpm run test:local-d1`, the tests on a local D1.
+  5. `pnpm run test:run`, the unit tests, and `pnpm run test:local-d1`, the tests on a local D1,
+     each writing its coverage.
+  6. `pnpm run test:coverage`, with `SERP_VERIFY_BASE: HEAD^1`: 100% line, branch and function
+     coverage ([checks.md](checks.md#coverage)).
 - **`Drizzle schema parity`** (`db-parity`) runs `pnpm run check:db:drizzle-parity`: every
   migration replayed and compared with the Drizzle schema.
 - **`CI passed`** (`ci-passed`), the job to require.

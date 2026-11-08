@@ -229,6 +229,35 @@ code. It runs in the commit-msg hook (`--commit-msg`) on the staged files, and i
 `main` adds only its merge commit, since `staging` already accepted the rest. That step needs the
 full history, so the Quality Gate checks out with `fetch-depth: 0`.
 
+### Coverage
+
+Every line, branch and function of the code runs in a test, as SERP's
+[coverage check](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/verification/coverage-check/README.md)
+sets for a repository at Ship: `pnpm run test:coverage` (`serp-verify coverage`, from
+`@serpcompany/verify`) fails on each line no test runs, branch never taken and function never
+called, at its line. Fill a gap with a test that drives the code as its callers do and asserts what
+should happen, or delete the code nothing needs. A test that only reaches a line is padding, which
+the `pr-review` skill's tests reviewer sends back.
+
+- **The reports**, as `coverage.reports` in `verify.json` lists them: `test:run` writes
+  `coverage/unit`, `test:local-d1` (`vitest.local-d1.config.ts`) writes `coverage/local-d1`, and
+  the process entry points the unit tests spawn write `coverage/unit-children`. For those,
+  `tests/support/childProcessCoverage.ts` gives each child of a test worker `NODE_V8_COVERAGE`,
+  and c8 reports the files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in
+  the child's environment. Library modules count only from tests that import them, since two
+  instrumentations of one file number its branches differently.
+- **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
+  `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
+  `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an
+  ignore comment is a comment, which the comments check refuses.
+- **CI:** the Quality Gate runs the check after both suites, with `SERP_VERIFY_BASE: HEAD^1` so it
+  reads the stage from `AGENTS.md` at the base, as SERP's
+  [Workflows](https://github.com/serpcompany/serp/blob/main/packages/verify/docs/workflows.md#the-coverage-check-in-a-test-job)
+  sets. Every job that installs needs `packages: read` and `NODE_AUTH_TOKEN`, since
+  `@serpcompany/verify` is a private GitHub Packages package.
+- **The inner loop:** `pnpm exec vitest related --run --coverage <files>`, then
+  `pnpm exec serp-verify coverage --changed`, which keeps only the gaps on the lines you changed.
+
 ## Git hooks
 
 Lefthook's hooks install with `pnpm install` (the `prepare` script); run

@@ -24,6 +24,7 @@ The inner loop, by part:
 | The local D1 tests | `pnpm exec vitest run --testTimeout=20000 tests/integration/<file>` |
 | Browser specs | `node --import tsx scripts/run-at-low-priority.ts pnpm run test:e2e:full <specs>` (the `browser-tests` skill) |
 | The repository checks | `pnpm run verify <checks> <paths>`, such as `pnpm run verify comments,sizes docs/agents` |
+| Coverage of what you changed | `pnpm exec vitest related --run --coverage <files>`, then `pnpm exec serp-verify coverage --changed` ([`checks.md`](checks.md#coverage)) |
 
 - **Never use the finish gate as the inner loop.** `pnpm run check` runs every check and every
   unit and local D1 test, one after another.

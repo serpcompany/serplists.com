@@ -161,7 +161,7 @@ todo, fixme, conditional or `.only` test, and a file `test:run` leaves out runs 
 and assert the outcome. Browser specs set up data through the API helpers and open only Templates
 the e2e stack seeds (`tests/unit/e2e/seeded-template-paths.test.ts`). A test is named for the
 behavior it checks, which is judgment ([`harness-debt.md`](../harness-debt.md), Checks). How to
-write each kind is in [`testing.md`](testing.md).
+write each kind is in [`testing.md`](testing.md), and coverage in [`checks.md`](checks.md#coverage).
 
 ## Secrets
 
@@ -243,6 +243,7 @@ follow-up issue, with a test that fails on the real mistake. Until it is a check
 | The git hooks | Comments, size, secrets and lint on a commit; `verify` on a push | Every clone |
 | `pnpm run lint`, `typecheck` | Type-aware ESLint, the five tsc projects | `check`, Quality Gate |
 | `pnpm run test:run`, `test:local-d1` | Unit and local D1 tests | `check`, Quality Gate |
+| `pnpm run test:coverage` | 100% line, branch and function coverage | `check`, Quality Gate |
 | `pnpm run check:db:drizzle-parity` | The migrations match the Drizzle schema | `check`, CI |
 | `pnpm run check` | `typecheck:env`, then each of the above in turn | By hand, per finished tree |
 | Pull request checks | Only a promotion into `main`, title, closing issue, a fix's test, evidence lines | `Pull request` |

@@ -589,9 +589,9 @@
     query.
   - `next/font/google` is compiled by the Next.js build, so `vitest.config.ts` resolves it
     to `nextFontGoogle.ts`, which returns the shape the root layout reads.
-- Coverage settings live under `test.coverage` in `vitest.config.ts`
-  (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
-  If you override `test.exclude`, keep `node_modules`, `dist`,
+- Coverage: `test:run` writes `coverage/unit`, the entry points it spawns `coverage/unit-children`
+  (`tests/support/childProcessCoverage.ts`), and `test:local-d1` writes `coverage/local-d1`
+  ([`code.md`](code.md#tests)). If you override `test.exclude`, keep `node_modules`, `dist`,
   `playwright-report`, `test-results`, `tests/e2e/**`, and `tmp/**` excluded.
 - If production test accounts must be removed, inspect dependent rows first and
   clean auth, templates, runs, likes, analytics, entitlement, and Stripe records
