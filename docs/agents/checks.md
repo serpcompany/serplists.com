@@ -248,7 +248,8 @@ the `pr-review` skill's tests reviewer sends back.
   files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in the child's
   environment. A library module counts only from the tests that import it, and an entry point the
   children report holds only from the processes that ran it: the teardown drops it from
-  `coverage/tests`.
+  `coverage/tests`. Coverage slows rendering, so the dom project gives each test 15 seconds and
+  local-d1 20; a test that spawns a script sets its own `{ timeout: 120_000 }`.
 - **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
   `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
   `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an
