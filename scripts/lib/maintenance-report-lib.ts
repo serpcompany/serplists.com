@@ -27,7 +27,7 @@ export function markdownTables(text: string): MarkdownTable[] {
       tables.push(current);
     } else {
       const [first, ...rest] = cellsOf(line);
-      if (first) current.rows.push([first, ...rest]);
+      if (first !== undefined && [first, ...rest].some(Boolean)) current.rows.push([first, ...rest]);
     }
   }
   return tables;

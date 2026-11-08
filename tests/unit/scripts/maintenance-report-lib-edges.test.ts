@@ -11,13 +11,13 @@ describe('the maintenance report on tables with short rows', () => {
     expect(scoresToRegrade(quality, new Map([['src/search.ts', day('2026-10-03')]]))).toEqual({ stale: [], ungraded: [] });
   });
 
-  it('reads a debt row cut short of its Issue and Size columns as unsized, with no issue, and skips a stray row with no cells', () => {
-    const debt = ['## Code', '', '| Debt | Issue | Size |', '| --- | --- | --- |', '| A short row. |', '|', '| | #12 | small |'].join('\n');
+  it('reads a debt row cut short of its Issue and Size columns as unsized, counts a row with an issue but no description, and skips a stray row with no cells', () => {
+    const debt = ['## Code', '', '| Debt | Issue | Size |', '| --- | --- | --- |', '| A short row. |', '|', '| | |', '| | #12 | small |'].join('\n');
 
     expect(summarizeDebt(debt)).toEqual({
-      open: 1,
-      bySize: { small: 0, medium: 0, large: 0 },
-      firstSmall: null,
+      open: 2,
+      bySize: { small: 1, medium: 0, large: 0 },
+      firstSmall: { section: 'Code', debt: '', issue: '#12' },
       unsized: [{ section: 'Code', debt: 'A short row.', issue: '' }],
     });
   });
