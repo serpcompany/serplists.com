@@ -1,5 +1,6 @@
-import { spawn, type SpawnOptions } from 'node:child_process';
+import { type ChildProcessByStdio, spawn, type SpawnOptions } from 'node:child_process';
 import path from 'node:path';
+import type { Readable, Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
 import { buildScriptInvocation, REPO_ROOT } from '../../scripts/lib/run-tool';
@@ -22,16 +23,19 @@ export function processEnvWithout(prefixes: readonly string[]): NodeJS.ProcessEn
   return { ...process.env, ...Object.fromEntries(removed) };
 }
 
-export async function ranToTheEnd(command: string, args: readonly string[], options: SpawnOptions): Promise<ScriptProcessRun> {
-  const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+export async function printedUntilClosed(child: ChildProcessByStdio<Writable | null, Readable, Readable>): Promise<ScriptProcessRun> {
   const chunks = { stdout: '', stderr: '' };
-  child.stdout.on('data', (chunk: Buffer) => (chunks.stdout += chunk.toString()));
-  child.stderr.on('data', (chunk: Buffer) => (chunks.stderr += chunk.toString()));
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => (chunks.stdout += chunk));
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => (chunks.stderr += chunk));
   const status = await new Promise<number | null>((exited, failed) => {
     child.once('error', failed);
     child.once('close', exited);
   });
   return { status, ...chunks };
+}
+
+export async function ranToTheEnd(command: string, args: readonly string[], options: SpawnOptions): Promise<ScriptProcessRun> {
+  return printedUntilClosed(spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] }));
 }
 
 export function runScriptProcess(

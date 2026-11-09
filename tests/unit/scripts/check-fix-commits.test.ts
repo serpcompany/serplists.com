@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { FIX_WITHOUT_A_TEST_MESSAGE, fixCommitsWithoutATest, isFixSubject, isTestFile } from '../../../scripts/lib/fix-commits';
 import { buildScriptInvocation, REPO_ROOT } from '../../../scripts/lib/run-tool';
+import { ranToTheEnd } from '../../support/scriptProcess';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { commandsTheRunnerRuns } from '../../support/workflowCommands';
 import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
@@ -41,9 +42,9 @@ function commit(repository: string, subject: string, files: string[]): void {
   execFileSync('git', ['commit', '-q', '-m', subject], { cwd: repository, env });
 }
 
-function runCheck(repository: string, args: string[]) {
+async function runCheck(repository: string, args: string[]) {
   const { command, args: invocationArgs } = buildScriptInvocation(CHECK, args);
-  const result = spawnSync(command, invocationArgs, { cwd: repository, env, encoding: 'utf8' });
+  const result = await ranToTheEnd(command, invocationArgs, { cwd: repository, env });
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
@@ -75,14 +76,14 @@ describe('which commits the rule covers', () => {
 });
 
 describe('pnpm CI: check-fix-commits --range', { timeout: 60_000 }, () => {
-  it('fails on a fix commit in the range that changes no test, and names it', () => {
+  it('fails on a fix commit in the range that changes no test, and names it', async () => {
     const repository = aRepository();
     const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, env, encoding: 'utf8' }).trim();
     commit(repository, 'fix: avatar falls back to the default icon', ['src/avatar.ts']);
     commit(repository, 'fix: share link with its regression test', ['src/share.ts', 'tests/unit/share.test.ts']);
     commit(repository, 'refactor: rename a helper', ['src/helper.ts']);
 
-    const { status, output } = runCheck(repository, ['--range', `${base}..HEAD`]);
+    const { status, output } = await runCheck(repository, ['--range', `${base}..HEAD`]);
 
     expect(status).toBe(1);
     expect(output).toContain('fix: avatar falls back to the default icon');
@@ -90,26 +91,26 @@ describe('pnpm CI: check-fix-commits --range', { timeout: 60_000 }, () => {
     expect(output).toContain(FIX_WITHOUT_A_TEST_MESSAGE);
   });
 
-  it('lists the subjects where the runner runs no command, so a subject shaped like one runs nothing', () => {
+  it('lists the subjects where the runner runs no command, so a subject shaped like one runs nothing', async () => {
     const repository = aRepository();
     const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, env, encoding: 'utf8' }).trim();
     commit(repository, 'fix: mask ##[add-mask]planted', ['src/mask.ts']);
     commit(repository, 'fix: warn\r::warning file=src/a.ts::planted', ['src/warn.ts']);
 
-    const { status, output } = runCheck(repository, ['--range', `${base}..HEAD`]);
+    const { status, output } = await runCheck(repository, ['--range', `${base}..HEAD`]);
 
     expect(status).toBe(1);
     expect(output).toContain('fix: mask ##[add-mask]planted');
     expect(commandsTheRunnerRuns(output)).toEqual(['stop-commands', 'resume']);
   });
 
-  it('passes when every fix commit in the range changes a test', () => {
+  it('passes when every fix commit in the range changes a test', async () => {
     const repository = aRepository();
     const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, env, encoding: 'utf8' }).trim();
     commit(repository, 'fix: with a test beside the code', ['src/a.ts', 'src/a.test.ts']);
     commit(repository, 'docs: explain it', ['docs/a.md']);
 
-    expect(runCheck(repository, ['--range', `${base}..HEAD`]).status).toBe(0);
+    expect((await runCheck(repository, ['--range', `${base}..HEAD`])).status).toBe(0);
   });
 });
 
@@ -125,22 +126,22 @@ describe('the commit-msg hook: check-fix-commits --commit-msg', { timeout: 60_00
     return runCheck(repository, ['--commit-msg', messageFile]);
   };
 
-  it('refuses a fix commit whose staged files hold no test', () => {
-    const { status, output } = staged(aRepository(), ['src/avatar.ts'], 'fix(avatar): show the uploaded image');
+  it('refuses a fix commit whose staged files hold no test', async () => {
+    const { status, output } = await staged(aRepository(), ['src/avatar.ts'], 'fix(avatar): show the uploaded image');
 
     expect(status).toBe(1);
     expect(output).toContain(FIX_WITHOUT_A_TEST_MESSAGE);
   });
 
-  it('accepts a fix commit that stages a test, and any other commit type without one', () => {
-    expect(staged(aRepository(), ['src/avatar.ts', 'tests/unit/avatar.test.ts'], 'fix: show the uploaded image').status).toBe(0);
-    expect(staged(aRepository(), ['src/avatar.ts'], 'refactor: name the avatar loader').status).toBe(0);
+  it('accepts a fix commit that stages a test, and any other commit type without one', async () => {
+    expect((await staged(aRepository(), ['src/avatar.ts', 'tests/unit/avatar.test.ts'], 'fix: show the uploaded image')).status).toBe(0);
+    expect((await staged(aRepository(), ['src/avatar.ts'], 'refactor: name the avatar loader')).status).toBe(0);
   });
 });
 
 describe('check-fix-commits without a range or a message file', { timeout: 60_000 }, () => {
-  it('prints how to call it and exits 2, so a hook or workflow that passes neither fails', () => {
-    const { status, output } = runCheck(aRepository(), []);
+  it('prints how to call it and exits 2, so a hook or workflow that passes neither fails', async () => {
+    const { status, output } = await runCheck(aRepository(), []);
 
     expect(status).toBe(2);
     expect(output).toContain('Usage: node --import tsx scripts/check-fix-commits.ts --range <base>..<head>');

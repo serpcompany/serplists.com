@@ -15,35 +15,35 @@ const UNREADABLE = 'not: [a template';
 const templatesCheck = (args: string[], cwd?: string) =>
   runRepositoryScript('scripts/check-template-sources.ts', args, cwd === undefined ? {} : { cwd });
 
-function aGeneratedYamlBundle(yamlName: string): string {
+async function aGeneratedYamlBundle(yamlName: string): Promise<string> {
   const folder = aFolderIn(workDir, { [yamlName]: LAUNCH_YAML });
-  expect(runRepositoryScript('scripts/generate-template-assets.ts', [path.join(folder, yamlName)]).status).toBe(0);
+  expect((await runRepositoryScript('scripts/generate-template-assets.ts', [path.join(folder, yamlName)])).status).toBe(0);
   return folder;
 }
 
 const issueLines = (stderr: string) => stderr.split('\n').filter(Boolean);
 
 describe('pnpm templates:check on a YAML bundle', { timeout: 60_000 }, () => {
-  it.each(['template.yaml', 'template.yml'])('accepts %s with the files templates:generate wrote from it', (yamlName) => {
-    const result = templatesCheck([aGeneratedYamlBundle(yamlName)]);
+  it.each(['template.yaml', 'template.yml'])('accepts %s with the files templates:generate wrote from it', async (yamlName) => {
+    const result = await templatesCheck([await aGeneratedYamlBundle(yamlName)]);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('Template sources OK (5 files checked)');
   });
 
-  it('accepts a YAML source before anything is generated from it', () => {
-    const result = templatesCheck([aFolderIn(workDir, { 'template.yaml': LAUNCH_YAML })]);
+  it('accepts a YAML source before anything is generated from it', async () => {
+    const result = await templatesCheck([aFolderIn(workDir, { 'template.yaml': LAUNCH_YAML })]);
 
     expect(result.stdout.trim()).toBe('Template sources OK (1 file checked)');
   });
 
-  it('names each generated file edited by hand, and exits 1', () => {
-    const folder = aGeneratedYamlBundle('template.yaml');
+  it('names each generated file edited by hand, and exits 1', async () => {
+    const folder = await aGeneratedYamlBundle('template.yaml');
     for (const file of ['README.md', 'preview.html', 'template.md', 'template.json']) {
       writeFileSync(path.join(folder, file), `${readFileSync(path.join(folder, file), 'utf8')}\nEdited by hand.\n`);
     }
 
-    const result = templatesCheck([folder]);
+    const result = await templatesCheck([folder]);
 
     expect(result.status).toBe(1);
     expect(issueLines(result.stderr)).toEqual([
@@ -56,27 +56,27 @@ describe('pnpm templates:check on a YAML bundle', { timeout: 60_000 }, () => {
 });
 
 describe('pnpm templates:check on JSON and Markdown sources', { timeout: 60_000 }, () => {
-  it('checks a template.json and template.md together as one pair', () => {
+  it('checks a template.json and template.md together as one pair', async () => {
     const folder = aFolderIn(workDir, { 'template.json': LAUNCH_JSON });
-    expect(runRepositoryScript('scripts/render-template-markdown.ts', [path.join(folder, 'template.json')]).status).toBe(0);
+    expect((await runRepositoryScript('scripts/render-template-markdown.ts', [path.join(folder, 'template.json')])).status).toBe(0);
     writeFileSync(path.join(folder, 'template.md'), readFileSync(path.join(folder, 'template.md'), 'utf8').replace('Review content', 'Review the copy'));
 
-    const result = templatesCheck([folder]);
+    const result = await templatesCheck([folder]);
 
     expect(result.status).toBe(1);
     expect(issueLines(result.stderr).map((line) => /\[([a-z-]+)\]/.exec(line)?.[1])).toEqual(['json-markdown-drift', 'markdown-not-generated']);
   });
 
-  it('checks a lone template.json on its own, and counts one file', () => {
+  it('checks a lone template.json on its own, and counts one file', async () => {
     const folder = aFolderIn(workDir, { 'template.json': LAUNCH_JSON });
 
-    expect(templatesCheck([folder]).stdout.trim()).toBe('Template sources OK (1 file checked)');
+    expect((await templatesCheck([folder])).stdout.trim()).toBe('Template sources OK (1 file checked)');
   });
 
-  it('reports a lone source it cannot read, and a preview.html without the YAML it comes from', () => {
+  it('reports a lone source it cannot read, and a preview.html without the YAML it comes from', async () => {
     const folder = aFolderIn(workDir, { 'template.md': UNREADABLE, 'nested/preview.html': '<p>orphan</p>' });
 
-    const result = templatesCheck([folder]);
+    const result = await templatesCheck([folder]);
 
     expect(result.status).toBe(1);
     expect(issueLines(result.stderr)).toEqual([
@@ -87,7 +87,7 @@ describe('pnpm templates:check on JSON and Markdown sources', { timeout: 60_000 
 });
 
 describe('what pnpm templates:check looks at', { timeout: 60_000 }, () => {
-  it('checks the current folder when given none, leaving out dependency, build and tool folders and READMEs beside no YAML', () => {
+  it('checks the current folder when given none, leaving out dependency, build and tool folders and READMEs beside no YAML', async () => {
     const folder = aFolderIn(workDir, {
       'checklists/launch/template.json': LAUNCH_JSON,
       'checklists/launch/README.md': 'Notes about the launch checklist.',
@@ -97,32 +97,32 @@ describe('what pnpm templates:check looks at', { timeout: 60_000 }, () => {
       'notes.md': UNREADABLE,
     });
 
-    const result = templatesCheck([], folder);
+    const result = await templatesCheck([], folder);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('Template sources OK (1 file checked)');
   });
 
-  it('checks a template file it is named directly, skips any other file, and skips an excluded folder it is named', () => {
+  it('checks a template file it is named directly, skips any other file, and skips an excluded folder it is named', async () => {
     const folder = aFolderIn(workDir, { 'launch/template.json': LAUNCH_JSON, 'launch/notes.txt': UNREADABLE, 'dist/template.md': UNREADABLE });
 
-    const result = templatesCheck([path.join(folder, 'launch', 'template.json'), path.join(folder, 'launch', 'notes.txt'), path.join(folder, 'dist')]);
+    const result = await templatesCheck([path.join(folder, 'launch', 'template.json'), path.join(folder, 'launch', 'notes.txt'), path.join(folder, 'dist')]);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('Template sources OK (1 file checked)');
   });
 
-  it('skips a path it is named that is neither a file nor a folder, such as the null device', () => {
-    const result = templatesCheck([devNull]);
+  it('skips a path it is named that is neither a file nor a folder, such as the null device', async () => {
+    const result = await templatesCheck([devNull]);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('Template sources OK (0 files checked)');
   });
 
-  it('fails with the reason when a path it is given does not exist', () => {
+  it('fails with the reason when a path it is given does not exist', async () => {
     const missing = path.join(workDir, 'no-such-folder');
 
-    const result = templatesCheck([missing]);
+    const result = await templatesCheck([missing]);
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('ENOENT');

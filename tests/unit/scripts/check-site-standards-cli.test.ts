@@ -51,8 +51,8 @@ describe('node scripts/check-site-standards.ts, as the deploy workflows run it',
     [[], 2, 'usage: node --import tsx scripts/check-site-standards.ts <base-url> <staging|production> [--local]'],
     [['https://example.test'], 2, 'usage:'],
     [['https://example.test', 'preview'], 1, 'Unknown environment preview: use staging or production'],
-  ])('refuses the arguments %j', { timeout: 60_000 }, (args, status, message) => {
-    const result = runRepositoryScript(SCRIPT, args);
+  ])('refuses the arguments %j', { timeout: 60_000 }, async (args, status, message) => {
+    const result = await runRepositoryScript(SCRIPT, args);
 
     expect(result.status).toBe(status);
     expect(result.stderr).toContain(message);

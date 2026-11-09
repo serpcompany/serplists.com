@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +10,7 @@ import {
 } from '../../../scripts/d1-baseline-migrations-lib';
 import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 import { z } from 'zod';
+import { ranToTheEnd } from '../../support/scriptProcess';
 import { parseJsonText } from '../../support/storedJson';
 
 const repoRoot = process.cwd();
@@ -173,25 +173,24 @@ describe('d1-baseline-migrations CLI dry runs, which never call wrangler without
     delete childEnv['CLOUDFLARE_ENV'];
     if (!env['D1_DATABASE_NAME']) delete childEnv['D1_DATABASE_NAME'];
     const { command, args: commandArgs } = buildScriptInvocation(path.join(repoRoot, 'scripts', 'd1-baseline-migrations.ts'), args);
-    return spawnSync(command, commandArgs, {
+    return ranToTheEnd(command, commandArgs, {
       cwd: repoRoot,
-      encoding: 'utf8',
       env: childEnv,
     });
   }
 
-  it('exits non-zero for a remote DB baseline without --preview or --allow-production', () => {
-    const result = dryRun(['--remote', '--database', 'DB', '--through', 'latest']);
+  it('exits non-zero for a remote DB baseline without --preview or --allow-production', async () => {
+    const result = await dryRun(['--remote', '--database', 'DB', '--through', 'latest']);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('--preview');
   });
 
-  it('exits non-zero when D1_DATABASE_NAME=DB names the remote target', () => {
-    expect(dryRun(['--remote', '--through', 'latest'], { D1_DATABASE_NAME: 'DB' }).status).not.toBe(0);
+  it('exits non-zero when D1_DATABASE_NAME=DB names the remote target', async () => {
+    expect((await dryRun(['--remote', '--through', 'latest'], { D1_DATABASE_NAME: 'DB' })).status).not.toBe(0);
   });
 
-  it('prints the resolved staging database on a preview dry run', () => {
-    const result = dryRun(['--remote', '--database', 'DB', '--preview', '--through', 'latest']);
+  it('prints the resolved staging database on a preview dry run', async () => {
+    const result = await dryRun(['--remote', '--database', 'DB', '--preview', '--through', 'latest']);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(STAGING_ID);
     expect(result.stdout).toContain('staging');

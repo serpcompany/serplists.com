@@ -39,8 +39,8 @@ describe('node scripts/verify-deployment.ts, as the deploy workflows run it', { 
     ]);
   });
 
-  it('exits 1 when the workflow passes none of its inputs', () => {
-    const result = runRepositoryScript(SCRIPT, [], { env: { ...process.env, DEPLOY_URL: undefined, RELEASE_COMMIT: undefined, SITE_ENV: undefined } });
+  it('exits 1 when the workflow passes none of its inputs', async () => {
+    const result = await runRepositoryScript(SCRIPT, [], { env: { ...process.env, DEPLOY_URL: undefined, RELEASE_COMMIT: undefined, SITE_ENV: undefined } });
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('::error::The smoke test needs DEPLOY_URL, RELEASE_COMMIT and SITE_ENV');

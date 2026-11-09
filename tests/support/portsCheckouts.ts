@@ -7,6 +7,7 @@ import { afterEach, expect } from 'vitest';
 import { z } from 'zod';
 
 import { REPO_ROOT } from '../../scripts/lib/run-tool';
+import { ranToTheEnd } from './scriptProcess';
 import { throwawayRepositoryEnvironment } from './throwawayGitRepository';
 
 export const PORTS_SCRIPT = path.join(REPO_ROOT, 'tools', 'checks', 'ports.mjs');
@@ -64,10 +65,10 @@ export function aPreloadedProgram(folder: string, lines: readonly string[]): str
 }
 
 export const portsRun = (folder: string, command: string[], changes: Record<string, string> = {}) =>
-  spawnSync(process.execPath, [PORTS_SCRIPT, ...command], { cwd: folder, encoding: 'utf8', env: portsEnvironment(changes) });
+  ranToTheEnd(process.execPath, [PORTS_SCRIPT, ...command], { cwd: folder, env: portsEnvironment(changes) });
 
-export const portsOf = (folder: string, changes: Record<string, string> = {}) =>
-  portsSchema.parse(JSON.parse(portsRun(folder, ['--json'], changes).stdout));
+export const portsOf = async (folder: string, changes: Record<string, string> = {}) =>
+  portsSchema.parse(JSON.parse((await portsRun(folder, ['--json'], changes)).stdout));
 
 export const claimsFolder = (main: string) => path.join(main, '.git', 'serplists-ports');
 

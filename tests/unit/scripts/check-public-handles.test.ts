@@ -1,16 +1,19 @@
+import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import { readD1Databases } from '../../../scripts/d1-baseline-migrations-lib';
-import { execTool, REPO_ROOT } from '../../../scripts/lib/run-tool';
+import { buildToolInvocation, REPO_ROOT } from '../../../scripts/lib/run-tool';
 import { runAgainstACloudflareD1StandIn } from '../../support/cloudflareD1StandIn';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const workDir = aWorkDirRemovedAfterAll('check-public-handles-');
+const execFileAsync = promisify(execFile);
 const STAGING_ID = readD1Databases(readFileSync(path.join(REPO_ROOT, 'wrangler.toml'), 'utf8')).topLevel.find((entry) => entry.binding === 'DB')?.preview_database_id ?? '';
 const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CLOUDFLARE_API_TOKEN: undefined, CLOUDFLARE_API_KEY: undefined };
 const WRANGLER_TOML = [
@@ -24,24 +27,25 @@ const WRANGLER_TOML = [
   '',
 ].join('\n');
 
-function aCheckoutWithALocalD1(sql: string): { checkout: string; execute: (command: string) => void } {
+async function aCheckoutWithALocalD1(sql: string): Promise<{ checkout: string; execute: (command: string) => Promise<void> }> {
   const checkout = aFolderIn(workDir, { 'wrangler.toml': WRANGLER_TOML });
-  const execute = (command: string) => {
-    execTool('wrangler', ['d1', 'execute', 'serp-checklists-db', '--local', '--command', command], { cwd: checkout, env, stdio: 'pipe' });
+  const execute = async (command: string) => {
+    const wrangler = buildToolInvocation('wrangler', ['d1', 'execute', 'serp-checklists-db', '--local', '--command', command]);
+    await execFileAsync(wrangler.command, wrangler.args, { ...wrangler.options, cwd: checkout, env });
   };
-  execute(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT); ${sql}`);
+  await execute(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT); ${sql}`);
   return { checkout, execute };
 }
 
 describe('pnpm run check:public-handles:local', { timeout: 120_000 }, () => {
-  it('names a User and an Organization holding one handle, and exits 1 until one is renamed', () => {
-    const { checkout, execute } = aCheckoutWithALocalD1(
+  it('names a User and an Organization holding one handle, and exits 1 until one is renamed', async () => {
+    const { checkout, execute } = await aCheckoutWithALocalD1(
       "INSERT INTO users VALUES ('u-1', 'Acme'), ('u-2', 'jane'), ('u-3', NULL); INSERT INTO teams VALUES ('t-1', 'acme'), ('t-2', '  ');",
     );
 
-    const colliding = runRepositoryScript('scripts/check-public-handles.ts', [], { cwd: checkout, env });
-    execute("UPDATE teams SET slug = 'acme-inc' WHERE id = 't-1'");
-    const renamed = runRepositoryScript('scripts/check-public-handles.ts', [], { cwd: checkout, env });
+    const colliding = await runRepositoryScript('scripts/check-public-handles.ts', [], { cwd: checkout, env });
+    await execute("UPDATE teams SET slug = 'acme-inc' WHERE id = 't-1'");
+    const renamed = await runRepositoryScript('scripts/check-public-handles.ts', [], { cwd: checkout, env });
 
     expect(colliding.status).toBe(1);
     expect(colliding.stdout.split('\n').filter(Boolean)).toEqual([
