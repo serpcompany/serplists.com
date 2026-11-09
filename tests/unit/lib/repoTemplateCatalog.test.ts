@@ -95,16 +95,25 @@ describe("repo template catalog", () => {
     templates: [slugless("Launch prep"), slugless("Launch day")],
   });
 
-  it("keeps every template of a pack that gives them no slug, the first named for its file as before and each later one numbered, with ids that hold across loads", () => {
+  it("keeps every template of a pack that gives them no slug, the last with the id named for its file as before and each earlier one numbered, with ids that hold across loads", () => {
     const source = { "../data/public-template-packs/launch.json": { default: sluglessPack() } };
 
     const ids = normalizeRepoTemplateSources(source).map(({ id, title }) => ({ id, title }));
 
     expect(ids).toEqual([
-      { id: "repo:launch-2", title: "Launch day" },
-      { id: "repo:launch", title: "Launch prep" },
+      { id: "repo:launch", title: "Launch day" },
+      { id: "repo:launch-1", title: "Launch prep" },
     ]);
     expect(normalizeRepoTemplateSources(source).map(({ id }) => id)).toEqual(ids.map(({ id }) => id));
+  });
+
+  it("keeps the id named for its file for the one slugless template of a pack, wherever it sits", () => {
+    const pack = { ...sluglessPack(), templates: [{ ...slugless("Launch prep"), slug: "launch-prep" }, slugless("Launch day")] };
+
+    expect(normalizeRepoTemplateSources({ "../data/public-template-packs/launch.json": pack }).map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: "repo:launch", title: "Launch day" },
+      { id: "repo:launch-prep", title: "Launch prep" },
+    ]);
   });
 
   it("numbers the slugless templates of a pack file with no name as template-1, template-2", () => {
