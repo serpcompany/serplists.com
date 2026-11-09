@@ -38,9 +38,13 @@ describe('the in-memory analytics', () => {
     expect(sends()).toEqual([0, 0, 0]);
   });
 
-  it('keeps window errors and rejections, with message and URL, and sends none', () => {
+  it('keeps window errors and rejections, with message and URL, and sends none', async () => {
     const sends = watchEveryWayToSend();
     window.history.replaceState(null, '', '/templates/?q=launch');
+
+    await vi.waitFor(() =>
+      expect(analytics.getEvents().at(-1)).toMatchObject({ event: 'page_view', properties: objectContaining({ path: '/templates/' }) }),
+    );
 
     window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught TypeError: Cannot save "Q3 launch plan"' }));
     window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new TypeError('Failed to fetch') }));

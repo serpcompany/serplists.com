@@ -1,5 +1,4 @@
-import { once } from 'node:events';
-import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -30,8 +29,27 @@ const devAllEnv = (vars: Record<string, string> = {}): Record<string, string | u
   ...vars,
 });
 
-const startDevAll = (cwd: string, { env = devAllEnv(), execPath }: { env?: Record<string, string | undefined>; execPath?: string } = {}) =>
-  startTheCopysScript(copy, 'scripts/dev-auto.ts', { cwd, env, ...(execPath === undefined ? {} : { execPath }) });
+const NODE_IS_MOVED_AWAY_BEFORE_THE_FIRST_SPAWN = [
+  "import childProcess from 'node:child_process';",
+  "import { renameSync } from 'node:fs';",
+  "import { syncBuiltinESMExports } from 'node:module';",
+  'const start = childProcess.spawn;',
+  'let moved = false;',
+  'childProcess.spawn = (...args) => {',
+  '  if (!moved) {',
+  '    moved = true;',
+  '    renameSync(process.env.SERPLISTS_NODE_MOVED_FROM, process.env.SERPLISTS_NODE_MOVED_TO);',
+  '  }',
+  '  return start(...args);',
+  '};',
+  'syncBuiltinESMExports();',
+  '',
+].join('\n');
+
+type StartOptions = { env?: Record<string, string | undefined>; execPath?: string; preloads?: readonly string[] };
+
+const startDevAll = (cwd: string, { env = devAllEnv(), execPath, preloads = [] }: StartOptions = {}) =>
+  startTheCopysScript(copy, 'scripts/dev-auto.ts', { cwd, env, preloads, ...(execPath === undefined ? {} : { execPath }) });
 
 describe('pnpm run dev:all with a stand-in next dev', { timeout: 300_000 }, () => {
   it("starts next dev on the port it records, with .dev.vars and the Worker vars for that port, and ends with next dev's exit code", async () => {
@@ -81,9 +99,14 @@ describe('pnpm run dev:all with a stand-in next dev', { timeout: 300_000 }, () =
     const checkout = aFolderIn(workDir);
     const node = path.join(aFolderIn(workDir), path.basename(process.execPath));
     copyFileSync(process.execPath, node);
-    const devAll = startDevAll(checkout, { execPath: node });
-    await once(devAll.child, 'spawn');
-    renameSync(node, `${node}.moved`);
+    chmodSync(node, 0o755);
+    const preload = path.join(aFolderIn(workDir), 'move-node-aside.mjs');
+    writeFileSync(preload, NODE_IS_MOVED_AWAY_BEFORE_THE_FIRST_SPAWN);
+    const devAll = startDevAll(checkout, {
+      execPath: node,
+      preloads: [preload],
+      env: devAllEnv({ SERPLISTS_NODE_MOVED_FROM: node, SERPLISTS_NODE_MOVED_TO: `${node}.moved` }),
+    });
 
     const run = await devAll.finished;
 
