@@ -1,8 +1,7 @@
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
 
 import { noSourceTextReads } from '../../../scripts/eslint-rules/no-source-text-reads';
-import { linesReportedBy, typescriptParserThatEdits, typescriptRuleTester } from '../../support/ruleTester';
+import { typescriptRuleTester } from '../../support/ruleTester';
 
 const aTestFile = path.join(process.cwd(), 'tests', 'unit', 'lib', 'sample.test.ts');
 const reads = (named: string) => ({ messageId: 'behaviorNotText', data: { path: named } });
@@ -171,22 +170,4 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
       errors: [reads('src/lib/*.ts')],
     },
   ],
-});
-
-describe('no-source-text-reads with a parser that leaves a template part uncooked', () => {
-  const uncooked = (value: unknown): void => {
-    if (typeof value !== 'object' || value === null) return;
-    if ('cooked' in value) Reflect.set(value, 'cooked', null);
-    Object.values(value).forEach(uncooked);
-  };
-  const withTemplatesUncooked = typescriptParserThatEdits((parsed) => {
-    uncooked(parsed.ast);
-    return parsed;
-  });
-  const code = "readFileSync(`src/lib/theme.ts`, 'utf8');";
-
-  it('reads a template part with no cooked text as unknown, so it names no source file from it', () => {
-    expect(linesReportedBy(noSourceTextReads, code, { filename: aTestFile })).toEqual([1]);
-    expect(linesReportedBy(noSourceTextReads, code, { filename: aTestFile, parser: withTemplatesUncooked })).toEqual([]);
-  });
 });

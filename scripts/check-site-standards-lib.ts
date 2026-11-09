@@ -96,7 +96,7 @@ function siteUnderCheck(base: URL, request: SiteRequest) {
 
 type SiteUnderCheck = ReturnType<typeof siteUnderCheck>;
 
-const locsIn = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => String(match[1]));
+const locsIn = (xml: string) => [...xml.matchAll(/<loc>[^<]+<\/loc>/g)].map(([element]) => element.slice("<loc>".length, -"</loc>".length));
 
 async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }: SiteUnderCheck) {
   for (const page of ONE_SEEDED_PAGE_OF_EACH_KIND.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
@@ -151,16 +151,11 @@ async function checkOtherHostsRedirectToTheCanonicalHost(
   if (onWorkersDev || local) {
     const workersDevHost = local ? LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST : undefined;
     const onTheWorkersDevHost = workersDevHost === undefined ? {} : { host: workersDevHost };
-    if (new URL(canonicalOrigin).hostname.endsWith(".workers.dev")) {
-      const page = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
-      check(page.status === 200, `${page.status} /about/ on ${workersDevHost ?? base.host}, where this environment lives`);
-    } else {
-      for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]] as const) {
-        await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
-      }
-      const smokeTest = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: true });
-      check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost ?? base.host} with ${SMOKE_TEST_HEADER}`);
+    for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]] as const) {
+      await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
     }
+    const smokeTest = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: true });
+    check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost ?? base.host} with ${SMOKE_TEST_HEADER}`);
   }
   if (local) {
     await expectRedirect("/pricing", "https://serplists.com/pricing/", { host: "www.serplists.com" });

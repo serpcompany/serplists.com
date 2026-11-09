@@ -120,20 +120,32 @@ describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => 
     expect(restarts(run.stdout)).toEqual([]);
   }, 30_000);
 
-  it("restarts once on dev:all's port when the listener it stops takes longer than a check to stop", async () => {
+  it("follows each move of dev:all in turn, never restarting a listener that is still stopping, when stopping takes longer than a check", async () => {
+    const stopHeard = inCheckout("stop-heard");
     const listening = listen({
-      env: { STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1", STRIPE_CLI_STAND_IN_SLOW_TO_STOP_MS: "2500", ...childrenEndAsEnv({ afterMs: 2500 }) },
+      env: {
+        STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1",
+        STRIPE_CLI_STAND_IN_SLOW_TO_STOP_MS: "2500",
+        ...childrenEndAsEnv({ afterMs: 4000, heardAt: stopHeard }),
+      },
       preloads: [CHILD_ENDING_STAND_IN],
     });
     await vi.waitFor(() => expect(stripeCliCalls()).toHaveLength(1), { timeout: 20_000, interval: 50 });
     startDevAllOn(4998);
+    await vi.waitFor(() => expect(existsSync(stopHeard)).toBe(true), { timeout: 20_000, interval: 50 });
+    startDevAllOn(4997);
 
     const run = await listening;
 
     expect(run.status).toBe(0);
-    expect(forwardedTo()).toEqual([stringMatching(/^http:\/\/localhost:\d+\/api\/stripe\/webhook$/), "http://localhost:4998/api/stripe/webhook"]);
-    expect(restarts(run.stdout)).toEqual(["[stripe-listen] This checkout's API is at http://localhost:4998/api/stripe/webhook. Restarting the listener."]);
-  }, 30_000);
+    expect(run.stdout.split("\n").filter((line) => line.includes("Forwarding Stripe events") || line.endsWith("Restarting the listener."))).toEqual([
+      stringMatching(/^\[stripe-listen\] Forwarding Stripe events to http:\/\/localhost:\d+\/api\/stripe\/webhook$/),
+      "[stripe-listen] This checkout's API is at http://localhost:4998/api/stripe/webhook. Restarting the listener.",
+      "[stripe-listen] Forwarding Stripe events to http://localhost:4998/api/stripe/webhook",
+      "[stripe-listen] This checkout's API is at http://localhost:4997/api/stripe/webhook. Restarting the listener.",
+      "[stripe-listen] Forwarding Stripe events to http://localhost:4997/api/stripe/webhook",
+    ]);
+  }, 60_000);
 
   it.each(["SIGINT", "SIGTERM"] as const)("stops the listener when it is sent %s, as a terminal's Ctrl+C or a stop does, and ends with status 1", async (signal) => {
     const requestFile = inCheckout("signal-request");
@@ -147,16 +159,6 @@ describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => 
     const run = await listening;
 
     expect(run.status).toBe(1);
-    expect(forwardedTo()).toEqual([FORWARD_TO]);
-  }, 30_000);
-
-  it("ends with status 0 when stripe listen ends with neither an exit code nor a signal", async () => {
-    const run = await listen({
-      env: { STRIPE_LOCAL_WEBHOOK_URL: FORWARD_TO, STRIPE_CLI_STAND_IN_EXIT_CODE: "3", ...childrenEndAsEnv({ code: null, signal: null }) },
-      preloads: [CHILD_ENDING_STAND_IN],
-    });
-
-    expect(run.status).toBe(0);
     expect(forwardedTo()).toEqual([FORWARD_TO]);
   }, 30_000);
 

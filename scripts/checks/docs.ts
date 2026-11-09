@@ -109,7 +109,7 @@ function contentProblems(doc: string, docs: Docs): Problem[] {
   const problems: Problem[] = findComments(doc, text).map(({ line }) => ({
     path: doc,
     line,
-    problem: `hides ${excerpt([text.split(/\r?\n/)[line - 1]].join(""))} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
+    problem: `hides ${excerpt(text.split(/\r?\n/)[line - 1] ?? "")} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
   }));
   const overBudget = budgetProblem(doc, text, docs.allowances);
   if (overBudget) problems.push({ path: doc, problem: overBudget });

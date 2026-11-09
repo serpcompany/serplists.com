@@ -248,8 +248,7 @@ async function runQuery(args: string[], deps: DeployedLogDeps): Promise<CommandR
   const limit = parseLimit(options.limit, DEFAULT_LIMIT, MAX_EVENTS);
   const [onlyEvent, ...otherEvents] = filter.events;
   const needle = filter.requestId ?? (otherEvents.length === 0 ? onlyEvent : undefined);
-  const fromMs = Number([filter.sinceMs, deps.nowMs].find((at) => at !== undefined));
-  const query = telemetryQuery(DEPLOYED_WORKERS[environment], filter.levels, needle, fromMs, deps.nowMs, limit);
+  const query = telemetryQuery(DEPLOYED_WORKERS[environment], filter.levels, needle, filter.sinceMs ?? deps.nowMs, deps.nowMs, limit);
   const { events, count } = await queryEvents(query, credentials(deps.env), deps);
   const entries = logEntriesOf(events).filter((entry) => matchesFilter(entry, filter));
   const lines = linesCommand(entries, limit, options.json ?? false);

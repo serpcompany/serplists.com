@@ -67,7 +67,7 @@ async function main() {
       return;
     }
 
-    process.exit(code ?? 1);
+    process.exit(code);
   });
 }
 

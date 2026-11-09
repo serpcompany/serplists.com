@@ -1,5 +1,4 @@
-import http from 'node:http';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { checkSiteStandards, checkSiteStandardsUntilItPasses, getWithoutFollowingRedirects } from '../../../scripts/check-site-standards-lib';
 import { stringMatching } from '../../support/asymmetricMatchers';
@@ -43,25 +42,6 @@ describe('a request the site standards check sends', () => {
     expect([answer.status, answer.location]).toEqual([200, null]);
   });
 
-  it('reads an answer that carries no status code as status 0', async () => {
-    const requestForReal = http.request;
-    const request = vi
-      .spyOn(http, 'request')
-      .mockImplementation((url: string | URL, options: http.RequestOptions, respond?: (response: http.IncomingMessage) => void) =>
-        requestForReal(url, options, respond).prependListener('response', (response) => {
-          response.statusCode = undefined;
-        }),
-      );
-
-    try {
-      const answer = await aSiteAnswering(200, {}, [])((origin) => getWithoutFollowingRedirects(`${origin}/`));
-
-      expect([answer.status, answer.body]).toEqual([0, 'the body']);
-    } finally {
-      request.mockRestore();
-    }
-  });
-
   it('gives up on a site that does not answer in time, naming the URL', async () => {
     await whileServingLocally(
       () => {},
@@ -96,16 +76,17 @@ describe('the site standards check when it is given no way to request the site',
   });
 });
 
-describe('the site standards check when a request fails with something other than an Error', () => {
-  it('says the site did not answer, for an unknown reason, before it checks again', async () => {
+describe('the site standards check when a request fails', () => {
+  it('says why the site did not answer before it checks again, and fails with that error once it runs out of attempts', async () => {
     const reasons: string[] = [];
+    const reset = new Error('read ECONNRESET');
 
     await expect(
       checkSiteStandardsUntilItPasses(
-        { baseUrl: 'https://serp-checklists-production.serp.workers.dev', siteEnv: 'production', request: () => Promise.reject<never>('ECONNRESET') },
+        { baseUrl: 'https://serp-checklists-production.serp.workers.dev', siteEnv: 'production', request: () => Promise.reject(reset) },
         { attempts: 2, sleep: async () => {}, onRetry: (_attempt, reason) => reasons.push(reason) },
       ),
-    ).rejects.toBe('ECONNRESET');
-    expect(reasons).toEqual(['the site did not answer (unknown error)']);
+    ).rejects.toBe(reset);
+    expect(reasons).toEqual(['the site did not answer (read ECONNRESET)']);
   });
 });

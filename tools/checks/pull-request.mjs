@@ -167,7 +167,7 @@ async function run(name, env) {
   try {
     return await check(env);
   } catch (error) {
-    return fails(`The ${name} check couldn't finish.`, error instanceof Error ? error.message : String(error));
+    return fails(`The ${name} check couldn't finish.`, error.message);
   }
 }
 

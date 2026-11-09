@@ -40,7 +40,7 @@ export function fencedCodeLines(text: string): Line[] {
   return lines.flatMap((line, index) => (fenced[index] && !FENCE.test(line) ? [{ line: index + 1, text: line }] : []));
 }
 
-export const codeSpans = (line: string) => [...line.matchAll(/`([^`]+)`/g)].map((match) => String(match[1]));
+export const codeSpans = (line: string) => [...line.matchAll(/`[^`]+`/g)].map(([span]) => span.slice(1, -1));
 
 export const withoutCodeSpans = (line: string) => line.replace(/`[^`]*`/g, (span) => " ".repeat(span.length));
 

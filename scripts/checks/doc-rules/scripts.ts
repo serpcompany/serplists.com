@@ -55,9 +55,8 @@ export interface KnownCommands {
 
 function invokedScript(words: readonly string[]): string | undefined {
   let index = 0;
-  while ((words[index] ?? "").startsWith("-")) {
-    const word = String(words[index]);
-    index += OPTIONS_WITH_VALUES.has(word.split("=", 1).join("")) && !word.includes("=") ? 2 : 1;
+  for (let word = words[index]; word?.startsWith("-"); word = words[index]) {
+    index += !word.includes("=") && OPTIONS_WITH_VALUES.has(word) ? 2 : 1;
   }
   const command = words[index] === "run" ? words[index + 1] : words[index];
   if (command === undefined || !SCRIPT_NAME.test(command) || (words[index] !== "run" && PNPM_COMMANDS.has(command))) return undefined;
@@ -65,14 +64,13 @@ function invokedScript(words: readonly string[]): string | undefined {
 }
 
 export function pnpmScripts(code: string): string[] {
-  return [...code.matchAll(/(?:^|[\s;&|(])pnpm((?:\s+[^\s;&|)]+)+)/g)].flatMap((match) => {
-    const script = invokedScript(String(match[1]).trim().split(/\s+/));
+  return [...code.matchAll(/(?<=(?:^|[\s;&|(])pnpm)(?:\s+[^\s;&|)]+)+/g)].flatMap(([invocation]) => {
+    const script = invokedScript(invocation.trim().split(/\s+/));
     return script === undefined ? [] : [script];
   });
 }
 
-export const proseScripts = (prose: string) =>
-  [...prose.matchAll(/\bpnpm run ([a-z][\w:.-]*\w)/g)].map((match) => String(match[1]));
+export const proseScripts = (prose: string) => [...prose.matchAll(/(?<=\bpnpm run )[a-z][\w:.-]*\w/g)].map(([name]) => name);
 
 export const missingScript = (name: string, known: KnownCommands) => !known.scripts.has(name) && !known.binaries.has(name);
 

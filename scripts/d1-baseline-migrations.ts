@@ -20,10 +20,8 @@ function getMigrationFiles(): string[] {
 function selectThroughMigration(migrationFiles: string[], throughMigration: string): string[] {
   if (throughMigration === "latest") return migrationFiles;
 
-  const matches = migrationFiles.filter(
-    (fileName) =>
-      fileName === throughMigration || fileName.startsWith(throughMigration),
-  );
+  const matchesThrough = (fileName: string) => fileName === throughMigration || fileName.startsWith(throughMigration);
+  const matches = migrationFiles.filter(matchesThrough);
   if (matches.length === 0) {
     throw new Error(`No migration matched --through ${throughMigration}`);
   }
@@ -33,8 +31,7 @@ function selectThroughMigration(migrationFiles: string[], throughMigration: stri
     );
   }
 
-  const selectedIndex = migrationFiles.indexOf(String(matches[0]));
-  return migrationFiles.slice(0, selectedIndex + 1);
+  return migrationFiles.slice(0, migrationFiles.findIndex(matchesThrough) + 1);
 }
 
 function sqlString(value: string): string {

@@ -14,7 +14,8 @@ const PROTOCOL_VERSION = "2025-06-18";
 const RUN_NAME = /^[a-z0-9][a-z0-9-]{0,60}$/;
 const API_STEP = /^(GET|POST|PUT|PATCH|DELETE) (\/api\/\S*)$/;
 const REFERENCE = /\{\$(\d+)\.([^}]+)\}/g;
-const WHOLE_REFERENCE = /^\{\$(\d+)\.([^}]+)\}$/;
+const WHOLE_REFERENCE = /^\{\$(?<step>\d+)\.(?<keyPath>[^}]+)\}$/;
+const wholeReferenceSchema = z.object({ step: z.string(), keyPath: z.string() });
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const START_LIMIT_MS = 180_000;
 const MCP_HEADERS = { Accept: "application/json, text/event-stream" };
@@ -111,8 +112,8 @@ const interpolated = (text: string, answers: readonly unknown[]) =>
 
 function resolved(value: unknown, answers: readonly unknown[]): unknown {
   if (typeof value === "string") {
-    const whole = WHOLE_REFERENCE.exec(value);
-    return whole ? referenced(answers, String(whole[1]), String(whole[2])) : interpolated(value, answers);
+    const whole = wholeReferenceSchema.safeParse(WHOLE_REFERENCE.exec(value)?.groups);
+    return whole.success ? referenced(answers, whole.data.step, whole.data.keyPath) : interpolated(value, answers);
   }
   const list = listSchema.safeParse(value);
   if (list.success) return list.data.map((item) => resolved(item, answers));
@@ -139,7 +140,7 @@ async function signIn(base: string, plan: Plan): Promise<string> {
   });
   const cookie = answer.headers
     .getSetCookie()
-    .map((line) => line.split(";", 1).join(""))
+    .map((line) => line.replace(/;.*/s, ""))
     .filter(Boolean)
     .join("; ");
   if (!answer.ok || !cookie) {
@@ -181,7 +182,7 @@ async function serverFor(base: string | undefined): Promise<Server> {
   const session = readDevSession();
   const running = `http://localhost:${session?.port ?? 0}`;
   if (session && (await isOwnedDevProcess(session.pid, session.startedAt)) && (await answersHealth(running))) {
-    const description = `this checkout's dev:all, already running (launcher pid ${[session.pid, "unknown"].find((pid) => pid !== null)}); left running`;
+    const description = `this checkout's dev:all, already running (launcher pid ${session.pid ?? "unknown"}); left running`;
     return { base: running, description, logged: true, stop: async () => undefined };
   }
   return startDevAll();
@@ -227,7 +228,7 @@ async function doctor(server: Server, plan: Plan, secret: string, health: Answer
 }
 
 async function run(name: string, plan: Plan, server: Server, folder: string): Promise<number> {
-  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), text.endsWith("\n") ? text : `${text}\n`);
+  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), `${text}\n`);
   const health = await call(server.base, "GET", "/api/health", {});
   const cookie = await signIn(server.base, plan);
   const lines: string[] = [];

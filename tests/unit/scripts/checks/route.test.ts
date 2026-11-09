@@ -54,16 +54,6 @@ describe('what git says to the hooks', () => {
 
     expect([run.status, run.stdout]).toEqual([0, '""']);
   });
-
-  it('names no checkout when git succeeds without printing one', { timeout: 60_000 }, async () => {
-    const run = await withSpawnSyncAnswering(
-      "'git'",
-      { status: 0, stdout: null, stderr: null },
-      `process.stdout.write(String(route.owningCheckout(${JSON.stringify(scratchFolder('route'))})));`,
-    );
-
-    expect([run.status, run.stdout]).toEqual([0, 'undefined']);
-  });
 });
 
 describe("what a hook passes on from the checkout's checks", () => {

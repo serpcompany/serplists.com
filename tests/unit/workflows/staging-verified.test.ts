@@ -135,10 +135,10 @@ describe('the staging-verified action on a runner that names no GitHub API URL',
     expect(requests).toEqual([]);
   });
 
-  it('reports a request that fails with a bare message by that message', { timeout: 120_000 }, async () => {
-    const { status, output } = await gateAnsweredBy({ thrown: 'getaddrinfo ENOTFOUND api.github.com' });
+  it('reports a request that cannot reach GitHub by the error fetch fails with', { timeout: 120_000 }, async () => {
+    const { status, output } = await gateAnsweredBy({ unreachable: 'getaddrinfo ENOTFOUND api.github.com' });
 
     expect(status).not.toBe(0);
-    expect(output).toContain("::error title=Couldn't tell whether Staging deployed these files::getaddrinfo ENOTFOUND api.github.com");
+    expect(output).toContain("::error title=Couldn't tell whether Staging deployed these files::fetch failed");
   });
 });

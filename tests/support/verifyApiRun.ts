@@ -33,10 +33,10 @@ const rpcRequestSchema = z.object({
 
 type Seen = { method: string; path: string; cookie: string | undefined; authorization: string | undefined };
 
-function answerRpc(body: string, serverVersion: string): unknown {
+function answerRpc(body: string): unknown {
   const request = rpcRequestSchema.parse(JSON.parse(body));
   const reply = (result: unknown) => ({ jsonrpc: '2.0', id: request.id, result });
-  if (request.method === 'initialize') return reply({ serverInfo: { name: 'serp-lists', version: serverVersion } });
+  if (request.method === 'initialize') return reply({ serverInfo: { name: 'serp-lists', version: '0.6.0' } });
   if (request.method === 'tools/list') return reply({ tools: [{ name: 'list_templates' }] });
   const tool = request.params?.name;
   if (tool === 'list_templates') return reply({ structuredContent: { templates: [{ id: 'template-1', title: 'Launch' }] } });
@@ -48,7 +48,7 @@ function answerRpc(body: string, serverVersion: string): unknown {
   return { jsonrpc: '2.0', id: request.id, error: { code: -32602, message: 'Unknown tool' } };
 }
 
-function answer(request: IncomingMessage, body: string, response: ServerResponse, count: number, serverVersion: string) {
+function answer(request: IncomingMessage, body: string, response: ServerResponse, count: number) {
   const route = `${request.method ?? 'GET'} ${new URL(request.url ?? '/', 'http://localhost').pathname}`;
   const send = (status: number, payload: unknown, headers: Record<string, string> = {}) => {
     response.writeHead(status, { 'content-type': 'application/json', 'x-request-id': `request-${count}`, ...headers });
@@ -73,7 +73,7 @@ function answer(request: IncomingMessage, body: string, response: ServerResponse
     response.end('plain text, not JSON');
     return undefined;
   }
-  if (route === 'POST /api/mcp' && request.headers.authorization === `Bearer ${SECRET}`) return send(200, answerRpc(body, serverVersion));
+  if (route === 'POST /api/mcp' && request.headers.authorization === `Bearer ${SECRET}`) return send(200, answerRpc(body));
   return send(404, { error: 'Not found' });
 }
 
@@ -84,16 +84,16 @@ export async function runTheScript(args: readonly string[], options: ScriptOptio
   return { status, output: `${stdout}${stderr}` };
 }
 
-type StandInOptions = { serverVersion?: string; onRequest?: (route: string) => void };
+type StandInOptions = { onRequest?: (route: string) => void };
 
-export async function withTheStandInApi<T>(run: (origin: string, seen: readonly Seen[]) => Promise<T>, { serverVersion = '0.6.0', onRequest }: StandInOptions = {}) {
+export async function withTheStandInApi<T>(run: (origin: string, seen: readonly Seen[]) => Promise<T>, { onRequest }: StandInOptions = {}) {
   const seen: Seen[] = [];
   const server = createServer((request, response) => {
     void text(request).then((body) => {
       const { cookie, authorization } = request.headers;
       seen.push({ method: request.method ?? 'GET', path: request.url ?? '/', cookie, authorization });
       onRequest?.(`${request.method ?? 'GET'} ${request.url ?? '/'}`);
-      answer(request, body, response, seen.length, serverVersion);
+      answer(request, body, response, seen.length);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -119,16 +119,13 @@ export function theProofFolderOf(runName: string): string {
   return made.join('');
 }
 
-export async function verifyApi(name: string, plan: unknown, extra: string[] = [], { serverVersion = '0.6.0' } = {}) {
+export async function verifyApi(name: string, plan: unknown, extra: string[] = []) {
   const planFile = aPlanFile(name, plan);
   const runName = `test-${name}-${process.pid}`;
-  return withTheStandInApi(
-    async (origin, seen) => {
-      const result = await runTheScript([runName, planFile, ...(extra.length > 0 ? extra : ['--base', origin])]);
-      return { ...result, seen, folder: theProofFolderOf(runName) };
-    },
-    { serverVersion },
-  );
+  return withTheStandInApi(async (origin, seen) => {
+    const result = await runTheScript([runName, planFile, ...(extra.length > 0 ? extra : ['--base', origin])]);
+    return { ...result, seen, folder: theProofFolderOf(runName) };
+  });
 }
 
 export const proof = (folder: string, file: string) => readFileSync(path.join(folder, file), 'utf8');

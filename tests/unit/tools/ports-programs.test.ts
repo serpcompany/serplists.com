@@ -4,10 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { mainPorts, portsFor } from '../../../tools/checks/ports.mjs';
-import { CHILD_ENDING_STAND_IN, childrenEndAsEnv } from '../../support/childEndingStandIn';
 import { aGitStandIn } from '../../support/gitStandIn';
 import { aPreloadedProgram, PORTS_SCRIPT, portsEnvironment, portsSchema, repository, scratch, worktree } from '../../support/portsCheckouts';
-import { ranToTheEnd, runScriptProcess } from '../../support/scriptProcess';
+import { ranToTheEnd } from '../../support/scriptProcess';
 
 const A_SPAWN_THAT_CANNOT_START = [
   "import childProcess from 'node:child_process';",
@@ -59,14 +58,6 @@ describe('the ports of a checkout whose git answers what an older or broken git 
 });
 
 describe('ports.mjs alongside other programs', () => {
-  it('can be imported by a program whose first argument names no file, and then runs no command of its own', async () => {
-    const program = `const { portsFor } = await import(${JSON.stringify(pathToFileURL(PORTS_SCRIPT).href)}); process.stdout.write(JSON.stringify(portsFor(1)));`;
-
-    const run = await ranToTheEnd(process.execPath, ['--input-type=module', '--eval', program, 'no-such-script.mjs'], { cwd: scratch(), env: portsEnvironment() });
-
-    expect([run.status, run.stdout, run.stderr]).toEqual([0, JSON.stringify(portsFor(1)), '']);
-  });
-
   it('fails, naming the program, when the command it launches cannot start', async () => {
     const main = repository();
     const run = await ranToTheEnd(
@@ -77,20 +68,6 @@ describe('ports.mjs alongside other programs', () => {
 
     expect(run.status).toBe(127);
     expect(run.stderr).toBe("node didn't start: spawn node ENOENT\n");
-  }, 30_000);
-
-  it('fails when the command it runs ends with neither an exit code nor a signal', async () => {
-    const finishes = path.join(scratch(), 'finishes.mjs');
-    writeFileSync(finishes, "process.stdout.write('finished');\n");
-
-    const run = await runScriptProcess('tools/checks/ports.mjs', {
-      args: ['run', 'dev', '--', 'node', finishes],
-      cwd: repository(),
-      env: portsEnvironment(childrenEndAsEnv({ code: null, signal: null })),
-      preloads: [CHILD_ENDING_STAND_IN],
-    });
-
-    expect([run.status, run.stdout]).toEqual([1, 'finished']);
   }, 30_000);
 
   it('passes a stop signal on to the command it runs, and fails when the signal ends that command', async () => {

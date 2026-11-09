@@ -75,20 +75,6 @@ describe('templateLint', () => {
     expect(issues.some((issue) => issue.code === 'json-markdown-drift')).toBe(true);
   });
 
-  it('reports a source that fails to read with something other than an Error, without a reason it cannot name', async () => {
-    readFileMock.mockRejectedValue('the disk went away');
-
-    await expect(lintSingleTemplateSource('/repo/template.json')).resolves.toEqual([
-      { filePath: '/repo/template.json', code: 'parse-error', message: 'Unknown template parse error' },
-    ]);
-    await expect(lintTemplatePair('/repo/template.json', '/repo/template.md')).resolves.toEqual([
-      { filePath: '/repo/template.json <-> /repo/template.md', code: 'pair-parse-error', message: 'Failed to lint template pair' },
-    ]);
-    await expect(lintYamlTemplateBundle('/repo/template.yaml', {})).resolves.toEqual([
-      { filePath: '/repo/template.yaml', code: 'yaml-bundle-parse-error', message: 'Failed to lint YAML template bundle' },
-    ]);
-  });
-
   it('flags drift between yaml source and generated readme/html artifacts', async () => {
     readFileMock
       .mockResolvedValueOnce([

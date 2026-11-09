@@ -25,6 +25,6 @@ function fail(title, message) {
   process.exit(1);
 }
 
-const failWhenItThrows = (title, main) => main().catch((error) => fail(title, error?.message ?? error));
+const failWhenItThrows = (title, main) => main().catch((error) => fail(title, error.message));
 
 module.exports = { get, post, fail, failWhenItThrows };

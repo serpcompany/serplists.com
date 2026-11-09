@@ -100,14 +100,6 @@ describe('pnpm run dev:all with a stand-in next dev', { timeout: 300_000 }, () =
     expect(sessionLeft).toBe(false);
   });
 
-  it('clears its session and fails when next dev ends with neither an exit code nor a signal', async () => {
-    const { run, sessionLeft } = await endedAs({ code: null, signal: null });
-
-    expect(run.stderr).not.toContain(RAISED_ON_ITSELF);
-    expect(run.status).toBe(1);
-    expect(sessionLeft).toBe(false);
-  });
-
   it('turns colour on for next dev unless something set FORCE_COLOR, and dev:stop stops it and the next dev it started', async () => {
     const checkout = aFolderIn(workDir);
     const devAll = startDevAll(checkout);

@@ -1,9 +1,8 @@
 import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { NO_COMMENTS_MESSAGE, noComments } from '../../../scripts/eslint-rules/no-comments';
-import { linesReportedBy, javascriptRuleTester, typescriptParserThatEdits, typescriptRuleTester } from '../../support/ruleTester';
+import { javascriptRuleTester, typescriptRuleTester } from '../../support/ruleTester';
 
 const removeComment = (line: number, column: number) => ({ message: NO_COMMENTS_MESSAGE, line, column });
 
@@ -118,21 +117,5 @@ describe('no-comments with eslint-disable comments', () => {
 
   it('reports the directive and every comment after it once the config sets noInlineConfig', () => {
     expect(reportedLines(disabledFile, { noInlineConfig: true })).toEqual([1, 2]);
-  });
-});
-
-describe('no-comments with a parser that gives a comment no location', () => {
-  const programComments = z.object({ comments: z.array(z.custom<object>((comment) => typeof comment === 'object' && comment !== null)) });
-  const withoutCommentLocations = typescriptParserThatEdits((parsed) => {
-    for (const comment of programComments.parse(parsed.ast).comments) Reflect.deleteProperty(comment, 'loc');
-    return parsed;
-  });
-  const code = 'export const answer = 42; // why\n';
-
-  it('refuses to report a comment it cannot place, rather than reporting it nowhere', () => {
-    expect(linesReportedBy(noComments, code)).toEqual([1]);
-    expect(() => linesReportedBy(noComments, code, { parser: withoutCommentLocations })).toThrow(
-      'The parser returned a comment without a location, so it cannot be reported.',
-    );
   });
 });

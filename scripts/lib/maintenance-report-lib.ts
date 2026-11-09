@@ -56,7 +56,7 @@ export function lastChange(times: ReadonlyMap<string, number>, path: string): nu
 }
 
 const dayOf = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
-const codeSpans = (text: string): string[] => [...text.matchAll(/`([^`\n]+)`/g)].map((match) => String(match[1]));
+const codeSpans = (text: string): string[] => [...text.matchAll(/`[^`\n]+`/g)].map(([span]) => span.slice(1, -1));
 
 type ScoreToRegrade = { area: string; graded: string; changed: { path: string; day: string }[] };
 export type QualityRows = { stale: ScoreToRegrade[]; ungraded: string[] };
@@ -143,7 +143,7 @@ function withoutFencedCode(text: string): string {
 }
 
 const linkTargets = (text: string): string[] =>
-  [...text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((match) => String(match[1]));
+  [...text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].flatMap((match) => (match[1] ? [match[1]] : []));
 
 const isExternal = (target: string) => /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#");
 

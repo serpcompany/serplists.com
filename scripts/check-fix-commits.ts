@@ -36,7 +36,7 @@ function checkRange(range: string): void {
 }
 
 function checkCommitMessage(messageFile: string): void {
-  const subject = readFileSync(messageFile, "utf8").split("\n", 1).join("");
+  const subject = readFileSync(messageFile, "utf8").replace(/\n.*/s, "");
   if (!isFixSubject(subject)) return;
   if (lines(git(["diff", "--cached", "--name-only"])).some(isTestFile)) return;
   console.log(FIX_WITHOUT_A_TEST_MESSAGE);

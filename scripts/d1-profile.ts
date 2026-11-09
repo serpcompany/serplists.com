@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
+import { z } from "zod";
 import { buildScriptInvocation, buildToolInvocation, type Invocation, killProcessTree, spawnTool } from "./lib/run-tool";
 import {
   buildUpdateRunBody,
@@ -34,6 +35,15 @@ const outDir = path.join(repoRoot, "tmp", "d1-profile");
 const scaleArg = process.argv.indexOf("--scale");
 const scale = scaleArg >= 0 ? Number(process.argv[scaleArg + 1]) : 1;
 const reuse = process.argv.includes("--reuse");
+
+const tableCountsSchema = z.object({
+  templates: z.number(),
+  checklist_runs: z.number(),
+  users: z.number(),
+  audit_events: z.number(),
+  template_versions: z.number(),
+  team_invites: z.number(),
+});
 
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
@@ -96,10 +106,9 @@ async function startServer(port: number, onRecord: (record: QueryRecord) => void
   const consume = (chunk: Buffer) => {
     serverLog.write(chunk);
     buffer += chunk.toString();
-    const lines = buffer.split("\n");
-    buffer = lines.splice(-1).join("");
-    for (const line of lines) {
-      const record = d1QueryRecordIn(line);
+    for (let end = buffer.indexOf("\n"); end !== -1; end = buffer.indexOf("\n")) {
+      const record = d1QueryRecordIn(buffer.slice(0, end));
+      buffer = buffer.slice(end + 1);
       if (record) onRecord(record);
     }
   };
@@ -148,11 +157,11 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
         plans.set(sql, `(plan unavailable: ${error instanceof Error ? error.message : String(error)})`);
       }
     }
-    const countedTables = ["templates", "checklist_runs", "users", "audit_events", "template_versions", "team_invites"];
-    const tableCounts = await platform.env.DB.prepare(
-      `SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`,
-    ).first<Record<string, number>>();
-    plans.set("__counts__", countedTables.map((table) => `${table}: ${(tableCounts?.[table] ?? 0).toLocaleString()}`).join(", "));
+    const countedTables = tableCountsSchema.keyof().options;
+    const tableCounts = tableCountsSchema.parse(
+      await platform.env.DB.prepare(`SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`).first(),
+    );
+    plans.set("__counts__", countedTables.map((table) => `${table}: ${tableCounts[table].toLocaleString()}`).join(", "));
   } finally {
     await platform.dispose();
   }

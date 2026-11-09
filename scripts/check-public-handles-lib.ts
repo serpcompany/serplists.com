@@ -40,7 +40,7 @@ export function findHandleProblems(owners: readonly HandleOwner[]): HandleProble
       .map(([handle, holders]) => ({ handle, owners: holders })),
     invalid: owners.flatMap((owner) => {
       const parsed = publicHandleSchema.safeParse(owner.value);
-      return parsed.success ? [] : [{ owner, reason: String([...parsed.error.issues.map((issue) => issue.message), "Not a valid handle."][0]) }];
+      return parsed.success ? [] : [{ owner, reason: parsed.error.issues[0]?.message ?? "Not a valid handle." }];
     }),
   };
 }

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { renderDevVars } from '../../../scripts/setup-local-lib';
+import { arrayContaining } from '../../support/asymmetricMatchers';
 import type { CheckoutCopy } from '../../support/checkoutCopy';
 import { aCopyOfTheCheckoutWithStandIns } from '../../support/checkoutCopyWithStandIns';
 import { capturedGroup } from '../../support/elements';
@@ -34,7 +34,16 @@ describe('pnpm run setup, in a copy of the checkout whose Playwright is a stand-
     const secret = capturedGroup(devVars.match(/^BETTER_AUTH_SECRET=([0-9a-f]{48})$/m), 1);
 
     expect(run.status).toBe(0);
-    expect(devVars).toBe(renderDevVars(readFileSync(path.join(copy.root, '.dev.vars.example'), 'utf8'), secret));
+    expect(devVars.split('\n')).toEqual(
+      arrayContaining([
+        `BETTER_AUTH_SECRET=${secret}`,
+        '# JWT_SECRET=replace-with-32-char-secret',
+        'FRONTEND_URL=http://localhost:3000',
+        '# RESEND_API_KEY=re_xxx',
+        '# STRIPE_SECRET_KEY=sk_test_xxx',
+        '# ENTITLEMENTS_ADMIN_SECRET=replace-with-admin-secret',
+      ]),
+    );
     expect(run.stdout).toContain('Created .dev.vars with a generated BETTER_AUTH_SECRET. Optional integrations are commented out.');
     expect(run.stdout).toContain('> Validate environment');
     expect(run.stdout).toContain('env ok');

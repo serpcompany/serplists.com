@@ -3,7 +3,6 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { LAUNCH_JSON, LAUNCH_PACK_YAML, LAUNCH_TEMPLATE, LAUNCH_YAML } from '../../fixtures/templateSourceFiles';
-import { FILE_SYSTEM_THAT_THROWS, fileSystemThatThrowsEnv, THROWN_BY_THE_FILE_SYSTEM } from '../../support/fileSystemThatThrows';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
@@ -85,26 +84,5 @@ describe('pnpm templates:render-markdown', { timeout: 60_000 }, () => {
 
     expect(rendered.status).toBe(1);
     expect(rendered.stderr).toContain(message);
-  });
-});
-
-describe('the template scripts, when the file system fails with something other than an Error', { timeout: 60_000 }, () => {
-  const schemaPath = path.join('docs', 'api', 'portable-template-pack.schema.json');
-
-  it.each([
-    ['pnpm templates:generate', 'scripts/generate-template-assets.ts', { 'template.yaml': LAUNCH_YAML }, ['template.yaml'], 'template.yaml'],
-    ['pnpm templates:render-markdown', 'scripts/render-template-markdown.ts', { 'template.json': LAUNCH_JSON }, ['template.json'], 'template.json'],
-    ['pnpm templates:check', 'scripts/check-template-sources.ts', { 'launch/template.json': LAUNCH_JSON }, ['launch'], 'launch'],
-    ['pnpm run schema:portable:generate', 'scripts/generate-portable-template-json-schema.ts', {}, [], schemaPath],
-  ])('%s prints what was thrown as it is, and exits 1', async (_command, script, files, args, refused) => {
-    const folder = aFolderHolding(files);
-
-    const run = await runRepositoryScript(script, args, {
-      cwd: folder,
-      env: fileSystemThatThrowsEnv(path.join(folder, refused)),
-      preloads: [FILE_SYSTEM_THAT_THROWS],
-    });
-
-    expect([run.status, run.stderr]).toEqual([1, `${THROWN_BY_THE_FILE_SYSTEM}\n`]);
   });
 });

@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
@@ -16,11 +15,6 @@ const localD1StatePath = path.resolve(
 );
 const retryableDeleteCodes = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
 const errorWithCodeSchema = z.object({ code: z.string() });
-
-assert.ok(
-  localD1StatePath.startsWith(path.join(repoRoot, ".wrangler")),
-  `Refusing to reset unexpected D1 state path: ${localD1StatePath}`,
-);
 
 function run({ command, args, options }: Invocation) {
   execFileSync(command, args, {

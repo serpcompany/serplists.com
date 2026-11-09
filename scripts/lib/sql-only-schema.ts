@@ -20,10 +20,8 @@ export type SqlOnlySchemaManifest = z.infer<typeof sqlOnlySchemaManifestSchema>;
 export function readSqlOnlySchema(location: URL | string = SQL_ONLY_SCHEMA_URL): SqlOnlySchemaManifest {
   const manifest = sqlOnlySchemaManifestSchema.safeParse(JSON.parse(readFileSync(location, "utf8")));
   if (!manifest.success) {
-    const where = manifest.error.issues
-      .slice(0, 1)
-      .map((issue) => ` (${issue.path.join(".")}: ${issue.message})`)
-      .join("");
+    const [issue] = manifest.error.issues;
+    const where = issue ? ` (${issue.path.join(".")}: ${issue.message})` : "";
     throw new Error(`db/sql-only-schema.json must list triggers as { name, table, definition } strings${where}.`);
   }
   return manifest.data;

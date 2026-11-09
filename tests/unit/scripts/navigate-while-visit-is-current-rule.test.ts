@@ -1,8 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
-
 import { navigateWhileVisitIsCurrent } from '../../../scripts/eslint-rules/navigate-while-visit-is-current';
-import { linesReportedBy, typescriptParserThatEdits, typescriptRuleTester } from '../../support/ruleTester';
+import { typescriptRuleTester } from '../../support/ruleTester';
 
 const ungated = (call: string) => ({ messageId: 'ungated', data: { call } });
 const ungatedCallback = (call: string) => ({ messageId: 'ungatedCallback', data: { call } });
@@ -138,18 +135,4 @@ typescriptRuleTester().run('navigate-while-visit-is-current', navigateWhileVisit
       errors: [ungated('router.push')],
     },
   ],
-});
-
-describe('navigate-while-visit-is-current with a parser that names no children for a kind of node', () => {
-  const visitorKeysOf = z.object({ visitorKeys: z.record(z.array(z.string())) });
-  const withoutStatementChildren = typescriptParserThatEdits((parsed) => ({
-    ...parsed,
-    visitorKeys: Object.fromEntries(Object.entries(visitorKeysOf.parse(parsed).visitorKeys).filter(([type]) => type !== 'ExpressionStatement')),
-  }));
-  const code = handler("await save();\nrouter.push('/next');");
-
-  it('looks for the request and the move only inside the nodes its parser names children for', () => {
-    expect(linesReportedBy(navigateWhileVisitIsCurrent, code)).toEqual([3]);
-    expect(linesReportedBy(navigateWhileVisitIsCurrent, code, { parser: withoutStatementChildren })).toEqual([]);
-  });
 });

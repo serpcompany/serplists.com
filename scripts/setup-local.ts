@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -38,7 +37,7 @@ function runD1Step(step: LocalD1SetupStep) {
     return;
   }
   const seedStep = LOCAL_SEED_STEPS.find((candidate) => candidate.id === step);
-  assert.ok(seedStep, `No local seed step is called ${step}.`);
+  if (!seedStep) throw new Error(`No local seed step is called ${step}.`);
   run(seedStep.label, seedStepInvocation(seedStep));
 }
 

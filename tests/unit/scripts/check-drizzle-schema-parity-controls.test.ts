@@ -8,8 +8,10 @@ import { aWranglerThatCanAnswerForItself, type WranglerAnswer, wranglerAnswering
 
 const PARITY_CHECK = 'scripts/data/check-drizzle-schema-parity.ts';
 
+const NO_ROWS = { results: [], success: true, meta: {} };
+
 const TINY_TABLES_WITHOUT_THEIR_CREATE_STATEMENTS = [
-  { results: ['counters', 'sitemap_revisions', 'templates', 'users'].map((name) => ({ type: 'table', name, tbl_name: name, sql: null })) },
+  { ...NO_ROWS, results: ['counters', 'sitemap_revisions', 'templates', 'users'].map((name) => ({ type: 'table', name, tbl_name: name, sql: null })) },
 ];
 
 describe('pnpm run check:db:drizzle-parity, when a negative control finds nothing to break', { timeout: 300_000 }, () => {
@@ -35,7 +37,7 @@ describe('pnpm run check:db:drizzle-parity, when a negative control finds nothin
   });
 });
 
-describe('pnpm run check:db:drizzle-parity, with a Wrangler whose JSON answer leaves out the rows', { timeout: 300_000 }, () => {
+describe('pnpm run check:db:drizzle-parity, with a Wrangler that answers with no rows', { timeout: 300_000 }, () => {
   let copy: CheckoutCopy;
 
   beforeAll(async () => {
@@ -45,8 +47,8 @@ describe('pnpm run check:db:drizzle-parity, with a Wrangler whose JSON answer le
   afterAll(() => copy.remove(), 120_000);
 
   it.each<[string, WranglerAnswer, string]>([
-    ['no result set for the schema objects', { when: 'sqlite_master', answer: [] }, 'no tables loaded; the schema query returned nothing'],
-    ['a result set with no rows for the columns', { when: 'pragma_table_info', answer: [{ success: true, meta: {} }] }, 'counters: no columns loaded; the schema query returned nothing'],
+    ['no schema objects', { when: 'sqlite_master', answer: [NO_ROWS] }, 'no tables loaded; the schema query returned nothing'],
+    ['no columns for any table', { when: 'pragma_table_info', answer: [NO_ROWS] }, 'counters: no columns loaded; the schema query returned nothing'],
     [
       'the tables without their CREATE statements, so no CHECK is left to compare',
       { when: 'sqlite_master', answer: TINY_TABLES_WITHOUT_THEIR_CREATE_STATEMENTS },
@@ -58,15 +60,5 @@ describe('pnpm run check:db:drizzle-parity, with a Wrangler whose JSON answer le
     expect(run.status).toBe(1);
     expect(run.stderr).toBe(`${refusal}\n`);
     expect(run.stdout).toBe('');
-  });
-
-  it('compares indexes by whether they are unique or partial when Wrangler lists no columns for any of them', async () => {
-    const noIndexColumns: WranglerAnswer = { when: 'pragma_index_info', answer: [{ success: true, meta: {} }] };
-
-    const run = await runTheCopysScript(copy, PARITY_CHECK, { env: { ...process.env, ...wranglerAnswering(noIndexColumns) } });
-
-    expect(run.stderr).toBe('');
-    expect(run.stdout).toBe('Drizzle schema parity ok: 5 tables, 1 named indexes, 1 foreign keys, 0 SQL-only triggers.\n');
-    expect(run.status).toBe(0);
   });
 });

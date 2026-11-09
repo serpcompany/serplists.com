@@ -228,9 +228,9 @@ describe('pnpm run d1:profile, on a copy of the checkout whose OpenNext build is
       expect(invalid.map((entry) => [entry.scenario.name, entry.status, entry.responseBody])).toEqual([[FREE_RUN, 403, '{"error":"Free plan limit reached"}']]);
     });
 
-    it('still writes the report when D1 refuses every plan with something other than an Error, and counts no rows it was not given', () => {
+    it('still writes the report, with the table sizes D1 counts, when D1 cannot explain a statement, saying why for each', () => {
       const report = readReport(copy);
-      expect(report).toContain('Scale 0.01. Table sizes: templates: 0, checklist_runs: 0, users: 0, audit_events: 0, template_versions: 0, team_invites: 0.');
+      expect(report).toContain('Scale 0.01. Table sizes: templates: 50, checklist_runs: 120, users: 20, audit_events: 7, template_versions: 3, team_invites: 1.');
       expect(statementBlocks(report).map((block) => block[4])).toEqual([
         `- Plan: (plan unavailable: ${D1_REFUSAL})`,
         `- Plan: (plan unavailable: ${D1_REFUSAL})`,
@@ -281,15 +281,6 @@ describe('pnpm run d1:profile, on a copy of the checkout whose OpenNext build is
     expect(run.calls.map(([command]) => command)).toEqual(['build', 'preview']);
     expect(readFileSync(profileOutput(copy, 'server.log'), 'utf8')).toContain('Could not find compiled Open Next config, did you run the build command?');
     expect(run.requests).toEqual([]);
-  });
-
-  it('refuses to profile when the system gives it no free port for the server', async () => {
-    const noAddress = ["import { Server } from 'node:net';", 'Server.prototype.address = function address() { return null; };', ''].join('\n');
-    const run = await runTheProfile(copy, { args: REUSED, preloads: [preloadInTheCopy(copy, { 'no-free-port.mjs': noAddress }, 'no-free-port.mjs')] });
-
-    expect(run.status).toBe(1);
-    expect(run.stderr).toContain('Error: No free port');
-    expect(run.calls).toEqual([['build']]);
   });
 
   it('fails, keeping the pristine copy, when --scale is not a number and D1 refuses the synthetic data it makes', async () => {

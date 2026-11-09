@@ -77,7 +77,7 @@ describe('pnpm run check:preview:d1-binding in a checkout whose preview binding 
       const run = await runTheCopysScript(copy, 'scripts/check-preview-d1-binding.ts');
 
       expect(run.status).toBe(1);
-      expect(run.stderr).toBe(`${problemIn(sharingProduction) ?? 'a problem'}\n`);
+      expect(run.stderr).toBe('preview_database_id must not match the production D1 database_id.\n');
       expect(run.stdout).toBe('');
     } finally {
       await copy.remove();

@@ -143,18 +143,24 @@ describe('resolveDatasetPlan', () => {
 
 describe('pristine snapshot', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'serplists-d1-profile-'));
-  const statePath = path.join(root, 'd1-profile-state');
-  const snapshotPath = path.join(root, 'd1-profile-pristine');
   const database = path.join('v3', 'd1', 'miniflare-D1DatabaseObject', 'db.sqlite');
   const meta = { scale: 1, datasetKey: 'key' };
 
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  it('restores the data as built, dropping the previous run writes', () => {
+  function aSavedDataset() {
+    const folder = mkdtempSync(path.join(root, 'dataset-'));
+    const statePath = path.join(folder, 'd1-profile-state');
+    const snapshotPath = path.join(folder, 'd1-profile-pristine');
     mkdirSync(path.dirname(path.join(statePath, database)), { recursive: true });
     writeFileSync(path.join(statePath, database), 'built');
     writeFileSync(path.join(statePath, `${database}-wal`), 'wal');
     saveSnapshot({ statePath, snapshotPath, meta });
+    return { folder, statePath, snapshotPath };
+  }
+
+  it('restores the data as built, dropping the previous run writes', () => {
+    const { statePath, snapshotPath } = aSavedDataset();
     expect(readSnapshotMeta(snapshotPath)).toEqual(meta);
 
     writeFileSync(path.join(statePath, database), 'mutated by the workload');
@@ -167,6 +173,7 @@ describe('pristine snapshot', () => {
   });
 
   it('asks whoever runs it to stop the process holding the dataset open when it cannot reset it, and leaves the dataset as it was', () => {
+    const { statePath, snapshotPath } = aSavedDataset();
     writeFileSync(path.join(statePath, database), 'still open in wrangler');
     folderHeldOpen.path = statePath;
     try {
@@ -181,6 +188,7 @@ describe('pristine snapshot', () => {
   });
 
   it('never reuses a snapshot whose copy did not finish or whose meta is unreadable', () => {
+    const { folder, snapshotPath } = aSavedDataset();
     rmSync(path.join(snapshotPath, 'meta.json'));
     expect(readSnapshotMeta(snapshotPath)).toBeNull();
 
@@ -190,6 +198,6 @@ describe('pristine snapshot', () => {
     writeFileSync(path.join(snapshotPath, 'meta.json'), '{"scale":1,"datasetK');
     expect(readSnapshotMeta(snapshotPath)).toBeNull();
 
-    expect(readSnapshotMeta(path.join(root, 'missing'))).toBeNull();
+    expect(readSnapshotMeta(path.join(folder, 'missing'))).toBeNull();
   });
 });

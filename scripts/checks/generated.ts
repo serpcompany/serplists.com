@@ -15,14 +15,15 @@ export const generatorChecks: ReadonlyArray<{ check: string; fix: string }> = [
 
 export const CLOUDFLARE_TYPES = "cloudflare-env.d.ts";
 const PLACEHOLDER_SECRET = "a-placeholder-secret-of-32-characters";
-const NODE_WITH_TSX = /^node --import tsx (\S+)((?: \S+)*)$/;
+const NODE_WITH_TSX = /^node --import tsx (?<script>\S+)(?<args>(?: \S+)*)$/;
+const nodeWithTsxSchema = z.object({ script: z.string(), args: z.string() });
 const manifest = z.object({ scripts: z.record(z.string()) });
 
 export function scriptCommand(at: string, name: string): { script: string; args: string[] } {
   const command = manifest.parse(JSON.parse(readFileSync(path.join(at, "package.json"), "utf8"))).scripts[name] ?? "";
-  const match = NODE_WITH_TSX.exec(command);
-  if (!match?.[1]) throw new Error(`package.json's "${name}" script must be "node --import tsx <script> [arguments]" for the generated check to run it.`);
-  return { script: match[1], args: String(match[2]).split(" ").filter(Boolean) };
+  const invocation = nodeWithTsxSchema.safeParse(NODE_WITH_TSX.exec(command)?.groups);
+  if (!invocation.success) throw new Error(`package.json's "${name}" script must be "node --import tsx <script> [arguments]" for the generated check to run it.`);
+  return { script: invocation.data.script, args: invocation.data.args.split(" ").filter(Boolean) };
 }
 
 export function staleGenerator(at: string, check: string, fix: string): string | undefined {
