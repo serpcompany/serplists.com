@@ -185,36 +185,40 @@
     declaration file sits beside a script, and `tests/tsconfig.json` turns `allowJs` off, so a
     test that imports JavaScript fails `pnpm run typecheck`. A test starts a script with
     `buildScriptInvocation()` or `execScript()` from `scripts/lib/run-tool.ts`, which run it
-    with tsx's loader from any folder. tsx reads the `@/` alias from the `tsconfig.json` it
-    finds above the working folder, so a test that runs a script from a folder outside the
-    checkout and needs the alias sets `TSX_TSCONFIG_PATH` (`tests/unit/scripts/line-endings.test.ts`).
+    with tsx's loader from any folder. tsx reads the `@/` alias from the `tsconfig.json` above
+    the working folder, so a test running a script outside the checkout sets `TSX_TSCONFIG_PATH`
+    (`tests/unit/scripts/line-endings.test.ts`).
   - A test of what a JavaScript caller may pass but the declared types rule out is a
-    `.test.mjs` file: workerd, whose local R2
-    reports a range with its unused fields set to `undefined`
-    (`tests/unit/functions/api/r2-file-response-from-workerd.test.mjs`). A test of content
-    stored before the API checked every write is TypeScript: it passes the stored JSON as
-    `unknown` through the parser the app reads it with (`normalizeSections`, `apiTemplateSchema`
-    and the Template mapper) and checks what the code downstream does with the result
-    (`tests/unit/components/ContentRenderer-stored-content.test.tsx`,
-    `tests/unit/lib/forms/templateEditorForm.storedContent.test.ts`).
+    `.test.mjs` file (workerd's local R2 reports a range with its unused fields `undefined`;
+    `tests/unit/functions/api/r2-file-response-from-workerd.test.mjs`). A test of content stored
+    before the API checked every write is TypeScript: it passes the stored JSON as `unknown`
+    through the parser the app reads it with (`normalizeSections`, `apiTemplateSchema`) and
+    checks what the code downstream does with the result.
   - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars
     `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
     complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.
+  - A script that writes the checkout (local D1, `.dev.vars`, `tmp/`, git state) runs from
+    `aCopyOfTheCheckout()` (`tests/support/checkoutCopy.ts`): a throwaway copy of every tracked
+    and untracked file, its `node_modules` linked to the checkout's, removed in a `finally` or
+    `afterAll`. `aCopyOfTheCheckoutWithStandIns()` replaces packages with stand-ins for a tool
+    the test must not really run (Playwright, `next`, Wrangler), and `runTheCopysScript()` and
+    `queryTheCopysLocalD1()` (`tests/support/scriptInACheckoutCopy.ts`) run a script there and
+    read the local D1 it wrote. Its children's coverage counts for the checkout's file
+    ([checks.md](checks.md#coverage)).
 - Smoke and e2e suites run against the production build on a local worker, or dedicated
   staging, never production. `tests/e2e/run-smoke.ts` builds the app with OpenNext
   (skip with `--skip-build`), and Playwright's web server
   (`tests/e2e/preview-server.ts`) serves it with `opennextjs-cloudflare preview`
   (workerd) on one origin for the pages and the API: `localhost:4173`, or the next free
   port, with D1 state in `.wrangler/smoke-state`. Keep the `localhost` host name;
-  mixing `127.0.0.1` drops `SameSite=Lax` cookies. The runner seeds the same directory
-  the preview runs on (`PLAYWRIGHT_WRANGLER_PERSIST_TO`) whatever port or URL you preset,
-  and a preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
-  other than `.wrangler/state`. It stops if `PLAYWRIGHT_API_URL` is not on the app's
-  origin, and seeds nothing for a remote app or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
+  mixing `127.0.0.1` drops `SameSite=Lax` cookies. The runner seeds the directory the
+  preview uses (`PLAYWRIGHT_WRANGLER_PERSIST_TO`, which may name only a folder inside
+  `.wrangler/` other than `.wrangler/state`). It stops if `PLAYWRIGHT_API_URL` is not on the
+  app's origin, and seeds nothing for a remote app or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
 - The production build has no dev helpers, so the specs bring their own:
   - Sign in with `loginAsAdmin()` or `loginAs()` from `tests/e2e/support/sign-in.ts`. They
-    fill the login form with a seeded user (`fillSignInForm()`, as the Fill buttons do in
-    `next dev`), wait for My Templates, where signing in lands, and let its requests finish,
+    fill the login form with a seeded user (`fillSignInForm()`), wait for My Templates, where
+    signing in lands, and let its requests finish,
     so the spec's next API call is the only one in flight. They wait for its heading, not
     the Switch context button, which sits in the closed sidebar sheet below `md`, so they
     sign in at any width.
@@ -470,12 +474,9 @@
   project only. happy-dom follows no link (the `navigation` settings in `vitest.config.ts`),
   so a click the app leaves to the browser loads nothing.
 
-  happy-dom was chosen over jsdom, both maintained (happy-dom 20.14.5 from September 2026,
-  22 million downloads a week; jsdom 30.1.1, 124 million): the DOM test files run in 32 s in
-  happy-dom and 53 s in jsdom (`--maxWorkers=2`), jsdom has no `matchMedia`, which
-  `useMediaQuery` reads, and jsdom 30 needs Node 22.22. With the DOM tests in happy-dom the
-  unit suite (`pnpm exec vitest run tests/unit src --maxWorkers=2`) took 248 s, against 222 s
-  on the hand-written fake DOM it replaced.
+  happy-dom was chosen over jsdom, both maintained: the DOM test files run in 32 s in happy-dom
+  and 53 s in jsdom (`--maxWorkers=2`), jsdom has no `matchMedia`, which `useMediaQuery` reads,
+  and jsdom 30 needs Node 22.22.
 
   So a component test takes one of three routes:
   - Render the component to HTML with `renderToStaticMarkup` and read the markup.
