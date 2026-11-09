@@ -64,8 +64,8 @@ describe('the comment check', { timeout: 60_000 }, () => {
     ]);
   });
 
-  it('fails a comment on a line that ends in a lone carriage return, at the line ESLint counts', async () => {
-    expect(await commentsIn({ 'src/old-mac.ts': 'export const a = 1;\r// why\r' })).toEqual(['src/old-mac.ts:2  ']);
+  it('fails a comment on a line that ends in a lone carriage return, at the line ESLint counts, showing that line', async () => {
+    expect(await commentsIn({ 'src/old-mac.ts': 'export const a = 1;\r// why\r' })).toEqual(['src/old-mac.ts:2  // why']);
   });
 
   it('fails a file it cannot parse, rather than passing it unread', async () => {

@@ -21,7 +21,9 @@ const ONLY_THE_NO_COMMENTS_RULE: Linter.Config[] = [
   },
 ];
 
-const lineOf = (text: string, line: number) => excerpt(text.split("\n")[line - 1] ?? "");
+const LINE_BREAKS_ESLINT_COUNTS = /\r\n|[\r\n\u2028\u2029]/;
+
+const lineOf = (text: string, line: number) => excerpt(text.split(LINE_BREAKS_ESLINT_COUNTS)[line - 1] ?? "");
 
 async function scriptComments(root: string, scripts: readonly string[]): Promise<Problem[]> {
   if (scripts.length === 0) return [];
