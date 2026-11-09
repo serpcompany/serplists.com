@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -112,7 +113,7 @@ export const UNAUTHORIZED_ACCOUNT: StandInAnswer = {
 
 export function scriptRunInAStandInProject(script: string) {
   const project = standInWranglerProject();
-  afterAll(() => rmSync(project, { recursive: true, force: true }));
+  afterAll(() => rm(project, { recursive: true, force: true, maxRetries: 3 }), 60_000);
   return (args: string[], databases: Record<string, DatabaseSync>, more: Pick<StandInOptions, 'env' | 'failWith'> = {}) =>
     runAgainstACloudflareD1StandIn(script, { ...more, args, cwd: project, databases });
 }
