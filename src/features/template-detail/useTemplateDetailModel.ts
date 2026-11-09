@@ -107,7 +107,7 @@ export const useTemplateDetailModel = (
   const historyLimit = historyLimitFor(showingAllHistory);
   const history = useQuery({
     queryKey: [...getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId), { limit: historyLimit }],
-    queryFn: () => api.getTemplateHistory(template?.id ?? '', { limit: historyLimit }),
+    queryFn: () => api.getTemplateHistory([template?.id].join(''), { limit: historyLimit }),
     enabled: canLoadTemplateHistory,
     placeholderData: keepPreviousData,
     retry: false,

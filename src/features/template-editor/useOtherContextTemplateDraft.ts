@@ -35,7 +35,7 @@ export const useOtherContextTemplateDraft = ({
       canCreateIn: (teamId) =>
         Boolean(nameOf(teamId)) && (!teamId || getPermissions(teamId).canEditTemplates),
     });
-    return other ? { ...other, name: nameOf(other.teamId) ?? "" } : null;
+    return other ? { ...other, name: [nameOf(other.teamId)].join("") } : null;
   }, [activeTeamId, enabled, getPermissions, isClient, isWorkspaceLoading, teams, userId]);
   const [discarded, setDiscarded] = useState<OtherContextTemplateDraft | null>(null);
   const found = lookedUp === discarded ? null : lookedUp;

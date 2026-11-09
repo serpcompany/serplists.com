@@ -198,6 +198,21 @@ describe('the template editor outline', () => {
     expect(inputNamed('Task Title').value).toBe('Write notes');
   });
 
+  it('keeps each task the form holds with a blank id in a row of its own, and moves it', async () => {
+    const errors = vi.spyOn(console, 'error');
+    const editor = await renderTheTemplateEditorPanelsOn({
+      title: 'One',
+      sections: [{ id: 's', title: 'Prep', items: [{ id: '', title: 'First' }, { id: '', title: 'Second' }] }],
+    });
+
+    await clickTheButton('Move Second up');
+
+    expect(editor.values().sections[0]?.items.map((item) => item.title)).toEqual(['Second', 'First']);
+    expect(outlineButtons()).toEqual(expect.arrayContaining(['Second', 'First']));
+    expect(errors.mock.calls.flat().join(' ')).not.toMatch(/key/i);
+    errors.mockRestore();
+  });
+
   it('moves a section with its move buttons while a task in it stays selected', async () => {
     const editor = await renderTheTemplateEditorPanels(launch);
 

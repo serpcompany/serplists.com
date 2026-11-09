@@ -182,25 +182,26 @@ function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | unde
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined;
 }
 
+const textOrEmpty = (value: unknown): string => [value].filter((text) => typeof text === "string").join("");
+
 export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
-  return sanitizeStoredFormFields(value).flatMap((field, index) => {
-    const { kind } = field;
-    if (!isFormFieldKind(kind)) return [];
-    const answer = readFormAnswer(kind, field.answer);
-    return [{
-      id: readTextId(field.id) || fallbackId(index),
-      label: typeof field.label === "string" ? field.label : "",
-      kind,
-      required: field.required === true,
-      ...(typeof field.description === "string" ? { description: field.description } : {}),
-      ...(isFormChoiceKind(kind)
-        ? { options: withFormOptionIds(formOptionRecordsIn(field.options)).map(({ id, label }) => ({ id, label: typeof label === "string" ? label : "" })) }
-        : {}),
-      ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
-      ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
-      ...(answer === undefined ? {} : { answer }),
-    }];
-  });
+  return sanitizeStoredFormFields(value).flatMap((field, index) =>
+    [field.kind].filter(isFormFieldKind).map((kind): ChecklistFormField => {
+      const answer = readFormAnswer(kind, field.answer);
+      return {
+        id: readTextId(field.id) || fallbackId(index),
+        label: textOrEmpty(field.label),
+        kind,
+        required: field.required === true,
+        ...(typeof field.description === "string" ? { description: field.description } : {}),
+        ...(isFormChoiceKind(kind)
+          ? { options: withFormOptionIds(formOptionRecordsIn(field.options)).map(({ id, label }) => ({ id, label: textOrEmpty(label) })) }
+          : {}),
+        ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
+        ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
+        ...(answer === undefined ? {} : { answer }),
+      };
+    }));
 }
 
 export function withoutFormAnswers(fields: unknown): unknown[] {

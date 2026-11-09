@@ -212,7 +212,7 @@ export function RunsDashboardView({
           <DashboardEmptyState
             icon={<ListChecks />}
             title="No runs of this template yet"
-            description={`Runs started from ${filterTemplateTitle ?? 'this template'} appear here.`}
+            description={`Runs started from ${String([filterTemplateTitle, 'this template'].find((title) => title !== undefined))} appear here.`}
             action={
               <Button onClick={() => setTemplateFilter(null)} variant="outline">
                 Show all runs

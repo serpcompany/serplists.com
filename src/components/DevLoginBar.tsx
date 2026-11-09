@@ -31,7 +31,7 @@ import { moveOnAfterAnAccountChange } from '@/lib/navigation/moveOnAfterAnAccoun
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 function resolveOrigin(): string {
-  return typeof window === 'undefined' ? '' : window.location.origin;
+  return [globalThis.window].filter((page) => page !== undefined).map((page) => page.location.origin).join('');
 }
 
 export function DevLoginBar(): JSX.Element | null {

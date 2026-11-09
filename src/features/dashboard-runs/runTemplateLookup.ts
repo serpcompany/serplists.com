@@ -42,7 +42,7 @@ export function runTemplateFilterOptions(
   if (selectedTemplateId && !options.some((option) => option.id === selectedTemplateId)) {
     options.push({ id: selectedTemplateId, title: lookup.get(selectedTemplateId)?.title ?? null });
   }
-  return options.sort((left, right) => (left.title ?? '').localeCompare(right.title ?? ''));
+  return options.sort((left, right) => [left.title].join('').localeCompare([right.title].join('')));
 }
 
 export function filterDashboardRuns(

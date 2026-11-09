@@ -8,6 +8,7 @@ import {
   createTemplateEditorItem,
   createTemplateEditorSection,
   type TemplateEditorFormValues,
+  type TemplateEditorItem,
 } from "@/lib/forms/templateEditorForm";
 
 type EditingItemState = {
@@ -205,7 +206,11 @@ export function useSectionOutline({
   }
 
   function moveTask(sectionIndex: number, fromIndex: number, toIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    const itemLists: readonly [...TemplateEditorItem[][], TemplateEditorItem[]] = [
+      ...[getValues(`sections.${sectionIndex}.items`)].filter((items) => items !== undefined),
+      [],
+    ];
+    const currentItems = itemLists[0];
     setValue(
       `sections.${sectionIndex}.items`,
       moveArrayEntry(currentItems, fromIndex, toIndex),

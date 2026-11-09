@@ -1,5 +1,5 @@
 import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
-import { formatExportSummaryMessage } from '@/lib/templates/templateImportSummary';
+import { formatExportSummaryMessage, type PortableExportSummary } from '@/lib/templates/templateImportSummary';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
@@ -62,12 +62,15 @@ export const exportTemplateFile = (params: {
 
   const { filename, pack } = buildTemplateExportFile(params.template);
   if (pack.templates.length === 0) {
-    const skipped = pack.manifest?.skippedTemplates ?? [];
-    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped }).message };
+    const skippedLists: readonly [...PortableExportSummary['skipped'][], PortableExportSummary['skipped']] = [
+      ...[pack.manifest?.skippedTemplates].filter((list) => list !== undefined),
+      [],
+    ];
+    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped: skippedLists[0] }).message };
   }
   (params.download ?? downloadBackupFile)(pack, filename);
 
-  return { kind: 'ok', assetWarnings: pack.manifest?.assetWarnings ?? 0 };
+  return { kind: 'ok', assetWarnings: Number([pack.manifest?.assetWarnings, 0].find((count) => count !== undefined)) };
 };
 
 export const getTemplateExportLabel = (

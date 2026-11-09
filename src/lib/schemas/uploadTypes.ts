@@ -13,7 +13,10 @@ type UploadKind = {
   mimeTypes: readonly string[];
 };
 
-const typeStoredForUntypedFile = (kind: UploadKind): string | null => kind.mimeTypes[0] ?? null;
+const typeStoredForUntypedFile = (kind: UploadKind): string | null => {
+  const types: readonly [...string[], null] = [...kind.mimeTypes, null];
+  return types[0];
+};
 
 const IMAGE_KINDS: readonly UploadKind[] = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },

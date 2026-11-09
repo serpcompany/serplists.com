@@ -18,12 +18,10 @@ const normalizeStringArray = (values?: string[]) => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const normalizeSubItems = (subItems?: { title: string }[]) => {
-  if (!Array.isArray(subItems) || subItems.length === 0) return undefined;
-  return subItems.map((subItem) => ({
+const normalizeSubItems = (subItems: { title: string }[]) =>
+  [subItems].filter((list) => list.length > 0).map((list) => list.map((subItem) => ({
     title: subItem.title.trim(),
-  }));
-};
+  })))[0];
 
 type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
 type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];

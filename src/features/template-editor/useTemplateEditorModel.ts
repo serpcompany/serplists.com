@@ -158,7 +158,7 @@ const buildLoadResult = (
   ownerSlug: template?.id
     ? resolvePublicTemplateOwnerSlug({
         id: template.id,
-        userId: template.userId ?? "",
+        userId: [template.userId].join(""),
         ownerProfile: template.ownerProfile,
         owner: template.owner,
         ownerType: template.ownerType,
@@ -166,7 +166,7 @@ const buildLoadResult = (
       })
     : undefined,
   ownership: template?.id
-    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic ?? false }
+    ? { userId: [template.userId].join(""), teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic === true }
     : undefined,
 });
 

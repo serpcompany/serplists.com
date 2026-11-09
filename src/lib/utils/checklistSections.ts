@@ -72,7 +72,7 @@ const shownContentSchema = z.object({
   type: z.enum(CHECKLIST_CONTENT_TYPES),
   value: z.string(),
   subItems: z.array(shownSubItemSchema).optional(),
-  fields: z.array(z.unknown()).optional(),
+  fields: z.array(z.unknown()).default(() => []),
 }).passthrough();
 
 const textIdField = (id: unknown): { id?: string } => {
@@ -88,17 +88,13 @@ const shownFields = (fields: unknown[], fieldIdPrefix: string): { fields: Checkl
 });
 
 const shownContents = (contents: unknown[], itemId: string): ChecklistItemContent[] =>
-  contents.flatMap((content, contentIndex) => {
-    const parsed = shownContentSchema.safeParse(content);
-    if (!parsed.success) return [];
-    const { id, subItems, fields, ...shown } = parsed.data;
-    return [{
+  contents.flatMap((content, contentIndex) =>
+    [shownContentSchema.safeParse(content)].filter((parsed) => parsed.success).map(({ data: { id, subItems, fields, ...shown } }) => ({
       ...shown,
       ...textIdField(id),
       ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}),
-      ...(shown.type === "form" ? shownFields(fields ?? [], `${itemId}-form-${contentIndex + 1}`) : {}),
-    }];
-  });
+      ...(shown.type === "form" ? shownFields(fields, `${itemId}-form-${contentIndex + 1}`) : {}),
+    })));
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];

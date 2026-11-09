@@ -170,11 +170,11 @@ describe('the actions on a template page', () => {
     apiMock.getTemplateById.mockRejectedValue(createApiError(404, { error: 'Not found' }));
     apiMock.getTemplateBySlug.mockRejectedValue(createApiError(404, { error: 'Not found' }));
 
-    await act(async () => {
-      page().reload();
-      await settle();
+    act(() => page().reload());
+    await vi.waitFor(async () => {
+      await act(settle);
+      expect(page().notFound).toBe(true);
     });
-    expect(page().notFound).toBe(true);
     await finishTheShare(sharing);
 
     expect(page().template).toBeNull();

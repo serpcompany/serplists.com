@@ -191,7 +191,7 @@ export function PublicTemplateView({
           )}
           {updatedDate ? (
             <p>
-              Updated <time dateTime={normalizeDbTimestamp(lastUpdated) ?? undefined}>{updatedDate}</time>
+              Updated <time dateTime={[normalizeDbTimestamp(lastUpdated)].find((timestamp) => timestamp !== null)}>{updatedDate}</time>
             </p>
           ) : null}
           {template.categories?.length ? (
