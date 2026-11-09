@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAdmin } from '@functions/api/handlers/admin';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { readJsonPayload } from '@functions/api/utils/request-json';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { apiEnv } from '../../../support/apiEnv';
 import type { Env } from '@functions/api/types';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+
+vi.mock('@functions/api/utils/request-json', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@functions/api/utils/request-json')>();
+  return { ...actual, readJsonPayload: vi.fn(actual.readJsonPayload) };
+});
 
 const ADMIN_SECRET = 'admin-secret-for-tests';
 const DAY = 24 * 60 * 60;
@@ -92,6 +98,16 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
     const response = await post({ plan: 'pro' });
 
     expect(response.status).toBe(400);
+    expect(overrideRows()).toEqual([]);
+  });
+
+  it('answers 400 and writes nothing for a payload that names no user, even when the body check lets one through', async () => {
+    vi.mocked(readJsonPayload).mockResolvedValueOnce({ body: { plan: 'pro' }, payload: { plan: 'pro', expiresAt: null } });
+
+    const response = await post({ plan: 'pro' });
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe('userId or email required');
     expect(overrideRows()).toEqual([]);
   });
 

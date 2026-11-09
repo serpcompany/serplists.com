@@ -322,20 +322,17 @@ export function updateRunAuditDiff(
   return diff;
 }
 
-function retiredRecord(entry: RetiredEntryRecord): ChecklistNodeRecord | null {
-  const record = entry.kind === "section" ? entry.section
-    : entry.kind === "item" ? entry.item
-      : entry.kind === "formAnswer" ? entry.field : entry.subItem;
+function retiredRecord(record: unknown): ChecklistNodeRecord | null {
   return isChecklistNodeRecord(record) ? record : null;
 }
 
 function retiredSectionId(entry: RetiredEntryRecord): unknown {
-  return entry.kind === "section" ? retiredRecord(entry)?.id : entry.sectionId;
+  return entry.kind === "section" ? retiredRecord(entry.section)?.id : entry.sectionId;
 }
 
 function retiredEntriesForTask(entries: RetiredEntryRecord[], taskId: string): RetiredEntryRecord[] {
   return entries.flatMap((entry) => {
-    if (entry.kind === "item") return retiredRecord(entry)?.id === taskId ? [entry] : [];
+    if (entry.kind === "item") return retiredRecord(entry.item)?.id === taskId ? [entry] : [];
     if (entry.kind === "subItem" || entry.kind === "formAnswer") return entry.itemId === taskId ? [entry] : [];
     const section = entry.kind === "section" && isSectionRecord(entry.section) ? entry.section : null;
     const task = section ? taskRecordsIn(section.items).find((item) => item.id === taskId) : undefined;

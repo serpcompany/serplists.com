@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { d1ThatRunsNoQuery } from '../../../support/apiEnv';
+import { errorThrownBy } from '../../../support/thrownError';
 import { drizzle } from 'drizzle-orm/d1';
 import { sql, type SQL } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
@@ -120,6 +121,18 @@ describe('withoutColumns', () => {
     Reflect.deleteProperty(widgets, Symbol.for('drizzle:Columns'));
 
     expect(() => withoutColumns(widgets, ['note'])).toThrow('withoutColumns: unsupported Drizzle table layout');
+  });
+
+  it('refuses to hand back a narrowed table whose prototype is not the table it narrows', () => {
+    const widgets = sqliteTable('widgets', { id: text('id').primaryKey(), note: text('note') });
+    const create = vi.spyOn(Object, 'create').mockReturnValueOnce({});
+    try {
+      expect(errorThrownBy(() => withoutColumns(widgets, ['note']))).toEqual(
+        new Error('withoutColumns: the narrowed table does not inherit from the table'),
+      );
+    } finally {
+      create.mockRestore();
+    }
   });
 });
 

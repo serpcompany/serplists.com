@@ -158,11 +158,11 @@ function createRunMatcher(kind: 'item' | 'subItem' | 'formAnswer', previous: Che
   return {
     claimed,
     underParent: (id: string | null, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
-      (id ? claimFirst(previousUnderParentById.get(id)) : undefined),
+      claimFirst(previousUnderParentById.get([id].join(''))),
     elsewhere: (id: string | null): ChecklistNodeRecord | undefined => {
-      if (!id) return undefined;
-      const copies = anywhere.get(id);
-      if (!copies) return earlierRetired.take(kind, id);
+      const key = [id].join('');
+      const copies = anywhere.get(key);
+      if (!copies) return earlierRetired.take(kind, key);
       return copies.length === 1 ? claimFirst(copies) : undefined;
     },
   };
@@ -185,7 +185,7 @@ function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claime
 function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
   const previousItems = getArray(section.items);
   const kept = withoutClaimed(previousItems, items.claimed)
-    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed, fields.claimed) : item));
+    .map((item) => [...[item].filter(isTaskRecord).map((task) => withoutMovedSubItems(task, subItems.claimed, fields.claimed)), item][0]);
   if (previousItems.length > 0 && kept.length === 0) return null;
   return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
     ? section
