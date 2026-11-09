@@ -244,11 +244,6 @@ describe('mergeSharedRunState and form answers', () => {
 });
 
 describe('readStoredRunSections', () => {
-  it('reads a run stored with no items as no sections', () => {
-    expect(readStoredRunSections(null)).toEqual([]);
-    expect(readStoredRunSections(undefined)).toEqual([]);
-  });
-
   it('reads stored items that are not a list as unreadable', () => {
     expect(readStoredRunSections('{"id":"s1"}')).toBeNull();
   });

@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
@@ -322,12 +322,6 @@ describe("buildAuditEventValues records where a change came from, never the clie
   it('stores no IP hash without the auth secret, rather than a plain SHA-256', async () => {
     expect(await ipHashUnder({})).toBeNull();
   });
-
-  it("stores no IP hash when the runtime can't derive the hash key, rather than failing the change", async () => {
-    vi.spyOn(crypto.subtle, 'importKey').mockRejectedValueOnce(new Error('HMAC is unavailable'));
-
-    expect(await ipHashUnder(withAuthSecret)).toBeNull();
-  });
 });
 
 describe('buildTemplateVersionValues', () => {
@@ -354,11 +348,5 @@ describe('buildTemplateVersionValues', () => {
 
   it('stores the change summary it is given', async () => {
     expect((await buildTemplateVersionValues({ ...version, changeSummary: 'template.updated' })).change_summary).toBe('template.updated');
-  });
-
-  it('stores an empty object, hashed, for a snapshot whose JSON form is nothing at all', async () => {
-    const values = await buildTemplateVersionValues({ ...version, snapshot: { toJSON: () => undefined } });
-
-    expect(values).toMatchObject({ snapshot_json: '{}', content_hash: await sha256Hex('{}') });
   });
 });

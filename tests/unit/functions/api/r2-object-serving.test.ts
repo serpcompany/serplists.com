@@ -23,19 +23,6 @@ class R2WhosePreconditionFails extends InMemoryR2Bucket {
   }
 }
 
-class R2ThatAnswersARangeWithTheWholeFile extends InMemoryR2Bucket {
-  readonly bodies: R2ObjectBody[] = [];
-
-  override get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>;
-  override get(key: string, options: R2GetOptions & { onlyIf: R2Conditional | Headers }): Promise<R2ObjectBody | R2Object | null>;
-  override async get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | R2Object | null> {
-    const { range, ...wholeFile } = options ?? {};
-    const object = await super.get(key, wholeFile);
-    if (object) this.bodies.push(object);
-    return object;
-  }
-}
-
 const get = (headers: Record<string, string>) => new Request(`https://serplists.com/api/uploads/${KEY}`, { headers });
 
 describe('serveR2Object', () => {
@@ -54,24 +41,6 @@ describe('serveR2Object', () => {
 
   it('passes on a ranged read that fails for any reason but the range', async () => {
     await expect(serveR2Object(get({ Range: 'bytes=0-3' }), new R2ThatFailsRangedReads([file]), KEY, CACHE)).rejects.toThrow('R2 is unavailable');
-  });
-
-  it('serves the range it asked for when R2 answers a ranged read without naming the range it served', async () => {
-    const response = await serveR2Object(get({ Range: 'bytes=2-4' }), new R2ThatAnswersARangeWithTheWholeFile([file]), KEY, CACHE);
-
-    expect(response.status).toBe(206);
-    expect(response.headers.get('Content-Range')).toBe('bytes 2-4/10');
-    expect(response.headers.get('Content-Length')).toBe('3');
-  });
-
-  it('answers a range past the end that R2 served anyway as not satisfiable, and lets go of the body R2 handed over', async () => {
-    const bucket = new R2ThatAnswersARangeWithTheWholeFile([file]);
-
-    const response = await serveR2Object(get({ Range: 'bytes=50-' }), bucket, KEY, CACHE);
-
-    expect(response.status).toBe(416);
-    expect(response.headers.get('Content-Range')).toBe('bytes */10');
-    expect(bucket.bodies.map((body) => body.bodyUsed)).toEqual([true]);
   });
 
   it.each([

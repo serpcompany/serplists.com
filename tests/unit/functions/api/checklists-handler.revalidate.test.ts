@@ -97,11 +97,11 @@ describe('Checklists Handlers', () => {
     ]);
   });
 
-  it('revalidates a run stored without a revision against a Template stored without a version, as revision 1 and version 1', async () => {
+  it('revalidates a run stored with text for its revision against a Template stored with text for its version, as revision 1 and version 1', async () => {
     const sections = [{ id: 'section-1', title: 'Launch', items: [{ id: 'item-1', title: 'Write copy' }] }];
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([runAtRevision2(sections, { revision: null })])
-      .mockResolvedValueOnce([personalTemplateRow({ version: null, is_public: false, items: JSON.stringify(sections) })]);
+      .mockResolvedValueOnce([runAtRevision2(sections, { revision: 'legacy' })])
+      .mockResolvedValueOnce([personalTemplateRow({ version: 'legacy', is_public: false, items: JSON.stringify(sections) })]);
 
     const response = await handleChecklists(apiRequest('checklists/run-1/revalidate', 'POST', { expected_revision: 1 }), mockEnv);
 

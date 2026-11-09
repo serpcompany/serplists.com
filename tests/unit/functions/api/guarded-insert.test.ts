@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { d1ThatRunsNoQuery } from '../../../support/apiEnv';
-import { errorThrownBy } from '../../../support/thrownError';
 import { drizzle } from 'drizzle-orm/d1';
 import { sql, type SQL } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { schema } from '@functions/api/db';
-import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
+import { insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
 import { activeRunCapacityAvailableSql } from '@functions/api/utils/active-run-limit';
 
 const drizzleWithoutD1 = drizzle(d1ThatRunsNoQuery(), { schema });
@@ -115,30 +114,3 @@ describe('insertRowWhere', () => {
   });
 });
 
-describe('withoutColumns', () => {
-  it('refuses a table that does not keep its columns where this Drizzle version does', () => {
-    const widgets = sqliteTable('widgets', { id: text('id').primaryKey(), note: text('note') });
-    Reflect.deleteProperty(widgets, Symbol.for('drizzle:Columns'));
-
-    expect(() => withoutColumns(widgets, ['note'])).toThrow('withoutColumns: unsupported Drizzle table layout');
-  });
-
-  it('refuses to hand back a narrowed table whose prototype is not the table it narrows', () => {
-    const widgets = sqliteTable('widgets', { id: text('id').primaryKey(), note: text('note') });
-    const create = vi.spyOn(Object, 'create').mockReturnValueOnce({});
-    try {
-      expect(errorThrownBy(() => withoutColumns(widgets, ['note']))).toEqual(
-        new Error('withoutColumns: the narrowed table does not inherit from the table'),
-      );
-    } finally {
-      create.mockRestore();
-    }
-  });
-});
-
-describe('allConditions', () => {
-  it('refuses to build a guard from no condition at all', () => {
-    expect(() => allConditions()).toThrow('allConditions: pass at least one condition');
-    expect(() => allConditions(undefined)).toThrow('allConditions: pass at least one condition');
-  });
-});

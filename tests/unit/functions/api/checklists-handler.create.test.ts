@@ -128,10 +128,10 @@ describe('Checklists Handlers', () => {
     expect(progressTheRunPageShows).toBe(0);
   });
 
-  it('starts an untitled run at template version 1 from a Template stored without a title or a version', async () => {
+  it('starts an untitled run at template version 1 from a Template stored with an empty title and text for its version', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([personalTemplateRow({ title: null, version: null, items: '[]', is_public: false })])
+      .mockResolvedValueOnce([personalTemplateRow({ title: '', version: 'legacy', items: '[]', is_public: false })])
       .mockResolvedValueOnce([{ count: 0 }]);
 
     const inserted = await insertedRunOf(await post({ template_id: 'template-1' }));

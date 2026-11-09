@@ -95,7 +95,7 @@ async function resolveTemplateRunSource(
     source: {
       effectiveTeamId,
       sections: resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalizedSections.sections))),
-      title: sourceTemplate.title || '',
+      title: sourceTemplate.title,
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
   };

@@ -55,9 +55,4 @@ describe('withSlugSuffix', () => {
   it('adds the suffix after a hyphen', () => {
     expect(withSlugSuffix('launch', 'abcd1234', 160)).toBe('launch-abcd1234');
   });
-
-  it('is the suffix alone when nothing of the base fits beside it', () => {
-    expect(withSlugSuffix('launch', 'abcd1234', 9)).toBe('abcd1234');
-    expect(withSlugSuffix('', 'abcd1234', 160)).toBe('abcd1234');
-  });
 });

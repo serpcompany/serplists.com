@@ -63,12 +63,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] && teamsSubpath[2] === "accept") {
-    const found = await findInviteByToken(db, teamsSubpath[1]);
-    if ("response" in found) {
-      return found.response;
-    }
-
-    const { invite } = found;
+    const invite = await findInviteByToken(db, teamsSubpath[1]);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -142,7 +137,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       });
     }
 
-    return transferTeamOwnership({ db, env, request, teamId, userId, membership }, await readJsonOrNull(request));
+    return transferTeamOwnership({ db, env, request, teamId, userId, membership, ownerMemberId: membership.id }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "activity") {

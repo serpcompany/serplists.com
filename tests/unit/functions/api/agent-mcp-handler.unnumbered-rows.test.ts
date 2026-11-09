@@ -7,7 +7,7 @@ import { objectContaining } from "../../../support/asymmetricMatchers";
 import { jsonRecordIn } from "../../../support/storedJson";
 import { releaseSectionWithTwoSubTasks } from "../../../fixtures/handlerRows";
 
-const NO_NUMBER = null;
+const TEXT_IN_A_NUMBER_COLUMN = "legacy";
 
 async function recordedAudit() {
   const result = firstOf(vi.mocked(buildAuditEventValues).mock.results);
@@ -15,12 +15,12 @@ async function recordedAudit() {
   return result.value;
 }
 
-describe("MCP tools over rows stored without the numbers the API counts by", () => {
+describe("MCP tools over rows stored with text where the API counts by numbers", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
-  it("starts a run of a Template stored without a content version at template version 1", async () => {
+  it("starts a run of a Template stored with text for its content version at template version 1", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { ...ownedTemplate(releaseSectionWithTwoSubTasks({ title: "Verify" })), content_version: NO_NUMBER },
+      { ...ownedTemplate(releaseSectionWithTwoSubTasks({ title: "Verify" })), content_version: TEXT_IN_A_NUMBER_COLUMN },
     ]);
 
     const body = await callTool("start_run", { templateId: "template-1" });
@@ -30,16 +30,16 @@ describe("MCP tools over rows stored without the numbers the API counts by", () 
     expect(jsonRecordIn((await recordedAudit()).after_json)).toEqual(objectContaining({ template_version: 1 }));
   });
 
-  it("reads a run stored without a revision or a template version as revision 1 of template version 1", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: NO_NUMBER, template_version: NO_NUMBER })]);
+  it("reads a run stored with text for its revision and template version as revision 1 of template version 1", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: TEXT_IN_A_NUMBER_COLUMN, template_version: TEXT_IN_A_NUMBER_COLUMN })]);
 
     const body = await callTool("get_run", { runId: "run-1" });
 
     expect(mcpRunResult.parse(body.result.structuredContent).run).toMatchObject({ revision: 1, templateVersion: 1 });
   });
 
-  it("updates a run stored without a revision as revision 1, saving and recording it as revision 2", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: NO_NUMBER })]);
+  it("updates a run stored with text for its revision as revision 1, saving and recording it as revision 2", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: TEXT_IN_A_NUMBER_COLUMN })]);
 
     const body = await callTool("update_run", {
       runId: "run-1",

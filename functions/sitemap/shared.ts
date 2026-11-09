@@ -44,9 +44,9 @@ type InventoryMetadata = {
   implementationLastmod?: string;
 };
 
-const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).filter(
-  (template) => template.slug?.trim(),
-);
+const hasSlug = (template: BundledTemplate): template is BundledTemplate & { slug: string } => Boolean(template.slug?.trim());
+
+const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).filter(hasSlug);
 
 const staticPages = bundledTemplateCatalog.staticPages as StaticPage[];
 const inventoryMetadata = (bundledTemplateCatalog as { inventory?: InventoryMetadata }).inventory;
@@ -155,10 +155,9 @@ export function methodNotAllowed(): Response {
   });
 }
 
-export function parsePage(value: string | string[] | undefined): number | null {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  if (!candidate || !/^\d+$/.test(candidate)) return null;
-  const page = Number(candidate);
+export function parsePage(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const page = Number(value);
   return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
@@ -180,12 +179,8 @@ function paginateEntries<T>(entries: T[], page: number): T[] {
 }
 
 export function bundledTemplateEntries(): SitemapEntry[] {
-  return bundledTemplates.flatMap((template) => {
-    const slug = [template.slug].join('');
-    return isValidTemplateSlug(slug)
-      ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod: template.lastmod }]
-      : [];
-  });
+  return bundledTemplates.flatMap(({ slug, lastmod }) =>
+    isValidTemplateSlug(slug) ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod }] : []);
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
@@ -317,7 +312,7 @@ export function requestSupportsSitemap(method: string): boolean {
 
 export async function handleInMemoryPagedSitemap(
   request: Request,
-  pageValue: string | string[] | undefined,
+  pageValue: string,
   loadEntries: () => SitemapEntry[] | Promise<SitemapEntry[]>,
 ): Promise<Response> {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
@@ -437,7 +432,7 @@ export async function loadRowsOfTwoLists<Row>(
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  params: { readonly page?: string | string[] | undefined };
+  params: { readonly page: string };
   loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
@@ -450,7 +445,6 @@ export async function handlePagedDatabaseSitemap<Row>({
   toEntry,
   prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
-  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const page = parsePage(params.page);
   if (!page) return xmlResponse(request, renderUrlset([]), 404);
 
@@ -458,9 +452,7 @@ export async function handlePagedDatabaseSitemap<Row>({
   const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
-  const rows = databaseLimit > 0
-    ? await loadRows({ limit: databaseLimit, offset: databaseOffset })
-    : [];
+  const rows = await loadRows({ limit: databaseLimit, offset: databaseOffset });
   const databaseEntries = rows
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);

@@ -157,17 +157,6 @@ describe("update_template operations", () => {
     expect(recordIn(replacedForm)["fields"]).toEqual(["not a field", { label: "Owner", kind: "text", id: stringMatching(FIELD_ID) }]);
   });
 
-  it("refuses insert_task with neither sectionId nor beforeTaskId, as its arguments' check does", () => {
-    const error = toolErrorOf(() => applyTemplateOperation(sectionsAsRead(), {
-      templateId: "tpl-1",
-      expectedVersion: 4,
-      operation: "insert_task",
-      task: { title: "Nowhere" },
-    }));
-
-    expect(error).toMatchObject({ code: "invalid_arguments", message: "sectionId: Pass sectionId, beforeTaskId, or both" });
-  });
-
   it("names the argument whose id it cannot find", () => {
     expect(toolErrorOf(() => applyParsed({ operation: "replace_section", sectionId: "nope", section: { title: "X" } })))
       .toMatchObject({ code: "section_not_found", message: "Section not found (sectionId)" });

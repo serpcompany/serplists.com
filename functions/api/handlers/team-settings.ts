@@ -72,7 +72,7 @@ export async function updateTeamSettings(
   if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
     const slug = publicHandleSchema.safeParse(parsed.data.slug);
     if (!slug.success) {
-      return jsonError(`slug: ${[...slug.error.issues.map((issue) => issue.message), "Invalid slug"].slice(0, 1).join("")}`, 400);
+      return jsonError(`slug: ${slug.error.issues[0]?.message ?? "Invalid slug"}`, 400);
     }
     if (await isTeamSlugTaken(db, parsed.data.slug, teamId)) {
       return teamSlugInUseError();

@@ -290,7 +290,7 @@ export function toolPermission(name: string): RunKeyPermission | undefined {
   return tool ? toolPermissions[tool.name] : undefined;
 }
 
-export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {
+export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): name is ToolName {
   const permission = toolPermission(name);
   return permission !== undefined && permissions.includes(permission);
 }

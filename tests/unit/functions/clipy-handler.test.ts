@@ -35,14 +35,16 @@ const generateFrom = (context: unknown) => handleGenerateTemplateFromClipy(reque
   getUserId: vi.fn().mockResolvedValue('user-1'),
 });
 
-async function imagesOfTheSteps(context: unknown): Promise<string[]> {
+async function imagesOfEachStep(context: unknown): Promise<string[][]> {
   const payload = await readJson(await generateFrom(context), clipyDraftBody);
   return sectionAt(payload.draft, 0).items
     .slice(1)
-    .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
-    .filter((content: { type: string }) => content.type === 'image')
-    .map((content: { value: string }) => content.value);
+    .map((item: { contents: Array<{ type: string; value: string }> }) => item.contents
+      .filter((content: { type: string }) => content.type === 'image')
+      .map((content: { value: string }) => content.value));
 }
+
+const imagesOfTheSteps = async (context: unknown): Promise<string[]> => (await imagesOfEachStep(context)).flat();
 
 async function expectNotReady(context: unknown) {
   const response = await generateFrom(context);
@@ -190,9 +192,12 @@ describe('Clipy template generation', () => {
       { tMs: 20_000, caption: 'Provides a descriptive title', frameUrl: 'https://cdn.clipy.online/key-moments/demo/title.jpg' },
     ];
 
-    expect(await imagesOfTheSteps(context)).toEqual([
-      'https://cdn.clipy.online/key-moments/demo/dashboard.jpg',
-      'https://cdn.clipy.online/key-moments/demo/title.jpg',
+    expect(await imagesOfEachStep(context)).toEqual([
+      ['https://cdn.clipy.online/key-moments/demo/dashboard.jpg'],
+      [],
+      ['https://cdn.clipy.online/key-moments/demo/title.jpg'],
+      [],
+      [],
     ]);
   });
 });

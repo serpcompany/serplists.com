@@ -71,12 +71,6 @@ class CountingDatabase extends D1DatabaseDouble {
   }
 }
 
-class DatabaseAnsweringOneResultTooMany extends CountingDatabase {
-  protected override async batchRows(statements: D1PreparedStatement[]) {
-    return [...await super.batchRows(statements), d1Result([])];
-  }
-}
-
 function fakeDatabase() {
   const db = new CountingDatabase();
   return { db, calls: db.calls };
@@ -110,11 +104,12 @@ describe("withD1Profiling", () => {
     expect(records.map((r) => r.sql)).toEqual(["update runs set progress = 1", "select 1", "select 2"]);
   });
 
-  it("records a result a batch answers beyond its statements as an unknown batch statement", async () => {
+  it("records a statement of a batch prepared on the database itself, which it never saw prepared, as an unknown batch statement", async () => {
+    const { db } = fakeDatabase();
     const records: D1QueryRecord[] = [];
-    const profiled = withD1Profiling(new DatabaseAnsweringOneResultTooMany(), (r) => records.push(r));
+    const profiled = withD1Profiling(db, (r) => records.push(r));
 
-    await profiled.batch([profiled.prepare("select 1")]);
+    await profiled.batch([profiled.prepare("select 1"), db.prepare("select 2")]);
 
     expect(records.map((r) => r.sql)).toEqual(["select 1", "(unknown batch statement)"]);
   });
@@ -146,17 +141,6 @@ describe("withD1Profiling", () => {
     expect(records).toHaveLength(3);
     expect(records[0]).toMatchObject({ rowsRead: 2, rowsReturned: 2 });
     expect(await profiledStatementAnswering(d1Result([])).statement.first()).toBeNull();
-  });
-
-  it("records no rows for a result that reports neither meta nor rows", async () => {
-    const bare = d1Result([]);
-    Reflect.deleteProperty(bare, "meta");
-    Reflect.deleteProperty(bare, "results");
-    const { statement, records } = profiledStatementAnswering(bare);
-
-    await statement.run();
-
-    expect(records).toEqual([expect.objectContaining({ rowsRead: 0, rowsWritten: 0, rowsReturned: 0 })]);
   });
 
   it("is not mistaken for a promise when an async function returns a profiled statement", async () => {

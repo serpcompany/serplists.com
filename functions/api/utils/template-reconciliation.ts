@@ -25,6 +25,7 @@ import {
   mapFormBlocks,
   mapSubTasksBlocks,
   normalizeLegacySectionShape,
+  type StableSection,
 } from './template-identities';
 import {
   reconcileFormFields,
@@ -158,11 +159,11 @@ function createRunMatcher(kind: 'item' | 'subItem' | 'formAnswer', previous: Che
   return {
     claimed,
     underParent: (id: string | null, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
-      claimFirst(previousUnderParentById.get([id].join(''))),
+      (id ? claimFirst(previousUnderParentById.get(id)) : undefined),
     elsewhere: (id: string | null): ChecklistNodeRecord | undefined => {
-      const key = [id].join('');
-      const copies = anywhere.get(key);
-      if (!copies) return earlierRetired.take(kind, key);
+      if (!id) return undefined;
+      const copies = anywhere.get(id);
+      if (!copies) return earlierRetired.take(kind, id);
       return copies.length === 1 ? claimFirst(copies) : undefined;
     },
   };
@@ -182,10 +183,11 @@ function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claime
   return { ...item, contents: mapFormBlocks(contents, (list) => withoutClaimed(list, claimedFields)) };
 }
 
-function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
-  const previousItems = getArray(section.items);
-  const kept = withoutClaimed(previousItems, items.claimed)
-    .map((item) => [...[item].filter(isTaskRecord).map((task) => withoutMovedSubItems(task, subItems.claimed, fields.claimed)), item][0]);
+function withoutMovedWork(section: StableSection, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
+  const previousItems = section.items;
+  const kept = previousItems
+    .filter((item) => !items.claimed.has(item))
+    .map((item) => withoutMovedSubItems(item, subItems.claimed, fields.claimed));
   if (previousItems.length > 0 && kept.length === 0) return null;
   return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
     ? section
@@ -227,29 +229,27 @@ export function reconcileRunSections(
     previousSectionShape,
   );
   const earlierRetired = createEarlierRetiredLookup(previousRetired);
-  const previousById = new Map(
-    normalizedPreviousSections.flatMap((section) => [getId(section)].filter((id) => id !== null).map((id) => [id, section] as const)),
-  );
-  const previousItems = normalizedPreviousSections.flatMap((section) => taskRecordsIn(section.items));
+  const previousById = new Map(normalizedPreviousSections.map((section) => [section.id, section]));
+  const previousItems = normalizedPreviousSections.flatMap((section) => section.items);
   const items = createRunMatcher('item', previousItems, earlierRetired);
   const subItems = createRunMatcher('subItem', previousItems.flatMap(getSubItems), earlierRetired);
   const fields = createRunMatcher('formAnswer', previousItems.flatMap(getFormFields), earlierRetired);
 
   const matchedSections = normalizedTemplateSections.map((templateSection) => {
-    const id = [getId(templateSection)].join('');
+    const { id } = templateSection;
     const previous: SectionRecord | undefined = previousById.get(id) ?? earlierRetired.take('section', id);
     const previousItems = taskRecordsIn(previous?.items);
     return { templateSection, id, previousItems, parent: indexById(previousItems) };
   });
   const templateItems = matchedSections.flatMap(({ templateSection, parent }) =>
-    taskRecordsIn(templateSection.items).map((templateItem) => ({ templateItem, parent })));
+    templateSection.items.map((templateItem) => ({ templateItem, parent })));
 
   const itemMatches = new Map<JsonRecord, TaskRecord | undefined>();
   for (const { templateItem, parent } of templateItems) {
-    itemMatches.set(templateItem, items.underParent(getId(templateItem), parent));
+    itemMatches.set(templateItem, items.underParent(templateItem.id, parent));
   }
   for (const { templateItem } of templateItems) {
-    if (!itemMatches.get(templateItem)) itemMatches.set(templateItem, items.elsewhere(getId(templateItem)));
+    if (!itemMatches.get(templateItem)) itemMatches.set(templateItem, items.elsewhere(templateItem.id));
   }
   const subItemMatches = new Map<JsonRecord, TaskRecord | undefined>();
   for (const { templateItem } of templateItems) {
@@ -278,14 +278,14 @@ export function reconcileRunSections(
 
   const retired: RetiredRunEntry[] = [];
   const sections = matchedSections.map(({ templateSection, id: sectionId, previousItems: sectionPreviousItems }) => {
-    const sectionItems = taskRecordsIn(templateSection.items).map((templateItem) => {
+    const sectionItems = templateSection.items.map((templateItem) => {
       const previousItem = itemMatches.get(templateItem);
       for (const subItem of previousItem ? getSubItems(previousItem) : []) {
         if (subItems.claimed.has(subItem) || !getId(subItem)) continue;
         retired.push({
           kind: 'subItem',
           sectionId,
-          itemId: [getId(templateItem)].join(''),
+          itemId: templateItem.id,
           ...(typeof templateItem.title === 'string' ? { itemTitle: templateItem.title } : {}),
           subItem,
         });
@@ -309,8 +309,7 @@ export function reconcileRunSections(
 
   const retainedSectionIds = new Set(matchedSections.map(({ id }) => id));
   for (const previousSection of normalizedPreviousSections) {
-    const sectionId = getId(previousSection);
-    if (!sectionId || retainedSectionIds.has(sectionId)) continue;
+    if (retainedSectionIds.has(previousSection.id)) continue;
     const section = withoutMovedWork(previousSection, items, subItems, fields);
     if (section) retired.push({ kind: 'section', section });
   }

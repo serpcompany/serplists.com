@@ -152,7 +152,7 @@ async function readTemplateHistory(
   if (!template || !(await canViewPrivateTemplate(env, template, userId))) {
     return jsonError('Template not found', 404);
   }
-  const subject = getTemplateSubject(template, userId);
+  const subject = getTemplateSubject(template);
 
   try {
     const [versionRows, eventRows] = await Promise.all([

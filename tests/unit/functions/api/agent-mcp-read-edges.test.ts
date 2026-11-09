@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { encodeCursor, MAX_RESULT_BYTES, sectionAt } from "@functions/api/handlers/agentMcpPages";
+import { encodeCursor, MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
   describeTemplateRead,
   readTemplate as readTemplateResult,
   templateView,
   writtenTemplateResult,
 } from "@functions/api/handlers/agentMcpTemplatePages";
-import { describeRunRead, readRun as readRunResult, runView, updatedRunResult } from "@functions/api/handlers/agentMcpRunPages";
-import { describeList } from "@functions/api/handlers/agentMcpLists";
+import { readRun as readRunResult, runView, updatedRunResult } from "@functions/api/handlers/agentMcpRunPages";
 import { expectAnInvalidCursor, resultBytes, toolErrorOf } from "../../../support/agentMcp";
 import { recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { objectContaining } from "../../../support/asymmetricMatchers";
@@ -82,32 +81,6 @@ describe("get_template outlines", () => {
   });
 });
 
-describe("descriptions of results a read never returns", () => {
-  it("describes a result with no template as an untitled template", () => {
-    expect(describeTemplateRead({})).toBe('Loaded template "Untitled".');
-  });
-
-  it("describes a section page that holds no task list as holding none of its tasks", () => {
-    expect(describeTemplateRead({ template: TEMPLATE_REF, section: { id: "s1", taskCount: 3, firstTask: 0 } }))
-      .toBe("Loaded tasks none of the 3 in a section too large for one result.");
-  });
-
-  it("describes a page of retired entries that holds none of them", () => {
-    expect(describeRunRead({ run: RUN_REF, retiredItems: [], retiredCount: 4, firstRetired: 0 }))
-      .toBe("Loaded retired entries none of the 4, too many for one result.");
-  });
-
-  it("counts no templates in a list result that holds no list", () => {
-    expect(describeList({}, "template")).toBe("Found 0 personal template(s).");
-  });
-});
-
-describe("the places a read looks up", () => {
-  it("refuses a section position past the last section with section_not_found", () => {
-    expect(toolErrorOf(() => sectionAt(view.sections, 1))).toMatchObject({ code: "section_not_found", message: "Section not found" });
-  });
-});
-
 describe("template write results", () => {
   it("returns the template's id, title, and version even when not even those fit one result", () => {
     const longId = `template-${"i".repeat(MAX_RESULT_BYTES)}`;
@@ -135,13 +108,6 @@ describe("get_run retired work narrowed to a task", () => {
 
 describe("run update results", () => {
   const sections = [{ id: "s1", title: "Ship", items: [small] }];
-  const notesUpdate = { runId: "run-1", expectedRevision: 5, operation: "set_task_notes" as const, notes: "Done" };
-
-  it("names a task an update touched that the run no longer holds, without the task", () => {
-    const { header } = runOf(sections);
-
-    expect(updatedRunResult(header, sections, { ...notesUpdate, taskId: "gone" })).toEqual({ run: header, taskId: "gone", taskOmitted: true });
-  });
 
   it("returns a run's id, cut title, status, progress, and revision when its fields alone are too large for one result", () => {
     const { header } = runOf(sections, [], "T".repeat(MAX_RESULT_BYTES));

@@ -10,7 +10,7 @@ const RUN_STATE_KEYS = new Set(['isCompleted', 'completed', 'notes', 'answer']);
 const isEmptyValue = (value: unknown): boolean =>
   value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 
-const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => Number(a > b) - Number(a < b);
+const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => (a < b ? -1 : 1);
 
 function sortKeysDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeysDeep);

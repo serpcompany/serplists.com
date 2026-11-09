@@ -117,8 +117,8 @@ describe('shared run updates, which take only completion and notes from a guest 
     expect(storedSectionsIn(storedUpdate().items)).toEqual(storedSections);
   });
 
-  it('saves a guest edit to a run stored without a revision as revision 1, moving it to revision 2', async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ revision: null })]);
+  it('saves a guest edit to a run stored with text for its revision as revision 1, moving it to revision 2', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ revision: 'legacy' })]);
 
     const { response } = await putShared({ sections: [], expected_revision: 1 });
 

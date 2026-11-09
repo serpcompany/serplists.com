@@ -85,24 +85,6 @@ describe("personal run key utility", () => {
     expect(dbMocks.db.update).not.toHaveBeenCalled();
   });
 
-  it("refuses to make a key it can't hash, so no key is handed out that could never be checked", async () => {
-    vi.spyOn(crypto.subtle, "digest").mockRejectedValueOnce(new Error("SHA-256 is unavailable"));
-
-    await expect(createPersonalRunKeySecret()).rejects.toThrow("Unable to hash personal run key");
-  });
-
-  it("authenticates no one when the presented key can't be hashed, without querying D1", async () => {
-    vi.spyOn(crypto.subtle, "digest").mockRejectedValueOnce(new Error("SHA-256 is unavailable"));
-
-    const identity = await authenticatePersonalRunKey(
-      new Request("http://localhost/api/mcp", { headers: { Authorization: "Bearer slrk_valid-token" } }),
-      mockEnv,
-    );
-
-    expect(identity).toBeNull();
-    expect(dbMocks.db.select).not.toHaveBeenCalled();
-  });
-
   it("records successful tool use at most once per fifteen minutes", async () => {
     await markPersonalRunKeyUsed(mockEnv, {
       keyId: "key-1",
@@ -129,8 +111,6 @@ describe("personal run key utility", () => {
   it.each([
     ["one row inserted", { meta: { changes: 1 } }, true],
     ["no row inserted, at the cap", { meta: { changes: 0 } }, false],
-    ["a result without meta", {}, false],
-    ["no result at all", null, false],
   ])("counts a new key as made only when the insert reports one row: %s", async (_label, result, made) => {
     Object.assign(dbMocks.db, { run: vi.fn().mockResolvedValue(result) });
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import * as legacyCategoriesSitemapRoute from '@/app/(site)/categories/sitemap.xml/route';
 import * as pagesSitemapRoute from '@/app/sitemaps/pages/[page]/route';
@@ -6,38 +6,15 @@ import * as legacyStaticSitemapRoute from '@/app/sitemaps/static.xml/route';
 import { serveProfilesSitemap, serveSitemapIndex, serveTemplatesSitemap } from '../../../functions/sitemap/routes';
 import {
   SITEMAP_PAGE_SIZE,
-  handlePagedDatabaseSitemap,
   mostRecentLastmod,
   parseCategories,
-  parsePage,
   planDurableShardIndex,
 } from '../../../functions/sitemap/shared';
 import { apiEnv } from '../../support/apiEnv';
 import { sitemapEntries } from '../../support/sitemapLocations';
 import { SqliteD1 } from '../../support/sqlite-d1';
-import { D1DatabaseDouble, D1StatementDouble, d1Result } from '../../support/d1Doubles';
 
 let d1: SqliteD1;
-
-class CountWithNoRow extends D1StatementDouble {
-  protected async allRows() {
-    return d1Result([]);
-  }
-
-  protected async rawRows() {
-    return [];
-  }
-}
-
-class D1ThatAnswersEveryCountWithNoRow extends D1DatabaseDouble {
-  constructor(private readonly database: SqliteD1) {
-    super();
-  }
-
-  prepare(sql: string): D1PreparedStatement {
-    return /^select count\(\*\)/.test(sql) ? new CountWithNoRow(sql) : this.database.prepare(sql);
-  }
-}
 
 beforeEach(() => {
   d1 = new SqliteD1();
@@ -133,12 +110,6 @@ describe('the database sitemap shards', () => {
 
     expect(await secondProfilesShardLocations(d1.binding)).toEqual(['/profile/org-025000/', '/profile/org-025001/']);
   });
-
-  it('counts no people before the Organizations when the database answers its counts with no row', async () => {
-    storeOnePersonAndOrganizationsPastTheFirstShard();
-
-    expect(await secondProfilesShardLocations(new D1ThatAnswersEveryCountWithNoRow(d1))).toEqual(['/profile/org-025001/']);
-  });
 });
 
 describe('the sitemap index shard revisions', () => {
@@ -170,42 +141,5 @@ describe('sitemap dates and categories', () => {
     expect(parseCategories(null)).toEqual([]);
     expect(parseCategories('   ')).toEqual([]);
     expect(parseCategories('Travel')).toEqual(['Travel']);
-  });
-});
-
-describe('the page a sitemap shard is asked for', () => {
-  it('reads the first of several values, and no page from none', () => {
-    expect(parsePage(['2', '3'])).toBe(2);
-    expect(parsePage([])).toBeNull();
-    expect(parsePage(undefined)).toBeNull();
-  });
-});
-
-describe('a database sitemap shard', () => {
-  const shard = (method: string, prefixEntries: { path: string }[] = []) => {
-    const loadRows = vi.fn(async () => [{ path: '/profile/alice/' }]);
-    const response = handlePagedDatabaseSitemap({
-      request: shardRequest('/sitemaps/profiles/1.xml', method),
-      params: { page: '1' },
-      loadRows,
-      toEntry: (row) => row,
-      prefixEntries,
-    });
-    return { response, loadRows };
-  };
-
-  it('refuses a method other than GET or HEAD without reading the database', async () => {
-    const { response, loadRows } = shard('POST');
-
-    expect((await response).status).toBe(405);
-    expect(loadRows).not.toHaveBeenCalled();
-  });
-
-  it('reads no database rows for a page its leading entries fill', async () => {
-    const leading = Array.from({ length: SITEMAP_PAGE_SIZE }, (_, index) => ({ path: `/templates/${index}/` }));
-    const { response, loadRows } = shard('GET', leading);
-
-    expect(await (await response).text()).not.toContain('/profile/alice/');
-    expect(loadRows).not.toHaveBeenCalled();
   });
 });

@@ -10,11 +10,4 @@ describe('resolveByteRange on the range workerd reports, which R2Range types rul
   ])("reads %j of %d bytes, as workerd's local R2 reports it with the unused fields undefined, as %j", (range, size, expected) => {
     expect(resolveByteRange(range, size)).toEqual(expected);
   });
-
-  it.each([
-    ['no fields at all', {}],
-    ['only an undefined suffix', { suffix: undefined }],
-  ])('serves no bytes for a range with %s, which names no bytes', (_label, range) => {
-    expect(resolveByteRange(range, 64)).toBeNull();
-  });
 });

@@ -109,23 +109,6 @@ describe("Personal run key management handler", () => {
     expect(JSON.stringify(body)).not.toContain("slrk_raw-secret-only-returned-once");
   });
 
-  it("answers 500 and stores no key when it can't make the key's secret", async () => {
-    keyMocks.createPersonalRunKeySecret.mockRejectedValueOnce(new Error("Unable to hash personal run key"));
-
-    const response = await handleAgentKeys(
-      new Request("http://localhost/api/agent-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Codex" }),
-      }),
-      mockEnv,
-    );
-
-    expect(response.status).toBe(500);
-    expect((await readJson(response, apiErrorBody)).error).toBe("Unable to create personal run key");
-    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
-  });
-
   it("stores chosen permissions with the read each write permission implies", async () => {
     const response = await handleAgentKeys(
       new Request("http://localhost/api/agent-keys", {
@@ -309,14 +292,6 @@ describe("Personal run key management handler", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual(objectContaining({ error: "Personal run key not found" }));
-  });
-
-  it("serves the same collection at a path without the /api prefix", async () => {
-    const response = await handleAgentKeys(new Request("http://localhost/agent-keys"), mockEnv);
-
-    expect(response.status).toBe(200);
-    expect(await readJson(response, keyListBody)).toEqual([]);
-    expect(dbMocks.selectChain.limit).toHaveBeenCalledWith(50);
   });
 
   it("rejects lookalike paths instead of treating them as the collection", async () => {

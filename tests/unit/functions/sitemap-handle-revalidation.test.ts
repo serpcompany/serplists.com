@@ -1,21 +1,9 @@
-import { sql } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { serveProfilesSitemap, serveSitemapIndex, serveTemplatesSitemap } from '../../../functions/sitemap/routes';
 import { apiEnv } from '../../support/apiEnv';
 import { sitemapLocations } from '../../support/sitemapLocations';
 import { SqliteD1 } from '../../support/sqlite-d1';
-
-vi.mock('../../../functions/sitemap/listedOwners', () => ({
-  validUsernameCondition: sql`1 = 1`,
-  validOrganizationHandleCondition: sql`1 = 1`,
-  listedOrganizationCondition: sql`1 = 1`,
-}));
-
-vi.mock('../../../functions/sitemap/shared', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../functions/sitemap/shared')>(),
-  validTemplateSlugCondition: sql`1 = 1`,
-}));
 
 let d1: SqliteD1;
 
@@ -44,7 +32,7 @@ afterEach(() => {
   d1.close();
 });
 
-describe("the sitemaps check each handle and slug again, even when the database's filter lets one through", () => {
+describe('the sitemaps list a handle and a slug stored with spaces around them, and leave out what fails the handle and slug rules', () => {
   it('lists a profile under its handle without the spaces around it, and leaves out one with no handle or one that is not a public handle', async () => {
     addUser('carol', '  carol  ');
     addUser('nameless', null);
@@ -67,7 +55,7 @@ describe("the sitemaps check each handle and slug again, even when the database'
       .toEqual(['/profile/alice/ship-it/']);
   });
 
-  it('builds the index from the same checked entries, so a profile that fails the check leaves the profiles shard as if it were not there', async () => {
+  it('builds the index from the same entries, so a profile that fails the handle rule leaves the profiles shard as if it were not there', async () => {
     const profilesShardHashWith = async (...usernames: string[]) => {
       d1.close();
       d1 = new SqliteD1();

@@ -16,9 +16,9 @@ const statementTarget = new WeakMap<object, D1PreparedStatement>();
 function toRecord(sql: string, result: D1Result<unknown>, startedAt: number): D1QueryRecord {
   return {
     sql,
-    rowsRead: result.meta?.rows_read ?? 0,
-    rowsWritten: result.meta?.rows_written ?? 0,
-    rowsReturned: result.results?.length ?? 0,
+    rowsRead: result.meta.rows_read,
+    rowsWritten: result.meta.rows_written,
+    rowsReturned: result.results.length,
     durationMs: Date.now() - startedAt,
   };
 }

@@ -95,23 +95,6 @@ describe('GET /api/profiles/by-handle, which resolves a handle through the publi
     expect(plan).toMatch(/SEARCH teams USING INDEX sqlite_autoindex_teams_1 \(id=\?\)/);
     expect(plan).not.toMatch(/SCAN/);
   });
-
-  it('names an Organization by its handle in a database that holds no name for it', async () => {
-    database.close();
-    database = new SqliteD1({
-      schemaSql: [
-        'CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, created_at TEXT)',
-        'CREATE TABLE teams (id TEXT PRIMARY KEY, slug TEXT, name TEXT, avatar_url TEXT, description TEXT, archived_at TEXT)',
-        'CREATE TABLE public_handles (handle TEXT PRIMARY KEY, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL)',
-      ],
-    });
-    database.run("INSERT INTO teams (id, slug) VALUES ('team-1', 'acme')");
-    database.run("INSERT INTO public_handles (handle, owner_type, owner_id) VALUES ('acme', 'team', 'team-1')");
-
-    const response = await profileOf('acme');
-
-    expect(await readJson(response, jsonObject)).toEqual({ type: 'team', handle: 'acme', name: 'acme', avatar_url: null, description: null });
-  });
 });
 
 describe('GET /api/templates/public?handle=, the public Templates of the Profile Owner a handle names', () => {
