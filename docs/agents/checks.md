@@ -243,8 +243,8 @@ the `pr-review` skill's tests reviewer sends back.
   project (node, dom and local-d1) in one run, which writes `coverage/tests`; two runs number a
   file's branches differently, since V8 reports blocks only for code that ran, so keep every
   suite in that one run, as a project of its own. The process entry points the node and dom tests
-  spawn write `coverage/tests-children`: `tests/support/childProcessCoverage.ts` gives each child
-  `NODE_V8_COVERAGE`, and c8 reports the files `PROCESS_ENTRY_POINTS` names. A library module
+  spawn write `coverage/tests-children`: `tests/support/childProcessCoverage.ts` and its setup file
+  `childProcessCoverageHandOff.ts` give each child `NODE_V8_COVERAGE`, and c8 reports the files `PROCESS_ENTRY_POINTS` names. A library module
   counts only from the tests that import it, and an entry point only from the processes that ran
   it, so the teardown drops it from `coverage/tests`. Coverage slows rendering, so the dom project
   gives each test 15 seconds and local-d1 20, and a test that spawns a script its own

@@ -242,7 +242,7 @@ follow-up issue, with a test that fails on the real mistake. Until it is a check
 | The stop hook (`stop-hook.mjs`) | The same and the docs, on uncommitted changes | Claude Code |
 | The git hooks | Comments, size, secrets and lint on a commit; `verify` on a push | Every clone |
 | `pnpm run lint`, `typecheck` | Type-aware ESLint, the five tsc projects | `check`, Quality Gate |
-| `pnpm run test:run`, `test:local-d1` | Unit and local D1 tests | `check`, Quality Gate |
+| `pnpm run test:run` | Unit and local D1 tests | `check`, Quality Gate |
 | `pnpm run test:coverage` | 100% line, branch and function coverage | `check`, Quality Gate |
 | `pnpm run check:db:drizzle-parity` | The migrations match the Drizzle schema | `check`, CI |
 | `pnpm run check` | `typecheck:env`, then each of the above in turn | By hand, per finished tree |

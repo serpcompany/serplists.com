@@ -195,10 +195,10 @@ staging/production model are in [database operations](database-operations.md).
 pnpm run check            # the finish gate: every check and test below but the browser tests
 pnpm run verify           # the repository checks
 pnpm run typecheck        # tsc for the app, scripts, API and tests
-pnpm run test             # both suites below, then the coverage check
-pnpm run test:run         # unit tests, with coverage (pnpm exec vitest for watch mode)
-pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
-pnpm run test:coverage    # the coverage check on the reports the two runs above wrote
+pnpm run test             # test:run, then the coverage check
+pnpm run test:run         # every unit and local D1 test, writing both coverage reports (pnpm exec vitest for watch mode)
+pnpm run test:local-d1    # only the local D1 tests (20 s per test: each starts a real local D1)
+pnpm run test:coverage    # the coverage check on the reports test:run wrote
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
 pnpm run test:e2e:full    # every browser spec on the same stack
 ```
