@@ -66,8 +66,8 @@ describe('the checks of a checkout holding a file with a comment', { timeout: 30
   const finding = `${commented}:1  name: serp # why (YAML)`;
   let copy: CheckoutCopy;
 
-  beforeAll(() => {
-    copy = aCopyOfTheCheckout({ asGitRepository: true });
+  beforeAll(async () => {
+    copy = await aCopyOfTheCheckout({ asGitRepository: true });
     writeFileSync(path.join(copy.root, commented), 'name: serp # why\n');
   }, 300_000);
 

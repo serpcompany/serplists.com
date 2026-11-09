@@ -15,8 +15,8 @@ const TINY_TABLES_WITHOUT_THEIR_CREATE_STATEMENTS = [
 describe('pnpm run check:db:drizzle-parity, when a negative control finds nothing to break', { timeout: 300_000 }, () => {
   let copy: CheckoutCopy;
 
-  beforeAll(() => {
-    copy = aCopyOfTheCheckout();
+  beforeAll(async () => {
+    copy = await aCopyOfTheCheckout();
   }, 120_000);
   afterAll(() => copy.remove(), 120_000);
 
@@ -38,8 +38,8 @@ describe('pnpm run check:db:drizzle-parity, when a negative control finds nothin
 describe('pnpm run check:db:drizzle-parity, with a Wrangler whose JSON answer leaves out the rows', { timeout: 300_000 }, () => {
   let copy: CheckoutCopy;
 
-  beforeAll(() => {
-    copy = aCopyOfTheCheckoutWithStandIns(aWranglerThatCanAnswerForItself());
+  beforeAll(async () => {
+    copy = await aCopyOfTheCheckoutWithStandIns(aWranglerThatCanAnswerForItself());
     giveTheCopyATinySchema(copy.root);
   }, 120_000);
   afterAll(() => copy.remove(), 120_000);

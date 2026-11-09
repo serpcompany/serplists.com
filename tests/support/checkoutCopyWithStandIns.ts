@@ -1,15 +1,17 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { copyFileSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFile, lstat, mkdir, readdir, rmdir, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { buildScriptInvocation, REPO_ROOT } from '../../scripts/lib/run-tool';
-import { aCopyOfTheCheckout, type CheckoutCopy } from './checkoutCopy';
+import { aCopyOfTheCheckout, type CheckoutCopy, isALinkOrJunction, unlinkWithoutFollowing } from './checkoutCopy';
 import type { ScriptProcessRun } from './scriptProcess';
 
 type StandInPackages = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 type Replaced = ReadonlyMap<string, readonly string[]>;
+
+export type CopyWithAStandInPackage = CheckoutCopy & { standInFolder: string };
 
 function replacedEntries(packageNames: readonly string[]): Replaced {
   const replaced = new Map<string, string[]>();
@@ -20,59 +22,60 @@ function replacedEntries(packageNames: readonly string[]): Replaced {
   return replaced;
 }
 
-function linkTheModulesExcept(from: string, to: string, replaced: Replaced): void {
-  mkdirSync(to);
-  for (const entry of readdirSync(from, { withFileTypes: true })) {
-    const source = path.join(from, entry.name);
-    const target = path.join(to, entry.name);
-    const inside = replaced.get(entry.name);
-    if (inside !== undefined) {
-      if (inside.length > 0) linkTheModulesExcept(source, target, replacedEntries(inside));
-    } else if (entry.isFile()) {
-      copyFileSync(source, target);
-    } else {
-      symlinkSync(source, target, 'junction');
-    }
-  }
+async function linkTheModulesExcept(from: string, to: string, replaced: Replaced): Promise<void> {
+  await mkdir(to);
+  const entries = await readdir(from, { withFileTypes: true });
+  await Promise.all(
+    entries.map(async (entry) => {
+      const source = path.join(from, entry.name);
+      const target = path.join(to, entry.name);
+      const inside = replaced.get(entry.name);
+      if (inside !== undefined) {
+        if (inside.length > 0) await linkTheModulesExcept(source, target, replacedEntries(inside));
+      } else if (entry.isFile()) {
+        await copyFile(source, target);
+      } else {
+        await symlink(source, target, 'junction');
+      }
+    }),
+  );
 }
 
-const isALinkOrJunction = (entry: string) => lstatSync(entry).isSymbolicLink() || realpathSync(entry) !== entry;
-
-function unlinkWithoutFollowing(link: string): void {
-  try {
-    unlinkSync(link);
-  } catch {
-    rmdirSync(link);
-  }
+async function removeTheLinkedModules(folder: string): Promise<void> {
+  const entries = await readdir(folder);
+  await Promise.all(
+    entries.map(async (entry) => {
+      const at = path.join(folder, entry);
+      if (await isALinkOrJunction(at)) await unlinkWithoutFollowing(at);
+      else if ((await lstat(at)).isDirectory()) await removeTheLinkedModules(at);
+      else await unlink(at);
+    }),
+  );
+  await rmdir(folder);
 }
 
-function removeTheLinkedModules(folder: string): void {
-  for (const entry of readdirSync(folder)) {
-    const at = path.join(folder, entry);
-    if (isALinkOrJunction(at)) unlinkWithoutFollowing(at);
-    else if (lstatSync(at).isDirectory()) removeTheLinkedModules(at);
-    else unlinkSync(at);
-  }
-  rmdirSync(folder);
-}
-
-export function aCopyOfTheCheckoutWithStandIns(packages: StandInPackages, options: { asGitRepository?: boolean } = {}): CheckoutCopy {
-  const copy = aCopyOfTheCheckout(options);
+export async function aCopyOfTheCheckoutWithStandIns(packages: StandInPackages, options: { asGitRepository?: boolean } = {}): Promise<CheckoutCopy> {
+  const copy = await aCopyOfTheCheckout(options);
   const modules = path.join(copy.root, 'node_modules');
-  unlinkWithoutFollowing(modules);
-  linkTheModulesExcept(path.join(REPO_ROOT, 'node_modules'), modules, replacedEntries(Object.keys(packages)));
+  await unlinkWithoutFollowing(modules);
+  await linkTheModulesExcept(path.join(REPO_ROOT, 'node_modules'), modules, replacedEntries(Object.keys(packages)));
   for (const [name, files] of Object.entries(packages)) {
     const folder = path.join(modules, ...name.split('/'));
-    mkdirSync(folder, { recursive: true });
-    for (const [file, text] of Object.entries(files)) writeFileSync(path.join(folder, file), text);
+    await mkdir(folder, { recursive: true });
+    for (const [file, text] of Object.entries(files)) await writeFile(path.join(folder, file), text);
   }
   return {
     root: copy.root,
-    remove: () => {
-      removeTheLinkedModules(modules);
-      copy.remove();
+    remove: async () => {
+      await removeTheLinkedModules(modules);
+      await copy.remove();
     },
   };
+}
+
+export async function aCopyOfTheCheckoutWithAStandInPackage({ name, files }: { name: string; files: Record<string, string> }): Promise<CopyWithAStandInPackage> {
+  const copy = await aCopyOfTheCheckoutWithStandIns({ [name]: files });
+  return { ...copy, standInFolder: path.join(copy.root, 'node_modules', ...name.split('/')) };
 }
 
 type RunningScript = {

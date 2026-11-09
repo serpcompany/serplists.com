@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { scenarios } from '../../../scripts/d1-profile-lib';
 import { D1_REFUSAL, LOCAL_D1_STAND_IN_FILES } from '../../fixtures/localD1PlatformStandIn';
 import { stringMatching } from '../../support/asymmetricMatchers';
-import type { CopyWithAStandInPackage } from '../../support/checkoutCopyWithAStandInPackage';
+import type { CopyWithAStandInPackage } from '../../support/checkoutCopyWithStandIns';
 import {
   aCopyWithAStandInOpenNext,
   answersOn,
@@ -88,7 +88,7 @@ describe('pnpm run d1:profile, on a copy of the checkout whose OpenNext build is
   let profiled: ProfileRun;
 
   beforeAll(async () => {
-    copy = aCopyWithAStandInOpenNext();
+    copy = await aCopyWithAStandInOpenNext();
     profiled = await runTheProfile(copy, { args: ['--scale', '0.01'], worker: { statementsOf: WORKLOAD } });
   }, 300_000);
 

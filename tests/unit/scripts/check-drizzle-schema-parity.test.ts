@@ -22,8 +22,8 @@ describe('pnpm run check:db:drizzle-parity, which replays every migration and co
   describe('in a copy of the checkout with a tiny schema', () => {
     let copy: CheckoutCopy;
 
-    beforeAll(() => {
-      copy = aCopyOfTheCheckout();
+    beforeAll(async () => {
+      copy = await aCopyOfTheCheckout();
     }, 120_000);
     afterAll(() => copy.remove(), 120_000);
 

@@ -46,7 +46,7 @@ describe('pnpm run db:schema:generate on a schema holding what the committed one
   ].join('\n');
 
   it('documents a foreign key with no on-delete rule, a default built from a value, and an index on an expression', async () => {
-    const copy = aCopyOfTheCheckout();
+    const copy = await aCopyOfTheCheckout();
     try {
       writeFileSync(path.join(copy.root, 'db', 'schema', 'notes.ts'), notesTable);
       appendFileSync(path.join(copy.root, 'db', 'schema', 'index.ts'), 'export { notes } from "./notes";\n');
@@ -59,7 +59,7 @@ describe('pnpm run db:schema:generate on a schema holding what the committed one
       expect(doc).toContain('| `title` | text | no | untitled |  |\n');
       expect(doc).toContain('- `notes_by_lower_title` on ((expression))\n');
     } finally {
-      copy.remove();
+      await copy.remove();
     }
   });
 });

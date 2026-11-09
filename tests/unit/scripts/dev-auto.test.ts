@@ -12,15 +12,15 @@ import { ended, type IdleProcess, isRunning, startAnIdleProcessNamed } from '../
 import { runRepositoryScriptWhileServing } from '../../support/repositoryScriptRun';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
-const copy = aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN);
+const copy = await aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN);
 const workDir = aWorkDirRemovedAfterAll('dev-auto-');
 const idle: IdleProcess[] = [];
 const devAlls: ReturnType<typeof startTheCopysScript>[] = [];
 
-afterAll(() => {
+afterAll(async () => {
   for (const each of devAlls) each.child.kill();
   for (const each of idle) each.stop();
-  copy.remove();
+  await copy.remove();
 });
 
 const devAllEnv = (vars: Record<string, string> = {}): Record<string, string | undefined> => ({

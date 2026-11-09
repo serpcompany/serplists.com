@@ -11,7 +11,7 @@ import { whileServingLocally } from '../../support/localHttpServer';
 import { PLAYWRIGHT_STAND_IN, whatTheBrowserWasAskedIn } from '../../support/playwrightStandIn';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
-const copy = aCopyOfTheCheckoutWithStandIns(PLAYWRIGHT_STAND_IN);
+const copy = await aCopyOfTheCheckoutWithStandIns(PLAYWRIGHT_STAND_IN);
 const workDir = aWorkDirRemovedAfterAll('ui-snapshot-');
 
 afterAll(() => copy.remove());

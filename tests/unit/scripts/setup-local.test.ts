@@ -23,8 +23,8 @@ describe('pnpm run setup, in a copy of the checkout whose Playwright is a stand-
   let copy: CheckoutCopy;
   const devVarsOf = () => readFileSync(path.join(copy.root, '.dev.vars'), 'utf8');
 
-  beforeAll(() => {
-    copy = aCopyOfTheCheckoutWithStandIns(A_PLAYWRIGHT_THAT_ONLY_SAYS_WHAT_IT_WAS_ASKED);
+  beforeAll(async () => {
+    copy = await aCopyOfTheCheckoutWithStandIns(A_PLAYWRIGHT_THAT_ONLY_SAYS_WHAT_IT_WAS_ASKED);
   }, 120_000);
   afterAll(() => copy.remove(), 120_000);
 

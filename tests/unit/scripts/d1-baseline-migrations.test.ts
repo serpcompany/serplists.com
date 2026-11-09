@@ -65,7 +65,7 @@ describe("pnpm run db:migrations:baseline:staging (scripts/d1-baseline-migration
 
   it("records the migrations through the one named as applied on this checkout's local database with --execute", { timeout: 300_000 }, async () => {
     const through = migrationNames[1] ?? "";
-    const copy = aCopyOfTheCheckout();
+    const copy = await aCopyOfTheCheckout();
 
     try {
       const run = await runTheCopysScript(copy, SCRIPT, { args: ["--database", "serp-checklists-db", "--through", through, "--execute"], env: { ...process.env, CI: "1" } });
@@ -76,7 +76,7 @@ describe("pnpm run db:migrations:baseline:staging (scripts/d1-baseline-migration
       const applied = await queryTheCopysLocalD1(copy, "SELECT name FROM d1_migrations ORDER BY id");
       expect(applied.map((row) => appliedRowSchema.parse(row).name)).toEqual(migrationNames.slice(0, 2));
     } finally {
-      copy.remove();
+      await copy.remove();
     }
   });
 

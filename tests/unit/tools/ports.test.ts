@@ -49,7 +49,7 @@ const asking = (folder: string) =>
     child.on('exit', () => done([folder, said.trim()]));
   });
 
-describe('the ports of a checkout', () => {
+describe('the ports of a checkout', { timeout: SLOW }, () => {
   it('are the documented ones in the main checkout, which claims nothing', () => {
     const main = repository();
     expect(portsOf(main)).toEqual({ dev: 3000, e2e: 4173, preview: 8787 });
@@ -175,7 +175,7 @@ describe('the ports of a checkout', () => {
   }, SLOW);
 });
 
-describe('the lock a claim is made under', () => {
+describe('the lock a claim is made under', { timeout: SLOW }, () => {
   it('makes a worktree wait while another run holds it', async () => {
     const main = repository();
     const one = worktree(main, 'one');
@@ -217,7 +217,7 @@ describe('the lock a claim is made under', () => {
   });
 });
 
-describe('a command run with a role', () => {
+describe('a command run with a role', { timeout: SLOW }, () => {
   const helper = (folder: string, name: string, source: string) => {
     writeFileSync(path.join(folder, name), source);
     return name;

@@ -14,8 +14,8 @@ describe('pnpm run db:reset, in a copy of the checkout whose local D1 another pr
   let copy: CheckoutCopy;
   let leftover: string;
 
-  beforeAll(() => {
-    copy = aCopyOfTheCheckout();
+  beforeAll(async () => {
+    copy = await aCopyOfTheCheckout();
     mkdirSync(localD1DatabasesOf(copy), { recursive: true });
     leftover = path.join(localD1DatabasesOf(copy), 'left-by-an-earlier-run.sqlite');
     writeFileSync(leftover, 'an earlier local D1');

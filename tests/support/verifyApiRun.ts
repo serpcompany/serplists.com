@@ -16,13 +16,13 @@ export const COOKIE = 'session=verify-api-test-cookie';
 const SECRET_THE_MCP_REFUSES = 'slrk_verify_api_secret_the_mcp_refuses';
 export const SLOW = 60_000;
 const plans = mkdtempSync(path.join(tmpdir(), 'verify-api-plans-'));
-const checkout = aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN, { asGitRepository: true });
+const checkout = await aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN, { asGitRepository: true });
 
 export const theCheckoutCopy = (): CheckoutCopy => checkout;
 
-afterAll(() => {
+afterAll(async () => {
   rmSync(plans, { recursive: true, force: true });
-  checkout.remove();
+  await checkout.remove();
 });
 
 const rpcRequestSchema = z.object({

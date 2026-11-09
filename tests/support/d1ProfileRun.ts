@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { scenarios } from '../../scripts/d1-profile-lib';
 import { buildScriptInvocation } from '../../scripts/lib/run-tool';
 import { OPEN_NEXT_CLI_STAND_IN } from '../fixtures/openNextCliStandIn';
-import { aCopyOfTheCheckoutWithAStandInPackage, type CopyWithAStandInPackage } from './checkoutCopyWithAStandInPackage';
+import { aCopyOfTheCheckoutWithAStandInPackage, type CopyWithAStandInPackage } from './checkoutCopyWithStandIns';
 import { type ReceivedRequest, type StandInAnswer, withLocalApiStandIn } from './localApiStandIn';
 import { parseJsonText } from './storedJson';
 
@@ -39,7 +39,7 @@ const signInBody = z.object({ email: z.string(), password: z.string() });
 
 const callOfTheStandIn = z.array(z.string());
 
-export function aCopyWithAStandInOpenNext(): CopyWithAStandInPackage {
+export function aCopyWithAStandInOpenNext(): Promise<CopyWithAStandInPackage> {
   return aCopyOfTheCheckoutWithAStandInPackage({
     name: '@opennextjs/cloudflare',
     files: {

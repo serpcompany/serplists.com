@@ -11,7 +11,7 @@ import { parseJsonText } from '../../support/storedJson';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { withTheDatesAround } from '../../support/utcDates';
 
-const copy = aCopyOfTheCheckout({ asGitRepository: true });
+const copy = await aCopyOfTheCheckout({ asGitRepository: true });
 
 afterAll(() => copy.remove());
 

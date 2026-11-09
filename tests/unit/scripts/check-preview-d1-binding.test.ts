@@ -70,7 +70,7 @@ describe('pnpm run check:preview:d1-binding in a checkout whose preview binding 
     const { topLevel } = readD1Databases(committed);
     const app = topLevel.find((database) => database.binding === 'DB');
     const sharingProduction = committed.replaceAll(app?.preview_database_id ?? '', app?.database_id ?? '');
-    const copy = aCopyOfTheCheckout();
+    const copy = await aCopyOfTheCheckout();
 
     try {
       writeFileSync(path.join(copy.root, 'wrangler.toml'), sharingProduction);
@@ -80,7 +80,7 @@ describe('pnpm run check:preview:d1-binding in a checkout whose preview binding 
       expect(run.stderr).toBe(`${problemIn(sharingProduction) ?? 'a problem'}\n`);
       expect(run.stdout).toBe('');
     } finally {
-      copy.remove();
+      await copy.remove();
     }
   });
 });
