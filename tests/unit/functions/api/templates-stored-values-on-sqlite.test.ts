@@ -4,6 +4,7 @@ import "../../../support/mockedSession";
 import { insertOwnedRun, openRunOwnerDatabase } from "../../../support/runOwnerOnSqlite";
 import { addOrganizationWithMember } from "../../../support/organizationRunsOnSqlite";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { handleChecklists } from "@functions/api/handlers/checklists";
 import { apiEnvOn } from "../../../support/apiEnv";
 import { apiRequest } from "../../../support/apiRequest";
 import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
@@ -91,6 +92,19 @@ describe("a Template's runs stored with a revision that is not a number", () => 
     expect(template("version")).toEqual({ version: 2 });
     expect(onlyElement(database.rows("SELECT revision, items FROM checklist_runs WHERE id = 'run-1'")))
       .toEqual({ revision: "legacy", items: JSON.stringify([SECTION]) });
+  });
+});
+
+describe("a Template stored with a content version that is not a number", () => {
+  it("revalidates a run against it as template version 1", async () => {
+    insertOwnedRun(database, { id: "run-1", status: "in_progress", items: JSON.stringify([SECTION]) });
+    database.run("UPDATE templates SET content_version = 'legacy' WHERE id = 'template-1'");
+
+    const response = await handleChecklists(apiRequest("checklists/run-1/revalidate", "POST", { expected_revision: 1 }), apiEnvOn(database));
+
+    expect(await response.json()).toEqual({ success: true, progress: 0, revision: 2, template_version: 1 });
+    expect(onlyElement(database.rows("SELECT revision, template_version FROM checklist_runs WHERE id = 'run-1'")))
+      .toEqual({ revision: 2, template_version: 1 });
   });
 });
 

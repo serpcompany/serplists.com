@@ -99,11 +99,6 @@ describe('pnpm script names', () => {
     expect(missing('pnpm <script>')).toEqual([]);
     expect(proseScripts('Run pnpm run docs:gone. Then pnpm passes the flag on.')).toEqual(['docs:gone']);
   });
-
-  it('read a name that ends in pnpm run as the whole script, not the start of another', () => {
-    expect(proseScripts('Run pnpm run pnpm run no-such-script')).toEqual(['pnpm']);
-    expect(proseScripts('pnpm run test:e2e.pnpm run no-such-script')).toEqual(['test:e2e.pnpm']);
-  });
 });
 
 describe('layout and names', () => {

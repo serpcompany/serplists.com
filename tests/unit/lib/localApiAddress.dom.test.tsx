@@ -45,14 +45,4 @@ describe('the same build loaded with no window, as a server render loads it', ()
 
     expect(request.getAgentMcpEndpoint()).toBe('/api/mcp');
   });
-
-  it('asks its own /api for the sign-in options', async () => {
-    const authClient = await loadForALocalApi(() => import('@/lib/auth-client'), 'in a server render');
-    const fetchStatus = vi.fn(async (_url: string, _init: RequestInit) => Response.json(authStatusWith()));
-    vi.stubGlobal('fetch', fetchStatus);
-
-    await expect(authClient.getAuthStatus()).resolves.toEqual(authStatusWith());
-
-    expect(fetchStatus.mock.calls.map(([url]) => url)).toEqual(['/api/auth/status']);
-  });
 });

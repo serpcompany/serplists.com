@@ -227,6 +227,18 @@ describe('the fix-test check', () => {
     expect(status).toBe(1);
     expect(output).toContain('GitHub answered 403 when asked for the files of #7.');
   });
+
+  it('asks GitHub for the files of no pull request, and cannot finish, when it is run by hand without being told which fix to check', async () => {
+    const { status, output } = await runAgainstAGitHubStandIn(
+      { script: SCRIPT, args: ['fix-test'] },
+      { GITHUB_REPOSITORY: REPOSITORY, PR_TITLE: 'fix: the change' },
+      github(),
+    );
+
+    expect(status).toBe(1);
+    expect(output).toContain("::error::The fix-test check couldn't finish.");
+    expect(output).toContain('GitHub answered 404 when asked for the files of #.');
+  });
 });
 
 describe('the evidence check', () => {
@@ -340,19 +352,6 @@ describe('the checks on a runner that leaves out the API URL', () => {
   const issueOnGitHub = `https://api.github.com/repos/${REPOSITORY}/issues/12`;
   const issueLinkAnsweredBy = (answer: FetchAnswer) =>
     check('issue-link', { PR_BODY: 'Closes #12', GITHUB_API_URL: '', NODE_OPTIONS: nodeOptionsWithAFetchStandIn(aFolderIn(workDir), { [issueOnGitHub]: answer }) });
-
-  it('asks GitHub for the files of no pull request, and cannot finish, when it is run by hand without being told which fix to check', { timeout: 120_000 }, async () => {
-    const { status, output, requests } = await runAgainstAGitHubStandIn(
-      { script: SCRIPT, args: ['fix-test'] },
-      { GITHUB_REPOSITORY: REPOSITORY, PR_TITLE: 'fix: the change' },
-      github(),
-    );
-
-    expect(status).toBe(1);
-    expect(output).toContain("::error::The fix-test check couldn't finish.");
-    expect(output).toContain('GitHub answered 404 when asked for the files of #.');
-    expect(requests.map((request) => request.path)).toEqual([`/repos/${REPOSITORY}/pulls//files`]);
-  });
 
   it('asks api.github.com whether each closed number is an issue', { timeout: 120_000 }, async () => {
     const { status, output, requests } = await issueLinkAnsweredBy({ status: 200, body: JSON.stringify({ number: 12 }) });

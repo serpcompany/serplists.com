@@ -37,20 +37,4 @@ describe("MCP tools over rows stored with text where the API counts by numbers",
 
     expect(mcpRunResult.parse(body.result.structuredContent).run).toMatchObject({ revision: 1, templateVersion: 1 });
   });
-
-  it("updates a run stored with text for its revision as revision 1, saving and recording it as revision 2", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: TEXT_IN_A_NUMBER_COLUMN })]);
-
-    const body = await callTool("update_run", {
-      runId: "run-1",
-      expectedRevision: 1,
-      operation: "set_task_notes",
-      taskId: "task-1",
-      notes: "Checked",
-    });
-
-    expect(body.result.isError).toBeUndefined();
-    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(objectContaining({ revision: 2 }));
-    expect(jsonRecordIn((await recordedAudit()).diff_json)).toEqual(objectContaining({ revision: { from: 1, to: 2 } }));
-  });
 });

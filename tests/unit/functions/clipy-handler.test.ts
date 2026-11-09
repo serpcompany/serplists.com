@@ -185,16 +185,17 @@ describe('Clipy template generation', () => {
     ]);
   });
 
-  it('gives a moment its caption matched to one step only, filling the other steps in time order with the rest', async () => {
+  it('gives a moment whose caption matches two steps to the step it matches best only, filling the other steps in time order with the rest', async () => {
     const context = completeContext();
     context.keyMoments.moments = [
       { tMs: 10_000, caption: 'Opens the dashboard', frameUrl: 'https://cdn.clipy.online/key-moments/demo/dashboard.jpg' },
+      { tMs: 15_000, caption: 'Clicks the New issue button', frameUrl: 'https://cdn.clipy.online/key-moments/demo/new-issue.jpg' },
       { tMs: 20_000, caption: 'Provides a descriptive title', frameUrl: 'https://cdn.clipy.online/key-moments/demo/title.jpg' },
     ];
 
     expect(await imagesOfEachStep(context)).toEqual([
       ['https://cdn.clipy.online/key-moments/demo/dashboard.jpg'],
-      [],
+      ['https://cdn.clipy.online/key-moments/demo/new-issue.jpg'],
       ['https://cdn.clipy.online/key-moments/demo/title.jpg'],
       [],
       [],

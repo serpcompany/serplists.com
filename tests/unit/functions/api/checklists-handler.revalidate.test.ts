@@ -97,18 +97,6 @@ describe('Checklists Handlers', () => {
     ]);
   });
 
-  it('revalidates a run stored with text for its revision against a Template stored with text for its version, as revision 1 and version 1', async () => {
-    const sections = [{ id: 'section-1', title: 'Launch', items: [{ id: 'item-1', title: 'Write copy' }] }];
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([runAtRevision2(sections, { revision: 'legacy' })])
-      .mockResolvedValueOnce([personalTemplateRow({ version: 'legacy', is_public: false, items: JSON.stringify(sections) })]);
-
-    const response = await handleChecklists(apiRequest('checklists/run-1/revalidate', 'POST', { expected_revision: 1 }), mockEnv);
-
-    expect(response.status).toBe(200);
-    expect(savedUpdate()).toEqual(objectContaining({ revision: 2, template_version: 1 }));
-  });
-
   it('revalidates a run whose task the template moved to another section without resetting it', async () => {
     theRunAndItsTemplate(
       runAtRevision2([

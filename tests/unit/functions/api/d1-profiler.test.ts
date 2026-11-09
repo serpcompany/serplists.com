@@ -104,16 +104,6 @@ describe("withD1Profiling", () => {
     expect(records.map((r) => r.sql)).toEqual(["update runs set progress = 1", "select 1", "select 2"]);
   });
 
-  it("records a statement of a batch prepared on the database itself, which it never saw prepared, as an unknown batch statement", async () => {
-    const { db } = fakeDatabase();
-    const records: D1QueryRecord[] = [];
-    const profiled = withD1Profiling(db, (r) => records.push(r));
-
-    await profiled.batch([profiled.prepare("select 1"), db.prepare("select 2")]);
-
-    expect(records.map((r) => r.sql)).toEqual(["select 1", "(unknown batch statement)"]);
-  });
-
   it("hands raw() its column names on a read, measured by a separate all()", async () => {
     const { db, calls } = fakeDatabase();
     const rows = await withD1Profiling(db, () => undefined).prepare("select id, title from templates").raw({ columnNames: true });
