@@ -99,6 +99,22 @@ describe("stripePostForm", () => {
   });
 });
 
+describe("stripePostForm's form body", () => {
+  it("sends booleans as true and false, and leaves out fields that are undefined or null", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ id: "cs_test" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stripePostForm(
+      "sk_test_example",
+      "/v1/checkout/sessions",
+      { allow_promotion_codes: true, "automatic_tax[enabled]": false, customer_email: undefined, customer: null, quantity: 1 },
+      stripeObjectSchema,
+    );
+
+    expect(firstOf(fetchMock.mock.calls)[1]?.body).toBe("allow_promotion_codes=true&automatic_tax%5Benabled%5D=false&quantity=1");
+  });
+});
+
 describe("stripeGet", () => {
   it("sends an authorized GET and returns the parsed body", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ id: "sub_1" }), { status: 200 }));

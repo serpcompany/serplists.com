@@ -6,7 +6,7 @@ const LEAF_BUDGET = 300;
 
 export const knownLongDocs: Readonly<Record<string, number>> = {
   "docs/agents/billing.md": 364,
-  "docs/agents/data-persistence.md": 457,
+  "docs/agents/data-persistence.md": 459,
   "docs/agents/database-operations.md": 416,
   "docs/agents/design.md": 364,
   "docs/agents/frontend.md": 719,

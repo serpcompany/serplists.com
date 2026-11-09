@@ -178,7 +178,7 @@ const Index = () => {
                 <MediaCard
                   key={template.id}
                   description={template.description || 'No description yet.'}
-                  href={buildCanonicalPublicTemplatePath(template)}
+                  href={buildCanonicalPublicTemplatePath(template) ?? buildPublicTemplatesPath()}
                   icon={<TypeIcon />}
                   title={template.title}
                 >

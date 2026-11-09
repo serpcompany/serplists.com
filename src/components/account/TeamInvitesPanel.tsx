@@ -50,15 +50,16 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
   const handleCreateInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!inviteEmail) {
+    const email = inviteEmail.trim();
+    if (!email) {
       toast.error('Email is required');
       return;
     }
 
     try {
-      const result = await createInvite(teamId, inviteEmail, inviteRole);
+      const result = await createInvite(teamId, email, inviteRole);
       if (result?.kind === 'created') {
-        setInviteEmail((current) => inviteEmailAfterLink(current, inviteEmail));
+        setInviteEmail((current) => inviteEmailAfterLink(current, email));
         toast.success('Invite link created');
       }
     } catch (error) {

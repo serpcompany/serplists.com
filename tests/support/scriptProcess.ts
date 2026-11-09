@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type SpawnOptions } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -22,17 +22,8 @@ export function processEnvWithout(prefixes: readonly string[]): NodeJS.ProcessEn
   return { ...process.env, ...Object.fromEntries(removed) };
 }
 
-export async function runScriptProcess(
-  script: string,
-  { args = [], cwd = REPO_ROOT, env = process.env, preloads = [] }: ScriptProcessOptions = {},
-): Promise<ScriptProcessRun> {
-  const { command, args: invocationArgs, options } = buildScriptInvocation(path.join(REPO_ROOT, script), args);
-  const preloadFlags = preloads.flatMap((preload) => ['--import', pathToFileURL(path.join(REPO_ROOT, preload)).href]);
-  const child = spawn(
-    command,
-    [...invocationArgs.slice(0, AFTER_THE_TSX_LOADER), ...preloadFlags, ...invocationArgs.slice(AFTER_THE_TSX_LOADER)],
-    { ...options, cwd, env, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+async function ranToTheEnd(command: string, args: readonly string[], options: SpawnOptions): Promise<ScriptProcessRun> {
+  const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
   const chunks = { stdout: '', stderr: '' };
   child.stdout.on('data', (chunk: Buffer) => (chunks.stdout += chunk.toString()));
   child.stderr.on('data', (chunk: Buffer) => (chunks.stderr += chunk.toString()));
@@ -41,4 +32,22 @@ export async function runScriptProcess(
     child.once('close', exited);
   });
   return { status, ...chunks };
+}
+
+export function runScriptProcess(
+  script: string,
+  { args = [], cwd = REPO_ROOT, env = process.env, preloads = [] }: ScriptProcessOptions = {},
+): Promise<ScriptProcessRun> {
+  const { command, args: invocationArgs, options } = buildScriptInvocation(path.join(REPO_ROOT, script), args);
+  const preloadFlags = preloads.flatMap((preload) => ['--import', pathToFileURL(path.join(REPO_ROOT, preload)).href]);
+  return ranToTheEnd(
+    command,
+    [...invocationArgs.slice(0, AFTER_THE_TSX_LOADER), ...preloadFlags, ...invocationArgs.slice(AFTER_THE_TSX_LOADER)],
+    { ...options, cwd, env },
+  );
+}
+
+export function runModuleCodeProcess(code: string): Promise<ScriptProcessRun> {
+  const { command, args } = buildScriptInvocation('--input-type=module', ['--eval', code]);
+  return ranToTheEnd(command, args, { cwd: REPO_ROOT, env: process.env });
 }

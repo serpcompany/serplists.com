@@ -60,7 +60,7 @@ export default function TeamInviteAccept() {
   const router = useAppRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const { consoleContext } = useWorkspace();
-  const invite = useTeamInviteLink(token, !isLoading && user ? user.id : null);
+  const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
   const preview = invite.preview;
   const invitePath = useCurrentPath();
   const [signOutFlight] = useState(() => createSingleFlight());
@@ -145,6 +145,10 @@ export default function TeamInviteAccept() {
   );
 
   const renderBody = () => {
+    if (!token) {
+      return <p className="text-center text-sm text-muted-foreground">This invite link is missing a token.</p>;
+    }
+
     if (isLoading) {
       return <StatusLine icon={<Spinner />}>Checking your session...</StatusLine>;
     }

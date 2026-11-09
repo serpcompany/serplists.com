@@ -56,7 +56,10 @@ export const getPrimaryTaskAction = (
   if (hasNext) {
     return { kind: 'next_task' };
   }
-  return { kind: 'next_unfinished', itemId: getNextSelectedItemId(run, taskId) };
+  const nextUnfinishedId = getNextSelectedItemId(run, taskId);
+  return nextUnfinishedId !== taskId
+    ? { kind: 'next_unfinished', itemId: nextUnfinishedId }
+    : { kind: 'complete_task' };
 };
 
 export const getPrimaryTaskButton = (

@@ -1,4 +1,3 @@
-import { skipToken } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRunHistoryResponse, TemplateHistoryEvent } from '@/lib/api';
@@ -21,17 +20,12 @@ const response = (count: number): ChecklistRunHistoryResponse => ({
   events: Array.from({ length: count }, (_, index) => event(index)),
 });
 
-const loadHistory = (query: ReturnType<typeof buildRunHistoryQuery>): Promise<ChecklistRunHistoryResponse> => {
-  if (query.queryFn === skipToken) throw new Error('The query never loads history.');
-  return query.queryFn();
-};
-
 describe('run history query', () => {
   it("requests only the events the page shows, instead of the server's default of 50 audit rows and their users", async () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(8)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client });
 
-    await loadHistory(query);
+    await query.queryFn();
 
     expect(RUN_HISTORY_PREVIEW_LIMIT).toBe(8);
     expect(client.getChecklistHistory).toHaveBeenCalledWith('run-1', { limit: RUN_HISTORY_PREVIEW_LIMIT });
@@ -48,20 +42,15 @@ describe('run history query', () => {
   it('never loads history for a shared run or before the run is known', () => {
     const client = { getChecklistHistory: vi.fn() };
 
-    for (const query of [
-      buildRunHistoryQuery({ runId: 'run-1', mode: 'shared', client }),
-      buildRunHistoryQuery({ runId: undefined, mode: 'private', client }),
-    ]) {
-      expect(query.enabled).toBe(false);
-      expect(query.queryFn).toBe(skipToken);
-    }
+    expect(buildRunHistoryQuery({ runId: 'run-1', mode: 'shared', client }).enabled).toBe(false);
+    expect(buildRunHistoryQuery({ runId: undefined, mode: 'private', client }).enabled).toBe(false);
   });
 
   it('asks for the latest 100 after View all activity, under its own cache key, and shows up to 100', async () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(100)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client, showingAll: true });
 
-    await loadHistory(query);
+    await query.queryFn();
 
     expect(client.getChecklistHistory).toHaveBeenCalledWith('run-1', { limit: 100 });
     expect(query.queryKey).toEqual(['checklist-run-history', 'run-1', { limit: 100 }]);

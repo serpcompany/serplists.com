@@ -54,13 +54,13 @@ afterEach(() => {
   unmounts.splice(0).forEach((unmount) => unmount());
 });
 
-async function openTheEditor(isCreate = false) {
+async function openTheEditor(isCreate = false, version: { getVersion?: () => number | undefined } = { getVersion: () => 4 }) {
   const access = await mountQueryHook(() =>
     useTemplateEditorAccess({
       isCreate,
       templateId: isCreate ? undefined : 'template-7',
       getValues: () => editedValues,
-      getVersion: () => 4,
+      ...version,
       allowLeave,
       guardLeave,
     }),
@@ -79,6 +79,15 @@ describe('the template editor while it edits a saved template', () => {
     expect(readTemplateEditDraft(editor)).toMatchObject({ values: { title: 'Launch plan, edited' }, baseVersion: 4 });
     expect(allowLeave).toHaveBeenCalledTimes(1);
     expect(navigation.url()).toBe(`/login/?next=${encodeURIComponent('/dashboard/templates/template-7/edit/')}`);
+  });
+
+  it('keeps the edits with no starting version when the editor gives none', async () => {
+    const access = await openTheEditor(false, {});
+
+    access().signIn();
+
+    expect(readTemplateEditDraft(editor)).toMatchObject({ values: { title: 'Launch plan, edited' } });
+    expect(readTemplateEditDraft(editor)?.baseVersion).toBeUndefined();
   });
 
   it('offers the edits kept from before, and drops them once they save', async () => {

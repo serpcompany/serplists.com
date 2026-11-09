@@ -54,7 +54,8 @@ const PROFILE_LOAD_ERROR_MESSAGE = 'Unable to load this public profile.';
 
 const loadFailed: LoadPublicProfileResult = { kind: 'error', message: PROFILE_LOAD_ERROR_MESSAGE };
 
-const normalizeUsername = (value: string) => value.trim().toLowerCase();
+const normalizeUsername = (value: string | undefined) =>
+  value?.trim().toLowerCase() ?? '';
 
 const mergeProfileTemplates = (
   username: string,
@@ -79,7 +80,7 @@ const mergeProfileTemplates = (
 };
 
 const getBundledLibraryProfile = (
-  username: string,
+  username: string | undefined,
 ): { profile: ProfileSurfaceRecord; templates: ChecklistTemplate[] } | null => {
   if (normalizeUsername(username) !== REPO_TEMPLATE_OWNER_SLUG) {
     return null;

@@ -1,7 +1,7 @@
+import http from "node:http";
+import https from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
-
-import { errorMessage } from "./lib/error-message";
 
 export const SMOKE_TEST_HEADER = "x-serplists-smoke-test";
 
@@ -39,6 +39,36 @@ const API = ["/api/health", "/api/auth/get-session", "/api/mcp", "/api/stripe/we
 const API_THAT_ANSWERS = ["/api/health", "/api/templates"];
 const LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST = "serp-checklists-check.serp.workers.dev";
 
+export function getWithoutFollowingRedirects(
+  url: string,
+  { host, headers = {}, timeoutMs = 30_000 }: { host?: string | undefined; headers?: Record<string, string>; timeoutMs?: number } = {},
+): Promise<SiteResponse> {
+  const target = new URL(url);
+  const client = target.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      target,
+      { method: "GET", headers: { ...headers, ...(host ? { host } : {}) }, timeout: timeoutMs },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const absoluteLocation = response.headers.location
+            ? new URL(response.headers.location, `${target.protocol}//${host ?? target.host}`).href
+            : null;
+          resolve({ status: response.statusCode ?? 0, location: absoluteLocation, headers: response.headers, body });
+        });
+      },
+    );
+    request.on("timeout", () => request.destroy(new Error(`timed out: ${url}`)));
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 function siteUnderCheck(base: URL, request: SiteRequest) {
   const origin = base.origin;
   const onWorkersDev = base.hostname.endsWith(".workers.dev");
@@ -66,7 +96,7 @@ function siteUnderCheck(base: URL, request: SiteRequest) {
 
 type SiteUnderCheck = ReturnType<typeof siteUnderCheck>;
 
-const locsIn = (xml: string) => z.array(z.string()).parse([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]));
+const locsIn = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
 
 async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }: SiteUnderCheck) {
   for (const page of ONE_SEEDED_PAGE_OF_EACH_KIND.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
@@ -121,11 +151,16 @@ async function checkOtherHostsRedirectToTheCanonicalHost(
   if (onWorkersDev || local) {
     const workersDevHost = local ? LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST : undefined;
     const onTheWorkersDevHost = workersDevHost === undefined ? {} : { host: workersDevHost };
-    for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]] as const) {
-      await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
+    if (new URL(canonicalOrigin).hostname.endsWith(".workers.dev")) {
+      const page = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
+      check(page.status === 200, `${page.status} /about/ on ${workersDevHost ?? base.host}, where this environment lives`);
+    } else {
+      for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]] as const) {
+        await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...onTheWorkersDevHost, sendSmokeTestHeader: false });
+      }
+      const smokeTest = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: true });
+      check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost ?? base.host} with ${SMOKE_TEST_HEADER}`);
     }
-    const smokeTest = await get("/about/", { ...onTheWorkersDevHost, sendSmokeTestHeader: true });
-    check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost ?? base.host} with ${SMOKE_TEST_HEADER}`);
   }
   if (local) {
     await expectRedirect("/pricing", "https://serplists.com/pricing/", { host: "www.serplists.com" });
@@ -137,12 +172,12 @@ export async function checkSiteStandards({
   baseUrl,
   siteEnv,
   local = false,
-  request,
+  request = getWithoutFollowingRedirects,
 }: {
   baseUrl: string;
   siteEnv: SiteEnvironment;
   local?: boolean;
-  request: SiteRequest;
+  request?: SiteRequest;
 }): Promise<SiteStandardsResult> {
   const base = new URL(baseUrl);
   const canonicalOrigin = CANONICAL_ORIGINS[siteEnv];
@@ -178,18 +213,20 @@ async function attemptSiteStandards(options: Parameters<typeof checkSiteStandard
 const whyTheAttemptFailed = (outcome: AttemptOutcome): string =>
   "result" in outcome
     ? `${outcome.result.failed} check(s) failed`
-    : `the site did not answer (${errorMessage(outcome.error)})`;
+    : `the site did not answer (${outcome.error instanceof Error ? outcome.error.message : "unknown error"})`;
 
 export async function checkSiteStandardsUntilItPasses(
   options: Parameters<typeof checkSiteStandards>[0],
   { attempts = 3, retryDelayMs = 20_000, sleep = delay, onRetry = () => {} }: RetryOptions = {},
 ): Promise<SiteStandardsResult> {
-  let outcome = await attemptSiteStandards(options);
-  for (let attempt = 1; !("result" in outcome && outcome.result.failed === 0) && attempt < attempts; attempt += 1) {
+  for (let attempt = 1; ; attempt += 1) {
+    const outcome = await attemptSiteStandards(options);
+    const passed = "result" in outcome && outcome.result.failed === 0;
+    if (passed || attempt >= attempts) {
+      if ("error" in outcome) throw outcome.error;
+      return outcome.result;
+    }
     onRetry(attempt + 1, whyTheAttemptFailed(outcome));
     await sleep(retryDelayMs);
-    outcome = await attemptSiteStandards(options);
   }
-  if ("error" in outcome) throw outcome.error;
-  return outcome.result;
 }

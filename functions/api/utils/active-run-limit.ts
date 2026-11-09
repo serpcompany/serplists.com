@@ -43,7 +43,7 @@ export async function checkActiveRunCapacity(
     ? await getEntitlementsForContext(env, { type: 'team', teamId: owner.teamId, userId: actingUserId ?? owner.userId })
     : await getEntitlementsForUser(env, owner.userId);
   const limit = entitlements.limits.maxActiveRuns;
-  if (limit === null) return { limit: null, hit: null };
+  if (entitlements.plan !== 'free' || !limit) return { limit: null, hit: null };
 
   const current = await countActiveRuns(env, owner);
   return { limit, hit: current >= limit ? { limit, current } : null };
@@ -106,7 +106,6 @@ export function reopenLimitResponse(reopen: ReopenCapacity | null): Response | n
 }
 
 export async function reopenMissLimitResponse(env: Env, reopen: ReopenCapacity | null): Promise<Response | null> {
-  if (!reopen) return null;
   const hit = await findReopenLimitHitAfterMiss(env, reopen);
-  return hit ? activeRunLimitResponse(reopen.owner, hit, 'reopen') : null;
+  return hit && reopen ? activeRunLimitResponse(reopen.owner, hit, 'reopen') : null;
 }

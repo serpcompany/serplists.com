@@ -78,7 +78,7 @@ export async function startRun(
     started_by_user_id: identity.userId,
     created_at: now,
     updated_at: now,
-    template_version: template.content_version,
+    template_version: typeof template.content_version === "number" ? template.content_version : 1,
     revision: 1,
     retired_items: "[]",
   };
@@ -157,7 +157,7 @@ export async function updateRun(
   const args = parseUpdateRunArguments(rawArguments);
 
   const existing = await getOwnedRun(env, identity.userId, args.runId);
-  const currentRevision = existing.revision;
+  const currentRevision = typeof existing.revision === "number" ? existing.revision : 1;
   if (args.expectedRevision !== currentRevision) {
     throw new ToolError("Run changed since it was loaded; fetch it again before updating", "edit_conflict", {
       expectedRevision: args.expectedRevision,

@@ -19,11 +19,12 @@ const inviteTeamMemberBodySchema = z.object({
 });
 
 function isInvitePending(invite: {
-  accepted_at: string | null;
-  expires_at: string;
-  revoked_at: string | null;
+  accepted_at?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
 }): boolean {
   if (invite.accepted_at || invite.revoked_at) return false;
+  if (!invite.expires_at) return false;
   return Date.parse(invite.expires_at) > Date.now();
 }
 
@@ -68,7 +69,7 @@ export async function createTeamInvite(
 
   const parsed = inviteTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
   }
 
   const inviteEmail = parsed.data.email;
@@ -120,6 +121,9 @@ export async function createTeamInvite(
 
   const token = createInviteToken();
   const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return jsonError("Unable to create invite token", 500);
+  }
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const invite = {

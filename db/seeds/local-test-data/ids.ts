@@ -30,13 +30,12 @@ export const TEST_VERSION_IDS = [
   "team-version-growth-launch-2",
   "team-version-client-reporting-1",
 ] as const;
-export const LOCAL_SEED_COMPLETE_AUDIT_ID = "audit-team-client-invite-john";
 export const TEST_AUDIT_IDS = [
   "audit-team-growth-created",
   "audit-template-growth-created",
   "audit-template-growth-updated",
   "audit-team-client-created",
-  LOCAL_SEED_COMPLETE_AUDIT_ID,
+  "audit-team-client-invite-john",
 ] as const;
 
 export const DEV_PASSWORD_HASH =

@@ -16,6 +16,11 @@ import { findHiddenShareLinkActors, HIDDEN_ACTOR } from '../utils/share-link-act
 
 type Db = ReturnType<typeof createDb>;
 
+function isMissingHistoryReadTableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such table: audit_events/i.test(message);
+}
+
 async function canListOrganizationRuns(env: Env, teamId: string, userId: string): Promise<boolean> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
   return membership !== null && canViewTeam(normalizeTeamRole(membership.role));
@@ -33,22 +38,30 @@ async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checkl
   if (!checklist || !(await canViewRunHistory(env, checklist, userId))) {
     return jsonError('Checklist not found', 404);
   }
-  const subject = getRunSubject(checklist);
+  const subject = getRunSubject(checklist, userId);
 
-  const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
-  const hideActor = await findHiddenShareLinkActors(env, {
-    userId: checklist.user_id,
-    teamId: checklist.team_id ?? null,
-  }, eventRows);
+  try {
+    const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
+    const hideActor = await findHiddenShareLinkActors(env, {
+      userId: checklist.user_id,
+      teamId: checklist.team_id ?? null,
+    }, eventRows);
 
-  return json({
-    checklistId,
-    subject,
-    events: eventRows.map((row) => {
-      const event = serializeHistoryEvent(row);
-      return hideActor(row) ? { ...event, actor: HIDDEN_ACTOR } : event;
-    }),
-  });
+    return json({
+      checklistId,
+      subject,
+      events: eventRows.map((row) => {
+        const event = serializeHistoryEvent(row);
+        return hideActor(row) ? { ...event, actor: HIDDEN_ACTOR } : event;
+      }),
+    });
+  } catch (error) {
+    if (isMissingHistoryReadTableError(error)) {
+      return json({ checklistId, subject, events: [] });
+    }
+
+    throw error;
+  }
 }
 
 async function readRun(env: Env, db: Db, userId: string, checklistId: string): Promise<Response> {

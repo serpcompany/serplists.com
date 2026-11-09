@@ -30,6 +30,7 @@ describe('resolveByteRange', () => {
     [{ offset: 100 }, 100, null],
     [{ offset: 0 }, 0, null],
     [{ suffix: 5 }, 0, null],
+    [{ offset: 10, length: 0 }, 100, null],
   ])('%j of %d bytes -> %j', (range, size, expected) => {
     expect(resolveByteRange(range as R2Range, size)).toEqual(expected);
   });

@@ -25,7 +25,7 @@ import {
   newTemplateResponse,
   type NewTemplateRows,
 } from '../utils/template-insert';
-import { getTemplateSelectColumns, type TemplateDb } from '../utils/template-rows';
+import { getTemplateSelectColumns, withRulesColumnFallback, type TemplateDb } from '../utils/template-rows';
 import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
 
 const cloneOptionsSchema = z.object({
@@ -77,11 +77,13 @@ export async function cloneTemplate(
     if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, currentCount);
   }
 
-  const [source] = await db
-    .select(getTemplateSelectColumns(true))
-    .from(templates)
-    .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
-    .limit(1);
+  const [source] = await withRulesColumnFallback((includeRules) =>
+    db
+      .select(getTemplateSelectColumns(includeRules, true))
+      .from(templates)
+      .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
+      .limit(1),
+  );
 
   if (!source || !source.is_public) {
     return jsonError('Template not found', 404);
@@ -89,7 +91,7 @@ export async function cloneTemplate(
   const sourceTooLarge = contentTooLargeResponse('template', normalizeSectionsPayload(source.items).sections);
   if (sourceTooLarge) return sourceTooLarge;
 
-  const isPublic = visibility !== 'private';
+  const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
 
   const templateId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -99,12 +101,12 @@ export async function cloneTemplate(
     const clonedTemplate: TemplateInsertValues = {
       id: templateId,
       user_id: userId,
-      title: source.title,
+      title: source.title || '',
       description: source.description || '',
-      type: source.type,
+      type: typeof source.type === 'string' ? source.type : 'checklist',
       seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
       seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
-      rules: source.rules,
+      rules: typeof source.rules === 'string' ? source.rules : null,
       required_tools: toStoredRequiredTools(readRequiredTools(source.required_tools)),
       items: withStableItemsColumn(source.items),
       version: 1,
@@ -133,8 +135,8 @@ export async function cloneTemplate(
         after: snapshot,
         metadata: {
           sourceTemplateId: sourceId,
-          sourceVersion: source.version,
-          sourceContentVersion: source.content_version,
+          sourceVersion: typeof source.version === 'number' ? source.version : null,
+          sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
         },
         request,
         env,
@@ -142,7 +144,7 @@ export async function cloneTemplate(
       }),
     };
   };
-  const title = source.title;
+  const title = source.title || '';
   const inserted = await insertTemplateWithUniqueSlug(db, {
     title, slug: await generateUniqueSlug(env, title, templateId), buildRows, capacity: cloneCapacity,
   });

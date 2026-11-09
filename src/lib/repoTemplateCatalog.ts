@@ -51,8 +51,8 @@ const buildRepoTemplateId = (
   fromPortablePack: boolean,
 ): string => {
   const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1).replace('.json', '');
-  const fallbackId = `${fileName}-${index + 1}`;
-  const ownId = fromPortablePack ? '' : template.id.trim();
+  const fallbackId = `${fileName || 'template'}-${index + 1}`;
+  const ownId = fromPortablePack ? '' : template.id?.trim();
   const baseId = ownId || template.slug?.trim() || fallbackId;
   return baseId.startsWith('repo:') ? baseId : `repo:${baseId}`;
 };
@@ -72,7 +72,12 @@ export const normalizeRepoTemplateSources = (
     templates.forEach((template, index) => {
       const repoTemplate: ChecklistTemplate = {
         ...template,
-        id: buildRepoTemplateId(sourcePath, template, index, fromPortablePack),
+        id: buildRepoTemplateId(
+          sourcePath,
+          template as ChecklistTemplate,
+          index,
+          fromPortablePack,
+        ),
         isPublic: true,
         userId: REPO_TEMPLATE_USER_ID,
         ownerProfile: {

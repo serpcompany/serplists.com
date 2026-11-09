@@ -30,6 +30,10 @@ import { useIsClient } from '@/hooks/useIsClient';
 import { moveOnAfterAnAccountChange } from '@/lib/navigation/moveOnAfterAnAccountChange';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
+function resolveOrigin(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin;
+}
+
 export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
   const pathname = usePathname();
@@ -157,7 +161,7 @@ export function DevLoginBar(): JSX.Element | null {
       </PageContainer>
       
       <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 text-center">
-        App and API: {window.location.origin} | 
+        App and API: {resolveOrigin()} | 
         <span className="ml-1">{getDevTestUserPasswordHelp()}</span>
       </div>
     </div>

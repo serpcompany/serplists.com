@@ -62,7 +62,7 @@ export async function reissueTeamInviteLink({
 
   const parsed = reissueInviteLinkBodySchema.safeParse(await readOptionalJson(request));
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
   }
 
   const now = new Date().toISOString();
@@ -83,6 +83,9 @@ export async function reissueTeamInviteLink({
 
   const token = createInviteToken();
   const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return jsonError("Unable to create invite token", 500);
+  }
 
   const role = parsed.data?.role ?? invite.role;
   const expiresAt = new Date(Date.now() + INVITE_LIFETIME_MS).toISOString();

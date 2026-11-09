@@ -42,8 +42,7 @@ export function runTemplateFilterOptions(
   if (selectedTemplateId && !options.some((option) => option.id === selectedTemplateId)) {
     options.push({ id: selectedTemplateId, title: lookup.get(selectedTemplateId)?.title ?? null });
   }
-  const sortTitle = (option: RunTemplateOption): string => option.title ?? '';
-  return options.sort((left, right) => sortTitle(left).localeCompare(sortTitle(right)));
+  return options.sort((left, right) => (left.title ?? '').localeCompare(right.title ?? ''));
 }
 
 export function filterDashboardRuns(

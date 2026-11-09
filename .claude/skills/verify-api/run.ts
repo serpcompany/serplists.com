@@ -139,7 +139,7 @@ async function signIn(base: string, plan: Plan): Promise<string> {
   });
   const cookie = answer.headers
     .getSetCookie()
-    .map((line) => line.replace(/;.*$/, ""))
+    .map((line) => line.split(";")[0] ?? "")
     .filter(Boolean)
     .join("; ");
   if (!answer.ok || !cookie) {
@@ -227,7 +227,7 @@ async function doctor(server: Server, plan: Plan, secret: string, health: Answer
 }
 
 async function run(name: string, plan: Plan, server: Server, folder: string): Promise<number> {
-  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), `${text}\n`);
+  const record = (file: string, text: string) => writeFileSync(path.join(folder, file), text.endsWith("\n") ? text : `${text}\n`);
   const health = await call(server.base, "GET", "/api/health", {});
   const cookie = await signIn(server.base, plan);
   const lines: string[] = [];

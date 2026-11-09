@@ -55,8 +55,9 @@ export interface KnownCommands {
 
 function invokedScript(words: readonly string[]): string | undefined {
   let index = 0;
-  for (let word = words[index]; word?.startsWith("-"); word = words[index]) {
-    index += OPTIONS_WITH_VALUES.has(word) ? 2 : 1;
+  while ((words[index] ?? "").startsWith("-")) {
+    const [option] = (words[index] ?? "").split("=");
+    index += OPTIONS_WITH_VALUES.has(option ?? "") && !(words[index] ?? "").includes("=") ? 2 : 1;
   }
   const command = words[index] === "run" ? words[index + 1] : words[index];
   if (command === undefined || !SCRIPT_NAME.test(command) || (words[index] !== "run" && PNPM_COMMANDS.has(command))) return undefined;
@@ -65,13 +66,13 @@ function invokedScript(words: readonly string[]): string | undefined {
 
 export function pnpmScripts(code: string): string[] {
   return [...code.matchAll(/(?:^|[\s;&|(])pnpm((?:\s+[^\s;&|)]+)+)/g)].flatMap((match) => {
-    const script = invokedScript(match[0].replace(/^[\s;&|(]?pnpm\s+/, "").split(/\s+/));
+    const script = invokedScript((match[1] ?? "").trim().split(/\s+/));
     return script === undefined ? [] : [script];
   });
 }
 
 export const proseScripts = (prose: string) =>
-  (prose.match(/\bpnpm run [a-z][\w:.-]*\w/g) ?? []).map((command) => command.slice("pnpm run ".length));
+  [...prose.matchAll(/\bpnpm run ([a-z][\w:.-]*\w)/g)].flatMap((match) => (match[1] ? [match[1]] : []));
 
 export const missingScript = (name: string, known: KnownCommands) => !known.scripts.has(name) && !known.binaries.has(name);
 

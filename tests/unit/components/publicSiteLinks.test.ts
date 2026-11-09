@@ -4,6 +4,8 @@ import { publicFooterGroups, publicHeaderItems, publicSocialLinks } from '@/comp
 import type { SocialNetwork } from '@/components/layout/socialNetworkIcons';
 import { everyPublicSiteLink } from '../../support/publicSiteLinks';
 
+const DOMAINS_CONFIRMED_AS_OURS = ['serp.co', 'serplists.com'];
+
 const SOCIAL_NETWORK_HOSTS: Record<SocialNetwork, string> = {
   facebook: 'www.facebook.com',
   github: 'github.com',
@@ -15,9 +17,24 @@ const SOCIAL_NETWORK_HOSTS: Record<SocialNetwork, string> = {
   youtube: 'www.youtube.com',
 };
 
+const isApprovedHost = (hostname: string) =>
+  DOMAINS_CONFIRMED_AS_OURS.some(
+    (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+  );
+
 describe('public site links in the header and every public footer', () => {
-  it('keeps every header and footer link as an app path', () => {
-    for (const link of everyPublicSiteLink) {
+  it('sends external links over https to a domain confirmed to be ours', () => {
+    const external = everyPublicSiteLink.filter((link) => link.external);
+
+    for (const link of external) {
+      const url = new URL(link.href);
+      expect(url.protocol, link.label).toBe('https:');
+      expect(isApprovedHost(url.hostname), `${link.label}: ${url.hostname}`).toBe(true);
+    }
+  });
+
+  it('keeps internal links as app paths', () => {
+    for (const link of everyPublicSiteLink.filter((entry) => !entry.external)) {
       expect(link.href, link.label).toMatch(/^\/(?!\/)/);
     }
   });

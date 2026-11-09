@@ -9,7 +9,7 @@ type PageHeroProps = VariantProps<typeof pageHeroVariants> & {
   actions?: ReactNode;
   chips?: ReactNode;
   className?: string;
-  description: ReactNode;
+  description?: ReactNode;
   eyebrow?: ReactNode;
   search?: ReactNode;
   title: ReactNode;
@@ -33,9 +33,11 @@ export function PageHero({
       <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
         {title}
       </h1>
-      <p className="max-w-2xl text-base text-balance text-muted-foreground sm:text-lg">
-        {description}
-      </p>
+      {description ? (
+        <p className="max-w-2xl text-base text-balance text-muted-foreground sm:text-lg">
+          {description}
+        </p>
+      ) : null}
       {actions ? (
         <div className={cn('mt-2 flex flex-wrap gap-2', centered && 'justify-center')}>
           {actions}

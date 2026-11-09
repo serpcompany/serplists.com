@@ -1,11 +1,11 @@
 import { createHmac } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
-import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
+import { buildAuditEventValues, buildTemplateVersionValues, type AuditEventInput } from '@functions/api/utils/audit';
 import { sha256Hex } from '@functions/api/utils/crypto';
 import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
@@ -321,5 +321,38 @@ describe("buildAuditEventValues records where a change came from, never the clie
 
   it('stores no IP hash without the auth secret, rather than a plain SHA-256', async () => {
     expect(await ipHashUnder({})).toBeNull();
+  });
+
+  it("stores no IP hash when the runtime can't derive the hash key, rather than failing the change", async () => {
+    vi.spyOn(crypto.subtle, 'importKey').mockRejectedValueOnce(new Error('HMAC is unavailable'));
+
+    expect(await ipHashUnder(withAuthSecret)).toBeNull();
+  });
+});
+
+describe('buildTemplateVersionValues', () => {
+  const version = {
+    templateId: 'template-1',
+    version: 2,
+    changedByUserId: 'user-1',
+    subject: { type: 'user', id: 'user-1' },
+    snapshot: { title: 'Plan', sections: [] },
+    createdAt: '2026-01-01T00:00:00.000Z',
+  } as const;
+
+  it('stores the snapshot with the SHA-256 of its JSON, and no change summary for a version written without one', async () => {
+    const values = await buildTemplateVersionValues(version);
+
+    expect(values).toMatchObject({
+      template_id: 'template-1',
+      version: 2,
+      snapshot_json: '{"title":"Plan","sections":[]}',
+      content_hash: await sha256Hex('{"title":"Plan","sections":[]}'),
+      change_summary: null,
+    });
+  });
+
+  it('stores the change summary it is given', async () => {
+    expect((await buildTemplateVersionValues({ ...version, changeSummary: 'template.updated' })).change_summary).toBe('template.updated');
   });
 });

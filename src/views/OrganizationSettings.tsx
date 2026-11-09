@@ -14,9 +14,13 @@ import { isPersonalRunMcpUiEnabled } from '@/env';
 import { buildConsoleSettingsPath, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
 
 export default function OrganizationSettings() {
-  const {
-    activeWorkspace: { name },
-  } = useWorkspace();
+  const { activeWorkspace } = useWorkspace();
+
+  if (activeWorkspace.type !== 'team') {
+    return null;
+  }
+
+  const { name } = activeWorkspace;
   const accountControls = isPersonalRunMcpUiEnabled()
     ? 'Your profile, security and Run Keys are in'
     : 'Your profile and security are in';

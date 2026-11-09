@@ -3,7 +3,6 @@ import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords"
 import type { Env } from "../types";
 import { requestHostIsSafe, requestOriginIsAllowed } from "../utils/agent-mcp-host";
 import { describeErrorForLog, log } from "../utils/logger";
-import { firstIssueOf } from "../utils/zod-issues";
 import { failedAuthIsBlocked, limitPersonalRunKey, recordFailedAuth } from "../utils/mcp-limits";
 import {
   authenticatePersonalRunKey,
@@ -11,12 +10,18 @@ import {
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
 import { describeList, listRuns, listTemplates } from "./agentMcpLists";
-import { boundedText, titleOf, toJson, type ToolResult } from "./agentMcpPages";
+import { boundedText, byteSize, fits, resultTooLarge, titleOf, toJson, type ToolResult } from "./agentMcpPages";
 import { describeRunRead } from "./agentMcpRunPages";
 import { getRun, startRun, updateRun } from "./agentMcpRunTools";
 import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
-import { keyAllowsTool, ToolError, toolDefinitions, toolNamed, toolPermission } from "./agentMcpTools";
+import {
+  isReadOnlyTool,
+  keyAllowsTool,
+  ToolError,
+  toolDefinitions,
+  toolPermission,
+} from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const MCP_SERVER_VERSION = "0.6.0";
@@ -82,6 +87,17 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
   });
 }
 
+function checkResultBound(request: Request, identity: PersonalRunKeyIdentity, tool: string, data: JsonRecord): void {
+  if (fits(data)) return;
+  if (isReadOnlyTool(tool)) throw resultTooLarge();
+  log("error", "mcp_result_too_large", {
+    requestId: requestIdOf(request),
+    keyId: identity.keyId,
+    tool: toolNameForLog(tool),
+    bytes: byteSize(data),
+  });
+}
+
 function contentTypeIsJson(request: Request): boolean {
   return request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() === "application/json";
 }
@@ -98,7 +114,7 @@ function requestIdOf(request: Request): string | undefined {
 }
 
 function toolNameForLog(name: string): string {
-  return toolNamed(name) ?? "unknown";
+  return toolDefinitions.some((tool) => tool.name === name) ? name : "unknown";
 }
 
 async function callTool(
@@ -108,14 +124,13 @@ async function callTool(
   name: string,
   rawArguments: unknown,
 ): Promise<{ data: ToolResult; text: string }> {
-  const tool = toolNamed(name);
-  if (!tool) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
-  const permission = toolPermission(tool);
-  if (!identity.permissions.includes(permission)) {
+  if (!keyAllowsTool(identity.permissions, name)) {
+    const permission = toolPermission(name);
+    if (!permission) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
     throw new ToolError(`This Run Key does not have the ${permission} permission`, "permission_denied", { permission });
   }
 
-  switch (tool) {
+  switch (name) {
     case "list_templates": {
       const data = await listTemplates(env, identity, rawArguments);
       return { data, text: describeList(data, "template") };
@@ -150,6 +165,8 @@ async function callTool(
       const omitted = data.taskOmitted === true ? " The task is too large for one result; read it with get_run and taskId." : "";
       return { data, text: `Updated run "${boundedText(titleOf(data.run))}".${omitted}` };
     }
+    default:
+      throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
   }
 }
 
@@ -242,7 +259,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   if (payload.method === "initialize") {
     const initialize = initializeArgs.safeParse(payload.params);
     if (!initialize.success) {
-      return rpcError(id, -32602, firstIssueOf(initialize.error).message);
+      return rpcError(id, -32602, initialize.error.issues[0]?.message ?? "Invalid initialize parameters");
     }
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
@@ -264,6 +281,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     log("info", "mcp_tool_call", { requestId, keyId: identity.keyId, toolName: toolNameForLog(params.name) });
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
+      checkResultBound(request, identity, params.name, data);
       try {
         await markPersonalRunKeyUsed(env, identity);
       } catch (error) {

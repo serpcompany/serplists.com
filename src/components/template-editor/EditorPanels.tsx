@@ -106,17 +106,18 @@ export function EditorPanels({
       </div>
 
       {showingTemplateInfo ? (
-        <TemplateBasicInfo />
+        <TemplateBasicInfo showIntro={false} />
       ) : showingSEO ? (
-        <SEOMetaEditor ownerIsOrganization={publicOwnerIsOrganization} ownerSlug={publicOwnerSlug} />
+        <SEOMetaEditor ownerIsOrganization={publicOwnerIsOrganization} ownerSlug={publicOwnerSlug} showIntro={false} />
       ) : selectedSection ? (
         selectedItemIndex === null ? (
-          <SectionEditor sectionIndex={selectedSectionIndex} />
+          <SectionEditor sectionIndex={selectedSectionIndex} showIntro={false} />
         ) : selectedItem ? (
           <ItemEditor
             itemIndex={selectedItemIndex}
             key={`${selectedSection.id}:${selectedItem.id}`}
             sectionIndex={selectedSectionIndex}
+            showIntro={false}
           />
         ) : (
           <Empty className="border">

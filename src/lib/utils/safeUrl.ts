@@ -3,7 +3,7 @@ const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 const isInPageAnchorOrSitePath = (value: string): boolean => value.startsWith("#") || value.startsWith("/");
 
 export function safeUrl(url: string): string {
-  const value = url.trim();
+  const value = (url ?? "").trim();
   if (!value) return "";
 
   if (isInPageAnchorOrSitePath(value)) return value;

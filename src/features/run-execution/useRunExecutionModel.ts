@@ -36,6 +36,7 @@ type GuestRunSource = {
 
 export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
   updateRun: UpdateRun;
+  dependencies?: Omit<RunExecutionDependencies, 'updateRun'>;
   guest?: GuestRunSource | undefined;
 };
 
@@ -47,11 +48,13 @@ export const useRunExecutionModel = (
   const latestOptions = useRef(options);
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
+      apiClient: options.dependencies?.apiClient,
       onShared: (runId) => void markRunShared(queryClient, runId),
+      origin: options.dependencies?.origin,
       refreshRuns: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
       updateRun: (run, updateOptions) => latestOptions.current.updateRun(run, updateOptions),
     }),
-    [queryClient],
+    [options.dependencies?.apiClient, options.dependencies?.origin, queryClient],
   );
   const latestDependencies = useRef(dependencies);
   useLayoutEffect(() => {
@@ -140,14 +143,20 @@ export const useRunExecutionModel = (
   const history = useQuery({ ...historyQuery, placeholderData: keepPreviousData });
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
-    const savedRun = result.kind === 'ok' ? result.run : undefined;
-    if (savedRun) {
-      latestRun.current = savedRun;
-      setRun(savedRun);
-      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, savedRun));
-      setSelectedItemId((currentSelectedItemId) =>
-        getSelectedRunItem(savedRun, currentSelectedItemId)?.item.id ?? getInitialSelectedItemId(savedRun),
-      );
+    if (result.kind === 'ok' && result.run) {
+      latestRun.current = result.run;
+      setRun(result.run);
+      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, result.run));
+      setSelectedItemId((currentSelectedItemId) => {
+        if (!currentSelectedItemId) {
+          return getInitialSelectedItemId(result.run ?? null);
+        }
+
+        return (
+          getSelectedRunItem(result.run ?? null, currentSelectedItemId)?.item.id ??
+          getInitialSelectedItemId(result.run ?? null)
+        );
+      });
     }
 
     return result;

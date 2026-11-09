@@ -15,25 +15,34 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 function SidebarProvider({
   defaultOpen = true,
+  open: openProp,
+  onOpenChange: setOpenProp,
   className,
   style,
   children,
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useMediaQuery(MOBILE_QUERY, false)
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  const [open, setOpenState] = React.useState(defaultOpen)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const open = openProp ?? uncontrolledOpen
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value
-      setOpenState(openState)
+      if (setOpenProp) {
+        setOpenProp(openState)
+      } else {
+        setUncontrolledOpen(openState)
+      }
 
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
     },
-    [open]
+    [setOpenProp, open]
   )
 
   const toggleSidebar = React.useCallback(() => {

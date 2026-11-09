@@ -3,6 +3,7 @@ import { contentAt, elementAt, firstOf, present, subTaskAt, taskIn } from '../..
 import {
   MAX_SHARED_RUN_NOTES_LENGTH,
   mergeSharedRunState,
+  readStoredRunSections,
   sharedRunUpdateSchema,
 } from '@functions/api/utils/shared-run-merge';
 import { withoutKeys } from '../../../support/guestState';
@@ -239,5 +240,16 @@ describe('mergeSharedRunState and form answers', () => {
     }).sections ?? []);
 
     expect(merged).toEqual({ sections: storedForm });
+  });
+});
+
+describe('readStoredRunSections', () => {
+  it('reads a run stored with no items as no sections', () => {
+    expect(readStoredRunSections(null)).toEqual([]);
+    expect(readStoredRunSections(undefined)).toEqual([]);
+  });
+
+  it('reads stored items that are not a list as unreadable', () => {
+    expect(readStoredRunSections('{"id":"s1"}')).toBeNull();
   });
 });

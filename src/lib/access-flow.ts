@@ -104,11 +104,11 @@ export const handleAccessFailure = async (
     fallbackMessage: string;
     billingEnabled?: boolean;
     navigate?: NavigateTo;
-    isCurrent: () => boolean;
+    isCurrent?: () => boolean;
   }
 ): Promise<void> => {
   const failure = getAccessFailure(error, options.fallbackMessage);
-  const stillHere = options.isCurrent();
+  const stillHere = options.isCurrent?.() ?? true;
 
   if (failure.kind === "auth_required" && options.navigate && stillHere) {
     navigateToLoginWithReturnPath(options.navigate);

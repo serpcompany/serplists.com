@@ -18,18 +18,27 @@ export const buildViewModePreferenceKey = (
 };
 
 export const readViewModePreference = (
-  storage: Pick<ViewModeStorage, 'getItem'>,
+  storage: Pick<ViewModeStorage, 'getItem'> | undefined,
   key: string,
   fallback: ViewMode,
 ): ViewMode => {
-  const storedValue = storage.getItem(key);
-  return storedValue === 'grid' || storedValue === 'list' ? storedValue : fallback;
+  if (!storage) return fallback;
+
+  try {
+    const storedValue = storage.getItem(key);
+    return storedValue === 'grid' || storedValue === 'list'
+      ? storedValue
+      : fallback;
+  } catch {
+    return fallback;
+  }
 };
 
 export const writeViewModePreference = (
-  storage: Pick<ViewModeStorage, 'setItem'>,
+  storage: Pick<ViewModeStorage, 'setItem'> | undefined,
   key: string,
   value: ViewMode,
 ): void => {
+  if (!storage) return;
   succeedsWithoutThrowing(() => storage.setItem(key, value));
 };

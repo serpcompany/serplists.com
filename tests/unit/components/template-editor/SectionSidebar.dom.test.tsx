@@ -1,4 +1,9 @@
-import { clickTheButton, renderTheTemplateEditorPanels, thePanelHeading } from '../../../support/templateEditorPanels';
+import {
+  clickTheButton,
+  renderTheTemplateEditorPanels,
+  renderTheTemplateEditorPanelsOn,
+  thePanelHeading,
+} from '../../../support/templateEditorPanels';
 import { act } from 'react';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { toast } from 'sonner';
@@ -64,6 +69,15 @@ describe('the template editor outline', () => {
 
     expect(toast.error).toHaveBeenCalledWith('You must have at least one section');
     expect(editor.values().sections).toHaveLength(1);
+  });
+
+  it('adds the first task to a section the form holds with no id, and opens it', async () => {
+    const editor = await renderTheTemplateEditorPanelsOn({ title: 'One', sections: [{ title: 'Prep', items: [] }] });
+
+    await clickTheButton('Add task to Prep');
+
+    expect(editor.values().sections[0]?.items).toHaveLength(1);
+    expect(thePanelHeading()).toBe('Task Details');
   });
 
   it('adds a task to a collapsed section, expanding it and opening the new task', async () => {

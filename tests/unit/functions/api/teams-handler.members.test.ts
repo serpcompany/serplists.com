@@ -134,6 +134,17 @@ describe("Teams handler", () => {
     await expectRefusedWithoutWriting(await transferOwnershipTo("owner-member"), 400, "owner_transfer_noop");
   });
 
+  it("rejects ownership transfer to another member who already holds the owner role", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([teamMember("owner", { id: "owner-member" })])
+      .mockResolvedValueOnce([teamMember("owner", { id: "member-2", user_id: "user-2" })]);
+
+    const response = await transferOwnershipTo("member-2");
+
+    expect((await readJson(response.clone(), apiErrorBody)).error).toBe("Member is already the Organization owner");
+    await expectRefusedWithoutWriting(response, 400, "owner_transfer_noop");
+  });
+
   it("rejects ownership transfer to inactive or missing members", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([teamMember("owner", { id: "owner-member" })])

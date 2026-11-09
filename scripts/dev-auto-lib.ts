@@ -252,12 +252,12 @@ export async function stopDevSession({
   session,
   isOwned = isOwnedDevProcess,
   killTree = killPidTree,
-  sessionPath = DEV_SESSION_PATH,
+  removeSession = () => removeDevSession(),
 }: {
   session: { pid: number | null; startedAt: number | null };
   isOwned?: OwnershipCheck;
   killTree?: (pid: number) => void;
-  sessionPath?: string;
+  removeSession?: () => void;
 }): Promise<{ stopped: number[]; skipped: number[]; failed: Array<{ pid: number; message: string }> }> {
   const result: { stopped: number[]; skipped: number[]; failed: Array<{ pid: number; message: string }> } = {
     stopped: [],
@@ -280,7 +280,7 @@ export async function stopDevSession({
       }
     }
   } finally {
-    removeDevSession(sessionPath);
+    removeSession();
   }
 
   return result;

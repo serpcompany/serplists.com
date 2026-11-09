@@ -87,18 +87,16 @@ describe("repo template catalog", () => {
     expect(repoTemplates.map(({ id }) => id)).toEqual(repoTemplates.map(({ slug }) => `repo:${slug}`));
   });
 
+  const slugless = (title: string) => ({ title, visibility: "public", sections: [{ title: "Prep", items: [{ title: "Check" }] }] });
+  const sluglessPack = () => ({
+    kind: "serplists-template-pack",
+    schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+    exportedAt: "2026-03-22T00:00:00.000Z",
+    templates: [slugless("Launch prep"), slugless("Launch day")],
+  });
+
   it("keeps every template of a pack that gives them no slug, each with an id that holds across loads", () => {
-    const slugless = (title: string) => ({ title, visibility: "public", sections: [{ title: "Prep", items: [{ title: "Check" }] }] });
-    const source = {
-      "../data/public-template-packs/launch.json": {
-        default: {
-          kind: "serplists-template-pack",
-          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-          exportedAt: "2026-03-22T00:00:00.000Z",
-          templates: [slugless("Launch prep"), slugless("Launch day")],
-        },
-      },
-    };
+    const source = { "../data/public-template-packs/launch.json": { default: sluglessPack() } };
 
     const ids = normalizeRepoTemplateSources(source).map(({ id, title }) => ({ id, title }));
 
@@ -107,6 +105,13 @@ describe("repo template catalog", () => {
       { id: "repo:launch-1", title: "Launch prep" },
     ]);
     expect(normalizeRepoTemplateSources(source).map(({ id }) => id)).toEqual(ids.map(({ id }) => id));
+  });
+
+  it("numbers the slugless templates of a pack file with no name as template-1, template-2", () => {
+    expect(normalizeRepoTemplateSources({ "../data/public-template-packs/.json": sluglessPack() }).map(({ id }) => id)).toEqual([
+      "repo:template-2",
+      "repo:template-1",
+    ]);
   });
 
   it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {

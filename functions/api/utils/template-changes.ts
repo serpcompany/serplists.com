@@ -10,7 +10,7 @@ const RUN_STATE_KEYS = new Set(['isCompleted', 'completed', 'notes', 'answer']);
 const isEmptyValue = (value: unknown): boolean =>
   value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 
-const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => (a < b ? -1 : 1);
+const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => (a < b ? -1 : a > b ? 1 : 0);
 
 function sortKeysDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeysDeep);
@@ -85,7 +85,7 @@ export function validateChangedTemplateFields(
     ),
   );
   const result = templatePayloadSchema.safeParse(changedFields);
-  return result.success ? null : describePayloadError(result.error);
+  return result.success ? null : describePayloadError(result.error, 'Invalid template payload');
 }
 
 const CONTENT_FIELDS = [

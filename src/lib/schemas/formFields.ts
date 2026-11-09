@@ -119,7 +119,7 @@ export const storedFormFieldSchema = z.discriminatedUnion("kind", [
 
 const formOptionFallbackId = (index: number): string => `option-${index + 1}`;
 
-export function withFormOptionIds<Option extends FormOptionRecord>(options: Option[]): Array<Option & { id: string }> {
+export function withFormOptionIds(options: FormOptionRecord[]): Array<FormOptionRecord & { id: string }> {
   const used = new Set<string>();
   return options.map((option, index) => {
     const stored = readTextId(option.id);
@@ -140,46 +140,31 @@ function storedAnswerFor(kind: FormFieldKind, answer: unknown): unknown {
   return fitsFormAnswerShape(kind, answer) ? answer : undefined;
 }
 
-type SanitizedFormOption = FormOptionRecord & { label: string };
-
-type SanitizedFormField = FormFieldRecord & {
-  kind: FormFieldKind;
-  label: string;
-  required: boolean;
-  description?: string;
-  options?: SanitizedFormOption[];
-  min?: number;
-  max?: number;
-};
-
-function sanitizeStoredOptions(value: unknown): SanitizedFormOption[] {
+function sanitizeStoredOptions(value: unknown): FormOptionRecord[] {
   return formOptionRecordsIn(value).map((option) => ({
     ...option,
     label: typeof option.label === "string" ? option.label : "",
   }));
 }
 
-function sanitizeStoredFormField(field: FormFieldRecord): SanitizedFormField[] {
-  const { kind } = field;
-  if (!isFormFieldKind(kind)) return [];
-  const { options, min, max, answer, description, ...rest } = field;
-  const next: SanitizedFormField = {
-    ...rest,
-    kind,
-    label: typeof field.label === "string" ? field.label : "",
-    required: field.required === true,
-  };
-  if (typeof description === "string") next.description = description;
-  if (isFormChoiceKind(kind)) next.options = sanitizeStoredOptions(options);
-  if (kind === "number" && isFiniteNumber(min)) next.min = min;
-  if (kind === "number" && isFiniteNumber(max)) next.max = max;
-  const storedAnswer = storedAnswerFor(kind, answer);
-  if (storedAnswer !== undefined) next.answer = storedAnswer;
-  return [next];
-}
-
 export function sanitizeStoredFormFields(value: unknown): FormFieldRecord[] {
-  return formFieldRecordsIn(value).flatMap(sanitizeStoredFormField);
+  return formFieldRecordsIn(value).flatMap((field) => {
+    const { kind } = field;
+    if (!isFormFieldKind(kind)) return [];
+    const { options, min, max, answer, description, ...rest } = field;
+    const next: FormFieldRecord = {
+      ...rest,
+      label: typeof field.label === "string" ? field.label : "",
+      required: field.required === true,
+    };
+    if (typeof description === "string") next.description = description;
+    if (isFormChoiceKind(kind)) next.options = sanitizeStoredOptions(options);
+    if (kind === "number" && isFiniteNumber(min)) next.min = min;
+    if (kind === "number" && isFiniteNumber(max)) next.max = max;
+    const storedAnswer = storedAnswerFor(kind, answer);
+    if (storedAnswer !== undefined) next.answer = storedAnswer;
+    return [next];
+  });
 }
 
 function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | undefined {
@@ -198,19 +183,23 @@ function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | unde
 }
 
 export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
-  return formFieldRecordsIn(value).flatMap(sanitizeStoredFormField).map((field, index) => {
-    const answer = readFormAnswer(field.kind, field.answer);
-    return {
+  return sanitizeStoredFormFields(value).flatMap((field, index) => {
+    const { kind } = field;
+    if (!isFormFieldKind(kind)) return [];
+    const answer = readFormAnswer(kind, field.answer);
+    return [{
       id: readTextId(field.id) || fallbackId(index),
-      label: field.label,
-      kind: field.kind,
-      required: field.required,
-      ...(field.description === undefined ? {} : { description: field.description }),
-      ...(field.options ? { options: withFormOptionIds(field.options).map(({ id, label }) => ({ id, label })) } : {}),
-      ...(field.min === undefined ? {} : { min: field.min }),
-      ...(field.max === undefined ? {} : { max: field.max }),
+      label: typeof field.label === "string" ? field.label : "",
+      kind,
+      required: field.required === true,
+      ...(typeof field.description === "string" ? { description: field.description } : {}),
+      ...(isFormChoiceKind(kind)
+        ? { options: withFormOptionIds(formOptionRecordsIn(field.options)).map(({ id, label }) => ({ id, label: typeof label === "string" ? label : "" })) }
+        : {}),
+      ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
+      ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
       ...(answer === undefined ? {} : { answer }),
-    };
+    }];
   });
 }
 

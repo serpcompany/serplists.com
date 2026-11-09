@@ -21,21 +21,25 @@ function usage(exitCode: number): never {
   process.exit(exitCode);
 }
 
-function parseArgs(argv: readonly string[]): Map<string, string | true> {
+function parseArgs(argv: readonly string[]): { positionals: string[]; flags: Map<string, string | true> } {
+  const positionals: string[] = [];
   const flags = new Map<string, string | true>();
-  const remaining = [...argv];
-  for (let token = remaining.shift(); token !== undefined; token = remaining.shift()) {
-    if (!token.startsWith("--")) continue;
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i] ?? "";
+    if (!token.startsWith("--")) {
+      positionals.push(token);
+      continue;
+    }
     const key = token.slice(2);
-    const next = remaining[0];
+    const next = argv[i + 1];
     if (!next || next.startsWith("--")) {
       flags.set(key, true);
     } else {
       flags.set(key, next);
-      remaining.shift();
+      i += 1;
     }
   }
-  return flags;
+  return { positionals, flags };
 }
 
 function requireNumber(name: string, value: string | true | undefined): number {
@@ -199,7 +203,7 @@ async function bootstrapOne({
 
 async function main() {
   const env = loadLocalEnv();
-  const flags = parseArgs(process.argv.slice(2));
+  const { flags } = parseArgs(process.argv.slice(2));
 
   if (flags.get("help")) usage(0);
 

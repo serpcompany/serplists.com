@@ -2,7 +2,6 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
 import { readJsonPayload } from "../utils/request-json";
-import { sha256Hex } from "../utils/crypto";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -35,15 +34,18 @@ const overrideBodySchema = z
     message: "userId or email required",
   });
 
+const sha256 = async (value: string): Promise<Uint8Array> =>
+  new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+
 async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean> {
   if (!env.ENTITLEMENTS_ADMIN_SECRET) return false;
   const provided = request.headers.get("X-Admin-Secret");
   if (!provided) return false;
-  const [expected, actual] = await Promise.all([sha256Hex(env.ENTITLEMENTS_ADMIN_SECRET), sha256Hex(provided)]);
-  let difference = 0;
-  for (let index = 0; index < expected.length; index += 1) {
-    difference |= expected.charCodeAt(index) ^ actual.charCodeAt(index);
-  }
+  const [expected, actual] = await Promise.all([sha256(env.ENTITLEMENTS_ADMIN_SECRET), sha256(provided)]);
+  let difference = expected.length === actual.length ? 0 : 1;
+  expected.forEach((byte, index) => {
+    difference |= byte ^ (actual[index] ?? 0);
+  });
   return difference === 0;
 }
 
@@ -67,7 +69,7 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
 }
 
 async function upsertOverride(request: Request, env: Env): Promise<Response> {
-  const read = await readJsonPayload(request, overrideBodySchema);
+  const read = await readJsonPayload(request, overrideBodySchema, "Invalid override payload");
   if ("response" in read) return read.response;
   const { userId, email, plan, expiresAt } = read.payload;
   const note = read.payload.note ?? null;

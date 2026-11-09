@@ -8,7 +8,6 @@ import {
   isSectionRecord,
   isSubTaskRecord,
   isTaskRecord,
-  subTaskRecordsIn,
   taskRecordsIn,
   type ChecklistNodeRecord,
   type FormFieldRecord,
@@ -111,7 +110,8 @@ function freshRunState(value: TaskRecord): TaskRecord {
   return next;
 }
 
-const resetSubItems = (subItems: unknown[]): unknown[] => subTaskRecordsIn(subItems).map(freshRunState);
+const resetSubItems = (subItems: unknown[]): unknown[] =>
+  subItems.map((subItem) => (isSubTaskRecord(subItem) ? freshRunState(subItem) : subItem));
 
 function resetTaskState(item: unknown): unknown {
   if (!isTaskRecord(item)) return item;
@@ -183,10 +183,9 @@ function withoutMovedSubItems(item: TaskRecord, claimed: Set<JsonRecord>, claime
 }
 
 function withoutMovedWork(section: SectionRecord, items: RunMatcher, subItems: RunMatcher, fields: RunMatcher): SectionRecord | null {
-  const previousItems = taskRecordsIn(section.items);
-  const kept = previousItems
-    .filter((item) => !items.claimed.has(item))
-    .map((item) => withoutMovedSubItems(item, subItems.claimed, fields.claimed));
+  const previousItems = getArray(section.items);
+  const kept = withoutClaimed(previousItems, items.claimed)
+    .map((item) => (isTaskRecord(item) ? withoutMovedSubItems(item, subItems.claimed, fields.claimed) : item));
   if (previousItems.length > 0 && kept.length === 0) return null;
   return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
     ? section

@@ -49,6 +49,19 @@ describe('a Template card in My Templates', () => {
     expect(onDelete).toHaveBeenCalledWith('sourdough');
   });
 
+  it('duplicates the Template from its menu, and offers the menu for Duplicate alone to someone who cannot edit', async () => {
+    const onDuplicate = vi.fn();
+    await renderSettled(<TemplateCard canEdit={false} context={PERSONAL_CONSOLE} onDuplicate={onDuplicate} template={recipe} />);
+
+    const items = await openTheMenu('Actions for Sourdough Loaf');
+    expect(items.map((item) => item.textContent)).toEqual(['Duplicate']);
+    await act(async () => {
+      fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Duplicate' }));
+    });
+
+    expect(onDuplicate).toHaveBeenCalledWith('sourdough');
+  });
+
   it('starts a run from the pointer shortcut on the card', async () => {
     const onStartRun = vi.fn();
     await renderSettled(<TemplateCard canEdit={false} context={PERSONAL_CONSOLE} onStartRun={onStartRun} template={recipe} />);

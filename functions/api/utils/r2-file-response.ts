@@ -37,10 +37,11 @@ export function resolveByteRange(range: R2Range, size: number): { start: number;
     if (range.suffix <= 0 || size === 0) return null;
     return { start: Math.max(0, size - range.suffix), end: size - 1 };
   }
+  if (!('offset' in range) && !('length' in range)) return null;
   const start = range.offset ?? 0;
   if (start >= size) return null;
   const end = range.length === undefined ? size - 1 : Math.min(start + range.length, size) - 1;
-  return { start, end };
+  return end < start ? null : { start, end };
 }
 
 function objectHeaders(object: R2Object, cacheControl: string): Headers {
@@ -114,17 +115,16 @@ export async function serveR2Object(
   if (requested.kind === 'unsatisfiable') return rangeNotSatisfiable(bucket, key);
 
   let range = requested.kind === 'partial' ? requested.range : undefined;
-  const found = await getObject(bucket, key, request.headers, range);
-  if (found === 'unsatisfiable') return rangeNotSatisfiable(bucket, key);
+  let object = await getObject(bucket, key, request.headers, range);
+  if (object === 'unsatisfiable') return rangeNotSatisfiable(bucket, key);
 
-  let object = found;
   if (range && object && hasBody(object) && ifRangeNamesAnotherVersion(request, object)) {
     await object.body.cancel();
     range = undefined;
-    object = await bucket.get(key, { onlyIf: request.headers });
+    object = await getObject(bucket, key, request.headers, undefined);
   }
 
-  if (!object) return jsonError('Not Found', 404);
+  if (!object || object === 'unsatisfiable') return jsonError('Not Found', 404);
 
   const headers = objectHeaders(object, cacheControl);
   if (!hasBody(object)) {

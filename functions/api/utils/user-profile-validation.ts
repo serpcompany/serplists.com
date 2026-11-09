@@ -2,7 +2,6 @@ import { APIError } from 'better-auth/api';
 import type { ZodError } from 'zod';
 import type { JsonRecord } from '../../../src/lib/schemas/jsonRecords';
 import type { Env } from '../types';
-import { firstIssueOf } from './zod-issues';
 import {
   USER_IMAGE_URL_MAX_LENGTH,
   displayUsernameSchema,
@@ -35,7 +34,7 @@ function reject(message: string): never {
 }
 
 function firstIssue(error: ZodError): string {
-  return firstIssueOf(error).message;
+  return error.issues[0]?.message ?? 'Invalid value.';
 }
 
 export function uploadedAvatarUrlError(value: string, policy: UserProfileWritePolicy): string | null {

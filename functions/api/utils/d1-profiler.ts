@@ -16,24 +16,33 @@ const statementTarget = new WeakMap<object, D1PreparedStatement>();
 function toRecord(sql: string, result: D1Result<unknown>, startedAt: number): D1QueryRecord {
   return {
     sql,
-    rowsRead: result.meta.rows_read,
-    rowsWritten: result.meta.rows_written,
-    rowsReturned: result.results.length,
+    rowsRead: result.meta?.rows_read ?? 0,
+    rowsWritten: result.meta?.rows_written ?? 0,
+    rowsReturned: result.results?.length ?? 0,
     durationMs: Date.now() - startedAt,
   };
 }
 
-async function rawReadMeasuredBySeparateAll(target: D1PreparedStatement, sql: string, record: Recorder) {
+type RawOptions = { columnNames?: boolean };
+
+async function rawReadMeasuredBySeparateAll(
+  target: D1PreparedStatement,
+  sql: string,
+  record: Recorder,
+  options?: RawOptions,
+) {
   const startedAt = Date.now();
   record(toRecord(sql, await target.all(), startedAt));
-  return target.raw();
+  return options?.columnNames ? target.raw({ columnNames: true }) : target.raw();
 }
 
-async function rawRowsOfSingleWrite(target: D1PreparedStatement, sql: string, record: Recorder) {
+async function rawRowsOfSingleWrite(target: D1PreparedStatement, sql: string, record: Recorder, options?: RawOptions) {
   const startedAt = Date.now();
   const result = await target.all<Record<string, unknown>>();
   record(toRecord(sql, result, startedAt));
-  return result.results.map((row) => Object.values(row));
+  const rows = result.results.map((row) => Object.values(row));
+  const columns = result.results[0] ? Object.keys(result.results[0]) : [];
+  return options?.columnNames ? [columns, ...rows] : rows;
 }
 
 function profileStatement(statement: D1PreparedStatement, sql: string, record: Recorder): D1PreparedStatement {
@@ -50,9 +59,21 @@ function profileStatement(statement: D1PreparedStatement, sql: string, record: R
           return result;
         };
       }
+      if (prop === "first") {
+        return async (column?: string) => {
+          const startedAt = Date.now();
+          const result = await target.all<Record<string, unknown>>();
+          record(toRecord(sql, result, startedAt));
+          const row = result.results[0];
+          if (!row) return null;
+          return column ? (row[column] ?? null) : row;
+        };
+      }
       if (prop === "raw") {
-        return () =>
-          isReadOnly(sql) ? rawReadMeasuredBySeparateAll(target, sql, record) : rawRowsOfSingleWrite(target, sql, record);
+        return (options?: RawOptions) =>
+          isReadOnly(sql)
+            ? rawReadMeasuredBySeparateAll(target, sql, record, options)
+            : rawRowsOfSingleWrite(target, sql, record, options);
       }
       const value: unknown = Reflect.get(target, prop, receiver);
       return value;

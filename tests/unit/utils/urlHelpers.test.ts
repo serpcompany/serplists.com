@@ -198,6 +198,10 @@ describe('Clipy outbound links', () => {
     );
   });
 
+  it('keeps text that is not an address as it is', () => {
+    expect(withSerpListsClipyRef('clipy.online/video/demo')).toBe('clipy.online/video/demo');
+  });
+
   it('opens text that is not an address in a new tab as it is, with no referral', () => {
     expect(getOutboundLinkProps('launch recording')).toEqual({ href: 'launch recording', target: '_blank', rel: 'noopener noreferrer' });
   });

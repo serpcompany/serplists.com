@@ -9,7 +9,6 @@ import {
 } from "@/features/template-editor/templateDraftStore";
 import { findOtherContextDraft } from "@/features/template-editor/templateEditorAccess";
 import { useIsClient } from "@/hooks/useIsClient";
-import { getOrganizationPermissions } from "@/lib/organizationPermissions";
 
 export type OtherContextTemplateDraft = {
   teamId: string | null;
@@ -24,20 +23,20 @@ export const useOtherContextTemplateDraft = ({
   enabled: boolean;
   userId: string | undefined;
 }) => {
-  const { activeTeamId, isWorkspaceLoading, selectWorkspace, teams } = useWorkspace();
+  const { activeTeamId, getPermissions, isWorkspaceLoading, selectWorkspace, teams } = useWorkspace();
   const isClient = useIsClient();
   const lookedUp = useMemo((): OtherContextTemplateDraft | null => {
     if (!isClient || !enabled || !userId) return null;
-    const draftsTheyCanContinue = listTemplateDraftContexts(userId).flatMap((context) => {
-      if (!context.teamId) return [{ ...context, name: "Personal" }];
-      const team = teams.find((candidate) => candidate.id === context.teamId);
-      return team && getOrganizationPermissions(team.role).canEditTemplates ? [{ ...context, name: team.name }] : [];
-    });
-    return findOtherContextDraft(draftsTheyCanContinue, {
+    const nameOf = (teamId: string | null): string | undefined =>
+      teamId ? teams.find((team) => team.id === teamId)?.name : "Personal";
+    const other = findOtherContextDraft(listTemplateDraftContexts(userId), {
       activeTeamId,
       workspaceReady: !isWorkspaceLoading,
+      canCreateIn: (teamId) =>
+        Boolean(nameOf(teamId)) && (!teamId || getPermissions(teamId).canEditTemplates),
     });
-  }, [activeTeamId, enabled, isClient, isWorkspaceLoading, teams, userId]);
+    return other ? { ...other, name: nameOf(other.teamId) ?? "" } : null;
+  }, [activeTeamId, enabled, getPermissions, isClient, isWorkspaceLoading, teams, userId]);
   const [discarded, setDiscarded] = useState<OtherContextTemplateDraft | null>(null);
   const found = lookedUp === discarded ? null : lookedUp;
 

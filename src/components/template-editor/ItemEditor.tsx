@@ -11,11 +11,13 @@ import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 interface ItemEditorProps {
   itemIndex: number;
   sectionIndex: number;
+  showIntro?: boolean;
 }
 
 export function ItemEditor({
   itemIndex,
   sectionIndex,
+  showIntro = true,
 }: ItemEditorProps): JSX.Element {
   const { control, setValue } = useFormContext<TemplateEditorFormValues>();
   const titleInputId = useId();
@@ -31,12 +33,21 @@ export function ItemEditor({
 
   return (
     <div className="flex flex-col gap-8">
+      {showIntro ? (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Task Details</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Define the step and add supporting content.
+          </p>
+        </div>
+      ) : null}
+
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor={titleInputId}>Task Title</FieldLabel>
           <Input
             id={titleInputId}
-            value={title}
+            value={title ?? ""}
             onChange={(event) =>
               setValue(
                 `sections.${sectionIndex}.items.${itemIndex}.title`,

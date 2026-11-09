@@ -33,10 +33,10 @@ const rpcRequestSchema = z.object({
 
 type Seen = { method: string; path: string; cookie: string | undefined; authorization: string | undefined };
 
-function answerRpc(body: string): unknown {
+function answerRpc(body: string, serverVersion: string): unknown {
   const request = rpcRequestSchema.parse(JSON.parse(body));
   const reply = (result: unknown) => ({ jsonrpc: '2.0', id: request.id, result });
-  if (request.method === 'initialize') return reply({ serverInfo: { name: 'serp-lists', version: '0.6.0' } });
+  if (request.method === 'initialize') return reply({ serverInfo: { name: 'serp-lists', version: serverVersion } });
   if (request.method === 'tools/list') return reply({ tools: [{ name: 'list_templates' }] });
   const tool = request.params?.name;
   if (tool === 'list_templates') return reply({ structuredContent: { templates: [{ id: 'template-1', title: 'Launch' }] } });
@@ -48,7 +48,7 @@ function answerRpc(body: string): unknown {
   return { jsonrpc: '2.0', id: request.id, error: { code: -32602, message: 'Unknown tool' } };
 }
 
-function answer(request: IncomingMessage, body: string, response: ServerResponse, count: number) {
+function answer(request: IncomingMessage, body: string, response: ServerResponse, count: number, serverVersion: string) {
   const route = `${request.method ?? 'GET'} ${new URL(request.url ?? '/', 'http://localhost').pathname}`;
   const send = (status: number, payload: unknown, headers: Record<string, string> = {}) => {
     response.writeHead(status, { 'content-type': 'application/json', 'x-request-id': `request-${count}`, ...headers });
@@ -73,7 +73,7 @@ function answer(request: IncomingMessage, body: string, response: ServerResponse
     response.end('plain text, not JSON');
     return undefined;
   }
-  if (route === 'POST /api/mcp' && request.headers.authorization === `Bearer ${SECRET}`) return send(200, answerRpc(body));
+  if (route === 'POST /api/mcp' && request.headers.authorization === `Bearer ${SECRET}`) return send(200, answerRpc(body, serverVersion));
   return send(404, { error: 'Not found' });
 }
 
@@ -92,13 +92,13 @@ export function runTheScript(args: readonly string[]) {
   });
 }
 
-export async function verifyApi(name: string, plan: unknown, extra: string[] = []) {
+export async function verifyApi(name: string, plan: unknown, extra: string[] = [], { serverVersion = '0.6.0' } = {}) {
   const seen: Seen[] = [];
   const server = createServer((request, response) => {
     void text(request).then((body) => {
       const { cookie, authorization } = request.headers;
       seen.push({ method: request.method ?? 'GET', path: request.url ?? '/', cookie, authorization });
-      answer(request, body, response, seen.length);
+      answer(request, body, response, seen.length, serverVersion);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

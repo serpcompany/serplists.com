@@ -3,12 +3,12 @@ import { render as renderInTheDom } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { RunExecutionApiClient } from '@/features/run-execution/runPersistence';
 import type { UseRunExecutionModelOptions } from '@/features/run-execution/useRunExecutionModel';
 import type { ChecklistRun } from '@/types/checklist';
 
-const runApi = vi.hoisted(() => ({ getChecklistById: vi.fn() }));
 vi.mock('@/lib/api', () => ({
-  api: { getChecklistHistory: vi.fn(() => new Promise(() => {})), getChecklistById: runApi.getChecklistById },
+  api: { getChecklistHistory: vi.fn(() => new Promise(() => {})) },
 }));
 
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
@@ -34,11 +34,13 @@ const storedRun = (id: string) => ({
   ]),
 });
 
-const storedRuns = () => {
-  runApi.getChecklistById.mockReset();
-  runApi.getChecklistById.mockImplementation((id: string) => Promise.resolve(storedRun(id)));
-  return runApi;
-};
+const apiClient = (): RunExecutionApiClient & { getChecklistById: ReturnType<typeof vi.fn> } => ({
+  createChecklistRunShare: vi.fn(),
+  getChecklistById: vi.fn((id: string) => Promise.resolve(storedRun(id))),
+  getSharedChecklist: vi.fn(),
+  revokeChecklistRunShare: vi.fn(),
+  updateSharedChecklist: vi.fn(),
+});
 
 type Model = ReturnType<typeof useRunExecutionModel>;
 
@@ -81,11 +83,12 @@ const savedRun = (run: ChecklistRun) => Promise.resolve(run);
 
 describe("run page model, whose updateRun from the Templates context changes identity whenever Share or a context switch changes the cached lists", () => {
   it('keeps the run, the unsaved notes only it holds and the selection, without a reload, when updateRun changes identity, and saves with the new one', async () => {
-    const server = storedRuns();
+    const client = apiClient();
     const firstUpdateRun = vi.fn(savedRun);
     const { loadingSeen, model, render } = await mountModel({
       runId: 'run-1',
       updateRun: firstUpdateRun,
+      dependencies: { apiClient: client },
     });
     expect(model().loading).toBe(false);
     expect(model().run?.id).toBe('run-1');
@@ -97,9 +100,9 @@ describe("run page model, whose updateRun from the Templates context changes ide
     loadingSeen.length = 0;
 
     const updateRunAfterTheCachedListsChanged = vi.fn(savedRun);
-    await render({ runId: 'run-1', updateRun: updateRunAfterTheCachedListsChanged });
+    await render({ runId: 'run-1', updateRun: updateRunAfterTheCachedListsChanged, dependencies: { apiClient: client } });
 
-    expect(server.getChecklistById).toHaveBeenCalledTimes(1);
+    expect(client.getChecklistById).toHaveBeenCalledTimes(1);
     expect(loadingSeen).not.toContain(true);
     expect(model().noteDrafts).toEqual({ 'item-1': 'Deployed build 42' });
     expect(model().hasUnsavedNotes).toBe(true);
@@ -114,20 +117,21 @@ describe("run page model, whose updateRun from the Templates context changes ide
   });
 
   it('still loads another run afresh, without the notes typed on the first', async () => {
-    const server = storedRuns();
+    const client = apiClient();
     const { model, render } = await mountModel({
       runId: 'run-1',
       updateRun: vi.fn(savedRun),
+      dependencies: { apiClient: client },
     });
     await act(async () => {
       model().setNoteDraft('item-1', 'Typed on run 1');
       model().setSelectedItemId('item-3');
     });
 
-    await render({ runId: 'run-2', updateRun: vi.fn(savedRun) });
+    await render({ runId: 'run-2', updateRun: vi.fn(savedRun), dependencies: { apiClient: client } });
 
-    expect(server.getChecklistById).toHaveBeenCalledTimes(2);
-    expect(server.getChecklistById).toHaveBeenLastCalledWith('run-2');
+    expect(client.getChecklistById).toHaveBeenCalledTimes(2);
+    expect(client.getChecklistById).toHaveBeenLastCalledWith('run-2');
     expect(model().run?.id).toBe('run-2');
     expect(model().noteDrafts).toEqual({});
     expect(model().selectedItemId).toBe('item-1');

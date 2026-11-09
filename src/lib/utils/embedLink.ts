@@ -1,7 +1,7 @@
 const NOT_IN_A_URL = /[\s<>"]/;
 
 export function absoluteHttpUrl(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = typeof value === "string" ? value.trim() : "";
   if (!trimmed || NOT_IN_A_URL.test(trimmed)) {
     return "";
   }
@@ -36,7 +36,7 @@ export function getEmbedLinkUrl(value: string): string {
     return direct;
   }
 
-  const match = value.match(FIRST_IFRAME_SRC_ATTRIBUTE);
+  const match = typeof value === "string" ? value.match(FIRST_IFRAME_SRC_ATTRIBUTE) : null;
   if (!match) {
     return "";
   }

@@ -86,6 +86,7 @@ const ChecklistRunPage = () => {
   const runContext = displayRun ? ownerConsoleContext(displayRun.teamId) : consoleContext;
   const isMovingToOwner = useOwnerContextRedirect(isSharedRun ? null : runContext);
   const consoleHomePath = buildConsoleHomePath(consoleContext);
+  const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
   const keepNoteDrafts = useKeptRunNoteDrafts({ privateRun: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
   const { allowLeave } = useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE, keepNoteDrafts);
@@ -96,14 +97,14 @@ const ChecklistRunPage = () => {
   });
 
   useEffect(() => {
-    if (!notFound) {
+    if (!notFound || loading) {
       return;
     }
 
     toast.error('Run not found');
     allowLeave();
     router.replace(isSharedRun ? buildPublicTemplatesPath() : consoleHomePath);
-  }, [allowLeave, consoleHomePath, isSharedRun, notFound, router]);
+  }, [allowLeave, consoleHomePath, isSharedRun, loading, notFound, router]);
 
   useEffect(() => {
     if (!loadError) {
@@ -116,13 +117,20 @@ const ChecklistRunPage = () => {
   const handleBack = () =>
     router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath(runContext));
 
-  const handleTitleEdit = (currentTitle: string) => {
-    setEditTitle(currentTitle);
+  const handleTitleEdit = () => {
+    if (isSharedRun || !displayRun) {
+      return;
+    }
+
+    setEditTitle(displayRun.title);
     setIsEditingTitle(true);
   };
 
-  const handleTitleSave = async (currentTitle: string) => {
-    if (editTitle.trim() === currentTitle) {
+  const handleTitleSave = async () => {
+    if (isSharedRun || !run) {
+      return;
+    }
+    if (editTitle.trim() === run.title) {
       handleTitleCancel();
       return;
     }
@@ -231,11 +239,11 @@ const ChecklistRunPage = () => {
             onBack={handleBack}
             onCancelRename={handleTitleCancel}
             onEditTitleChange={setEditTitle}
-            onSaveTitle={() => void handleTitleSave(displayRun.title)}
+            onSaveTitle={() => void handleTitleSave()}
             onShare={() => void shareLinkState.createShareLink()}
-            onStartRename={() => handleTitleEdit(displayRun.title)}
+            onStartRename={handleTitleEdit}
             onStopSharing={shareLinkState.stopSharing}
-            progress={displayRun.progress}
+            progress={displayProgress}
             title={displayRun.title}
             titleChanged={isRunTitleChange(editTitle, displayRun.title)}
           />
@@ -253,7 +261,7 @@ const ChecklistRunPage = () => {
             onSelectTask={setSelectedItemId}
             onToggleSubItem={actions.toggleSubItem}
             onToggleTask={actions.toggleTask}
-            progress={displayRun.progress}
+            progress={displayProgress}
             run={displayRun}
             selectedItemId={selectedItemId}
             totalTasks={counts.tasksTotal}

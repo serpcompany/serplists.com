@@ -41,12 +41,16 @@ function noStore(response: Response): Response {
 export async function findInviteByToken(
   db: Db,
   token: string,
-): Promise<TeamInviteRow | undefined> {
+): Promise<{ invite: TeamInviteRow | undefined } | { response: Response }> {
   const { teamInvites } = schema;
 
   const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return { response: jsonError("Unable to verify invite token", 500) };
+  }
+
   const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.token_hash, tokenHash)).limit(1);
-  return invite;
+  return { invite };
 }
 
 export async function previewTeamInvite({
@@ -63,6 +67,10 @@ export async function previewTeamInvite({
   const { teamInvites, teamMembers, teams, users } = schema;
 
   const tokenHash = await sha256Hex(token);
+  if (!tokenHash) {
+    return jsonError("Unable to verify invite token", 500);
+  }
+
   const [invite] = await db
     .select({
       id: teamInvites.id,
@@ -98,11 +106,11 @@ export async function previewTeamInvite({
   const preview = {
     teamId: invite.teamId,
     teamName: invite.teamName,
-    teamSlug: invite.teamSlug,
+    teamSlug: invite.teamSlug ?? null,
     role: normalizeTeamRole(invite.role, "viewer"),
     expiresAt: invite.expires_at,
-    inviterName: invite.inviterName,
-    inviterEmail: invite.inviterEmail,
+    inviterName: invite.inviterName ?? null,
+    inviterEmail: invite.inviterEmail ?? null,
   };
 
   if (invite.accepted_at) {
@@ -156,7 +164,12 @@ export async function declineTeamInvite({
 }): Promise<Response> {
   const { teamInvites } = schema;
 
-  const invite = await findInviteByToken(db, token);
+  const found = await findInviteByToken(db, token);
+  if ("response" in found) {
+    return found.response;
+  }
+
+  const { invite } = found;
   if (!invite?.id || invite.revoked_at || invite.accepted_at) {
     return inviteNotFound();
   }

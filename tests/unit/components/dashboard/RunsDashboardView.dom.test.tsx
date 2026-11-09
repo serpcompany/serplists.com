@@ -49,7 +49,7 @@ beforeEach(() => {
 async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
   navigation.reset('/');
   await renderSettled(
-    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} onRetryLoad={vi.fn()} />,
+    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} />,
   );
 }
 
@@ -119,7 +119,6 @@ async function openTheRunsAt(url: string) {
     <RunsDashboardView
       getRunPermissions={() => PERSONAL_PERMISSIONS}
       onDeleteRun={vi.fn()}
-      onRetryLoad={vi.fn()}
       runs={runs}
       workspaceTemplates={templates}
     />,
@@ -178,7 +177,7 @@ describe('the runs table on a wide screen', () => {
     display.wide = true;
     navigation.reset('/dashboard/runs/');
     await renderSettled(
-      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} onRetryLoad={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
+      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
     );
   }
 
@@ -224,8 +223,11 @@ const staleShared: ChecklistRun = { ...runOf('run-stale', 'tpl-a', 'Audit One'),
 const stalePrivate: ChecklistRun = { ...runOf('run-old', 'tpl-b', 'Launch One'), isStale: true };
 
 type RunsPageHandlers = Partial<
-  Pick<React.ComponentProps<typeof RunsDashboardView>, 'loadError' | 'onRevalidateRun' | 'onStopSharingRun'>
-> & { onRetryLoad?: () => void };
+  Pick<
+    React.ComponentProps<typeof RunsDashboardView>,
+    'getRunPermissions' | 'loadError' | 'onRetryLoad' | 'onRevalidateRun' | 'onStopSharingRun'
+  >
+>;
 
 async function openTheRunsWithActions(shownRuns: ChecklistRun[], handlers: RunsPageHandlers = {}) {
   navigation.reset('/dashboard/runs/');
@@ -235,7 +237,6 @@ async function openTheRunsWithActions(shownRuns: ChecklistRun[], handlers: RunsP
       onDeleteRun={vi.fn()}
       runs={shownRuns}
       workspaceTemplates={templates}
-      onRetryLoad={vi.fn()}
       {...handlers}
     />,
   );
@@ -339,6 +340,16 @@ describe("a run's actions on the runs page", () => {
     expect(onDeleteRun).not.toHaveBeenCalled();
   });
 
+  it('offers only Delete in the menu of a run the viewer may delete but not share', async () => {
+    const deleteOnly = { canEditTemplates: false, canManage: true, canRun: false };
+    await openTheRunsWithActions([staleShared], { getRunPermissions: () => deleteOnly, onStopSharingRun: vi.fn() });
+
+    const items = await openTheMenu('Run options');
+
+    expect(items.map((item) => item.textContent)).toEqual(['Delete']);
+    expect(document.body.querySelector('[data-slot="dropdown-menu-separator"]')).toBeNull();
+  });
+
   it('offers Retry when the runs failed to load', async () => {
     const onRetryLoad = vi.fn();
     await openTheRunsWithActions([], { loadError: new Error('HTTP 503'), onRetryLoad });
@@ -346,6 +357,15 @@ describe("a run's actions on the runs page", () => {
     await press('Retry');
 
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the load error on the page when Retry is pressed on a page given nothing to retry with', async () => {
+    await openTheRunsWithActions([], { loadError: new Error('HTTP 503') });
+
+    await press('Retry');
+
+    expect(screen.getByText("Couldn't load your runs")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 });
 

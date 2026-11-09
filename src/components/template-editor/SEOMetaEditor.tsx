@@ -14,6 +14,7 @@ import { DEFAULT_TEMPLATE_TITLE, TEMPLATE_FIELD_LIMITS } from "@/lib/schemas/tem
 import { buildTemplateSeoPreview } from "@/lib/templates/templateSeoPreview";
 
 interface SEOMetaEditorProps {
+  showIntro?: boolean;
   ownerIsOrganization?: boolean;
   ownerSlug?: string | null;
 }
@@ -22,6 +23,7 @@ const browserOrigin = (): string | undefined =>
   typeof window !== "undefined" ? window.location.origin : undefined;
 
 export const SEOMetaEditor = ({
+  showIntro = true,
   ownerIsOrganization = false,
   ownerSlug = null,
 }: SEOMetaEditorProps): JSX.Element => {
@@ -62,6 +64,16 @@ export const SEOMetaEditor = ({
 
   return (
     <div className="flex flex-col gap-8">
+      {showIntro ? (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Search &amp; SEO</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure how this template appears in search results and public
+            listings.
+          </p>
+        </div>
+      ) : null}
+
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor={ids.seoTitle}>Search Title</FieldLabel>

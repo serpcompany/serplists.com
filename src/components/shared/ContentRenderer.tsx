@@ -72,6 +72,15 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   subtaskHeadingAs: SubtaskHeading = 'h4',
   uploadLoginPath,
 }) => {
+  if (!contents || contents.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <File className="h-12 w-12 mx-auto mb-3 opacity-50" />
+        <p>No additional content for this task</p>
+      </div>
+    );
+  }
+
   const renderable = contents.map(toRenderableContent);
   const firstFormWithProblem = renderable.findIndex(hasFormProblem);
 

@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { isPublicHandle } from '@/lib/schemas/publicHandle';
 import { elementAt, firstOf } from '../../support/elements';
 import { validateXML } from 'xmllint-wasm';
 
@@ -13,6 +12,7 @@ import {
   categorySlug,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
+  isValidUsername,
   parseCategories,
   planDurableShardIndex,
   renderSitemapIndex,
@@ -95,9 +95,9 @@ describe('public sitemap behavior', () => {
   });
 
   it('validates the same public usernames, template slugs, and category values', () => {
-    expect(isPublicHandle('alice_bob.1')).toBe(true);
-    expect(isPublicHandle('jane-doe')).toBe(true);
-    expect(isPublicHandle('invalid owner')).toBe(false);
+    expect(isValidUsername('alice_bob.1')).toBe(true);
+    expect(isValidUsername('jane-doe')).toBe(true);
+    expect(isValidUsername('invalid owner')).toBe(false);
     expect(isValidTemplateSlug('technical-seo')).toBe(true);
     expect(isValidTemplateSlug('Technical SEO')).toBe(false);
     expect(categorySlug(' SEO & Analytics ')).toBe('seo-analytics');

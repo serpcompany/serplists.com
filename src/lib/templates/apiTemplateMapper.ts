@@ -30,8 +30,8 @@ const templateSections = (template: ApiTemplate): unknown => {
 };
 
 export const mapApiTemplate = (template: ApiTemplate): ChecklistTemplate => ({
-  id: template.id,
-  title: template.title,
+  id: String(template.id),
+  title: String(template.title || ''),
   description: optionalString(template.description) ?? '',
   type: template.type === 'recipe' ? 'recipe' : 'checklist',
   seoTitle: optionalString(template.seoTitle) ?? '',

@@ -11,7 +11,6 @@ import { buildUserProfileWritePolicy, uploadedAvatarUrlError } from "../utils/us
 import { canManageTeam, findActiveTeam, type TeamRole } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 import { invalidPayloadResponse } from "../utils/request-json";
-import { firstIssueOf } from "../utils/zod-issues";
 import { findHiddenShareLinkActors, HIDDEN_ACTOR } from "../utils/share-link-actors";
 import type { TeamRouteContext } from "./team-membership";
 
@@ -48,7 +47,7 @@ export async function updateTeamSettings(
 
   const parsed = updateTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
   }
 
   const team = await findActiveTeam(db, teamId);
@@ -73,7 +72,7 @@ export async function updateTeamSettings(
   if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
     const slug = publicHandleSchema.safeParse(parsed.data.slug);
     if (!slug.success) {
-      return jsonError(`slug: ${firstIssueOf(slug.error).message}`, 400);
+      return jsonError(`slug: ${slug.error.issues[0]?.message ?? "Invalid slug"}`, 400);
     }
     if (await isTeamSlugTaken(db, parsed.data.slug, teamId)) {
       return teamSlugInUseError();

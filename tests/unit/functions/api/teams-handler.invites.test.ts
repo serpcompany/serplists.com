@@ -232,6 +232,12 @@ describe("Teams handler", () => {
     expectNothingRevoked(await revokeTheInvite());
   });
 
+  it("does not revoke an invite stored without an expiry", async () => {
+    anAdminAndTheInvite(storedInvite({ expires_at: null }));
+
+    expectNothingRevoked(await revokeTheInvite());
+  });
+
   it("reports a conflict instead of a revoke when the invite was accepted between read and write", async () => {
     anAdminAndTheInvite(storedInvite()).mockResolvedValueOnce([{ accepted_at: "2026-01-02T00:00:00.000Z" }]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);

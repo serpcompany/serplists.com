@@ -31,7 +31,16 @@ const CACHE_KEY = '/__page-meta/v1/categories';
 
 const summarySchema = z.array(z.object({ slug: z.string(), name: z.string(), count: z.number() }));
 
-const toTemplates = (body: unknown): ChecklistTemplate[] => apiTemplateListSchema.parse(body).map(mapApiTemplate);
+const toTemplates = (body: unknown): ChecklistTemplate[] => {
+  const rows = apiTemplateListSchema.safeParse(body);
+  return (rows.success ? rows.data : []).flatMap((row) => {
+    try {
+      return [mapApiTemplate(row)];
+    } catch {
+      return [];
+    }
+  });
+};
 
 const buildCategorySummary = async (): Promise<Response> => {
   const catalog = await fetchApi('/api/templates?scope=public');

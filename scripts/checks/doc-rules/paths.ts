@@ -17,7 +17,7 @@ export function repositoryTree(files: readonly string[]): Tree {
   return { files: new Set(files), folders, topFolders };
 }
 
-export const exists = (tree: Tree, path: string) => tree.files.has(path) || tree.folders.has(posix.normalize(path));
+export const exists = (tree: Tree, path: string) => tree.files.has(path) || tree.folders.has(posix.normalize(path || "."));
 
 const PATH_SHAPE = /^[\w.@[\]()/-]+$/;
 
@@ -28,7 +28,7 @@ export function namedPath(code: string, tree: Tree): string | undefined {
     .replace(/:\d+(?:-\d+)?$/, "")
     .replace(/[/:.,;]+$/, "");
   if (!candidate || !PATH_SHAPE.test(candidate)) return undefined;
-  const first = candidate.replace(/[/].*$/, "");
+  const first = candidate.split("/")[0] ?? "";
   const inATrackedFolder = candidate.includes("/") && tree.topFolders.has(first);
   const aTrackedRootFile = !candidate.includes("/") && tree.files.has(candidate);
   return inATrackedFolder || aTrackedRootFile ? candidate : undefined;

@@ -67,6 +67,16 @@ describe('Run page without a run', () => {
   });
 });
 
+describe('Run page reloading a run a save just found gone', () => {
+  it('waits for the reload to finish before it says the run is not found', async () => {
+    const { container } = await openTheRunPageInTheDom({ ...withoutARun, loading: true, notFound: true });
+
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/dashboard/runs/run-1/');
+    expect(container.querySelector('[data-dashboard-loading-state="true"]')).not.toBeNull();
+  });
+});
+
 describe('Shared run Copy Link', () => {
   const openTheSharedRun = () =>
     openTheRunPageInTheDom(

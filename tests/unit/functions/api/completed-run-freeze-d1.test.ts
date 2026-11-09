@@ -186,7 +186,7 @@ describe("the run page's own saves of a completed legacy run, whose shapes the p
     },
   ]);
 
-  const pageRun = () => mapChecklistToRun({ id: "legacy", status: "completed", items: legacyItems, revision: 1 });
+  const pageRun = () => mapChecklistToRun({ id: "legacy", status: "completed", items: legacyItems, revision: 1 }, "legacy");
 
   const saveFromThePage = (edit: (section: ChecklistSection) => ChecklistSection) =>
     put("legacy", buildRunUpdatePayload({ ...pageRun(), sections: pageRun().sections.map(edit) }));

@@ -36,6 +36,27 @@ describe('limitPersonalRunKey', () => {
   });
 });
 
+describe('limitPersonalRunKey when it must forget a key and the oldest has had its minute', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('forgets the key whose minute has passed, and a busy key stays refused', async () => {
+    const limits = await import('@functions/api/utils/mcp-limits');
+    limits.limitPersonalRunKey(key('stale'));
+    vi.advanceTimersByTime(61_000);
+    for (let request = 0; request < limits.RUN_KEY_REQUESTS_PER_MINUTE; request += 1) limits.limitPersonalRunKey(key('busy'));
+    for (let other = 0; other < 999; other += 1) limits.limitPersonalRunKey(key(`other-${other}`));
+
+    expect(limits.limitPersonalRunKey(key('busy'))).toEqual({ allowed: false, retryAfter: 60 });
+  });
+});
+
 describe('failed MCP sign-ins', () => {
   it('blocks an address after ten failed attempts', () => {
     const request = () => mcpRequest({ 'CF-Connecting-IP': '198.51.100.20' });

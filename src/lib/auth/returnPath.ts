@@ -34,7 +34,12 @@ export function sanitizeReturnPath(value: unknown): string | null {
     return null;
   }
 
-  const url = new URL(value, PLACEHOLDER_ORIGIN);
+  let url: URL;
+  try {
+    url = new URL(value, PLACEHOLDER_ORIGIN);
+  } catch {
+    return null;
+  }
   if (url.origin !== PLACEHOLDER_ORIGIN || hasControlCharacter(decodeURIComponentSafe(url.pathname))) {
     return null;
   }

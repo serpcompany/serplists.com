@@ -118,6 +118,23 @@ describe('the run page', () => {
     expect(page().selectedItemId).toBe('task-a');
   });
 
+  it('moves to the first unfinished task after a save when the selected task is no longer in the saved run', async () => {
+    const page = await theRunPage();
+    await act(async () => page().setSelectedItemId('task-b'));
+    updateRun.mockImplementationOnce(async (sent) => ({
+      ...sent,
+      revision: 2,
+      sections: sent.sections.map((section) => ({ ...section, items: section.items.filter((item) => item.id !== 'task-b') })),
+    }));
+
+    await act(async () => {
+      await page().saveItemNotes('task-a', 'Done by Bob');
+    });
+
+    expect(run(page).sections.flatMap((section) => section.items.map((item) => item.id))).toEqual(['task-a']);
+    expect(page().selectedItemId).toBe('task-a');
+  });
+
   it('reloads the run after a save that another session got in before, and saves again on it', async () => {
     const page = await theRunPage();
     server.getChecklistById.mockResolvedValue({ ...apiRun('run-1', 'Renamed elsewhere'), revision: 2 });

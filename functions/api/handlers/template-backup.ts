@@ -37,6 +37,7 @@ import { generateUniqueSlug, insertTemplateWithUniqueSlug } from '../utils/templ
 import {
   getTemplateSelectColumns,
   parseTemplateRow,
+  withRulesColumnFallback,
   type TemplateDb,
 } from '../utils/template-rows';
 import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
@@ -111,11 +112,13 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
     ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, backupTeamId), isNull(templates.deleted_at))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
 
-  const rows = await db
-    .select(getTemplateSelectColumns(true))
-    .from(templates)
-    .where(whereClause)
-    .orderBy(desc(templates.created_at));
+  const rows = await withRulesColumnFallback((includeRules) =>
+    db
+      .select(getTemplateSelectColumns(includeRules, true))
+      .from(templates)
+      .where(whereClause)
+      .orderBy(desc(templates.created_at)),
+  );
 
   const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 
@@ -125,10 +128,10 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
       id: parsed.id,
       title: parsed.title,
       description: parsed.description || '',
-      type: parsed.type,
-      seoTitle: parsed.seoTitle,
-      seoDescription: parsed.seoDescription,
-      rules: parsed.rules,
+      type: typeof parsed.type === 'string' ? parsed.type : 'checklist',
+      seoTitle: typeof parsed.seoTitle === 'string' ? parsed.seoTitle : '',
+      seoDescription: typeof parsed.seoDescription === 'string' ? parsed.seoDescription : '',
+      rules: Array.isArray(parsed.rules) ? parsed.rules : undefined,
       requiredTools: parsed.requiredTools,
       sections: parsed.sections,
       categories: parsed.categories,
@@ -138,7 +141,7 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
       updatedAt: parsed.updated_at || parsed.created_at,
       isPublic: Boolean(parsed.is_public),
       slug: parsed.slug || '',
-      version: parsed.version,
+      version: typeof parsed.version === 'number' ? parsed.version : 1,
     };
   });
 
@@ -184,7 +187,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
     : templateBackupImportBodySchema.safeParse(body);
 
   if (!parsedBody.success) {
-    return invalidPayloadResponse(parsedBody.error);
+    return invalidPayloadResponse(parsedBody.error, 'Invalid template import payload');
   }
 
   const { templates: incomingTemplates, options } = parsedBody.data;
@@ -215,7 +218,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
       summary.failed.push({
         index,
         title: template.title,
-        reason: formatPayloadIssue(fields.error),
+        reason: formatPayloadIssue(fields.error, 'Invalid template fields'),
         code: 'invalid_fields',
       });
       continue;

@@ -53,7 +53,7 @@ export async function createTemplateForUser(
 
   const parsed = templatePayloadSchema.safeParse(body);
   if (!parsed.success) {
-    const { message, details } = describePayloadError(parsed.error);
+    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
     return refuse(message, 400, { details });
   }
 

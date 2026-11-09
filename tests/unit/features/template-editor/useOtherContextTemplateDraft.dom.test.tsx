@@ -10,17 +10,24 @@ const workspace = vi.hoisted(() => ({
   activeTeamId: undefined as string | undefined,
   selectWorkspace: vi.fn<(workspaceId: string) => void>(),
 }));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: workspace.activeTeamId,
-    isWorkspaceLoading: false,
-    selectWorkspace: workspace.selectWorkspace,
-    teams: [
-      { id: 'team-acme', name: 'Acme', role: 'editor' },
-      { id: 'team-beta', name: 'Beta', role: 'viewer' },
-    ],
-  }),
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  const teams = [
+    { id: 'team-acme', name: 'Acme', role: 'editor' as const },
+    { id: 'team-beta', name: 'Beta', role: 'viewer' as const },
+  ];
+  const getPermissions = (teamId?: string) =>
+    getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role);
+  return {
+    useWorkspace: () => ({
+      activeTeamId: workspace.activeTeamId,
+      getPermissions,
+      isWorkspaceLoading: false,
+      selectWorkspace: workspace.selectWorkspace,
+      teams,
+    }),
+  };
+});
 
 import { useOtherContextTemplateDraft } from '@/features/template-editor/useOtherContextTemplateDraft';
 

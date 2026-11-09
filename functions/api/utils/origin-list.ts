@@ -9,9 +9,11 @@ export function urlOrigin(value: string | null | undefined): string | null {
 }
 
 export function parseAllowedOrigin(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
   let url: URL;
   try {
-    url = new URL(value.trim());
+    url = new URL(trimmed);
   } catch {
     return null;
   }

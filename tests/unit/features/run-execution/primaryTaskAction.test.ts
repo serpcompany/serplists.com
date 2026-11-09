@@ -54,6 +54,16 @@ describe('getPrimaryTaskAction', () => {
   ])('%s', (_label, run, taskId, hasNext, expected) => {
     expect(getPrimaryTaskAction(run, taskId, hasNext)).toEqual(expected);
   });
+
+  it('offers Mark Complete when the only unfinished task left is a stored copy of the selected task, under the same id', () => {
+    const run = buildRun([true, false]);
+    const runWithARepeatedId: ChecklistRun = {
+      ...run,
+      sections: [{ ...sectionAt(run, 0), items: [{ ...taskAt(run, 0, 0), id: 'item-2' }, taskAt(run, 0, 1)] }],
+    };
+
+    expect(getPrimaryTaskAction(runWithARepeatedId, 'item-2', false)).toEqual({ kind: 'complete_task' });
+  });
 });
 
 describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, which older runs and API writes can hold, treats the task as not done', () => {

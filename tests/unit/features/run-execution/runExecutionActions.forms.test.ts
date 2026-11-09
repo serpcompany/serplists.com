@@ -7,6 +7,7 @@ import {
   toggleRunSubItem,
 } from '@/features/run-execution/runExecutionActions';
 import { isRunItemFinished } from '@/features/run-execution/runExecutionMappers';
+import { findTaskFormField } from '@/features/run-execution/runFormAnswers';
 import { createRunSaver } from '@/features/run-execution/runSaver';
 import { ApiError } from '@/lib/api-errors';
 import { FORM_INCOMPLETE_CODE } from '@/lib/schemas/formValidation';
@@ -98,6 +99,19 @@ describe('saving a form answer on the Run page', () => {
     )).toEqual({ kind: 'not_found' });
     expect(updateRun).not.toHaveBeenCalled();
     expect(apiClient.updateSharedChecklist).not.toHaveBeenCalled();
+  });
+
+  it('finds a field by its id, and none in a form block stored without a field list', () => {
+    const withoutFields: ChecklistItem = { id: 'item-form', title: 'Collect details', contents: [{ id: 'form-1', type: 'form', value: '' }] };
+
+    expect(findTaskFormField(formTask(), 'field-site')?.label).toBe('Website');
+    expect(findTaskFormField(withoutFields, 'field-site')).toBeUndefined();
+  });
+
+  it('queues a cleared answer under the same key every time it is cleared', () => {
+    const saves = bindRunSaves({ dependencies: { updateRun: savingRun() }, noteDrafts: () => ({}) });
+
+    expect(saves.answer('item-form', 'field-name', undefined).key).toBe('answer:item-form:field-name:null');
   });
 
   it('queues each answer under its own key, so a double save is dropped but a changed answer is not, and retries only when no one else changed it', () => {

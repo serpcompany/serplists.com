@@ -27,6 +27,15 @@ describe('sharing from the run page tells the cached runs list, which would othe
     expect(onShared).toHaveBeenCalledWith('run-1');
   });
 
+  it('gives a link from the site root when no origin is set and there is no browser window to read one from', async () => {
+    const client = apiClient(vi.fn().mockResolvedValue({ shareToken: 'token-2' }));
+
+    const result = await createRunExecutionShare({ run: buildRun() }, { apiClient: client, updateRun: vi.fn() });
+
+    expect(typeof window).toBe('undefined');
+    expect(result).toMatchObject({ kind: 'ok', shareUrl: '/share/token-2/' });
+  });
+
   it('reports nothing when the share fails', async () => {
     const onShared = vi.fn();
     const client = apiClient(vi.fn().mockRejectedValue(new Error('Run not found')));

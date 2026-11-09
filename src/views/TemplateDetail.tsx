@@ -145,8 +145,8 @@ const TemplateDetail = () => {
     userId: user?.id,
   });
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
-  const updatedDate = formatLocalDate(displayTemplate?.updatedAt);
-  const historyEntries = buildTemplateHistoryTimeline(history.data, historyLimitFor(history.showingAll));
+  const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
+  const historyEntries = buildTemplateHistoryTimeline(history?.data, historyLimitFor(Boolean(history?.showingAll)));
 
   const handleUpgrade = () =>
     handleUpgradeRequiredForContext({
@@ -189,6 +189,10 @@ const TemplateDetail = () => {
   };
 
   const handleShare = async () => {
+    if (!displayTemplate) {
+      return;
+    }
+
     const visit = beginVisit();
     setIsCreatingShare(true);
     try {
@@ -262,6 +266,10 @@ const TemplateDetail = () => {
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
+    if (!displayTemplate || !canEditTemplate || isChangingVisibility) {
+      return;
+    }
+
     const visit = beginVisit();
     setIsUpdatingVisibility(true);
     try {
@@ -285,11 +293,13 @@ const TemplateDetail = () => {
     }
   };
 
-  const handleDelete = async (templateId: string) => {
+  const handleDelete = async () => {
+    if (!displayTemplate) return;
+
     const visit = beginVisit();
     setIsDeleting(true);
     try {
-      await deleteTemplate(templateId);
+      await deleteTemplate(displayTemplate.id);
       toast.success('Template deleted');
       if (visit.isCurrent()) {
         router.push(buildConsoleTemplatesPath(templateContext));
@@ -425,9 +435,9 @@ const TemplateDetail = () => {
             <TemplateHistoryCard
               className="lg:col-span-2"
               entries={historyEntries}
-              isError={history.isError}
-              isLoading={history.isLoading}
-              viewAll={{ onViewAll: history.onViewAll, showingAll: history.showingAll }}
+              isError={Boolean(history?.isError)}
+              isLoading={Boolean(history?.isLoading)}
+              viewAll={history ? { onViewAll: history.onViewAll, showingAll: history.showingAll } : undefined}
             />
           ) : null}
         </div>
@@ -440,7 +450,7 @@ const TemplateDetail = () => {
           pending: isDeleting,
           onConfirm: () => {
             setArchiveDialogOpen(false);
-            void handleDelete(displayTemplate.id);
+            void handleDelete();
           },
         }}
         runDialog={{ open: runDialogOpen, onOpenChange: setRunDialogOpen, onConfirm: handleStartRun, loading: isCreatingRun }}

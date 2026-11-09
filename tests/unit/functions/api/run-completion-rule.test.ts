@@ -39,7 +39,7 @@ const cases: Array<[string, unknown[], boolean]> = [
 describe('the rule for completing a run, shared by Complete run and MCP set_run_status so neither completes work the other counts as open', () => {
   it.each(cases)('is the same on the run page and over MCP for %s', (_label, sections, expected) => {
     const items = JSON.stringify(sections);
-    const run = mapChecklistToRun({ id: 'run-1', status: 'in_progress', items });
+    const run = mapChecklistToRun({ id: 'run-1', status: 'in_progress', items }, 'run-1');
     const { total, open } = findOpenRunTasks(parseStoredSections(items));
 
     expect(canFinishRun(run)).toBe(expected);

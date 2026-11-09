@@ -4,6 +4,8 @@ import { checklistRuns } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 
+const UNTITLED_RUN_TITLE = 'Checklist Run';
+
 export async function loadSharedRunTitle(env: Env, shareToken: string): Promise<string | null> {
   const token = shareToken.trim();
   if (!token) return null;
@@ -18,5 +20,6 @@ export async function loadSharedRunTitle(env: Env, shareToken: string): Promise<
       ),
     )
     .limit(1);
-  return row ? row.title : null;
+  if (!row) return null;
+  return typeof row.title === 'string' ? row.title : UNTITLED_RUN_TITLE;
 }

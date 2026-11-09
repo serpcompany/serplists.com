@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseLogText, requestRecords } from '../../../scripts/lib/logEntries';
+import { formatTable } from '../../../scripts/lib/logFormat';
 import { runLogQuery } from '../../../scripts/lib/logQueryCommand';
 import {
   emptyFilter,
@@ -252,5 +253,21 @@ describe('runLogQuery', () => {
     expect(badOption.exitCode).toBe(2);
     expect(badOption.output).toContain('Usage: pnpm run logs:query');
     expect(missing).toEqual({ output: `No log at ${path.join(workDir, 'none.log')}.`, exitCode: 1 });
+  });
+});
+
+describe('a table of results', () => {
+  it('aligns each column to its widest cell, leaving the last column unpadded', () => {
+    expect(formatTable(['route', 'count'], [['GET /api/templates', 12], ['GET /', 3]])).toBe(
+      ['route               count', 'GET /api/templates  12', 'GET /               3'].join('\n'),
+    );
+  });
+
+  it('measures a row with fewer cells than the headers as if its missing cells were empty', () => {
+    expect(formatTable(['route', 'count', 'p95'], [['GET /', 3]])).toBe(['route  count  p95', 'GET /  3'].join('\n'));
+  });
+
+  it('prints the cells a row has beyond the headers without padding them', () => {
+    expect(formatTable(['route'], [['GET /', 3, 'slow']])).toBe(['route', 'GET /  3  slow'].join('\n'));
   });
 });

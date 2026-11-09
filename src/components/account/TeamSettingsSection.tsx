@@ -50,6 +50,7 @@ export function TeamSettingsSection() {
     activeTeamId,
     activeWorkspace,
     canManageTeam,
+    isTeamWorkspace,
     patchTeam,
     refreshTeams,
   } = useWorkspace();
@@ -81,12 +82,18 @@ export function TeamSettingsSection() {
     void markOrganizationListStale();
     toast.warning('Saved, but refreshing failed. Reload to see the latest state.');
   };
-  const changedTeamSettings = getTeamSettingsUpdate(
-    { name: editTeamName, slug: editTeamSlug, description: editTeamDescription },
-    activeWorkspace,
-  );
+  const activeMemberId =
+    isTeamWorkspace && 'memberId' in activeWorkspace
+      ? activeWorkspace.memberId
+      : null;
+  const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
+  const changedTeamSettings = isTeamWorkspace
+    ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug, description: editTeamDescription }, activeWorkspace)
+    : null;
 
-  const saveOrganizationAvatar = async (teamId: string, avatarUrl: string | null): Promise<string | null> => {
+  const saveOrganizationAvatar = async (avatarUrl: string | null): Promise<string | null> => {
+    if (!activeTeamId) return 'Select an Organization before updating its settings';
+    const teamId = activeTeamId;
     try {
       const result = await saveTeamSettings(teamId, { avatar_url: avatarUrl });
       patchTeam(teamId, { avatar_url: result.team.avatar_url ?? null });
@@ -98,8 +105,13 @@ export function TeamSettingsSection() {
     return null;
   };
 
-  const handleUpdateTeam = async (teamId: string, event: FormEvent<HTMLFormElement>) => {
+  const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!activeTeamId) {
+      toast.error('Select an Organization before updating its settings');
+      return;
+    }
 
     const update = changedTeamSettings;
     if (!update) {
@@ -111,6 +123,7 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     const submitted = { name: editTeamName, slug: editTeamSlug, description: editTeamDescription };
     setIsUpdatingTeam(true);
     try {
@@ -138,10 +151,14 @@ export function TeamSettingsSection() {
   };
 
   const handleUpdateMember = async (
-    teamId: string,
     member: TeamMember,
     updates: { role?: AssignableTeamRole; status?: TeamMemberStatus },
   ) => {
+    if (!activeTeamId) {
+      return;
+    }
+
+    const teamId = activeTeamId;
     setUpdatingMemberId(member.id);
     try {
       await runTeamWrite({
@@ -159,7 +176,11 @@ export function TeamSettingsSection() {
     }
   };
 
-  const handleTransferOwnership = async (teamId: string, member: TeamMember) => {
+  const handleTransferOwnership = async (member: TeamMember) => {
+    if (!activeTeamId) {
+      return;
+    }
+
     const memberName = member.name || member.email || member.user_id;
     if (
       typeof window !== 'undefined' &&
@@ -168,6 +189,7 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setTransferringOwnerMemberId(member.id);
     try {
       await runTeamWrite({
@@ -214,13 +236,13 @@ export function TeamSettingsSection() {
             currentAvatarUrl={activeWorkspace.avatarUrl ?? null}
             editable={canManageTeam}
             fallbackIcon={Users}
-            saveAvatar={(avatarUrl) => saveOrganizationAvatar(activeWorkspace.teamId, avatarUrl)}
+            saveAvatar={saveOrganizationAvatar}
             size="lg"
           />
         </Field>
 
         {canManageTeam ? (
-          <form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => void handleUpdateTeam(activeWorkspace.teamId, event)}>
+          <form className="grid gap-3 md:grid-cols-2" onSubmit={handleUpdateTeam}>
             <Field>
               <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
               <Input
@@ -258,7 +280,7 @@ export function TeamSettingsSection() {
           </form>
         ) : null}
 
-        {canManageTeam ? <TeamInvitesPanel teamId={activeWorkspace.teamId} /> : null}
+        {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
 
         {!canManageTeam ? (
           <p className="text-sm text-muted-foreground">
@@ -267,14 +289,14 @@ export function TeamSettingsSection() {
         ) : null}
 
         <OrganizationMemberList
-          activeMemberId={activeWorkspace.memberId}
+          activeMemberId={activeMemberId}
           canManageTeam={canManageTeam}
-          canTransferOwnership={activeWorkspace.role === 'owner'}
+          canTransferOwnership={canTransferOwnership}
           members={members}
           membersQuery={membersQuery}
           onRetry={() => void reload.members()}
-          onTransferOwnership={(member) => void handleTransferOwnership(activeWorkspace.teamId, member)}
-          onUpdateMember={(member, updates) => void handleUpdateMember(activeWorkspace.teamId, member, updates)}
+          onTransferOwnership={(member) => void handleTransferOwnership(member)}
+          onUpdateMember={(member, updates) => void handleUpdateMember(member, updates)}
           transferringOwnerMemberId={transferringOwnerMemberId}
           updatingMemberId={updatingMemberId}
         />

@@ -1,4 +1,5 @@
 import {
+  Copy,
   Edit3,
   FileText,
   Globe,
@@ -34,6 +35,7 @@ interface TemplateCardProps {
   context: ConsoleContext;
   canEdit?: boolean;
   onDelete?: ((id: string) => void) | undefined;
+  onDuplicate?: (id: string) => void;
   onStartRun?: ((id: string) => void) | undefined;
 }
 
@@ -42,10 +44,11 @@ export function TemplateCard({
   context,
   canEdit = true,
   onDelete,
+  onDuplicate,
   onStartRun,
 }: TemplateCardProps) {
   const templateContext = resolveTemplateConsoleContext(template, context);
-  const hasMenuActions = canEdit || Boolean(onStartRun || onDelete);
+  const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
   const taskCount = countTemplateItems(template);
   const title = template.title.trim();
@@ -82,6 +85,12 @@ export function TemplateCard({
                 <DropdownMenuItem onClick={() => onStartRun(template.id)}>
                   <Play />
                   Start Run
+                </DropdownMenuItem>
+              ) : null}
+              {onDuplicate ? (
+                <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
+                  <Copy />
+                  Duplicate
                 </DropdownMenuItem>
               ) : null}
               {onDelete ? (

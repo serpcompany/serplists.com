@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { Env } from "../types";
-import { hmacSha256Hex } from "./crypto";
 
 export type StripeBillingConfig = {
   secretKey: string;
@@ -24,20 +23,25 @@ export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   return { secretKey, proPriceId, proPriceIds };
 }
 
-export function assertStripeWebhookConfigured(env: Env): StripeWebhookConfig {
+function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    throw new Error("Stripe webhook is not configured. Set STRIPE_WEBHOOK_SECRET.");
-  }
+  if (!webhookSecret) return null;
   return { webhookSecret };
 }
 
-type StripeForm = Record<string, string | number | boolean | undefined>;
+export function assertStripeWebhookConfigured(env: Env): StripeWebhookConfig {
+  const config = getStripeWebhookConfig(env);
+  if (!config) {
+    throw new Error("Stripe webhook is not configured. Set STRIPE_WEBHOOK_SECRET.");
+  }
+  return config;
+}
 
-function encodeForm(body: StripeForm): string {
+function encodeForm(body: Record<string, string | number | boolean | undefined | null>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(body)) {
-    if (value !== undefined) params.set(key, String(value));
+    if (value === undefined || value === null) continue;
+    params.set(key, typeof value === "boolean" ? (value ? "true" : "false") : String(value));
   }
   return params.toString();
 }
@@ -121,7 +125,7 @@ export async function stripeGet(secretKey: string, path: string): Promise<unknow
 export async function stripePostForm<Reply>(
   secretKey: string,
   path: string,
-  body: StripeForm,
+  body: Record<string, string | number | boolean | undefined | null>,
   reply: z.ZodType<Reply, z.ZodTypeDef, unknown>,
   options?: { idempotencyKey?: string },
 ): Promise<Reply> {
@@ -158,6 +162,20 @@ function parseStripeSignatureHeader(header: string): { timestamp: number; v1: st
 
   if (!timestamp || v1.length === 0) return null;
   return { timestamp, v1 };
+}
+
+async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

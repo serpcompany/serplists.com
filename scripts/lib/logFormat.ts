@@ -17,12 +17,12 @@ export function formatEntry(entry: LogEntry): string {
 }
 
 export function formatTable(headers: string[], rows: Array<Array<string | number>>): string {
-  const lines = [headers, ...rows];
-  const widths = headers.map((_, column) => Math.max(...lines.map((row) => String(row[column]).length)));
-  return lines
+  const cells = [headers, ...rows.map((row) => row.map(String))];
+  const widths = headers.map((_, column) => Math.max(...cells.map((row) => (row[column] ?? "").length)));
+  return cells
     .map((row) =>
-      widths
-        .map((width, column) => (column === widths.length - 1 ? String(row[column]) : String(row[column]).padEnd(width)))
+      row
+        .map((cell, column) => (column === row.length - 1 ? cell : cell.padEnd(widths[column] ?? 0)))
         .join("  ")
         .trimEnd(),
     )

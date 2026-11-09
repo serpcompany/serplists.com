@@ -9,6 +9,7 @@ import {
   users,
 } from '../../db/schema/index';
 import { createDb } from '../api/db';
+import { isPublicHandle } from '../../src/lib/schemas/publicHandle';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
@@ -43,8 +44,8 @@ type InventoryMetadata = {
   implementationLastmod?: string;
 };
 
-const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).flatMap(
-  ({ slug, ...template }) => (slug?.trim() ? [{ ...template, slug }] : []),
+const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).filter(
+  (template) => template.slug?.trim(),
 );
 
 const staticPages = bundledTemplateCatalog.staticPages as StaticPage[];
@@ -154,9 +155,10 @@ export function methodNotAllowed(): Response {
   });
 }
 
-export function parsePage(value: string): number | null {
-  if (!/^\d+$/.test(value)) return null;
-  const page = Number(value);
+export function parsePage(value: string | string[] | undefined): number | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || !/^\d+$/.test(candidate)) return null;
+  const page = Number(candidate);
   return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
@@ -178,9 +180,12 @@ function paginateEntries<T>(entries: T[], page: number): T[] {
 }
 
 export function bundledTemplateEntries(): SitemapEntry[] {
-  return bundledTemplates.flatMap(({ slug, lastmod }) =>
-    isValidTemplateSlug(slug) ? [{ path: `/profile/serp/${encodeURIComponent(slug)}/`, lastmod }] : [],
-  );
+  return bundledTemplates.flatMap((template) => {
+    const slug = template.slug ?? '';
+    return isValidTemplateSlug(slug)
+      ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod: template.lastmod }]
+      : [];
+  });
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
@@ -194,6 +199,8 @@ export function catalogPageEntry(path: '/templates/' | '/categories/'): SitemapE
   if (!entry) throw new Error(`Missing generated sitemap metadata for ${path}`);
   return entry;
 }
+
+export const isValidUsername = isPublicHandle;
 
 export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
@@ -310,7 +317,7 @@ export function requestSupportsSitemap(method: string): boolean {
 
 export async function handleInMemoryPagedSitemap(
   request: Request,
-  pageValue: string,
+  pageValue: string | string[] | undefined,
   loadEntries: () => SitemapEntry[] | Promise<SitemapEntry[]>,
 ): Promise<Response> {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
@@ -430,7 +437,7 @@ export async function loadRowsOfTwoLists<Row>(
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  params: { readonly page: string };
+  params: { readonly page?: string | string[] | undefined };
   loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
@@ -443,6 +450,7 @@ export async function handlePagedDatabaseSitemap<Row>({
   toEntry,
   prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
+  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const page = parsePage(params.page);
   if (!page) return xmlResponse(request, renderUrlset([]), 404);
 
@@ -450,7 +458,9 @@ export async function handlePagedDatabaseSitemap<Row>({
   const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
-  const rows = await loadRows({ limit: databaseLimit, offset: databaseOffset });
+  const rows = databaseLimit > 0
+    ? await loadRows({ limit: databaseLimit, offset: databaseOffset })
+    : [];
   const databaseEntries = rows
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);

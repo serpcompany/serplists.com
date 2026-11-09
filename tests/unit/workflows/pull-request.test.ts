@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { isTestFile } from '../../../scripts/lib/fix-commits';
+import { nodeOptionsWithAFetchStandIn, type FetchAnswer } from '../../support/fetchStandIn';
+import { aFolderIn } from '../../support/foldersOfFiles';
 import { runAgainstAGitHubStandIn, type Route } from '../../support/githubApiStandIn';
 import { commandsTheRunnerRuns } from '../../support/workflowCommands';
-import { readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
+import { aWorkDirRemovedAfterAll, readWorkflowFile, workflowStepSchema } from '../../support/workflowGuards';
 
 const REPOSITORY = 'serpcompany/serplists.com';
 const SCRIPT = 'tools/checks/pull-request.mjs';
@@ -330,5 +332,41 @@ describe('the checks when the workflow leaves a field out', () => {
 
     expect(status).toBe(0);
     expect(requests).toEqual([]);
+  });
+});
+
+describe('the checks on a runner that leaves out the pull request number or the API URL', () => {
+  const workDir = aWorkDirRemovedAfterAll('pull-request-checks-');
+  const issueOnGitHub = `https://api.github.com/repos/${REPOSITORY}/issues/12`;
+  const issueLinkAnsweredBy = (answer: FetchAnswer) =>
+    check('issue-link', { PR_BODY: 'Closes #12', GITHUB_API_URL: '', NODE_OPTIONS: nodeOptionsWithAFetchStandIn(aFolderIn(workDir), { [issueOnGitHub]: answer }) });
+
+  it('asks GitHub for the files of no pull request, and cannot finish, when it is not told which fix to check', { timeout: 120_000 }, async () => {
+    const { status, output, requests } = await runAgainstAGitHubStandIn(
+      { script: SCRIPT, args: ['fix-test'] },
+      { GITHUB_REPOSITORY: REPOSITORY, PR_TITLE: 'fix: the change' },
+      github(),
+    );
+
+    expect(status).toBe(1);
+    expect(output).toContain("::error::The fix-test check couldn't finish.");
+    expect(output).toContain('GitHub answered 404 when asked for the files of #.');
+    expect(requests.map((request) => request.path)).toEqual([`/repos/${REPOSITORY}/pulls//files`]);
+  });
+
+  it('asks api.github.com whether each closed number is an issue', { timeout: 120_000 }, async () => {
+    const { status, output, requests } = await issueLinkAnsweredBy({ status: 200, body: JSON.stringify({ number: 12 }) });
+
+    expect(status).toBe(0);
+    expect(output).toContain('Closes #12');
+    expect(requests).toEqual([]);
+  });
+
+  it('reports a request that fails with a bare message by that message', { timeout: 120_000 }, async () => {
+    const { status, output } = await issueLinkAnsweredBy({ thrown: 'getaddrinfo ENOTFOUND api.github.com' });
+
+    expect(status).toBe(1);
+    expect(output).toContain("::error::The issue-link check couldn't finish.");
+    expect(output).toContain('getaddrinfo ENOTFOUND api.github.com');
   });
 });

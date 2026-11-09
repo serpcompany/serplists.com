@@ -73,6 +73,11 @@ export const fits = (result: JsonRecord): boolean => byteSize(result) <= MAX_RES
 
 export const resultTooLarge = () => new ToolError("Result is too large to return", "result_too_large", { limit: MAX_RESULT_BYTES });
 
+export function bounded(page: JsonRecord): JsonRecord {
+  if (fits(page)) return page;
+  throw resultTooLarge();
+}
+
 export const tasksOf = (section: SectionRecord): TaskRecord[] => taskRecordsIn(section.items);
 
 export function findSection(sections: SectionRecord[], sectionId: string, idArgumentName = "sectionId"): number {
@@ -162,6 +167,7 @@ const CURSOR_AND_OFFSETS_RESERVE_BYTES = 512;
 const SEPARATOR_BYTES = 1;
 const JSON_STRING_QUOTES_BYTES = 2;
 const SHORT_ESCAPE_BYTES = 2;
+const UNICODE_ESCAPE_BYTES = 6;
 const SURROGATE_PAIR_UTF8_BYTES = 4;
 
 export const unitOf = (value: unknown): Unit => {
@@ -171,6 +177,10 @@ export const unitOf = (value: unknown): Unit => {
 
 function jsonStringBytes(codeUnit: number): number {
   if (codeUnit === 0x22 || codeUnit === 0x5c) return SHORT_ESCAPE_BYTES;
+  if (codeUnit < 0x20) {
+    const hasShortEscape = codeUnit === 0x08 || codeUnit === 0x09 || codeUnit === 0x0a || codeUnit === 0x0c || codeUnit === 0x0d;
+    return hasShortEscape ? SHORT_ESCAPE_BYTES : UNICODE_ESCAPE_BYTES;
+  }
   if (codeUnit < 0x80) return 1;
   return codeUnit < 0x800 ? 2 : 3;
 }
@@ -181,7 +191,10 @@ function partEndWithinBytes(json: string, from: number, maxBytes: number): numbe
   while (index < json.length) {
     const code = json.charCodeAt(index);
     const isSurrogatePair = code >= 0xd800 && code <= 0xdbff && (json.charCodeAt(index + 1) & 0xfc00) === 0xdc00;
-    const width = isSurrogatePair ? SURROGATE_PAIR_UTF8_BYTES : jsonStringBytes(code);
+    const isLoneSurrogate = !isSurrogatePair && code >= 0xd800 && code <= 0xdfff;
+    const width = isSurrogatePair
+      ? SURROGATE_PAIR_UTF8_BYTES
+      : isLoneSurrogate ? UNICODE_ESCAPE_BYTES : jsonStringBytes(code);
     if (bytes + width > maxBytes) break;
     bytes += width;
     index += isSurrogatePair ? 2 : 1;
@@ -252,13 +265,13 @@ export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionR
   const packed = pack(values.map(unitOf), start, roomForUnits(frame));
   const included = values.slice(packed.first, packed.first + packed.count);
   const withFields = packed.first === 0 && packed.count > 0;
-  return {
+  return bounded({
     [paged.key]: withFields ? included[0] : paged.ref,
     sectionsOmitted: true,
     outline: withFields ? included.slice(1) : included,
     limit: MAX_RESULT_BYTES,
     ...partAndNextCursor(paged, packed, { m: "outline" }, (unit) => (unit === 0 ? { of: paged.key } : { of: "outline", index: unit - 1 })),
-  };
+  });
 }
 
 function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, start: Position): JsonRecord {
@@ -271,7 +284,7 @@ function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: numb
   const frame = { [paged.key]: paged.ref, section: { ...frameId("id", section.id), taskCount: tasks.length, firstTask: tasks.length, items: [] } };
   const packed = pack(values.map(unitOf), start, roomForUnits(frame));
   const withFields = packed.first === fieldsUnit && packed.count > 0;
-  return {
+  return bounded({
     [paged.key]: paged.ref,
     section: {
       ...(withFields ? fields : frameId("id", section.id)),
@@ -281,7 +294,7 @@ function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: numb
     },
     ...partAndNextCursor(paged, packed, { m: "section", s: sectionIndex }, (unit) =>
       (unit === fieldsUnit ? { of: "section", index: sectionIndex } : { of: "task", index: unit - firstTaskUnit })),
-  };
+  });
 }
 
 function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
@@ -289,11 +302,11 @@ function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number,
   const task = tasksOf(section)[taskIndex];
   const frame = { [paged.key]: paged.ref, ...frameId("sectionId", section.id) };
   const packed = pack([unitOf(task)], start, roomForUnits(frame));
-  return {
+  return bounded({
     ...frame,
     ...(packed.count > 0 ? { task } : {}),
     ...partAndNextCursor(paged, packed, { m: "task", s: sectionIndex, k: taskIndex }, () => ({ of: "task", index: taskIndex })),
-  };
+  });
 }
 
 export function readSectionOrTask(paged: Paged, sections: SectionRecord[], { sectionId, taskId }: SectionAndTaskIds): JsonRecord | null {

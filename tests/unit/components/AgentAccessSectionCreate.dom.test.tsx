@@ -96,6 +96,15 @@ describe('creating a Run Key', () => {
     expect(screen.getByRole('button', { name: 'Create Run Key' })).toBeTruthy();
   });
 
+  it('creates no key when the form is sent with a name of only spaces', async () => {
+    await openAgentAccess();
+
+    await createKeyNamed('   ');
+
+    expect(server.createAgentKey).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Create Run Key' }).hasAttribute('disabled')).toBe(true);
+  });
+
   it("shows the server's reason when the key could not be created, and keeps what was typed", async () => {
     server.createAgentKey.mockRejectedValue(new ApiError({ status: 429, message: 'Too many Run Keys' }));
     await openAgentAccess();

@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { elementAt, firstOf } from '../../../support/elements';
 import { d1ThatRunsNoQuery } from '../../../support/apiEnv';
 import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
 import { schema } from '@functions/api/db';
-import { insertTemplateWithHistoryFallback } from '@functions/api/utils/template-writes';
+import {
+  insertTemplateWithHistoryFallback,
+  isMissingRulesColumnError,
+  updateTemplateWithHistoryFallback,
+} from '@functions/api/utils/template-writes';
+import { withRulesColumnFallback } from '@functions/api/utils/template-rows';
 
 const values = {
   id: 'template-1',
@@ -37,8 +43,50 @@ const auditValues = {
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 
-describe('insertTemplateWithHistoryFallback', () => {
-  it('writes the template with its rules, its first version and its audit event in one batch', async () => {
+function databaseWithoutRulesColumn() {
+  const db = drizzle(d1ThatRunsNoQuery(), { schema });
+  const batches: Array<Array<{ sql: string; params: unknown[] }>> = [];
+  const batch = vi.fn(async (statements: BuiltQuery[]) => {
+    const built = statements.map((statement) => statement.toSQL());
+    batches.push(built);
+    if (built.some((query) => /"rules"/.test(query.sql))) {
+      throw new Error('D1_ERROR: table templates has no column named rules: SQLITE_ERROR');
+    }
+    return built.map(() => ({ meta: { changes: 1 } }));
+  });
+  return { db: Object.assign(db, { batch }), batches };
+}
+
+describe('insertTemplateWithHistoryFallback without the rules column', () => {
+  it('retries a limit-guarded insert without naming rules, still guarded by the template limit and writing the given values', async () => {
+    const { db, batches } = databaseWithoutRulesColumn();
+
+    const inserted = await insertTemplateWithHistoryFallback(db, values, versionValues, auditValues, {
+      owner: { userId: 'user-1', teamId: null },
+      limit: 1,
+    });
+
+    expect(inserted).toBe(true);
+    expect(batches).toHaveLength(2);
+    const templateInsert = firstOf(elementAt(batches, 1));
+    expect(templateInsert.sql).toMatch(/^insert into "templates" \(/);
+    expect(templateInsert.sql).not.toContain('"rules"');
+    expect(templateInsert.sql).toMatch(/where \(select count\(\*\) from "templates" where .*\) < \?$/);
+    expect(templateInsert.params).toEqual(expect.arrayContaining(['template-1', 'user-1', 'Template']));
+  });
+
+  it('retries a plain insert without naming rules', async () => {
+    const { db, batches } = databaseWithoutRulesColumn();
+
+    expect(await insertTemplateWithHistoryFallback(db, values, versionValues, auditValues)).toBe(true);
+
+    expect(batches).toHaveLength(2);
+    expect(firstOf(elementAt(batches, 1)).sql).toMatch(/^insert into "templates" \(/);
+    expect(firstOf(elementAt(batches, 1)).sql).not.toContain('"rules"');
+    expect(firstOf(elementAt(batches, 1)).params).toEqual(expect.arrayContaining(['template-1', 'user-1', 'Template']));
+  });
+
+  it('writes the template with its rules, its first version and its audit event in one batch when the column exists', async () => {
     const db = drizzle(d1ThatRunsNoQuery(), { schema });
     const batch = vi.fn(async (statements: BuiltQuery[]) => statements.map(() => ({ meta: { changes: 1 } })));
     Object.assign(db, { batch });
@@ -50,5 +98,86 @@ describe('insertTemplateWithHistoryFallback', () => {
     expect(statements.map((statement) => statement.slice(0, statement.indexOf(' ('))))
       .toEqual(['insert into "templates"', 'insert into "template_versions"', 'insert into "audit_events"']);
     expect(firstOf(statements)).toContain('"rules"');
+  });
+});
+
+function databaseThatRefusesEveryBatch(error: Error) {
+  const db = drizzle(d1ThatRunsNoQuery(), { schema });
+  const batch = vi.fn(async () => {
+    throw error;
+  });
+  return { db: Object.assign(db, { batch }), batch };
+}
+
+const slugTaken = new Error('D1_ERROR: UNIQUE constraint failed: templates.slug: SQLITE_CONSTRAINT');
+
+describe('insertTemplateWithHistoryFallback when the batch fails for another reason', () => {
+  it('passes the failure on without retrying', async () => {
+    const { db, batch } = databaseThatRefusesEveryBatch(slugTaken);
+
+    await expect(insertTemplateWithHistoryFallback(db, values, versionValues, auditValues)).rejects.toBe(slugTaken);
+    expect(batch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('updateTemplateWithHistoryFallback without the rules column', () => {
+  const update = { title: 'Renamed', rules: '[]', updated_at: 'later' };
+  const sameTemplate = eq(schema.templates.id, 'template-1');
+
+  it('retries the save without naming rules, writing the other fields, and reports the Template saved', async () => {
+    const { db, batches } = databaseWithoutRulesColumn();
+
+    expect(await updateTemplateWithHistoryFallback(db, update, sameTemplate, auditValues, versionValues))
+      .toEqual({ updated: true, runResults: [] });
+
+    expect(batches).toHaveLength(2);
+    const templateUpdate = elementAt(elementAt(batches, 1), 2);
+    expect(templateUpdate.sql).toMatch(/^update "templates" set "title" = \?, "updated_at" = \? where /);
+    expect(templateUpdate.params).toEqual(expect.arrayContaining(['Renamed', 'later']));
+    expect(templateUpdate.params).not.toContain('[]');
+  });
+
+  it('passes another failure on without retrying', async () => {
+    const { db, batch } = databaseThatRefusesEveryBatch(slugTaken);
+
+    await expect(updateTemplateWithHistoryFallback(db, update, sameTemplate, auditValues, versionValues)).rejects.toBe(slugTaken);
+    expect(batch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('withRulesColumnFallback, which reads Templates in a database from before the rules column', () => {
+  it('reads again without rules when the first read names a rules column the database lacks', async () => {
+    const reads: boolean[] = [];
+
+    const rows = await withRulesColumnFallback(async (includeRules) => {
+      reads.push(includeRules);
+      if (includeRules) throw new Error('D1_ERROR: no such column: rules: SQLITE_ERROR');
+      return ['template-1'];
+    });
+
+    expect(rows).toEqual(['template-1']);
+    expect(reads).toEqual([true, false]);
+  });
+
+  it('passes on a failure that is not about the rules column, without reading again', async () => {
+    const reads: boolean[] = [];
+
+    await expect(withRulesColumnFallback((includeRules) => {
+      reads.push(includeRules);
+      throw slugTaken;
+    })).rejects.toBe(slugTaken);
+    expect(reads).toEqual([true]);
+  });
+});
+
+describe('isMissingRulesColumnError', () => {
+  it('recognizes the SQLite missing-column errors of reads, updates and inserts, thrown as errors or as text', () => {
+    expect(isMissingRulesColumnError(new Error('D1_ERROR: no such column: rules: SQLITE_ERROR'))).toBe(true);
+    expect(isMissingRulesColumnError(new Error('no such column: "templates"."rules"'))).toBe(true);
+    expect(isMissingRulesColumnError(new Error('D1_ERROR: table templates has no column named rules: SQLITE_ERROR'))).toBe(true);
+    expect(isMissingRulesColumnError(new Error('D1_ERROR: table templates has no column named rules_v2'))).toBe(false);
+    expect(isMissingRulesColumnError(new Error('UNIQUE constraint failed: templates.slug'))).toBe(false);
+    expect(isMissingRulesColumnError('D1_ERROR: no such column: rules')).toBe(true);
+    expect(isMissingRulesColumnError('D1_ERROR: database is locked')).toBe(false);
   });
 });

@@ -164,6 +164,10 @@ describe('TemplateDetail visibility switch', () => {
 
     expect(visibilitySwitch().hasAttribute('disabled')).toBe(true);
     await act(async () => {
+      await handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange')(false);
+    });
+    expect(setVisibility).toHaveBeenCalledTimes(1);
+    await act(async () => {
       saved.resolve({ kind: 'ok' });
       await flipped;
     });
@@ -174,6 +178,10 @@ describe('TemplateDetail visibility switch', () => {
     await openTheTemplate({ userId: 'user-9', ownerProfile: { username: 'alice' } });
 
     expect(visibilitySwitch().hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      await handlerIn(visibilitySwitchProps.at(-1), 'onCheckedChange')(true);
+    });
+    expect(setVisibility).not.toHaveBeenCalled();
   });
 });
 

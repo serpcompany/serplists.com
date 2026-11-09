@@ -1,9 +1,19 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { errorMessage } from "./lib/error-message";
 import { type Git, PROMOTION_BODY_FILE, promotionBody, SQUASH_ONLY, stagingSubjectsSinceTheLastPromotion } from "./promote-prepare-lib";
+
+export {
+  type Git,
+  issuesClosedBy,
+  PROMOTION_BODY_FILE,
+  promotionBody,
+  pullRequestOf,
+  stagingSubjectsSinceTheLastPromotion,
+} from "./promote-prepare-lib";
 
 function pullRequestBody(pullRequest: number): string {
   try {
@@ -92,4 +102,6 @@ function main() {
   console.log(`Pushed ${branch}: staging ${staging.slice(0, 7)} with main ${mainCommit.slice(0, 7)} recorded as merged.\n${openIt}`);
 }
 
-main();
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main();
+}

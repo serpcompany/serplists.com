@@ -4,7 +4,7 @@ import { anchorOf, headingAnchors, headingSlug } from '../../../../scripts/check
 import { budgetProblem, staleAllowances, wrappedLines } from '../../../../scripts/checks/doc-rules/budgets';
 import { misnamed, misnamedDecision, outOfLayout } from '../../../../scripts/checks/doc-rules/layout';
 import { markdownLinks, proseLines } from '../../../../scripts/checks/doc-rules/markdown';
-import { namedPath, repositoryTree } from '../../../../scripts/checks/doc-rules/paths';
+import { exists, namedPath, repositoryTree } from '../../../../scripts/checks/doc-rules/paths';
 import { missingScript, pnpmScripts, proseScripts } from '../../../../scripts/checks/doc-rules/scripts';
 import { skillProblems } from '../../../../scripts/checks/doc-rules/skills';
 
@@ -64,6 +64,10 @@ describe('repository paths in code spans', () => {
     expect(namedPath('./tools/checks/', tree)).toBe('tools/checks');
     expect(namedPath('package.json', tree)).toBe('package.json');
     expect(namedPath('src/gone.ts', tree)).toBe('src/gone.ts');
+  });
+
+  it('count the empty path, like ., as the repository root', () => {
+    expect([exists(tree, ''), exists(tree, '.'), exists(tree, 'docs/agents'), exists(tree, 'docs/gone')]).toEqual([true, true, true, false]);
   });
 
   it('leave out patterns, placeholders, commands and paths outside the tracked folders', () => {

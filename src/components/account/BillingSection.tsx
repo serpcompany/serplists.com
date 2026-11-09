@@ -94,6 +94,15 @@ export function BillingSection() {
   }, [billingReturn, queryClient, userId]);
 
   const handleUpgrade = async () => {
+    if (isTeamWorkspace) {
+      toast.error("Switch to Personal to manage a personal subscription.");
+      return;
+    }
+
+    if (!billingEnabled) {
+      toast.error("Billing is temporarily unavailable. Please contact support.");
+      return;
+    }
     setIsStartingCheckout(true);
     try {
       window.location.href = await createPersonalCheckoutUrl();
@@ -107,6 +116,15 @@ export function BillingSection() {
   };
 
   const handleManage = async () => {
+    if (isTeamWorkspace) {
+      toast.error("Switch to Personal to manage a personal subscription.");
+      return;
+    }
+
+    if (!billingEnabled) {
+      toast.error("Billing is temporarily unavailable. Please contact support.");
+      return;
+    }
     setIsOpeningPortal(true);
     try {
       window.location.href = await createBillingPortalUrl();

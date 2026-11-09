@@ -1,10 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { TestProject } from 'vitest/node';
 
 export const CHILD_COVERAGE_VARIABLE = 'SERPLISTS_CHILD_COVERAGE';
+
+export const checkoutCopiesListOf = (rawDirectory: string): string => `${rawDirectory}-copies.txt`;
 
 const PROCESS_ENTRY_POINTS = [
   '.github/actions/**/*.cjs',
@@ -36,6 +39,26 @@ function sourceOf(record: string, root: string): string {
   return path.resolve(root, line.slice(3));
 }
 
+const spellingsOf = (folder: string): string[] => [pathToFileURL(folder).href, JSON.stringify(folder).slice(1, -1)];
+
+function replacedEverywhere(text: string, from: readonly string[], to: readonly string[]): string {
+  return from.reduce((current, spelling, index) => current.split(spelling).join(to[index] ?? spelling), text);
+}
+
+function mapCheckoutCopiesOntoTheCheckout(rawDirectory: string, root: string): void {
+  const list = checkoutCopiesListOf(rawDirectory);
+  if (!existsSync(list)) return;
+  const copies = readFileSync(list, 'utf8').split(/\r?\n/).filter((copy) => copy.length > 0);
+  rmSync(list, { force: true });
+  const checkout = spellingsOf(root);
+  for (const file of readdirSync(rawDirectory)) {
+    const raw = path.join(rawDirectory, file);
+    const text = readFileSync(raw, 'utf8');
+    const mapped = copies.reduce((current, copy) => replacedEverywhere(current, spellingsOf(copy), checkout), text);
+    if (mapped !== text) writeFileSync(raw, mapped);
+  }
+}
+
 function leaveEntryPointsToTheirProcesses(inProcessReport: string, processReport: string, root: string): void {
   if (!existsSync(inProcessReport) || !existsSync(processReport)) return;
   const measuredAsProcesses = new Set(recordsOf(readFileSync(processReport, 'utf8')).map((record) => sourceOf(record, root)));
@@ -50,9 +73,11 @@ export default function recordChildProcessCoverage(project: TestProject): (() =>
   const rawDirectory = `${reportsDirectory}-raw`;
   rmSync(rawDirectory, { recursive: true, force: true });
   rmSync(reportsDirectory, { recursive: true, force: true });
+  rmSync(checkoutCopiesListOf(rawDirectory), { force: true });
   mkdirSync(rawDirectory, { recursive: true });
   process.env[CHILD_COVERAGE_VARIABLE] = rawDirectory;
   return () => {
+    mapCheckoutCopiesOntoTheCheckout(rawDirectory, root);
     const report = spawnSync(
       process.execPath,
       [

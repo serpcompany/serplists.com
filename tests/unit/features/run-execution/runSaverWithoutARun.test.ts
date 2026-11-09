@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
+import { persistRun } from '@/features/run-execution/runPersistence';
 import { createRunSaver, type QueuedRunSave, type RunSaverContext } from '@/features/run-execution/runSaver';
 
 import { buildRun } from '../../../fixtures/runExecutionFixtures';
@@ -40,5 +41,15 @@ describe('a save on a run page whose run is not there to save', () => {
     expect(reload).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledTimes(1);
     expect(onNotFound).not.toHaveBeenCalled();
+  });
+});
+
+describe('persisting a run that is not there', () => {
+  it('refuses with Run not found and sends nothing', async () => {
+    const updateRun = vi.fn();
+
+    await expect(persistRun({ run: null }, { updateRun })).rejects.toThrow('Run not found.');
+    await expect(persistRun({}, { updateRun })).rejects.toThrow('Run not found.');
+    expect(updateRun).not.toHaveBeenCalled();
   });
 });

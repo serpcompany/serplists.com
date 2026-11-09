@@ -22,7 +22,7 @@ export async function restoreChecklistRun(
 ): Promise<Response> {
   const { checklistRuns } = schema;
 
-  if (checklistId === 'checklists') {
+  if (!checklistId || checklistId === 'checklists') {
     return jsonError('Checklist ID required', 400);
   }
 
@@ -61,7 +61,7 @@ export async function restoreChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun),
+    subject: getRunSubject(existingRun, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.restored',
     before: existingRun,
@@ -128,7 +128,7 @@ export async function archiveChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingChecklist),
+    subject: getRunSubject(existingChecklist, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.deleted',
     before: existingChecklist,

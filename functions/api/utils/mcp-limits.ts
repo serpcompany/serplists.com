@@ -23,8 +23,8 @@ export function limitPersonalRunKey(
   rateLimitWindows.set(identity.keyId, window);
 
   if (rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) {
-    for (const key of rateLimitWindows.keys()) {
-      rateLimitWindows.delete(key);
+    for (const [key, candidate] of rateLimitWindows) {
+      if (candidate.resetsAt <= now || rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) rateLimitWindows.delete(key);
       if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
     }
   }

@@ -35,6 +35,18 @@ describe("getEntitlementsForUser", () => {
     expect(entitlements.limits.maxActiveRuns).toBe(3);
   });
 
+  it("defaults to free when entitlement override table is not migrated yet", async () => {
+    dbMocks.selectChain.limit.mockRejectedValueOnce(
+      new Error("D1_ERROR: no such table: entitlement_overrides"),
+    );
+
+    const env = apiEnv();
+    const entitlements = await getEntitlementsForUser(env, "user-1");
+
+    expect(entitlements.plan).toBe("free");
+    expect(entitlements.limits.maxTemplates).toBe(1);
+  });
+
   it("resolves user context through the existing user entitlement path", async () => {
     theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 
@@ -54,5 +66,47 @@ describe("getEntitlementsForUser", () => {
     expect(entitlements.plan).toBe("team");
     expect(entitlements.source).toBe("team_override");
     expect(entitlements.limits.maxTemplates).toBeNull();
+  });
+});
+
+describe("entitlements in a database the billing tables have not reached yet", () => {
+  const withStripe = () => apiEnv({ STRIPE_SECRET_KEY: "sk_test_entitlements", STRIPE_PRO_PRICE_ID: "price_pro" });
+  const locked = new Error("D1_ERROR: database is locked");
+
+  beforeEach(() => {
+    chainSelectsUpdatesAndDeletes(dbMocks);
+    dbMocks.selectChain.orderBy.mockResolvedValue([]);
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+  });
+
+  it("passes on a failed override lookup that is not a missing table", async () => {
+    dbMocks.selectChain.limit.mockRejectedValueOnce(locked);
+
+    await expect(getEntitlementsForUser(apiEnv(), "user-1")).rejects.toBe(locked);
+  });
+
+  it("defaults to free when the Stripe subscriptions table is missing", async () => {
+    dbMocks.selectChain.orderBy.mockRejectedValueOnce("D1_ERROR: no such table: stripe_subscriptions");
+
+    expect(await getEntitlementsForUser(withStripe(), "user-1")).toMatchObject({ plan: "free", source: "free" });
+  });
+
+  it("passes on a failed subscription lookup that is not a missing table", async () => {
+    dbMocks.selectChain.orderBy.mockRejectedValueOnce(locked);
+
+    await expect(getEntitlementsForUser(withStripe(), "user-1")).rejects.toBe(locked);
+  });
+
+  it("defaults an Organization to free when the Organization override table is missing", async () => {
+    dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("D1_ERROR: no such table: team_entitlement_overrides"));
+
+    expect(await getEntitlementsForContext(apiEnv(), { type: "team", teamId: "team-1", userId: "user-1" }))
+      .toMatchObject({ plan: "free", source: "free" });
+  });
+
+  it("passes on a failed Organization override lookup that is not a missing table", async () => {
+    dbMocks.selectChain.limit.mockRejectedValueOnce(locked);
+
+    await expect(getEntitlementsForContext(apiEnv(), { type: "team", teamId: "team-1", userId: "user-1" })).rejects.toBe(locked);
   });
 });

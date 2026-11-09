@@ -33,7 +33,7 @@ export type SitemapContext = {
 
 export type SitemapShard = {
   kind: 'categories' | 'profiles' | 'templates';
-  page: string;
+  page: string | string[] | undefined;
 };
 
 const REVISION_DEPENDENCIES = {

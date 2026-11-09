@@ -12,7 +12,7 @@ import { type KnownCommands, knownCommands, missingScript, pnpmScripts, proseScr
 import { foldersWithoutASkill, skillCatalog, skillProblems } from "./doc-rules/skills";
 import { type TestTitle, testTitles } from "./doc-rules/test-titles";
 import { covers, type Run } from "./files";
-import { lineExcerpt, type Problem } from "./problems";
+import { excerpt, type Problem } from "./problems";
 
 interface Docs {
   tree: Tree;
@@ -59,7 +59,7 @@ function resolveLink(from: string, target: string): string {
 }
 
 const markdownIn = (tree: Tree, folder: string) =>
-  [...tree.files].filter((file) => file.endsWith(".md") && posix.dirname(file) === posix.normalize(folder));
+  [...tree.files].filter((file) => file.endsWith(".md") && posix.dirname(file) === posix.normalize(folder || "."));
 
 function linkProblems(doc: string, docs: Docs, linked: string[]): Problem[] {
   const problems: Problem[] = [];
@@ -109,7 +109,7 @@ function contentProblems(doc: string, docs: Docs): Problem[] {
   const problems: Problem[] = findComments(doc, text).map(({ line }) => ({
     path: doc,
     line,
-    problem: `hides ${lineExcerpt(text, line)} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
+    problem: `hides ${excerpt(text.split(/\r?\n/)[line - 1] ?? "")} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
   }));
   const overBudget = budgetProblem(doc, text, docs.allowances);
   if (overBudget) problems.push({ path: doc, problem: overBudget });

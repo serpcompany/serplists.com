@@ -74,7 +74,7 @@ const CategoryDetail = () => {
   const { allCategories, templates, loading, catalogError, retryCatalog } =
     useTemplateLibrary();
 
-  const slug = buildCategorySlug(categorySlug);
+  const slug = buildCategorySlug(categorySlug ?? 'business');
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
     [allCategories, templates],

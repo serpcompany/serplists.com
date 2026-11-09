@@ -5,6 +5,7 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import {
+  bounded,
   boundedText,
   byteSize,
   decodeCursor,
@@ -129,7 +130,7 @@ function listPage<Row>({ name, rowsAndOneMore, owned, summarize, cursor }: Listi
   const more = consumed < candidates.length || rowsAndOneMore.length > LIST_PAGE_ROWS;
   if (more && consumed === 0) throw resultTooLarge();
   const lastConsumed = more ? candidates[consumed - 1] : undefined;
-  return { [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) };
+  return bounded({ [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) });
 }
 
 function readListCursor(value: string | undefined, list: ListCursor["l"]): ListCursor | undefined {

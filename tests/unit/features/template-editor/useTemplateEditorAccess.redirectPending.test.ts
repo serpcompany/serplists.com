@@ -29,7 +29,6 @@ const options = {
   getValues: () => values,
   allowLeave: vi.fn(),
   guardLeave: vi.fn(),
-  getVersion: () => undefined,
 };
 
 function Editor() {

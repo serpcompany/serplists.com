@@ -7,7 +7,7 @@ import type { ApiRun } from '@/lib/schemas/apiRuns';
 import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 
 const apiMock = vi.hoisted(() => ({
-  createChecklist: vi.fn<(payload: Record<string, unknown>) => Promise<{ id: string }>>(),
+  createChecklist: vi.fn<(payload: Record<string, unknown>) => Promise<{ id: string } | undefined>>(),
   createTemplate: vi.fn<(payload: Record<string, unknown>) => Promise<{ id: string; slug?: string }>>(),
   getChecklists: vi.fn(),
   getTemplates: vi.fn(),
@@ -138,6 +138,15 @@ describe('TemplatesProvider createRun given only a template id', () => {
     const run = await context.createRun({ templateId: 'template-1', template });
 
     expect(run).toMatchObject({ id: 'run-4', templateVersion: 1 });
+  });
+
+  it('says the run could not be created when the API answers with no run', async () => {
+    apiMock.createChecklist.mockResolvedValue(undefined);
+    const { context } = renderTemplatesProvider();
+
+    await expect(context.createRun({ templateId: 'template-1', template: launchChecklist() })).rejects.toThrow(
+      'Failed to create checklist run',
+    );
   });
 
   it('refuses a template id that is in neither list', async () => {

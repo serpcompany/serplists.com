@@ -1,6 +1,6 @@
 import React, { act, useState } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
-import { FormProvider, useForm, type UseFormReturn } from 'react-hook-form';
+import { FormProvider, useForm, type DefaultValues, type UseFormReturn } from 'react-hook-form';
 import { vi } from 'vitest';
 
 import { EditorPanels } from '@/components/template-editor/EditorPanels';
@@ -26,13 +26,16 @@ export interface TemplateEditorPanelsOptions {
   ownerSlug?: string | null;
 }
 
-export async function renderTheTemplateEditorPanels(
-  template: TemplateEditorFormSource,
+export const renderTheTemplateEditorPanels = (template: TemplateEditorFormSource, options: TemplateEditorPanelsOptions = {}) =>
+  renderTheTemplateEditorPanelsOn(buildTemplateEditorFormValues(template), options);
+
+export async function renderTheTemplateEditorPanelsOn(
+  defaultValues: DefaultValues<TemplateEditorFormValues>,
   { besideForm = true, ownerIsOrganization = false, ownerSlug = 'jane' }: TemplateEditorPanelsOptions = {},
 ) {
   const held: { form: UseFormReturn<TemplateEditorFormValues> | null } = { form: null };
   function Editor() {
-    const form = useForm<TemplateEditorFormValues>({ defaultValues: buildTemplateEditorFormValues(template) });
+    const form = useForm<TemplateEditorFormValues>({ defaultValues });
     held.form = form;
     const selection = useTemplateEditorState();
     const [sheetOpen, setSheetOpen] = useState(false);

@@ -77,3 +77,19 @@ describe('RunHistorySection labels every run action the API writes, beyond creat
     expect(html).not.toContain('checklist_run.');
   });
 });
+
+describe('RunHistorySection with history it cannot fully read', () => {
+  it('shows an event stored with no time without a time, never as an invalid date', () => {
+    const html = render([{ ...event('checklist_run.restored', owner), createdAt: '' }]);
+
+    expect(html).toContain('Restored run');
+    expect(html).toContain('<time></time>');
+    expect(html).not.toContain('Invalid Date');
+  });
+
+  it('says no history has been recorded when it is given no history', () => {
+    const html = renderToStaticMarkup(<RunHistorySection />);
+
+    expect(html).toContain('No run history has been recorded yet.');
+  });
+});

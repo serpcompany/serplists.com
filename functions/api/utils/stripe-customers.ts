@@ -13,7 +13,7 @@ export async function createStripeCustomer(
 ): Promise<string> {
   const { users } = schema;
   const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-  const email = user?.email;
+  const email = user?.email ?? undefined;
   const customer = await stripePostForm(
     secretKey,
     "/v1/customers",

@@ -20,7 +20,7 @@ type Library = ReturnType<typeof useTemplateLibrary>;
 const renderFirstPassWithoutEffects = (templateType?: 'checklist' | 'recipe'): Library => {
   let captured: Library | undefined;
   const Probe = () => {
-    captured = useTemplateLibrary(templateType);
+    captured = useTemplateLibrary(undefined, templateType);
     return null;
   };
   renderToStaticMarkup(<Probe />);
@@ -145,6 +145,7 @@ describe('useTemplateLibrary', () => {
     const ids = library.templates.map((template) => template.id);
 
     expect(ids).toEqual([...repoTemplates.map((template) => template.id), databaseTemplate.id]);
+    expect(library.filteredTemplates.map((template) => template.id)).toEqual(ids);
     expect(library.allCategories).not.toContain('orphaned');
   });
 });

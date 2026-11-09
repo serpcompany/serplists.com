@@ -68,7 +68,7 @@ const Templates = () => {
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [filterVisibility, setFilterVisibility] =
     useState<VisibilityFilter>('all');
-  const [templateToDelete, setTemplateToDelete] = useState('');
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
   const fieldId = useId();
 
@@ -103,6 +103,14 @@ const Templates = () => {
       });
   }, [filterVisibility, model.templates, searchQuery, sortBy]);
 
+  const handleRunDialogChange = (open: boolean) => {
+    if (open || isStartingCheckout) {
+      return;
+    }
+
+    model.closeRunLauncher();
+  };
+
   const startUpgrade = async (): Promise<boolean> => {
     setIsStartingCheckout(true);
     const redirecting = await handleUpgradeRequiredForContext({
@@ -116,6 +124,10 @@ const Templates = () => {
   };
 
   const handleRunConfirm = async (runName: string) => {
+    if (isLaunchingRun) {
+      return;
+    }
+
     const visit = beginVisit();
     const result = await model.createRunFromTemplate(runName);
 
@@ -140,12 +152,12 @@ const Templates = () => {
     try {
       await model.removeTemplate(templateToDelete);
       toast.success('Template deleted');
-      setTemplateToDelete('');
+      setTemplateToDelete(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Failed to delete template.',
       );
-      if (isStaleRecordError(error)) setTemplateToDelete('');
+      if (isStaleRecordError(error)) setTemplateToDelete(null);
     } finally {
       setIsDeletingTemplate(false);
     }
@@ -263,7 +275,7 @@ const Templates = () => {
 
       <RunNameDialog
         open={model.runLauncherOpen}
-        onOpenChange={() => model.closeRunLauncher()}
+        onOpenChange={handleRunDialogChange}
         templateTitle={model.selectedTemplate?.title ?? ''}
         onConfirm={handleRunConfirm}
         loading={isLaunchingRun}
@@ -274,9 +286,9 @@ const Templates = () => {
         description="Are you sure you want to delete this template?"
         onConfirm={() => void handleDeleteTemplate()}
         onOpenChange={(open) => {
-          if (!open) setTemplateToDelete('');
+          if (!open) setTemplateToDelete(null);
         }}
-        open={templateToDelete !== ''}
+        open={templateToDelete !== null}
         pending={isDeletingTemplate}
         pendingLabel="Deleting..."
         title="Delete template"

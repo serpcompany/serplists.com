@@ -26,7 +26,7 @@ export async function revalidateChecklistRun(
     expected_revision: z.number().int().positive().optional(),
   }).safeParse(optionalBody);
   if (!revalidateBody.success) {
-    return invalidPayloadResponse(revalidateBody.error);
+    return invalidPayloadResponse(revalidateBody.error, 'Invalid revalidation payload');
   }
 
   const found = await findRunToUpdate(env, db, checklistId, userId, 'Checklist not found');
@@ -39,7 +39,7 @@ export async function revalidateChecklistRun(
     return jsonError('Checklist run is not linked to a template.', 400);
   }
 
-  const currentRevision = existingRun.revision;
+  const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;
   if (typeof revalidateBody.data.expected_revision === 'number' && revalidateBody.data.expected_revision !== currentRevision) {
     return jsonError('Checklist run changed since it was loaded. Refresh before revalidating.', 409, {
       code: 'edit_conflict',
@@ -78,7 +78,7 @@ export async function revalidateChecklistRun(
     items: JSON.stringify(reconciled.sections),
     retired_items: JSON.stringify(reconciled.retired),
     progress: calculateRunProgress(reconciled.sections),
-    template_version: sourceTemplate.version,
+    template_version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     revision: currentRevision + 1,
     status: 'in_progress',
     completed_at: null,
@@ -87,7 +87,7 @@ export async function revalidateChecklistRun(
   };
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun),
+    subject: getRunSubject(existingRun, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.revalidated',
     before: existingRun,

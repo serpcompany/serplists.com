@@ -135,8 +135,8 @@ function mergeItem(stored: TaskRecord, guest: SharedRunItem): { item: TaskRecord
   return { item: next };
 }
 
-export function readStoredRunSections(items: string): unknown[] | null {
-  const parsed = parseJsonArray(items);
+export function readStoredRunSections(items: unknown): unknown[] | null {
+  const parsed = parseJsonArray(items ?? '[]');
   return parsed ? normalizeSectionsPayload(parsed).sections : null;
 }
 

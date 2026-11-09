@@ -39,7 +39,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid owner transfer payload");
   }
 
   const ownerMemberId = membership.id;
@@ -67,6 +67,11 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
   const targetMemberId = targetMember?.id;
   if (!targetMember || !targetMemberId) {
     return jsonError("Member not found", 404);
+  }
+  if (normalizeTeamRole(targetMember.role) === "owner") {
+    return jsonError("Member is already the Organization owner", 400, {
+      code: "owner_transfer_noop",
+    });
   }
 
   const now = new Date().toISOString();
@@ -205,7 +210,7 @@ export async function updateTeamMember(
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid member payload");
   }
   if (typeof parsed.data.role === "undefined" && typeof parsed.data.status === "undefined") {
     return jsonError("No fields to update", 400);

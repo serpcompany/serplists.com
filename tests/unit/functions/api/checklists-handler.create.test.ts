@@ -128,6 +128,18 @@ describe('Checklists Handlers', () => {
     expect(progressTheRunPageShows).toBe(0);
   });
 
+  it('starts an untitled run at template version 1 from a Template stored without a title or a version', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([personalTemplateRow({ title: null, version: null, items: '[]', is_public: false })])
+      .mockResolvedValueOnce([{ count: 0 }]);
+
+    const inserted = await insertedRunOf(await post({ template_id: 'template-1' }));
+
+    expect(inserted.title).toBe('');
+    expect(inserted.template_version).toBe(1);
+  });
+
   it('should reject checklist runs from inaccessible private templates', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([

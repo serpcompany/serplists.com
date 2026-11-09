@@ -58,9 +58,20 @@ export function SiteFooter({ className }: { className?: string }) {
               <ul className="flex flex-col gap-3">
                 {column.items.map((item) => (
                   <li key={item.label}>
-                    <Link href={item.href} className={footerLinkClassName}>
-                      {item.label}
-                    </Link>
+                    {item.external ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={footerLinkClassName}
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <Link href={item.href} className={footerLinkClassName}>
+                        {item.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

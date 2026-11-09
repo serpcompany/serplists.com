@@ -83,19 +83,21 @@ const textIdField = (id: unknown): { id?: string } => {
 const shownSubItem = ({ id, ...shown }: z.infer<typeof shownSubItemSchema>): ChecklistSubItem =>
   typeof id === "string" ? { ...shown, id } : shown;
 
-const shownFields = (fields: unknown, fieldIdPrefix: string): { fields: ChecklistFormField[] } => ({
+const shownFields = (fields: unknown[], fieldIdPrefix: string): { fields: ChecklistFormField[] } => ({
   fields: readFormFields(fields, (index) => `${fieldIdPrefix}-field-${index + 1}`),
 });
 
 const shownContents = (contents: unknown[], itemId: string): ChecklistItemContent[] =>
-  contents.map((content, contentIndex) => {
-    const { id, subItems, fields, ...shown } = shownContentSchema.parse(content);
-    return {
+  contents.flatMap((content, contentIndex) => {
+    const parsed = shownContentSchema.safeParse(content);
+    if (!parsed.success) return [];
+    const { id, subItems, fields, ...shown } = parsed.data;
+    return [{
       ...shown,
       ...textIdField(id),
       ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}),
-      ...(shown.type === "form" ? shownFields(fields, `${itemId}-form-${contentIndex + 1}`) : {}),
-    };
+      ...(shown.type === "form" ? shownFields(fields ?? [], `${itemId}-form-${contentIndex + 1}`) : {}),
+    }];
   });
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {
@@ -176,12 +178,13 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       isCompleted: false,
       contents: item.contents?.map((content) => {
         if (content.type === "form") {
-          return { ...content, fields: content.fields?.map(({ answer: _cleared, ...field }) => field) };
+          return { ...content, fields: (content.fields ?? []).map(({ answer: _cleared, ...field }) => field) };
         }
         if (content.type !== "subItems") return content;
+        if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {
           ...content,
-          subItems: content.subItems?.map((subItem) => ({
+          subItems: content.subItems.map((subItem) => ({
             ...subItem,
             isCompleted: false,
           })),

@@ -24,17 +24,17 @@ function selectThroughMigration(migrationFiles: string[], throughMigration: stri
     (fileName) =>
       fileName === throughMigration || fileName.startsWith(throughMigration),
   );
-  const [selected, ...others] = matches;
-  if (selected === undefined) {
+  if (matches.length === 0) {
     throw new Error(`No migration matched --through ${throughMigration}`);
   }
-  if (others.length > 0) {
+  if (matches.length > 1) {
     throw new Error(
       `--through ${throughMigration} matched multiple migrations: ${matches.join(", ")}`,
     );
   }
 
-  return migrationFiles.slice(0, migrationFiles.indexOf(selected) + 1);
+  const selectedIndex = migrationFiles.indexOf(matches[0] ?? "");
+  return migrationFiles.slice(0, selectedIndex + 1);
 }
 
 function sqlString(value: string): string {

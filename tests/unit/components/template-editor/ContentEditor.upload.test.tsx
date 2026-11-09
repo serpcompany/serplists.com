@@ -274,6 +274,31 @@ describe('ContentEditor media URL typed over an upload', () => {
     expect(findFileInput(tree)).not.toBeNull();
   });
 
+  it('writes a URL typed into a block to that block after a block was inserted above it', () => {
+    createForm([{ id: 'c1', type: 'file', value: '' }]);
+    const tree = renderEditorFileUploadFromCurrentForm();
+    const blockTypedInto = contentAt(0);
+    assert.exists(blockTypedInto);
+    editorForm().setValue(CONTENT_PATH, [{ id: 'c0', type: 'text', value: 'Intro' }, blockTypedInto]);
+
+    typeUrl(tree, EXTERNAL_URL);
+
+    expect(contentAt(0)).toEqual({ id: 'c0', type: 'text', value: 'Intro' });
+    expect(contentAt(1)).toEqual(expect.objectContaining({ id: 'c1', value: EXTERNAL_URL, uploadType: 'url' }));
+  });
+
+  it('writes nothing for a URL typed into a block that was removed', () => {
+    createForm([{ id: 'c1', type: 'file', value: '' }]);
+    const tree = renderEditorFileUploadFromCurrentForm();
+    editorForm().setValue(CONTENT_PATH, []);
+    harness.editorSetValueSpy.mockClear();
+
+    typeUrl(tree, EXTERNAL_URL);
+
+    expect(editorForm().getValues(CONTENT_PATH)).toEqual([]);
+    expect(harness.editorSetValueSpy).not.toHaveBeenCalled();
+  });
+
   it('keeps the file details while the value stays the same', () => {
     createForm([
       { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },

@@ -23,9 +23,10 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
   }
 
   if (content.type === "subItems") {
+    const subItems = content.subItems ?? [];
     return [
       "Sub-items:",
-      ...content.subItems.map((subItem) => `- [ ] ${subItem.title}`),
+      ...subItems.map((subItem) => `- [ ] ${subItem.title}`),
     ].join("\n");
   }
 
@@ -55,8 +56,12 @@ const renderReadmeContentBlock = (content: NonNullable<PortableChecklistTemplate
     return lines.join("\n\n");
   }
 
-  const embed: Extract<typeof content, { type: "embed" }> = content;
-  return `**${inferEmbedProvider(embed.value)}**\n\n${embed.value}`;
+  if (content.type === "embed") {
+    return `**${inferEmbedProvider(content.value)}**\n\n${content.value}`;
+  }
+
+  const unhandled: never = content;
+  return unhandled;
 };
 
 export const renderTemplateReadme = (template: PortableChecklistTemplate) => {

@@ -154,6 +154,12 @@ export function PublicTemplateContent({
             <FormFieldList fields={content.fields} />
           </div>
         ) : null;
+
+      default: {
+        const unhandledType: never = content.type;
+        void unhandledType;
+        return null;
+      }
     }
   };
 
@@ -257,11 +263,11 @@ export function PublicTemplateContent({
               </h3>
             </div>
             <p className="shrink-0 text-sm whitespace-nowrap text-muted-foreground">
-              {formatCount(section.items.length, 'task')}
+              {formatCount(section.items?.length ?? 0, 'task')}
             </p>
           </div>
 
-          {section.items.length ? (
+          {section.items?.length ? (
             <div className="mt-4 divide-y">
               {section.items.map((item, itemIndex) =>
                 renderItem(item, sectionIndex, itemIndex),

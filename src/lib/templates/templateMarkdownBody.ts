@@ -40,7 +40,7 @@ export const escapeTemplateMarkdownDescription = (description: string): string =
 const unescapeDescriptionLine = (line: string): string =>
   ESCAPED_STRUCTURAL_LINE.test(line) ? line.slice(1) : line;
 
-const capturedText = (match: RegExpExecArray, group: number): string => String(match[group]);
+const capturedText = (match: RegExpExecArray, group: number): string => match[group] ?? "";
 
 export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody => {
   const lines = body.split("\n")[Symbol.iterator]();

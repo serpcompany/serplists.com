@@ -71,7 +71,7 @@ export async function updateTemplateForUser(
 
   const parsed = templateUpdatePayloadSchema.safeParse(body);
   if (!parsed.success) {
-    const { message, details } = describePayloadError(parsed.error);
+    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
     return refuse(message, 400, { details });
   }
 
@@ -82,13 +82,13 @@ export async function updateTemplateForUser(
   let syncedItems: string | null = null;
   let incomingSections: unknown[] | null = null;
 
-  if (title !== undefined) {
-    updates.title = title;
+  if (typeof title !== 'undefined') {
+    updates.title = title || '';
   }
-  if (description !== undefined) {
-    updates.description = description;
+  if (typeof description !== 'undefined') {
+    updates.description = description || '';
   }
-  if (type !== undefined) {
+  if (Object.prototype.hasOwnProperty.call(body, 'type') && typeof type === 'string') {
     updates.type = type;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'seoTitle')) {
@@ -110,7 +110,7 @@ export async function updateTemplateForUser(
     }
     incomingSections = normalizedSections.sections;
   }
-  if (is_public !== undefined) {
+  if (Object.prototype.hasOwnProperty.call(body, 'is_public') && typeof is_public === 'boolean') {
     updates.is_public = is_public;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'categories') || Object.prototype.hasOwnProperty.call(body, 'category')) {
@@ -187,8 +187,10 @@ export async function updateTemplateForUser(
   if (invalidField) {
     return refuse(invalidField.message, 400, { details: invalidField.details });
   }
-  const currentVersion = existingTemplate.version;
-  const currentContentVersion = existingTemplate.content_version;
+  const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
+  const currentContentVersion = typeof existingTemplate.content_version === 'number'
+    ? existingTemplate.content_version
+    : currentVersion;
   if (Object.keys(changes).length === 0) {
     return {
       saved: {
@@ -221,7 +223,7 @@ export async function updateTemplateForUser(
     ? and(sameVersionInOwnerScope, stillPrivate)
     : sameVersionInOwnerScope;
 
-  const subject = getTemplateSubject(existingTemplate);
+  const subject = getTemplateSubject(existingTemplate, userId);
   const updatedTemplate = {
     ...existingTemplate,
     ...templateValues,
@@ -291,7 +293,7 @@ export async function updateTemplateForUser(
       log('warn', 'run_reconcile_skipped_content_too_large', { templateId, runId: run.id });
       return null;
     }
-    const revision = run.revision;
+    const revision = typeof run.revision === 'number' ? run.revision : 1;
     const items = JSON.stringify(reconciled.sections);
     const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
 

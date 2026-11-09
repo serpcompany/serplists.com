@@ -6,15 +6,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import OrganizationSettings from '@/views/OrganizationSettings';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
+const ORGANIZATION = { id: 'team-1', name: 'Acme', role: 'admin', type: 'team' };
+const workspace = vi.hoisted(() => ({ activeWorkspace: { id: 'team-1', name: 'Acme', role: 'admin', type: 'team' } }));
+
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeWorkspace: { id: 'team-1', name: 'Acme', role: 'admin', type: 'team' } }),
+  useWorkspace: () => workspace,
 }));
 vi.mock('@/components/account/BillingSection', () => ({ BillingSection: () => <h2>Acme billing</h2> }));
 vi.mock('@/components/account/TeamSettingsSection', () => ({ TeamSettingsSection: () => <h2>Members</h2> }));
 vi.mock('@/components/account/LeaveOrganizationCard', () => ({ LeaveOrganizationCard: () => <h2>Leave</h2> }));
 
 theInMemoryBrowserAsTheWindow();
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  workspace.activeWorkspace = ORGANIZATION;
+});
 
 const openTheSettingsAt = async (origin: string) => {
   navigation.reset(`${origin}/dashboard/organization/team-1/settings/`);
@@ -36,5 +42,16 @@ describe("Organization Settings' pointer to the User's own controls", () => {
 
     expect(page).toContain('Your profile and security are in Account Settings.');
     expect(page).not.toContain('Run Keys');
+  });
+});
+
+describe('Organization Settings outside an Organization', () => {
+  it('shows nothing while Personal is the active context', async () => {
+    workspace.activeWorkspace = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
+
+    const page = await openTheSettingsAt('http://localhost');
+
+    expect(page).toBe('');
+    expect(screen.queryByRole('heading')).toBeNull();
   });
 });

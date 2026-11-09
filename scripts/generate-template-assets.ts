@@ -3,7 +3,6 @@ import path from "node:path";
 import { parseTemplateYaml, renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
 import { renderTemplatePreviewHtml } from "./lib/templatePreviewHtml";
 import { renderTemplateReadme } from "./lib/templateReadme";
-import { errorMessage } from "./lib/error-message";
 
 const normalizeJson = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
@@ -42,6 +41,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(errorMessage(error));
+  console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });

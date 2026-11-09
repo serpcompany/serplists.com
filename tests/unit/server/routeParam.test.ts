@@ -12,6 +12,15 @@ describe('routeParam', () => {
   it('keeps a segment with a malformed escape as it came, instead of failing the page', () => {
     expect(routeParam('100%-done')).toBe('100%-done');
   });
+
+  it('reads the first segment of a catch-all parameter, decoded', () => {
+    expect(routeParam(['caf%C3%A9', 'launch'])).toBe('café');
+  });
+
+  it('reads a missing or empty catch-all parameter as an empty segment', () => {
+    expect(routeParam(undefined)).toBe('');
+    expect(routeParam([])).toBe('');
+  });
 });
 
 describe('routeQuery', () => {

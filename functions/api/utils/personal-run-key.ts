@@ -44,6 +44,9 @@ export async function createPersonalRunKeySecret(): Promise<{
   crypto.getRandomValues(randomBytes);
   const key = `${PERSONAL_RUN_KEY_PREFIX}${encodeBase64Url(randomBytes)}`;
   const keyHash = await sha256Hex(key);
+  if (!keyHash) {
+    throw new Error("Unable to hash personal run key");
+  }
 
   return {
     key,
@@ -64,7 +67,7 @@ export async function insertPersonalRunKeyWithinCap(
   env: Env,
   record: PersonalRunKeyRecord,
 ): Promise<boolean> {
-  const result = await createDb(env).run(sql`
+  const result: unknown = await createDb(env).run(sql`
     insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
     select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}, ${JSON.stringify(record.permissions)}
     where (
@@ -72,7 +75,8 @@ export async function insertPersonalRunKeyWithinCap(
       where user_id = ${record.user_id} and revoked_at is null
     ) < ${MAX_ACTIVE_PERSONAL_RUN_KEYS}
   `);
-  return result.meta.changes === 1;
+  const meta = typeof result === "object" && result !== null ? (result as { meta?: { changes?: unknown } }).meta : undefined;
+  return meta?.changes === 1;
 }
 
 export async function authenticatePersonalRunKey(
@@ -83,6 +87,8 @@ export async function authenticatePersonalRunKey(
   if (!token?.startsWith(PERSONAL_RUN_KEY_PREFIX)) return null;
 
   const keyHash = await sha256Hex(token);
+  if (!keyHash) return null;
+
   const db = createDb(env);
   const { personalRunKeys } = schema;
   const [record] = await db

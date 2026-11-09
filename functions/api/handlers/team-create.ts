@@ -30,7 +30,7 @@ export async function createTeam(
 
   const parsed = createTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error);
+    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
   }
 
   const now = new Date().toISOString();
@@ -54,7 +54,7 @@ export async function createTeam(
     updated_at: now,
   };
 
-  for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; ; attempt += 1) {
     const team = {
       id: teamId,
       name: parsed.data.name,
@@ -85,6 +85,9 @@ export async function createTeam(
     } catch (error) {
       if (!isTeamSlugUniqueViolation(error)) throw error;
       if (requestedSlug) return teamSlugInUseError();
+      if (attempt >= MAX_CREATE_ATTEMPTS) {
+        return jsonError("Could not reserve an Organization slug. Try again.", 409, { code: "team_slug_exists" });
+      }
       slug = suffixTeamSlug(base, crypto.randomUUID().slice(0, 8));
       continue;
     }
@@ -98,6 +101,4 @@ export async function createTeam(
       slug,
     });
   }
-
-  return jsonError("Could not reserve an Organization slug. Try again.", 409, { code: "team_slug_exists" });
 }

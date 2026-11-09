@@ -86,8 +86,8 @@ export const AvatarUpload = ({
     }
   };
 
-  const handleRemoveAvatar = async (avatarUrl: string) => {
-    if (!user) return;
+  const handleRemoveAvatar = async () => {
+    if (!user || !currentAvatarUrl) return;
 
     setIsRemoving(true);
 
@@ -98,7 +98,7 @@ export const AvatarUpload = ({
         return;
       }
 
-      await deleteUploadedAsset(avatarUrl);
+      await deleteUploadedAsset(currentAvatarUrl);
       toast.success("Avatar removed successfully!");
       onAvatarUpdate?.("");
     } catch (error) {
@@ -135,7 +135,7 @@ export const AvatarUpload = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleRemoveAvatar(currentAvatarUrl)}
+              onClick={handleRemoveAvatar}
               disabled={isUploading || isRemoving}
               aria-label="Remove avatar"
             >

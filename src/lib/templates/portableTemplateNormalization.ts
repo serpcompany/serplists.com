@@ -18,10 +18,12 @@ const normalizeStringArray = (values?: string[]) => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const normalizeSubItems = (subItems: { title: string }[]) =>
-  subItems.map((subItem) => ({
+const normalizeSubItems = (subItems?: { title: string }[]) => {
+  if (!Array.isArray(subItems) || subItems.length === 0) return undefined;
+  return subItems.map((subItem) => ({
     title: subItem.title.trim(),
   }));
+};
 
 type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
 type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];
@@ -48,6 +50,7 @@ type NormalizedContent = {
 
 type NormalizedItem = { title: string; description?: string; contents?: NormalizedContent[] };
 
+type NormalizedRule = Omit<PortableTemplateRule, "id"> & { id?: string | undefined };
 
 type NormalizedTemplate = {
   title: string;
@@ -60,7 +63,7 @@ type NormalizedTemplate = {
   visibility?: NonNullable<PortableChecklistTemplate["visibility"]>;
   categories?: string[];
   tags?: string[];
-  rules?: PortableTemplateRule[];
+  rules?: NormalizedRule[];
   requiredTools?: NonNullable<PortableChecklistTemplate["requiredTools"]>;
 };
 
@@ -86,8 +89,14 @@ const normalizeContents = (contents?: PortableContent[]) => {
       type: content.type,
     };
 
+    const normalizedValue = holdsNoValue(content.type)
+      ? ""
+      : typeof content.value === "string"
+        ? content.value.trim()
+        : "";
+
     if (!holdsNoValue(content.type)) {
-      nextContent.value = content.value.trim();
+      nextContent.value = normalizedValue;
     }
 
     if (content.type === "image" || content.type === "video" || content.type === "file") {
@@ -97,7 +106,10 @@ const normalizeContents = (contents?: PortableContent[]) => {
       if (typeof content.fileSize === "number") nextContent.fileSize = content.fileSize;
     }
 
-    if (content.type === "subItems") nextContent.subItems = normalizeSubItems(content.subItems);
+    if (content.type === "subItems") {
+      const normalizedSubItems = normalizeSubItems(content.subItems);
+      if (normalizedSubItems) nextContent.subItems = normalizedSubItems;
+    }
 
     if (content.type === "form") nextContent.fields = content.fields.map(normalizeFormField);
 

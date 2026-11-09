@@ -62,9 +62,13 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return createTeam({ db, env, request, userId }, await readJsonOrNull(request));
   }
 
-  const [section, second, third, fourth] = teamsSubpath;
-  if (request.method === "POST" && section === "invites" && second && third === "accept") {
-    const invite = await findInviteByToken(db, second);
+  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] && teamsSubpath[2] === "accept") {
+    const found = await findInviteByToken(db, teamsSubpath[1]);
+    if ("response" in found) {
+      return found.response;
+    }
+
+    const { invite } = found;
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -85,8 +89,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
   }
 
-  if (request.method === "POST" && section === "invites" && second === "pending" && third && fourth === "accept") {
-    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, third)).limit(1);
+  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[2] && teamsSubpath[3] === "accept") {
+    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, teamsSubpath[2])).limit(1);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }

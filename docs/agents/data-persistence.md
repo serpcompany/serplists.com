@@ -58,9 +58,11 @@ nothing and the batch still commits; its result reports `meta.changes === 0`, wh
 `batchWriteMissed` (`functions/api/utils/guarded-writes.ts`) reads.
 
 Drizzle names every column of a table in an `INSERT`, filling missing values with
-defaults or `NULL`, so every column the schema declares must exist in the database. Template
-reads and writes name `templates.rules`, which every database has had since migration 0020;
-they no longer retry without it.
+defaults or `NULL`, so leaving a value out does not help when the database lacks the
+column. Template reads and writes retry without `rules` when SQLite reports the column
+missing (before the migration that adds it): `no such column: rules` in reads and
+updates, `table templates has no column named rules` in an `INSERT` column list. The
+retried insert drops the column from the statement itself (`withoutColumns`).
 
 ## Core Tables
 

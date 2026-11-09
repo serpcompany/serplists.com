@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { subscribeToNavigations } from "@/lib/navigation/navigationSignal";
 import { createPageVisitTracker, type PageVisit } from "@/lib/navigation/pageVisit";
 
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 type PageVisitOptions = {
   endOn?: "location" | "pathname";
 };
@@ -14,7 +16,7 @@ export const usePageVisit = ({ endOn = "location" }: PageVisitOptions = {}): (()
   const pathname = usePathname();
   const [tracker] = useState(createPageVisitTracker);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     tracker.enter();
     return () => tracker.leave();
   }, [tracker, pathname]);

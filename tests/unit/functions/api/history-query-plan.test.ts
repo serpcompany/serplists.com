@@ -61,7 +61,7 @@ describe('history query plans from the real migrations and Drizzle SQL, which fa
 
 describe('public profile template query plan', () => {
   const planFor = (owner: { type: 'user' | 'team'; id: string }) =>
-    explain(migratedDatabase(), selectPublicProfileTemplates(apiEnv({ DB: d1ThatRunsNoQuery() }), owner));
+    explain(migratedDatabase(), selectPublicProfileTemplates(apiEnv({ DB: d1ThatRunsNoQuery() }), owner, true));
 
   it("reads a Creator's public templates from the owner index, not by scanning every public template", () => {
     const plan = planFor({ type: 'user', id: 'user-1' });

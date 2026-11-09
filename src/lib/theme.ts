@@ -75,12 +75,15 @@ export const toggleDocumentTheme = (
   return setStoredTheme(nextTheme, documentRef, storage);
 };
 
-type ThemeStorageEvent = { key: unknown; storageArea: unknown };
+type ThemeStorageEvent = { key: string | null; storageArea: unknown };
 
-const readStorageEvent = (event: Event): ThemeStorageEvent | null =>
-  'key' in event && 'storageArea' in event ? { key: event.key, storageArea: event.storageArea } : null;
+const readStorageEvent = (event: Event): ThemeStorageEvent | null => {
+  if (!('key' in event) || !('storageArea' in event)) return null;
+  const { key, storageArea } = event;
+  return key === null || typeof key === 'string' ? { key, storageArea } : null;
+};
 
-const isThemeOrClearedKey = (key: unknown): boolean => key === null || key === THEME_STORAGE_KEY;
+const isThemeOrClearedKey = (key: string | null): boolean => key === null || key === THEME_STORAGE_KEY;
 
 const isFromAnotherStorageArea = (event: ThemeStorageEvent, localStorageArea: unknown): boolean =>
   Boolean(event.storageArea && localStorageArea && event.storageArea !== localStorageArea);

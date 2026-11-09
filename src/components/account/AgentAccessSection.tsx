@@ -40,7 +40,13 @@ import {
   type RunKeyPermission,
 } from '@/lib/schemas/runKeyPermissions';
 
-const hostOf = (url: string): string => new URL(url).host;
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
 
 const formatTimestamp = (value: string | null): string => {
   if (!value) return 'Never';
@@ -65,8 +71,8 @@ export type AgentAccessSectionViewProps = {
   mcpHostMismatch: boolean;
   permissions: readonly RunKeyPermission[];
   revokingKeyId: string | null;
-  onCopyEndpoint: (endpoint: string) => void;
-  onCopySecret: (secret: string) => void;
+  onCopyEndpoint: () => void;
+  onCopySecret: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onDismissSecret: () => void;
   onKeyNameChange: (name: string) => void;
@@ -185,7 +191,7 @@ export function AgentAccessSectionView({
                   readOnly
                   onFocus={(event) => event.currentTarget.select()}
                 />
-                <Button className="sm:shrink-0" type="button" variant="outline" onClick={() => onCopySecret(createdKey.secret)}>
+                <Button className="sm:shrink-0" type="button" variant="outline" onClick={onCopySecret}>
                   <Copy data-icon="inline-start" />
                   Copy key
                 </Button>
@@ -232,7 +238,7 @@ export function AgentAccessSectionView({
                       readOnly
                       onFocus={(event) => event.currentTarget.select()}
                     />
-                    <Button className="sm:shrink-0" type="button" variant="outline" onClick={() => onCopyEndpoint(mcpEndpoint)}>
+                    <Button className="sm:shrink-0" type="button" variant="outline" onClick={onCopyEndpoint}>
                       <Copy data-icon="inline-start" />
                       Copy endpoint
                     </Button>
@@ -294,7 +300,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                       <ul aria-label={`Permissions for ${key.name}`} className="flex flex-wrap gap-1">
                         {key.permissions.map((permission) => (
                           <Badge key={permission} render={<li />} variant="outline">
-                            {RUN_KEY_PERMISSION_DETAILS[permission].label}
+                            {RUN_KEY_PERMISSION_DETAILS[permission]?.label ?? permission}
                           </Badge>
                         ))}
                       </ul>
@@ -355,6 +361,7 @@ export function AgentAccessSection() {
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const name = keyName.trim();
+    if (!name) return;
 
     setIsCreating(true);
     try {
@@ -371,8 +378,10 @@ export function AgentAccessSection() {
     }
   };
 
-  const handleCopySecret = async (secret: string) => {
-    const copied = await copyTextToClipboard(secret);
+  const handleCopySecret = async () => {
+    if (!createdKey) return;
+
+    const copied = await copyTextToClipboard(createdKey.secret);
     if (copied) {
       toast.success('Run Key copied');
     } else {
@@ -380,8 +389,10 @@ export function AgentAccessSection() {
     }
   };
 
-  const handleCopyEndpoint = async (endpoint: string) => {
-    const copied = await copyTextToClipboard(endpoint);
+  const handleCopyEndpoint = async () => {
+    if (!mcpEndpoint) return;
+
+    const copied = await copyTextToClipboard(mcpEndpoint);
     if (copied) {
       toast.success('MCP endpoint copied');
     } else {

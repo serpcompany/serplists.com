@@ -106,6 +106,16 @@ describe('Index starter library', () => {
     expect(html).toContain('0 items in 0 sections');
   });
 
+  it('links a featured starter template with no public address of its own to the Template Library', () => {
+    const libraryLinks = (html: string) => html.match(/href="\/templates\/"/g)?.length ?? 0;
+    const withAnAddress = renderTheHomePage([starter('camping')]);
+    const withoutAnAddress = renderTheHomePage([starter('orphan', { teamId: 'team-1', title: 'Orphaned starter' })]);
+
+    expect(withoutAnAddress).toContain('Orphaned starter');
+    expect(withoutAnAddress).not.toContain('href="/profile/');
+    expect(libraryLinks(withoutAnAddress)).toBe(libraryLinks(withAnAddress) + 1);
+  });
+
   it('counts the items and sections of a featured starter template', () => {
     const html = renderTheHomePage([
       starter('trip', {

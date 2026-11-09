@@ -3,7 +3,6 @@ import { formatExportSummaryMessage } from '@/lib/templates/templateImportSummar
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
-  type ExportedPortableTemplatePack,
 } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -30,7 +29,7 @@ const buildTemplateExportFilename = (template: ChecklistTemplate): string => {
 
 export const buildTemplateExportFile = (
   template: ChecklistTemplate,
-): { filename: string; pack: ExportedPortableTemplatePack } => ({
+): { filename: string; pack: PortableTemplatePack } => ({
   filename: buildTemplateExportFilename(template),
   pack: exportPortableTemplatesToJSON([template]),
 });
@@ -63,12 +62,12 @@ export const exportTemplateFile = (params: {
 
   const { filename, pack } = buildTemplateExportFile(params.template);
   if (pack.templates.length === 0) {
-    const skipped = pack.manifest.skippedTemplates ?? [];
+    const skipped = pack.manifest?.skippedTemplates ?? [];
     return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped }).message };
   }
   (params.download ?? downloadBackupFile)(pack, filename);
 
-  return { kind: 'ok', assetWarnings: pack.manifest.assetWarnings };
+  return { kind: 'ok', assetWarnings: pack.manifest?.assetWarnings ?? 0 };
 };
 
 export const getTemplateExportLabel = (

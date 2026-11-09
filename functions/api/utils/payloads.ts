@@ -8,7 +8,6 @@ import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
 import { requiredToolsSchema } from "../../../src/lib/schemas/requiredTools";
 import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
-import { firstIssueOf } from "./zod-issues";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -73,8 +72,9 @@ export const templateImportFieldsSchema = templatePayloadSchema
   .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true, requiredTools: true })
   .required({ title: true });
 
-export function formatPayloadIssue(error: z.ZodError): string {
-  const issue = firstIssueOf(error);
+export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
+  const issue = error.issues[0];
+  if (!issue) return fallback;
   return `${issue.path.join(".") || "payload"}: ${issue.message}`;
 }
 
@@ -93,8 +93,10 @@ export const checklistPayloadSchema = z.object({
 
 export function describePayloadError(
   error: z.ZodError,
+  fallback: string,
 ): { message: string; details: { field?: string } } {
-  const issue = firstIssueOf(error);
+  const issue = error.issues[0];
+  if (!issue) return { message: fallback, details: {} };
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
   return { message, details: field === undefined ? {} : { field } };

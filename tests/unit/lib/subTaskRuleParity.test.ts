@@ -36,7 +36,7 @@ const fixtures: Array<[string, Json[]]> = [
 
 describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks blocks,', () => {
   it.each(fixtures)('are the same on the run page and in the API for %s', (_label, sections) => {
-    const run = mapChecklistToRun({ id: 'run-1', status: 'in_progress', items: JSON.stringify(sections) });
+    const run = mapChecklistToRun({ id: 'run-1', status: 'in_progress', items: JSON.stringify(sections) }, 'run-1');
     const counts = countRunTasks(run.sections);
     const { total, open } = findOpenRunTasks(sections);
 

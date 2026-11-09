@@ -70,7 +70,7 @@ export async function transferTemplate(
     });
   }
 
-  const currentVersion = existing.version;
+  const currentVersion = typeof existing.version === 'number' ? existing.version : 1;
   if (expectedVersion !== currentVersion) return editConflict(expectedVersion, currentVersion);
 
   const entitlements = await getEntitlementsForContext(env, { type: 'team', teamId, userId });
@@ -139,7 +139,7 @@ export async function transferTemplate(
       if (current >= capacity.limit) return templateLimitResponse(owner, 'save', capacity.limit, current);
     }
     const latest = await findTemplateById(db, templateId);
-    return editConflict(expectedVersion, latest?.version ?? null);
+    return editConflict(expectedVersion, typeof latest?.version === 'number' ? latest.version : null);
   }
 
   return json({ success: true, id: templateId, teamId, version: nextVersion });

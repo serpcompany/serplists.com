@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { keepPreviousData, skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { useBillingStatus } from '@/hooks/useBillingStatus';
@@ -107,13 +107,19 @@ export const useTemplateDetailModel = (
   const historyLimit = historyLimitFor(showingAllHistory);
   const history = useQuery({
     queryKey: [...getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId), { limit: historyLimit }],
-    queryFn: template ? () => api.getTemplateHistory(template.id, { limit: historyLimit }) : skipToken,
+    queryFn: () => api.getTemplateHistory(template?.id ?? '', { limit: historyLimit }),
     enabled: canLoadTemplateHistory,
     placeholderData: keepPreviousData,
     retry: false,
   });
 
-  const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: ['templates'] });
+  const invalidateTemplates = async () => {
+    if (!options.userId) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
+  };
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>
     startTemplateRun({

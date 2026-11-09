@@ -153,4 +153,18 @@ describe('linting a YAML template and the files generated from it', () => {
       { filePath: file('template.yaml'), code: 'yaml-bundle-parse-error', message: 'YAML template source must be an object' },
     ]);
   });
+
+  it('refuses a bundle whose source is not a template file, without reading it', async () => {
+    const file = templateFolder({});
+
+    expect(await lintYamlTemplateBundle(file('notes.txt'), {})).toEqual([
+      { filePath: file('notes.txt'), code: 'unsupported-file-type', message: 'Unsupported template source file type' },
+    ]);
+  });
+
+  it('reads a bundle source in the format its file name gives, so a Markdown source parses as Markdown', async () => {
+    const file = templateFolder({ 'template.md': renderTemplateMarkdown(template), 'template.json': canonicalJson });
+
+    expect(await lintYamlTemplateBundle(file('template.md'), { jsonPath: file('template.json') })).toEqual([]);
+  });
 });

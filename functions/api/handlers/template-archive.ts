@@ -29,7 +29,7 @@ export async function restoreTemplate(
 ): Promise<Response> {
   const { templates, auditEvents } = schema;
 
-  if (templateId === 'templates') {
+  if (!templateId || templateId === 'templates') {
     return jsonError('Template ID required', 400);
   }
 
@@ -66,7 +66,7 @@ export async function restoreTemplate(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(existingTemplate),
+    subject: getTemplateSubject(existingTemplate, userId),
     resource: { type: 'template', id: templateId },
     action: 'template.restored',
     before: existingTemplate,
@@ -130,7 +130,7 @@ export async function archiveTemplate(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(existingTemplate),
+    subject: getTemplateSubject(existingTemplate, userId),
     resource: { type: 'template', id: templateId },
     action: 'template.deleted',
     before: existingTemplate,

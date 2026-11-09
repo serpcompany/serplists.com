@@ -89,6 +89,25 @@ describe('creating an invite link', () => {
     expect(api.createTeamInvite).not.toHaveBeenCalled();
   });
 
+  it('asks for an email when only spaces were typed', async () => {
+    await mountThePanel();
+
+    await submitTheInvite('   ');
+
+    expect(toast.error).toHaveBeenCalledWith('Email is required');
+    expect(api.createTeamInvite).not.toHaveBeenCalled();
+  });
+
+  it('invites the email without the spaces typed around it, and clears the field', async () => {
+    vi.mocked(api.createTeamInvite).mockResolvedValue(createdInvite());
+    await mountThePanel();
+
+    await submitTheInvite('  kim@example.test  ');
+
+    expect(api.createTeamInvite).toHaveBeenCalledWith('team-1', { email: 'kim@example.test', role: 'viewer' });
+    expect(inputNamed('Invite email').value).toBe('');
+  });
+
   it('creates a link for the chosen role, shows it, clears the email, and copies it on request', async () => {
     vi.mocked(api.createTeamInvite).mockResolvedValue(createdInvite({ role: 'runner' }));
     writeText.mockResolvedValue(undefined);

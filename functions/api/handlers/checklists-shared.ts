@@ -52,7 +52,7 @@ export async function handleSharedChecklist(
     return jsonError('Shared run not found', 404);
   }
 
-  const read = await readJsonPayload(request, sharedRunUpdateSchema);
+  const read = await readJsonPayload(request, sharedRunUpdateSchema, 'Invalid checklist payload');
   if ('response' in read) return read.response;
 
   const { sections, status, expected_revision } = read.payload;
@@ -60,7 +60,7 @@ export async function handleSharedChecklist(
     return jsonError('No fields to update', 400);
   }
 
-  const currentRevision = existingSharedRun.revision;
+  const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
   if (expected_revision !== currentRevision) {
     return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
       code: 'edit_conflict',
@@ -120,7 +120,7 @@ export async function handleSharedChecklist(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId,
-    subject: getRunSubject(existingSharedRun),
+    subject: getRunSubject(existingSharedRun, existingSharedRun.user_id),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',
     before: existingSharedRun,

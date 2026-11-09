@@ -13,9 +13,17 @@ type RequiredToolsListProps = {
   tools: readonly RequiredTool[] | undefined;
 };
 
+const hostOf = (href: string): string => {
+  try {
+    return new URL(href).host;
+  } catch {
+    return '';
+  }
+};
+
 function ToolRow({ tool }: { tool: RequiredTool }) {
   const href = absoluteHttpUrl(tool.url);
-  const host = href ? new URL(href).host : '';
+  const host = href ? hostOf(href) : '';
   return (
     <li className="flex min-w-0 items-start justify-between gap-3 rounded-lg border px-3 py-2">
       <span className="flex min-w-0 flex-col gap-0.5">

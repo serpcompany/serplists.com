@@ -62,4 +62,11 @@ describe('the verify-api script', () => {
     expect(run.status).toBe(1);
     expect(run.output).toContain("https://serplists.com isn't this machine");
   }, SLOW);
+
+  it('ends each proof file with one newline, adding none to a file whose last line the server already ended', async () => {
+    const run = await verifyApi('newlines', { steps: [{ api: 'GET /api/templates' }] }, [], { serverVersion: '0.6.0\n' });
+    expect(run.status).toBe(0);
+    expect(proof(run.folder, 'doctor.txt').endsWith('mcp: serp-lists 0.6.0\n')).toBe(true);
+    expect(proof(run.folder, 'requests.txt').endsWith('cleanup: signed out: 200\n')).toBe(true);
+  }, SLOW);
 });
