@@ -144,8 +144,6 @@ export function ContentEditor({
             sectionIndex={sectionIndex}
           />
         );
-      default:
-        return null;
     }
   }
 

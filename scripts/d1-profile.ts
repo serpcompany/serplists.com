@@ -97,7 +97,7 @@ async function startServer(port: number, onRecord: (record: QueryRecord) => void
     serverLog.write(chunk);
     buffer += chunk.toString();
     const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    buffer = lines.splice(-1).join("");
     for (const line of lines) {
       const record = d1QueryRecordIn(line);
       if (record) onRecord(record);

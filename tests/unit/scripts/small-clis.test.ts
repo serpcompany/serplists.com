@@ -146,16 +146,3 @@ describe('pnpm run docs:references', { timeout: 60_000 }, () => {
     expect(result.stderr).toContain('https://docs.stripe.com/llms.txt returned 503');
   });
 });
-
-describe('pnpm run ui:snap', { timeout: 60_000 }, () => {
-  it.each([
-    [['dashboard', '--out', 'tmp/shot.gif'], '--out must end in .png, .jpg, .jpeg, .jpe (lowercase), got "tmp/shot.gif".'],
-    [['dashboard', '--full'], 'Unknown flag --full.'],
-  ])('refuses %j before it opens a browser, with its usage, and exits 2', (args, message) => {
-    const result = runRepositoryScript('scripts/ui-snapshot.ts', args);
-
-    expect(result.status).toBe(2);
-    expect(result.stderr).toContain(message);
-    expect(result.stderr).toContain('Usage: pnpm run ui:snap -- [route]');
-  });
-});

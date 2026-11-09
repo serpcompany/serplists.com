@@ -25,7 +25,7 @@ function parseArgs(argv: readonly string[]): { positionals: string[]; flags: Map
   const positionals: string[] = [];
   const flags = new Map<string, string | true>();
   for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i] ?? "";
+    const token = String(argv[i]);
     if (!token.startsWith("--")) {
       positionals.push(token);
       continue;

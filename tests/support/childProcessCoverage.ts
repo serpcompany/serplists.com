@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { TestProject } from 'vitest/node';
+import { z } from 'zod';
 
 export const CHILD_COVERAGE_VARIABLE = 'SERPLISTS_CHILD_COVERAGE';
 
@@ -45,17 +46,73 @@ function replacedEverywhere(text: string, from: readonly string[], to: readonly 
   return from.reduce((current, spelling, index) => current.split(spelling).join(to[index] ?? spelling), text);
 }
 
+const rawProcessCoverageSchema = z
+  .object({ result: z.array(z.unknown()), 'source-map-cache': z.record(z.object({ lineLengths: z.array(z.number()) }).passthrough()).optional() })
+  .passthrough();
+
+const rawScriptCoverageSchema = z
+  .object({
+    url: z.string(),
+    functions: z.array(z.object({ ranges: z.array(z.object({ startOffset: z.number(), endOffset: z.number() }).passthrough()) }).passthrough()),
+  })
+  .passthrough();
+
+const endOfTheCodeBeforeItsSourceMapComment = (lineLengths: readonly number[]) =>
+  lineLengths.slice(0, -1).reduce((offset, length) => offset + length + 1, 0);
+
+function processCoverageIn(text: string): z.infer<typeof rawProcessCoverageSchema> | undefined {
+  try {
+    const parsed = rawProcessCoverageSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function transformedScriptsIn(text: string): Map<string, number> {
+  const cache = processCoverageIn(text)?.['source-map-cache'] ?? {};
+  return new Map(Object.entries(cache).map(([url, { lineLengths }]) => [url, endOfTheCodeBeforeItsSourceMapComment(lineLengths)]));
+}
+
+function endingWithTheCode(text: string, codeEnds: ReadonlyMap<string, number>): string {
+  const coverage = processCoverageIn(text);
+  if (coverage === undefined) return text;
+  const result = coverage.result.map((each) => {
+    const script = rawScriptCoverageSchema.safeParse(each);
+    const end = script.success ? codeEnds.get(script.data.url) : undefined;
+    if (!script.success || end === undefined) return each;
+    const clamp = <Range extends { startOffset: number; endOffset: number }>(range: Range) => ({
+      ...range,
+      startOffset: Math.min(range.startOffset, end),
+      endOffset: Math.min(range.endOffset, end),
+    });
+    return { ...script.data, functions: script.data.functions.map((fn) => ({ ...fn, ranges: fn.ranges.map(clamp) })) };
+  });
+  return JSON.stringify({ ...coverage, result });
+}
+
 function mapCheckoutCopiesOntoTheCheckout(rawDirectory: string, root: string): void {
   const list = checkoutCopiesListOf(rawDirectory);
   if (!existsSync(list)) return;
   const copies = readFileSync(list, 'utf8').split(/\r?\n/).filter((copy) => copy.length > 0);
   rmSync(list, { force: true });
   const checkout = spellingsOf(root);
+  const codeEnds = new Map<string, number>();
   for (const file of readdirSync(rawDirectory)) {
     const raw = path.join(rawDirectory, file);
     const text = readFileSync(raw, 'utf8');
     const mapped = copies.reduce((current, copy) => replacedEverywhere(current, spellingsOf(copy), checkout), text);
-    if (mapped !== text) writeFileSync(raw, mapped);
+    if (mapped === text) continue;
+    writeFileSync(raw, mapped);
+    for (const [url, end] of transformedScriptsIn(mapped)) codeEnds.set(url, end);
+  }
+  if (codeEnds.size === 0) return;
+  const urls = [...codeEnds.keys()];
+  for (const file of readdirSync(rawDirectory)) {
+    const raw = path.join(rawDirectory, file);
+    const text = readFileSync(raw, 'utf8');
+    const ended = urls.some((url) => text.includes(url)) ? endingWithTheCode(text, codeEnds) : text;
+    if (ended !== text) writeFileSync(raw, ended);
   }
 }
 

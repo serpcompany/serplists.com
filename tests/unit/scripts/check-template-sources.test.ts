@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { devNull } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -109,6 +110,13 @@ describe('what pnpm templates:check looks at', { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('Template sources OK (1 file checked)');
+  });
+
+  it('skips a path it is named that is neither a file nor a folder, such as the null device', () => {
+    const result = templatesCheck([devNull]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('Template sources OK (0 files checked)');
   });
 
   it('fails with the reason when a path it is given does not exist', () => {

@@ -96,7 +96,7 @@ function siteUnderCheck(base: URL, request: SiteRequest) {
 
 type SiteUnderCheck = ReturnType<typeof siteUnderCheck>;
 
-const locsIn = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+const locsIn = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => String(match[1]));
 
 async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }: SiteUnderCheck) {
   for (const page of ONE_SEEDED_PAGE_OF_EACH_KIND.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
@@ -219,14 +219,14 @@ export async function checkSiteStandardsUntilItPasses(
   options: Parameters<typeof checkSiteStandards>[0],
   { attempts = 3, retryDelayMs = 20_000, sleep = delay, onRetry = () => {} }: RetryOptions = {},
 ): Promise<SiteStandardsResult> {
-  for (let attempt = 1; ; attempt += 1) {
-    const outcome = await attemptSiteStandards(options);
-    const passed = "result" in outcome && outcome.result.failed === 0;
-    if (passed || attempt >= attempts) {
-      if ("error" in outcome) throw outcome.error;
-      return outcome.result;
-    }
+  let attempt = 1;
+  let outcome = await attemptSiteStandards(options);
+  while (!(("result" in outcome && outcome.result.failed === 0) || attempt >= attempts)) {
     onRetry(attempt + 1, whyTheAttemptFailed(outcome));
     await sleep(retryDelayMs);
+    attempt += 1;
+    outcome = await attemptSiteStandards(options);
   }
+  if ("error" in outcome) throw outcome.error;
+  return outcome.result;
 }

@@ -15,8 +15,29 @@ import {
 import { apiEnv } from '../../support/apiEnv';
 import { sitemapEntries } from '../../support/sitemapLocations';
 import { SqliteD1 } from '../../support/sqlite-d1';
+import { D1DatabaseDouble, D1StatementDouble, d1Result } from '../../support/d1Doubles';
 
 let d1: SqliteD1;
+
+class CountWithNoRow extends D1StatementDouble {
+  protected async allRows() {
+    return d1Result([]);
+  }
+
+  protected async rawRows() {
+    return [];
+  }
+}
+
+class D1ThatAnswersEveryCountWithNoRow extends D1DatabaseDouble {
+  constructor(private readonly database: SqliteD1) {
+    super();
+  }
+
+  prepare(sql: string): D1PreparedStatement {
+    return /^select count\(\*\)/.test(sql) ? new CountWithNoRow(sql) : this.database.prepare(sql);
+  }
+}
 
 beforeEach(() => {
   d1 = new SqliteD1();
@@ -86,7 +107,7 @@ describe('the database sitemap shards', () => {
     );
   });
 
-  it('lists the Organizations that spill past the people onto the second profiles shard', async () => {
+  function storeOnePersonAndOrganizationsPastTheFirstShard() {
     addUser('user-1', 'alice', null);
     d1.run(
       `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
@@ -97,14 +118,26 @@ describe('the database sitemap shards', () => {
     d1.run(
       `INSERT INTO sitemap_shard_revisions (kind, page, content_hash, revised_at) VALUES ('profiles', 2, 'hash', '2026-01-01T00:00:00.000Z')`,
     );
+  }
 
+  async function secondProfilesShardLocations(database: D1Database) {
     const response = await serveProfilesSitemap(
-      { request: shardRequest('/sitemaps/profiles/2.xml'), env: apiEnv({ DB: d1.binding }), waitUntil: () => undefined },
+      { request: shardRequest('/sitemaps/profiles/2.xml'), env: apiEnv({ DB: database }), waitUntil: () => undefined },
       '2',
     );
-    const locations = Array.from((await response.text()).matchAll(/<loc>https:\/\/serplists\.com([^<]*)<\/loc>/g), (match) => match[1]);
+    return Array.from((await response.text()).matchAll(/<loc>https:\/\/serplists\.com([^<]*)<\/loc>/g), (match) => match[1]);
+  }
 
-    expect(locations).toEqual(['/profile/org-025000/', '/profile/org-025001/']);
+  it('lists the Organizations that spill past the people onto the second profiles shard', async () => {
+    storeOnePersonAndOrganizationsPastTheFirstShard();
+
+    expect(await secondProfilesShardLocations(d1.binding)).toEqual(['/profile/org-025000/', '/profile/org-025001/']);
+  });
+
+  it('counts no people before the Organizations when the database answers its counts with no row', async () => {
+    storeOnePersonAndOrganizationsPastTheFirstShard();
+
+    expect(await secondProfilesShardLocations(new D1ThatAnswersEveryCountWithNoRow(d1))).toEqual(['/profile/org-025001/']);
   });
 });
 

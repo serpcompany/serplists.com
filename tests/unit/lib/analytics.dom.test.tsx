@@ -59,3 +59,17 @@ describe('the in-memory analytics', () => {
     expect(analytics.getEvents().at(-1)?.properties).toMatchObject({ message: '', context: 'unhandled_promise_rejection' });
   });
 });
+
+describe('the analytics loaded where there is no window, as in a server render', () => {
+  it('keeps no events, not even for a page error once a window exists', async () => {
+    vi.resetModules();
+    vi.stubGlobal('window', undefined);
+    const { analytics: loadedWithoutAWindow } = await import('@/lib/analytics');
+    vi.unstubAllGlobals();
+
+    loadedWithoutAWindow.trackTemplateView('template-1', 'Launch plan');
+    window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught TypeError: Cannot save' }));
+
+    expect(loadedWithoutAWindow.getEvents()).toEqual([]);
+  });
+});

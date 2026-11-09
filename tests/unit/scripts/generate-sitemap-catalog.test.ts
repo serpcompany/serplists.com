@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execScript } from '../../../scripts/lib/run-tool';
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
+import { aGitStandIn } from '../../support/gitStandIn';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { z } from 'zod';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
@@ -228,6 +229,27 @@ describe('generate-sitemap-catalog outside a full clone', { timeout: 120_000 }, 
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('src/data/public-template-packs/notes.json is not a template pack');
+  });
+
+  it('passes over a commit git lists with a date it cannot read, dating the templates by the commits it can', () => {
+    const copy = copyOfTheFiles('with-an-undated-commit', (source) => !source.endsWith('bundled-catalog.generated.json'));
+    const gitOnThePath = aGitStandIn(path.join(elsewhere, 'undated-commit-git'), copy, {
+      'rev-parse': "process.stdout.write('false\\n');\n",
+      log: [
+        "const listsEachCommit = process.argv.includes('--first-parent');",
+        "process.stdout.write(listsEachCommit ? 'beef01\\t2026-02-02T00:00:00Z\\nc0ffee\\tlast tuesday\\n' : '2026-01-01T00:00:00Z\\n');",
+        '',
+      ].join('\n'),
+      'ls-tree': `process.stdout.write(require('node:fs').readdirSync(${JSON.stringify(path.dirname(packPath))}).join('\\n'));\n`,
+      show: "process.stdout.write(require('node:fs').readFileSync(process.argv[2].split(':')[1], 'utf8'));\n",
+    });
+
+    const result = runGenerator(copy, [], { CI: '', ...gitOnThePath });
+    const catalog = parseJsonText(readFileSync(path.join(copy, catalogPath), 'utf8'), catalogSchema);
+
+    expect(result.status).toBe(0);
+    expect(catalog.templates.length).toBeGreaterThan(0);
+    expect(new Set(catalog.templates.map((entry) => entry.lastmod))).toEqual(new Set(['2026-02-02T00:00:00.000Z']));
   });
 
   it('reads a history in which the packs and the categories arrived in different commits', () => {

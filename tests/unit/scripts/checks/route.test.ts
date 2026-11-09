@@ -1,8 +1,11 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { REPO_ROOT } from '../../../../scripts/lib/run-tool';
 import { alreadyTold, changedPaths, installAdvice, routeHook, toldFile } from '../../../../tools/checks/route.mjs';
+import { runModuleCodeProcess } from '../../../support/scriptProcess';
 import { scratchFolder } from './scratch';
 
 const worktree = '/work/main/.claude/worktrees/task';
@@ -23,6 +26,19 @@ describe('which checks a hook runs', () => {
   it('skips a file in no repository, and a repository without these checks', () => {
     expect(routeHook(undefined, 'hook.ts', () => true)).toEqual({ kind: 'skip' });
     expect(routeHook('/work/other', 'stop-hook.ts', () => false)).toEqual({ kind: 'skip' });
+  });
+});
+
+describe('what git says to the hooks', () => {
+  it('is nothing, rather than a failure, for a folder git cannot run in', { timeout: 60_000 }, async () => {
+    const route = pathToFileURL(path.join(REPO_ROOT, 'tools', 'checks', 'route.mjs')).href;
+    const missing = path.join(scratchFolder('route'), 'removed');
+
+    const run = await runModuleCodeProcess(
+      `import { gitOutput } from ${JSON.stringify(route)}; process.stdout.write(JSON.stringify(gitOutput(${JSON.stringify(missing)}, 'status')));`,
+    );
+
+    expect([run.status, run.stdout]).toEqual([0, '""']);
   });
 });
 

@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { readD1Databases } from "../../../scripts/d1-baseline-migrations-lib";
+import { aCopyOfTheCheckout } from "../../support/checkoutCopy";
 import { runAgainstACloudflareD1StandIn } from "../../support/cloudflareD1StandIn";
+import { queryTheCopysLocalD1, runTheCopysScript } from "../../support/scriptInACheckoutCopy";
 
 const SCRIPT = "scripts/d1-baseline-migrations.ts";
 const repoRoot = process.cwd();
@@ -59,6 +61,23 @@ describe("pnpm run db:migrations:baseline:staging (scripts/d1-baseline-migration
     expect(run.stdout).toContain(`- ${migrationNames.at(-1) ?? ""}`);
     expect(run.stdout).toContain("Dry run only. Re-run with --execute");
     expect(run.calls).toEqual([]);
+  });
+
+  it("records the migrations through the one named as applied on this checkout's local database with --execute", { timeout: 300_000 }, async () => {
+    const through = migrationNames[1] ?? "";
+    const copy = aCopyOfTheCheckout();
+
+    try {
+      const run = await runTheCopysScript(copy, SCRIPT, { args: ["--database", "serp-checklists-db", "--through", through, "--execute"], env: { ...process.env, CI: "1" } });
+
+      expect(run.status).toBe(0);
+      expect(run.stdout).toContain(`Baselining 2 migration(s) through ${through} on serp-checklists-db (local):`);
+      expect(run.stdout).toContain("D1 migration baseline complete");
+      const applied = await queryTheCopysLocalD1(copy, "SELECT name FROM d1_migrations ORDER BY id");
+      expect(applied.map((row) => appliedRowSchema.parse(row).name)).toEqual(migrationNames.slice(0, 2));
+    } finally {
+      copy.remove();
+    }
   });
 
   it.each([

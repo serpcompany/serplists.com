@@ -1,9 +1,7 @@
-import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import { describe, expect, it } from 'vitest';
 
 import {
   checkoutPorts,
@@ -15,63 +13,22 @@ import {
   portsPerWorktree,
   roles,
 } from '../../../tools/checks/ports.mjs';
-import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { packageScripts } from '../../support/packageScripts';
+import {
+  claims,
+  claimsFolder,
+  lockOf,
+  PORTS_SCRIPT,
+  portsEnvironment,
+  portsOf,
+  portsRun as ports,
+  repository,
+  scratch,
+  subfolder,
+  worktree,
+} from '../../support/portsCheckouts';
 
-const repoRoot = process.cwd();
-const script = path.join(repoRoot, 'tools', 'checks', 'ports.mjs');
-const portsSchema = z.object({ dev: z.number(), e2e: z.number(), preview: z.number() }).strict();
 const SLOW = 30_000;
-
-const folders: string[] = [];
-afterEach(() => {
-  for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
-});
-
-function scratch(): string {
-  const folder = realpathSync(mkdtempSync(path.join(tmpdir(), 'ports-')));
-  folders.push(folder);
-  return folder;
-}
-
-const environment = (changes: Record<string, string> = {}): NodeJS.ProcessEnv => ({
-  ...throwawayRepositoryEnvironment(),
-  PORT: undefined,
-  ...changes,
-});
-
-const git = (folder: string, ...command: string[]) =>
-  spawnSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...command], {
-    cwd: folder,
-    encoding: 'utf8',
-    env: environment(),
-  });
-
-function repository(): string {
-  const folder = scratch();
-  git(folder, 'init', '--quiet');
-  git(folder, 'commit', '--quiet', '--allow-empty', '--message', 'Start');
-  return folder;
-}
-
-function worktree(main: string, name: string): string {
-  const folder = path.join(main, '.claude', 'worktrees', name);
-  expect(git(main, 'worktree', 'add', '--quiet', '--detach', folder).status).toBe(0);
-  return folder;
-}
-
-function subfolder(checkout: string): string {
-  const folder = path.join(checkout, 'src', 'app');
-  mkdirSync(folder, { recursive: true });
-  return folder;
-}
-
-const ports = (folder: string, command: string[], changes: Record<string, string> = {}) =>
-  spawnSync(process.execPath, [script, ...command], { cwd: folder, encoding: 'utf8', env: environment(changes) });
-const portsOf = (folder: string, changes: Record<string, string> = {}) =>
-  portsSchema.parse(JSON.parse(ports(folder, ['--json'], changes).stdout));
-const claimsFolder = (main: string) => path.join(main, '.git', 'serplists-ports');
-const claims = (main: string) => readdirSync(claimsFolder(main)).sort();
 
 function twoWorktreesWithTheirBlocks() {
   const main = repository();
@@ -85,7 +42,7 @@ function twoWorktreesWithTheirBlocks() {
 const asking = (folder: string) =>
   new Promise<[string, string]>((done) => {
     let said = '';
-    const child = spawn(process.execPath, [script, '--json'], { cwd: folder, env: environment() });
+    const child = spawn(process.execPath, [PORTS_SCRIPT, '--json'], { cwd: folder, env: portsEnvironment() });
     child.stdout.on('data', (chunk: Buffer) => {
       said += chunk.toString();
     });
@@ -219,8 +176,6 @@ describe('the ports of a checkout', () => {
 });
 
 describe('the lock a claim is made under', () => {
-  const lockOf = (main: string) => path.join(claimsFolder(main), 'lock');
-
   it('makes a worktree wait while another run holds it', async () => {
     const main = repository();
     const one = worktree(main, 'one');

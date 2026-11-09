@@ -284,7 +284,7 @@ export async function updateTemplateForUser(
     && !run.deleted_at
   );
 
-  const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
+  const nextTemplateSections = parseJsonArray(syncedItems) ?? [];
   const reconciledRunUpdates = (await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate | null> => {
     const previousSections = parseJsonArray(run.items) ?? [];
     const previousRetired = parseJsonArray(run.retired_items) ?? [];

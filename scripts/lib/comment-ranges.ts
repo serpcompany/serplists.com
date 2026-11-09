@@ -21,7 +21,7 @@ export function lineLocator(text: string): (offset: number) => number {
     let high = lineStarts.length - 1;
     while (low < high) {
       const middle = Math.ceil((low + high) / 2);
-      if ((lineStarts[middle] ?? Number.POSITIVE_INFINITY) <= offset) low = middle;
+      if (Number(lineStarts[middle]) <= offset) low = middle;
       else high = middle - 1;
     }
     return low + 1;

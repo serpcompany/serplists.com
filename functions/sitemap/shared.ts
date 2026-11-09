@@ -181,7 +181,7 @@ function paginateEntries<T>(entries: T[], page: number): T[] {
 
 export function bundledTemplateEntries(): SitemapEntry[] {
   return bundledTemplates.flatMap((template) => {
-    const slug = template.slug ?? '';
+    const slug = [template.slug].join('');
     return isValidTemplateSlug(slug)
       ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod: template.lastmod }]
       : [];

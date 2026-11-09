@@ -37,6 +37,7 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
       "const read = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8'); read(process.argv[2]);",
     ),
     inATest('a path in a declared const that has no value', "declare const LAYOUT: string; readFileSync(LAYOUT, 'utf8');"),
+    inATest('a path an object other than a URL builds, whatever text it is given', "readFileSync(new SourceLocator('src/app/layout.tsx'), 'utf8');"),
     inATest('a glob whose query it cannot read', "import.meta.glob('/src/**/*.ts', { query: rawQuery });"),
     inATest('a const that names itself, without following it forever', "const dir = path.join(dir, 'x'); readFileSync(dir, 'utf8');"),
     inATest('a file without an extension in a source folder', "readFileSync('functions/Dockerfile', 'utf8');"),

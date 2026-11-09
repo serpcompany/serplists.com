@@ -36,7 +36,7 @@ export function parseStatusRange(text: string): StatusRange {
 
 export function parseSince(text: string, nowMs: number): number {
   const relative = /^(\d+)([smhd])$/.exec(text);
-  if (relative?.[1] && relative[2]) return nowMs - Number(relative[1]) * (durationUnits[relative[2]] ?? 0);
+  if (relative?.[1] && relative[2]) return nowMs - Number(relative[1]) * Number(durationUnits[relative[2]]);
   const absolute = Date.parse(text);
   if (Number.isNaN(absolute)) throw new Error(`--since takes a duration such as 15m, 2h or 1d, or a date, not "${text}".`);
   return absolute;
@@ -134,26 +134,27 @@ export function summarizeRoutes(records: RequestRecord[], rowsRead: Map<string, 
     groups.set(key, [...(groups.get(key) ?? []), record]);
   }
   return [...groups.values()]
-    .map((group) => {
-      const first = group[0];
-      const durations = group.map((record) => record.durationMs);
-      const rows = group.flatMap((record) => {
-        const read = record.requestId === undefined ? undefined : rowsRead.get(record.requestId);
-        return read === undefined ? [] : [read];
-      });
-      return {
-        route: `${first?.method ?? ""} ${normalizeRoute(first?.path ?? "")}`,
-        kind: first?.kind ?? "api",
-        count: group.length,
-        clientErrors: group.filter((record) => record.status >= 400 && record.status < 500).length,
-        serverErrors: group.filter((record) => record.status >= 500).length,
-        p50Ms: percentile(durations, 0.5),
-        p95Ms: percentile(durations, 0.95),
-        maxMs: Math.max(...durations),
-        p95RowsRead: rows.length === 0 ? undefined : percentile(rows, 0.95),
-        maxRowsRead: rows.length === 0 ? undefined : Math.max(...rows),
-      };
-    })
+    .flatMap((group) =>
+      group.slice(0, 1).map((first) => {
+        const durations = group.map((record) => record.durationMs);
+        const rows = group.flatMap((record) => {
+          const read = record.requestId === undefined ? undefined : rowsRead.get(record.requestId);
+          return read === undefined ? [] : [read];
+        });
+        return {
+          route: `${first.method} ${normalizeRoute(first.path)}`,
+          kind: first.kind,
+          count: group.length,
+          clientErrors: group.filter((record) => record.status >= 400 && record.status < 500).length,
+          serverErrors: group.filter((record) => record.status >= 500).length,
+          p50Ms: percentile(durations, 0.5),
+          p95Ms: percentile(durations, 0.95),
+          maxMs: Math.max(...durations),
+          p95RowsRead: rows.length === 0 ? undefined : percentile(rows, 0.95),
+          maxRowsRead: rows.length === 0 ? undefined : Math.max(...rows),
+        };
+      }),
+    )
     .sort((left, right) => right.p95Ms - left.p95Ms || right.count - left.count);
 }
 

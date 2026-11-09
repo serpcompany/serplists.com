@@ -1,4 +1,5 @@
 import '../../support/mockedNextNavigation';
+import { clickTheLastButtonReading } from '../../support/recordedButtons';
 import React, { act } from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -396,5 +397,33 @@ describe('what the page offers each user', () => {
     expect(screen.queryByText('Pro feature')).toBeNull();
     expect(screen.getByText('My Templates').parentElement?.textContent).toContain('0');
     expect(screen.getByRole('button', { name: 'Export Portable Pack' }).hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('a click that arrives on a control the page has turned off', () => {
+  it.each([
+    ['nobody is signed in', () => { page.signedIn = false; }, 'Log in to export your templates'],
+    ['an Organization viewer', () => { page.isTeamWorkspace = true; page.canEditTemplates = false; }, "You need editor access to export this Organization's templates."],
+    ['an Organization on the Free plan', () => { page.isTeamWorkspace = true; page.billing = freePlan(); }, ORGANIZATION_BACKUP_UPGRADE_MESSAGE],
+  ])('exports nothing for %s, and says why', async (_who, arrange, message) => {
+    arrange();
+    await renderSettled(theBackupPage());
+
+    await act(() => clickTheLastButtonReading('Export Portable Pack'));
+
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(api.exportTemplateBackup).not.toHaveBeenCalled();
+    expect(api.createBillingCheckout).not.toHaveBeenCalled();
+  });
+
+  it('imports nothing from a file over the Template limit per import, and says what the limit is', async () => {
+    const sixTemplates = Array.from({ length: 6 }, (_, index) => ({ title: `Trip ${index + 1}`, sections: [{ title: 'Prep', items: [{ title: 'Pack' }] }] }));
+    await chooseTheFile(portablePackFile(sixTemplates));
+    await screen.findByText('Import Preview');
+
+    await act(() => clickTheLastButtonReading('Confirm Import'));
+
+    expect(toast.error).toHaveBeenCalledWith('Import limited to 5 templates per file for now');
+    expect(page.importTemplates).not.toHaveBeenCalled();
   });
 });

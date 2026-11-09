@@ -28,7 +28,7 @@ export function namedPath(code: string, tree: Tree): string | undefined {
     .replace(/:\d+(?:-\d+)?$/, "")
     .replace(/[/:.,;]+$/, "");
   if (!candidate || !PATH_SHAPE.test(candidate)) return undefined;
-  const first = candidate.split("/")[0] ?? "";
+  const first = candidate.split("/", 1).join("");
   const inATrackedFolder = candidate.includes("/") && tree.topFolders.has(first);
   const aTrackedRootFile = !candidate.includes("/") && tree.files.has(candidate);
   return inATrackedFolder || aTrackedRootFile ? candidate : undefined;

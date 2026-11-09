@@ -178,13 +178,12 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       isCompleted: false,
       contents: item.contents?.map((content) => {
         if (content.type === "form") {
-          return { ...content, fields: (content.fields ?? []).map(({ answer: _cleared, ...field }) => field) };
+          return { ...content, fields: content.fields?.map(({ answer: _cleared, ...field }) => field) };
         }
         if (content.type !== "subItems") return content;
-        if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {
           ...content,
-          subItems: content.subItems.map((subItem) => ({
+          subItems: content.subItems?.map((subItem) => ({
             ...subItem,
             isCompleted: false,
           })),

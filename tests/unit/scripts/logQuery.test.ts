@@ -156,6 +156,10 @@ describe('summaries', () => {
     expect(percentile([], 0.5)).toBe(0);
   });
 
+  it('gives 0 for a fraction that names no rank, as it does for no values', () => {
+    expect(percentile([5, 1, 4], Number.NaN)).toBe(0);
+  });
+
   it('counts requests, client and server errors, and latency per route, slowest p95 first', () => {
     const records = requestRecords(
       parseLogText(

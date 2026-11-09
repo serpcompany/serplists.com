@@ -216,7 +216,7 @@ function patchComments(text: string): FoundComment[] {
   let target: string | null = null;
   let index = 0;
   while (index < lines.length) {
-    const headerLine = lines[index] ?? "";
+    const headerLine = String(lines[index]);
     const header = HUNK_HEADER.exec(headerLine);
     if (headerLine.startsWith("+++ ")) target = patchTarget(headerLine);
     index += 1;

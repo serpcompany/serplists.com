@@ -22,7 +22,7 @@ export function processEnvWithout(prefixes: readonly string[]): NodeJS.ProcessEn
   return { ...process.env, ...Object.fromEntries(removed) };
 }
 
-async function ranToTheEnd(command: string, args: readonly string[], options: SpawnOptions): Promise<ScriptProcessRun> {
+export async function ranToTheEnd(command: string, args: readonly string[], options: SpawnOptions): Promise<ScriptProcessRun> {
   const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
   const chunks = { stdout: '', stderr: '' };
   child.stdout.on('data', (chunk: Buffer) => (chunks.stdout += chunk.toString()));

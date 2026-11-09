@@ -22,11 +22,12 @@ const insertTemplate = (overrides: Partial<Record<string, unknown>> = {}) => {
     seo_description: 'Saved Clipy search description with five actionable steps.',
     is_public: 1,
     deleted_at: null,
+    created_at: '2026-09-04',
     ...overrides,
   };
   d1.run(
     `INSERT INTO templates (id, user_id, title, description, seo_title, seo_description, items, slug, is_public, deleted_at, created_at, owner_type, category)
-     VALUES (?, 'user-1', ?, ?, ?, ?, '[]', ?, ?, ?, '2026-09-04', 'user', '["packing"]')`,
+     VALUES (?, 'user-1', ?, ?, ?, ?, '[]', ?, ?, ?, ?, 'user', '["packing"]')`,
     row.id,
     row.title,
     row.description,
@@ -35,6 +36,7 @@ const insertTemplate = (overrides: Partial<Record<string, unknown>> = {}) => {
     row.slug,
     row.is_public,
     row.deleted_at,
+    row.created_at,
   );
 };
 
@@ -102,6 +104,16 @@ describe('template page metadata', () => {
       expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/alice/reviewed-clipy-checklist/');
       expect(JSON.stringify(metadata)).not.toContain(host);
     }
+  });
+
+  it('names no publish date for a template stored with an empty creation time', async () => {
+    insertTemplate({ created_at: '' });
+
+    const lookup = await loadTemplatePageSeo('alice', 'reviewed-clipy-checklist');
+
+    assert(lookup.kind === 'found');
+    expect(lookup.seo.title).toBe('Saved Clipy Search Title');
+    expect(lookup.seo.publishedTime).toBeUndefined();
   });
 
   it('uses the template id for a template without a slug', async () => {

@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, type PathLike, readFileSync, rmSync, type RmOptions, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { sectionRecordsIn } from '@/lib/schemas/jsonRecords';
 
 import {
@@ -20,6 +20,21 @@ import {
   saveSnapshot,
   scenarios,
 } from '../../../scripts/d1-profile-lib';
+
+const folderHeldOpen = vi.hoisted(() => ({ path: '' }));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    rmSync: (target: PathLike, options?: RmOptions) => {
+      if (target === folderHeldOpen.path) {
+        throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${folderHeldOpen.path}'`), { code: 'EBUSY' });
+      }
+      actual.rmSync(target, options);
+    },
+  };
+});
 
 const syntheticSections = [
   { id: 's1', title: 'Section', items: [{ id: 'i1', title: 'Task one' }, { id: 'i2', title: 'Task two' }] },
@@ -149,6 +164,20 @@ describe('pristine snapshot', () => {
     expect(readFileSync(path.join(statePath, database), 'utf8')).toBe('built');
     expect(readFileSync(path.join(statePath, `${database}-wal`), 'utf8')).toBe('wal');
     expect(existsSync(path.join(statePath, 'extra-file'))).toBe(false);
+  });
+
+  it('asks whoever runs it to stop the process holding the dataset open when it cannot reset it, and leaves the dataset as it was', () => {
+    writeFileSync(path.join(statePath, database), 'still open in wrangler');
+    folderHeldOpen.path = statePath;
+    try {
+      expect(() => restoreSnapshot({ snapshotPath, statePath })).toThrow(
+        `Could not reset ${statePath}; stop any d1:profile or wrangler process using it and retry. Error: EBUSY: resource busy or locked, rmdir '${statePath}'`,
+      );
+    } finally {
+      folderHeldOpen.path = '';
+    }
+
+    expect(readFileSync(path.join(statePath, database), 'utf8')).toBe('still open in wrangler');
   });
 
   it('never reuses a snapshot whose copy did not finish or whose meta is unreadable', () => {

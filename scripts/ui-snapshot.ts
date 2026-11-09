@@ -3,13 +3,14 @@ import path from "node:path";
 import { chromium, devices } from "@playwright/test";
 import { checkoutPorts } from "../tools/checks/ports.mjs";
 import { readDevSession } from "./dev-auto-lib";
+import { errorMessage } from "./lib/error-message";
 import { parseUiSnapArgs, UI_SNAP_USAGE, type UiSnapArgs } from "./ui-snapshot-lib";
 
 let options: UiSnapArgs;
 try {
   options = parseUiSnapArgs(process.argv.slice(2));
 } catch (error) {
-  console.error(`${error instanceof Error ? error.message : String(error)}\n${UI_SNAP_USAGE}`);
+  console.error(`${errorMessage(error)}\n${UI_SNAP_USAGE}`);
   process.exit(2);
 }
 const { routePath, outPath, ariaPath } = options;

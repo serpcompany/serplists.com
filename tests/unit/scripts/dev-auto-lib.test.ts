@@ -4,7 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { firstOf } from "../../support/elements";
+import { firstOf, present } from "../../support/elements";
 import { listeningPort } from "../../support/listeningPort";
 import {
   buildCorsAllowedOrigins,
@@ -178,6 +178,19 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
       expect(await isPortAvailable(holder.port)).toBe(false);
     } finally {
       await holder.release();
+    }
+  });
+
+  it("calls a port busy while a connection holds it as its own end, though nothing listens on it", async () => {
+    const server = net.createServer((socket) => socket.on("error", () => socket.destroy()));
+    await new Promise<void>((listening) => server.listen({ host: "127.0.0.1", port: 0 }, () => listening()));
+    const connection = net.connect({ host: "127.0.0.1", port: listeningPort(server) });
+    await new Promise<void>((connected) => connection.once("connect", () => connected()));
+    try {
+      expect(await isPortAvailable(present(connection.localPort, "the connection's own port"))).toBe(false);
+    } finally {
+      connection.destroy();
+      await new Promise<void>((closed) => server.close(() => closed()));
     }
   });
 

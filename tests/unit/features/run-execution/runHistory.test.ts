@@ -46,6 +46,16 @@ describe('run history query', () => {
     expect(buildRunHistoryQuery({ runId: undefined, mode: 'private', client }).enabled).toBe(false);
   });
 
+  it('names no run when the history of a run not yet known is fetched anyway, and keys it apart from every run', async () => {
+    const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(0)) };
+    const query = buildRunHistoryQuery({ runId: undefined, mode: 'private', client });
+
+    await query.queryFn();
+
+    expect(client.getChecklistHistory).toHaveBeenCalledWith('', { limit: RUN_HISTORY_PREVIEW_LIMIT });
+    expect(query.queryKey).toEqual(['checklist-run-history', 'none', { limit: RUN_HISTORY_PREVIEW_LIMIT }]);
+  });
+
   it('asks for the latest 100 after View all activity, under its own cache key, and shows up to 100', async () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(100)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client, showingAll: true });

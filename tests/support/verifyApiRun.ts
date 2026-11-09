@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -7,22 +6,23 @@ import { text } from 'node:stream/consumers';
 import { afterAll } from 'vitest';
 import { z } from 'zod';
 
-import { buildScriptInvocation } from '../../scripts/lib/run-tool';
+import type { CheckoutCopy } from './checkoutCopy';
+import { aCopyOfTheCheckoutWithStandIns, runTheCopysScriptToTheEnd } from './checkoutCopyWithStandIns';
 import { listeningPort } from './listeningPort';
+import { NEXT_DEV_STAND_IN } from './nextDevStandIn';
 
-const repoRoot = process.cwd();
-const script = path.join(repoRoot, '.claude', 'skills', 'verify-api', 'run.ts');
 export const SECRET = 'slrk_verify_api_test_secret';
 export const COOKIE = 'session=verify-api-test-cookie';
 const SECRET_THE_MCP_REFUSES = 'slrk_verify_api_secret_the_mcp_refuses';
 export const SLOW = 60_000;
 const plans = mkdtempSync(path.join(tmpdir(), 'verify-api-plans-'));
-const runFolders: string[] = [];
-const verifyFolders = path.join(repoRoot, 'tmp', 'agent', 'verify');
+const checkout = aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN, { asGitRepository: true });
+
+export const theCheckoutCopy = (): CheckoutCopy => checkout;
 
 afterAll(() => {
   rmSync(plans, { recursive: true, force: true });
-  for (const folder of runFolders) rmSync(folder, { recursive: true, force: true });
+  checkout.remove();
 });
 
 const rpcRequestSchema = z.object({
@@ -77,46 +77,58 @@ function answer(request: IncomingMessage, body: string, response: ServerResponse
   return send(404, { error: 'Not found' });
 }
 
-export function runTheScript(args: readonly string[]) {
-  const invocation = buildScriptInvocation(script, args);
-  return new Promise<{ status: number | null; output: string }>((resolve) => {
-    const child = spawn(invocation.command, invocation.args, { cwd: repoRoot });
-    let output = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.on('close', (status) => resolve({ status, output }));
-  });
+type ScriptOptions = { env?: Record<string, string>; preloads?: readonly string[] };
+
+export async function runTheScript(args: readonly string[], options: ScriptOptions = {}) {
+  const { status, stdout, stderr } = await runTheCopysScriptToTheEnd(theCheckoutCopy(), '.claude/skills/verify-api/run.ts', { args, ...options });
+  return { status, output: `${stdout}${stderr}` };
 }
 
-export async function verifyApi(name: string, plan: unknown, extra: string[] = [], { serverVersion = '0.6.0' } = {}) {
+type StandInOptions = { serverVersion?: string; onRequest?: (route: string) => void };
+
+export async function withTheStandInApi<T>(run: (origin: string, seen: readonly Seen[]) => Promise<T>, { serverVersion = '0.6.0', onRequest }: StandInOptions = {}) {
   const seen: Seen[] = [];
   const server = createServer((request, response) => {
     void text(request).then((body) => {
       const { cookie, authorization } = request.headers;
       seen.push({ method: request.method ?? 'GET', path: request.url ?? '/', cookie, authorization });
+      onRequest?.(`${request.method ?? 'GET'} ${request.url ?? '/'}`);
       answer(request, body, response, seen.length, serverVersion);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const planFile = path.join(plans, `${name}.json`);
-  if (plan !== undefined) writeFileSync(planFile, typeof plan === 'string' ? plan : JSON.stringify(plan));
-  const runName = `test-${name}-${process.pid}`;
-  const base = extra.length > 0 ? extra : ['--base', `http://127.0.0.1:${listeningPort(server)}`];
   try {
-    const result = await runTheScript([runName, planFile, ...base]);
-    const made = (existsSync(verifyFolders) ? readdirSync(verifyFolders) : [])
-      .filter((folder) => /^\d{4}-\d{2}-\d{2}-/.test(folder) && folder.slice(11) === runName)
-      .map((folder) => path.join(verifyFolders, folder));
-    runFolders.push(...made);
-    if (made.length > 1) throw new Error(`Expected at most one verify folder for ${runName}, found ${made.length}`);
-    return { ...result, seen, folder: made.join('') };
+    return await run(`http://127.0.0.1:${listeningPort(server)}`, seen);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+}
+
+export function aPlanFile(name: string, plan: unknown): string {
+  const planFile = path.join(plans, `${name}.json`);
+  if (plan !== undefined) writeFileSync(planFile, typeof plan === 'string' ? plan : JSON.stringify(plan));
+  return planFile;
+}
+
+export function theProofFolderOf(runName: string): string {
+  const verifyFolders = path.join(theCheckoutCopy().root, 'tmp', 'agent', 'verify');
+  const made = (existsSync(verifyFolders) ? readdirSync(verifyFolders) : [])
+    .filter((folder) => /^\d{4}-\d{2}-\d{2}-/.test(folder) && folder.slice(11) === runName)
+    .map((folder) => path.join(verifyFolders, folder));
+  if (made.length > 1) throw new Error(`Expected at most one verify folder for ${runName}, found ${made.length}`);
+  return made.join('');
+}
+
+export async function verifyApi(name: string, plan: unknown, extra: string[] = [], { serverVersion = '0.6.0' } = {}) {
+  const planFile = aPlanFile(name, plan);
+  const runName = `test-${name}-${process.pid}`;
+  return withTheStandInApi(
+    async (origin, seen) => {
+      const result = await runTheScript([runName, planFile, ...(extra.length > 0 ? extra : ['--base', origin])]);
+      return { ...result, seen, folder: theProofFolderOf(runName) };
+    },
+    { serverVersion },
+  );
 }
 
 export const proof = (folder: string, file: string) => readFileSync(path.join(folder, file), 'utf8');

@@ -88,6 +88,21 @@ async function openTheTemplate(options = onTheTemplatePage) {
   return page.current;
 }
 
+function aShareSaveThatWaits() {
+  let finishSaving = () => {};
+  apiMock.updateTemplate.mockImplementation(
+    () => new Promise((resolve) => {
+      finishSaving = () => resolve({ success: true, id: 'template-7', version: 3, slug: 'quarterly-audit' });
+    }),
+  );
+  return (sharing: Promise<unknown>) =>
+    act(async () => {
+      finishSaving();
+      await sharing;
+      await settle();
+    });
+}
+
 describe('the actions on a template page', () => {
   it('starts a run of the template under the name typed', async () => {
     createRun.mockResolvedValue({
@@ -124,12 +139,7 @@ describe('the actions on a template page', () => {
   });
 
   it('keeps showing the template opened while an earlier share was still saving', async () => {
-    let finishSaving = () => {};
-    apiMock.updateTemplate.mockImplementation(
-      () => new Promise((resolve) => {
-        finishSaving = () => resolve({ success: true, id: 'template-7', version: 3, slug: 'quarterly-audit' });
-      }),
-    );
+    const finishTheShare = aShareSaveThatWaits();
     apiMock.getTemplateById.mockImplementation(async (id: string) =>
       id === 'template-8' ? { ...storedTemplate, id: 'template-8', title: 'Annual Review', slug: 'annual-review' } : { ...server },
     );
@@ -147,14 +157,28 @@ describe('the actions on a template page', () => {
       expect(page.current().model.template?.title).toBe('Annual Review');
     });
 
-    await act(async () => {
-      finishSaving();
-      await sharing;
-      await settle();
-    });
+    await finishTheShare(sharing);
 
     expect(await sharing).toEqual({ kind: 'ok', shareUrl: `${window.location.origin}/profile/alice/quarterly-audit/` });
     expect(page.current().model.template).toMatchObject({ id: 'template-8', title: 'Annual Review', isPublic: false });
+  });
+
+  it('leaves a template deleted while its share was saving gone, rather than showing it again', async () => {
+    const finishTheShare = aShareSaveThatWaits();
+    const page = await openTheTemplate();
+    const sharing = page().shareTemplate();
+    apiMock.getTemplateById.mockRejectedValue(createApiError(404, { error: 'Not found' }));
+    apiMock.getTemplateBySlug.mockRejectedValue(createApiError(404, { error: 'Not found' }));
+
+    await act(async () => {
+      page().reload();
+      await settle();
+    });
+    expect(page().notFound).toBe(true);
+    await finishTheShare(sharing);
+
+    expect(page().template).toBeNull();
+    expect(page().notFound).toBe(true);
   });
 
   it('moves the template into an Organization and shows it there', async () => {

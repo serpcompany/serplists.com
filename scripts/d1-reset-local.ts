@@ -1,8 +1,10 @@
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { errorMessage } from "./lib/error-message";
 import { DATABASE_NAME, RESET_SEED_STEPS, seedStepInvocation } from "./lib/local-d1-seed";
 import { buildToolInvocation, type Invocation } from "./lib/run-tool";
 
@@ -15,9 +17,10 @@ const localD1StatePath = path.resolve(
 const retryableDeleteCodes = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
 const errorWithCodeSchema = z.object({ code: z.string() });
 
-if (!localD1StatePath.startsWith(path.join(repoRoot, ".wrangler"))) {
-  throw new Error(`Refusing to reset unexpected D1 state path: ${localD1StatePath}`);
-}
+assert.ok(
+  localD1StatePath.startsWith(path.join(repoRoot, ".wrangler")),
+  `Refusing to reset unexpected D1 state path: ${localD1StatePath}`,
+);
 
 function run({ command, args, options }: Invocation) {
   execFileSync(command, args, {
@@ -62,6 +65,6 @@ try {
   for (const step of RESET_SEED_STEPS) run(seedStepInvocation(step));
   console.log("Local D1 reset complete");
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 }

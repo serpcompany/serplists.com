@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { sql, type SQL } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { schema } from '@functions/api/db';
-import { insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
 import { activeRunCapacityAvailableSql } from '@functions/api/utils/active-run-limit';
 
 const drizzleWithoutD1 = drizzle(d1ThatRunsNoQuery(), { schema });
@@ -111,5 +111,21 @@ describe('insertRowWhere', () => {
 
     expect(query.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"."id" = \?\)$/);
     expect(query.params.at(-1)).toBe('run-1');
+  });
+});
+
+describe('withoutColumns', () => {
+  it('refuses a table that does not keep its columns where this Drizzle version does', () => {
+    const widgets = sqliteTable('widgets', { id: text('id').primaryKey(), note: text('note') });
+    Reflect.deleteProperty(widgets, Symbol.for('drizzle:Columns'));
+
+    expect(() => withoutColumns(widgets, ['note'])).toThrow('withoutColumns: unsupported Drizzle table layout');
+  });
+});
+
+describe('allConditions', () => {
+  it('refuses to build a guard from no condition at all', () => {
+    expect(() => allConditions()).toThrow('allConditions: pass at least one condition');
+    expect(() => allConditions(undefined)).toThrow('allConditions: pass at least one condition');
   });
 });

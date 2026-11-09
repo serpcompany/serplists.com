@@ -65,6 +65,19 @@ describe('templateLint Markdown round-trip', () => {
     ]);
   });
 
+  it('says the generated Markdown does not import, for an unknown reason, when its import fails with something other than an Error', async () => {
+    readFileMock.mockResolvedValueOnce(yamlWithMarkdownText);
+    markdownParserBrokenByTheTest.current = () => {
+      throw 'the Markdown parser gave up';
+    };
+
+    const issues = await lintYamlTemplateBundle('/repo/template.yaml', {});
+
+    expect(issues).toEqual([
+      { filePath: '/repo/template.yaml', code: 'markdown-roundtrip', message: 'Generated Markdown does not import: unknown parse error' },
+    ]);
+  });
+
   it('reports generated Markdown that imports as a different template', async () => {
     readFileMock.mockResolvedValueOnce(yamlWithMarkdownText);
     markdownParserBrokenByTheTest.current = () => ({

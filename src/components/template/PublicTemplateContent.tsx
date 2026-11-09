@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -45,7 +45,7 @@ export function PublicTemplateContent({
     }));
   };
 
-  const renderContent = (content: ChecklistItemContent, itemTitle: string) => {
+  const renderContent = (content: ChecklistItemContent, itemTitle: string): JSX.Element | null => {
     switch (content.type) {
       case 'text':
         return content.value ? (
@@ -154,12 +154,6 @@ export function PublicTemplateContent({
             <FormFieldList fields={content.fields} />
           </div>
         ) : null;
-
-      default: {
-        const unhandledType: never = content.type;
-        void unhandledType;
-        return null;
-      }
     }
   };
 
@@ -263,7 +257,7 @@ export function PublicTemplateContent({
               </h3>
             </div>
             <p className="shrink-0 text-sm whitespace-nowrap text-muted-foreground">
-              {formatCount(section.items?.length ?? 0, 'task')}
+              {formatCount(section.items.length, 'task')}
             </p>
           </div>
 

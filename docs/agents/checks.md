@@ -240,16 +240,20 @@ should happen, or delete the code nothing needs. A test that only reaches a line
 the `pr-review` skill's tests reviewer sends back.
 
 - **The reports**, as `coverage.reports` in `verify.json` lists them: `test:run` runs every
-  project (node, dom and local-d1) in one run, which writes `coverage/tests`. Two runs number a
-  file's branches differently, since V8 reports blocks only for code that ran, so their lcov
-  records can't be merged: keep every suite in that one run, as a project of its own. The
-  process entry points the node and dom tests spawn write `coverage/tests-children`:
-  `tests/support/childProcessCoverage.ts` gives each child `NODE_V8_COVERAGE`, and c8 reports the
-  files `PROCESS_ENTRY_POINTS` names. A spawning helper keeps that variable in the child's
-  environment. A library module counts only from the tests that import it, and an entry point the
-  children report holds only from the processes that ran it: the teardown drops it from
-  `coverage/tests`. Coverage slows rendering, so the dom project gives each test 15 seconds and
-  local-d1 20; a test that spawns a script sets its own `{ timeout: 120_000 }`.
+  project (node, dom and local-d1) in one run, which writes `coverage/tests`; two runs number a
+  file's branches differently, since V8 reports blocks only for code that ran, so keep every
+  suite in that one run, as a project of its own. The process entry points the node and dom tests
+  spawn write `coverage/tests-children`: `tests/support/childProcessCoverage.ts` gives each child
+  `NODE_V8_COVERAGE`, and c8 reports the files `PROCESS_ENTRY_POINTS` names. A library module
+  counts only from the tests that import it, and an entry point only from the processes that ran
+  it, so the teardown drops it from `coverage/tests`. Coverage slows rendering, so the dom project
+  gives each test 15 seconds and local-d1 20, and a test that spawns a script its own
+  `{ timeout: 120_000 }`.
+- **A script that writes the checkout** runs from `aCopyOfTheCheckout()`
+  (`tests/support/checkoutCopy.ts`): a throwaway copy of the tracked and untracked files, its
+  `node_modules` linked to the checkout's, removed in a `finally`. Its children's coverage counts
+  for the checkout's files: the teardown rewrites the copy's paths to the checkout's and clamps
+  each V8 range to the code before tsx's inline source map, whose length the copy's path changes.
 - **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
   `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
   `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an

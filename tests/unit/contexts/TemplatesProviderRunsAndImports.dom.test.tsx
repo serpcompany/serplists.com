@@ -179,6 +179,15 @@ describe('TemplatesProvider importTemplates', () => {
     expect(firstOf(apiMock.importTemplateBackup.mock.calls)[0]).toMatchObject({ options: { visibility: 'preserve' } });
   });
 
+  it('imports every template with the visibility the import chose', async () => {
+    apiMock.importTemplateBackup.mockResolvedValue({ total: 1, imported: 1, failed: [] });
+    const { context } = renderTemplatesProvider();
+
+    await context.importTemplates([launchChecklist()], { visibility: 'private' });
+
+    expect(firstOf(apiMock.importTemplateBackup.mock.calls)[0]).toMatchObject({ options: { visibility: 'private' } });
+  });
+
   it(`refuses more than ${MAX_TEMPLATES_PER_IMPORT} templates in one file without sending any`, async () => {
     const { context } = renderTemplatesProvider();
     const tooMany = Array.from({ length: MAX_TEMPLATES_PER_IMPORT + 1 }, (_, index) => launchChecklist({ id: `template-${index}` }));

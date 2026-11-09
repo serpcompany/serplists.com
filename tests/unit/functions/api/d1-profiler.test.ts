@@ -71,6 +71,12 @@ class CountingDatabase extends D1DatabaseDouble {
   }
 }
 
+class DatabaseAnsweringOneResultTooMany extends CountingDatabase {
+  protected override async batchRows(statements: D1PreparedStatement[]) {
+    return [...await super.batchRows(statements), d1Result([])];
+  }
+}
+
 function fakeDatabase() {
   const db = new CountingDatabase();
   return { db, calls: db.calls };
@@ -102,6 +108,15 @@ describe("withD1Profiling", () => {
     await profiled.prepare("update runs set progress = 1").run();
     await profiled.batch([profiled.prepare("select 1"), profiled.prepare("select 2")]);
     expect(records.map((r) => r.sql)).toEqual(["update runs set progress = 1", "select 1", "select 2"]);
+  });
+
+  it("records a result a batch answers beyond its statements as an unknown batch statement", async () => {
+    const records: D1QueryRecord[] = [];
+    const profiled = withD1Profiling(new DatabaseAnsweringOneResultTooMany(), (r) => records.push(r));
+
+    await profiled.batch([profiled.prepare("select 1")]);
+
+    expect(records.map((r) => r.sql)).toEqual(["select 1", "(unknown batch statement)"]);
   });
 
   it("hands raw() its column names on a read, measured by a separate all()", async () => {

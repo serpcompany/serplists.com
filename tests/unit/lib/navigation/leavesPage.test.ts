@@ -26,4 +26,9 @@ describe('whether a link leaves the page, while the page renders on the server',
     expect(leavesPage({ query: { tab: 'runs' } }, null)).toBe(false);
     expect(leavesPage('/templates/', null)).toBe(true);
   });
+
+  it('reads an empty link as the folder of the page it is on, which the root page does not leave', () => {
+    expect(leavesPage('', '/')).toBe(false);
+    expect(leavesPage({}, '/templates/')).toBe(true);
+  });
 });

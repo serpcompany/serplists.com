@@ -1,4 +1,4 @@
-import React, { StrictMode } from 'react';
+import React, { StrictMode, useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
 
@@ -27,5 +27,36 @@ describe('usePageVisit', () => {
     );
 
     expect(beginVisit?.().isCurrent()).toBe(true);
+  });
+});
+
+describe('usePageVisit loaded with a window, as in a browser, or with none, as on the server', () => {
+  const whatAChildEffectSeesOnTheFirstRender = async (useTheVisit: typeof usePageVisit) => {
+    navigation.reset('/dashboard/templates/');
+    let seen: boolean | undefined;
+    function Child({ beginVisit }: { beginVisit: () => PageVisit }) {
+      useEffect(() => {
+        seen = beginVisit().isCurrent();
+      }, [beginVisit]);
+      return null;
+    }
+    function Page() {
+      return <Child beginVisit={useTheVisit()} />;
+    }
+    await renderSettled(<Page />);
+    return seen;
+  };
+
+  it('enters the visit before the effects of what the page renders, in a browser', async () => {
+    expect(await whatAChildEffectSeesOnTheFirstRender(usePageVisit)).toBe(true);
+  });
+
+  it('enters it in an effect of its own when loaded with no window, which runs after the effects of what the page renders', async () => {
+    vi.resetModules();
+    vi.stubGlobal('window', undefined);
+    const loaded = await import('@/hooks/usePageVisit');
+    vi.unstubAllGlobals();
+
+    expect(await whatAChildEffectSeesOnTheFirstRender(loaded.usePageVisit)).toBe(false);
   });
 });

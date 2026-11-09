@@ -89,11 +89,7 @@ const normalizeContents = (contents?: PortableContent[]) => {
       type: content.type,
     };
 
-    const normalizedValue = holdsNoValue(content.type)
-      ? ""
-      : typeof content.value === "string"
-        ? content.value.trim()
-        : "";
+    const normalizedValue = holdsNoValue(content.type) ? "" : content.value.trim();
 
     if (!holdsNoValue(content.type)) {
       nextContent.value = normalizedValue;

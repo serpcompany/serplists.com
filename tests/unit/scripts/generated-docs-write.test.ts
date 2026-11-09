@@ -1,10 +1,12 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { REPO_ROOT } from '../../../scripts/lib/run-tool';
+import { aCopyOfTheCheckout } from '../../support/checkoutCopy';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { runRepositoryScript } from '../../support/repositoryScriptRun';
+import { runTheCopysScript } from '../../support/scriptInACheckoutCopy';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const workDir = aWorkDirRemovedAfterAll('generated-docs-');
@@ -22,6 +24,43 @@ describe('pnpm run db:schema:generate', { timeout: 60_000 }, () => {
     expect(generated.stdout).toMatch(/^Wrote docs\/api\/db-schema\.md \(\d+ tables\)\n$/);
     expect(written(checkout, 'docs/api/db-schema.md')).toBe(committed('docs/api/db-schema.md'));
     expect(runRepositoryScript('scripts/generate-db-schema-doc.ts', ['--check'], { cwd: checkout }).stdout).toContain('docs/api/db-schema.md is up to date');
+  });
+});
+
+describe('pnpm run db:schema:generate on a schema holding what the committed one does not use', { timeout: 300_000 }, () => {
+  const notesTable = [
+    'import { sql } from "drizzle-orm";',
+    'import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";',
+    'import { users } from "./users";',
+    '',
+    'export const notes = sqliteTable(',
+    '  "notes",',
+    '  {',
+    '    id: text("id").primaryKey(),',
+    '    owner_id: text("owner_id").references(() => users.id),',
+    '    title: text("title").notNull().default(sql`${"untitled"}`),',
+    '  },',
+    '  (table) => [index("notes_by_lower_title").on(sql`lower(${table.title})`)],',
+    ');',
+    '',
+  ].join('\n');
+
+  it('documents a foreign key with no on-delete rule, a default built from a value, and an index on an expression', async () => {
+    const copy = aCopyOfTheCheckout();
+    try {
+      writeFileSync(path.join(copy.root, 'db', 'schema', 'notes.ts'), notesTable);
+      appendFileSync(path.join(copy.root, 'db', 'schema', 'index.ts'), 'export { notes } from "./notes";\n');
+
+      const run = await runTheCopysScript(copy, 'scripts/generate-db-schema-doc.ts');
+
+      expect(run.status).toBe(0);
+      const doc = written(copy.root, 'docs/api/db-schema.md');
+      expect(doc).toContain('| `owner_id` | text | yes |  | FK → users.id |\n');
+      expect(doc).toContain('| `title` | text | no | untitled |  |\n');
+      expect(doc).toContain('- `notes_by_lower_title` on ((expression))\n');
+    } finally {
+      copy.remove();
+    }
   });
 });
 

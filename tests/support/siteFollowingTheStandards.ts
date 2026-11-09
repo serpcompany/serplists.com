@@ -1,6 +1,10 @@
+import type { RequestListener } from 'node:http';
+import { createServer } from 'node:https';
+
 import type { SiteRequest } from '../../scripts/check-site-standards-lib';
 import { loadBuiltRoutes, workerRedirect } from './builtRoutes';
-import { whileServingLocally } from './localHttpServer';
+import { whileListeningLocally, whileServingLocally } from './localHttpServer';
+import type { SelfSignedCertificate } from './selfSignedCertificate';
 
 export async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'staging', { brokenApi = false, templatesStatus = 200 } = {}) {
   const { redirects } = await loadBuiltRoutes(siteEnv);
@@ -35,16 +39,24 @@ export async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' 
 
 type StandInSite = Awaited<ReturnType<typeof deployedWorkerWithTheBuiltRedirects>>;
 
-export function servedOverHttp<T>(site: StandInSite, run: (origin: string) => Promise<T>): Promise<T> {
-  return whileServingLocally((incoming, outgoing) => {
+const answeringAs =
+  (site: StandInSite, protocol: 'http' | 'https'): RequestListener =>
+  (incoming, outgoing) => {
     const host = incoming.headers.host ?? '127.0.0.1';
     const headers = Object.fromEntries(
       Object.entries(incoming.headers).flatMap(([name, value]) => (typeof value === 'string' ? [[name, value]] : [])),
     );
-    site(`http://${host}${incoming.url ?? '/'}`, { headers })
+    site(`${protocol}://${host}${incoming.url ?? '/'}`, { headers })
       .then(({ status, location, headers: answerHeaders, body }) => {
         outgoing.writeHead(status, { ...answerHeaders, ...(location === null ? {} : { location }) }).end(body);
       })
       .catch((error: unknown) => outgoing.writeHead(500).end(String(error)));
-  }, run);
+  };
+
+export function servedOverHttp<T>(site: StandInSite, run: (origin: string) => Promise<T>): Promise<T> {
+  return whileServingLocally(answeringAs(site, 'http'), run);
+}
+
+export function servedOverHttps<T>(site: StandInSite, certificate: SelfSignedCertificate, run: (origin: string) => Promise<T>): Promise<T> {
+  return whileListeningLocally(createServer(certificate, answeringAs(site, 'https')), (port) => `https://localhost:${port}`, run);
 }

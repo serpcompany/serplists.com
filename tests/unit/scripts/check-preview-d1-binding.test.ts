@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { findPreviewD1BindingProblem } from '../../../scripts/check-preview-d1-binding-lib';
 import { readD1Databases } from '../../../scripts/d1-baseline-migrations-lib';
 import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
+import { aCopyOfTheCheckout } from '../../support/checkoutCopy';
+import { runTheCopysScript } from '../../support/scriptInACheckoutCopy';
 
 const repoRoot = process.cwd();
 
@@ -59,5 +61,26 @@ describe('the preview D1 binding check', () => {
     const analytics = inlineTable({ binding: 'ANALYTICS', database_id: 'prod-1', preview_database_id: 'prod-1' });
 
     expect(problemIn(wranglerToml(separate, [analytics]))).toBeNull();
+  });
+});
+
+describe('pnpm run check:preview:d1-binding in a checkout whose preview binding points at the production database', () => {
+  it('prints the problem and exits 1, so the deploy stops before it can write production data', { timeout: 300_000 }, async () => {
+    const committed = readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8');
+    const { topLevel } = readD1Databases(committed);
+    const app = topLevel.find((database) => database.binding === 'DB');
+    const sharingProduction = committed.replaceAll(app?.preview_database_id ?? '', app?.database_id ?? '');
+    const copy = aCopyOfTheCheckout();
+
+    try {
+      writeFileSync(path.join(copy.root, 'wrangler.toml'), sharingProduction);
+      const run = await runTheCopysScript(copy, 'scripts/check-preview-d1-binding.ts');
+
+      expect(run.status).toBe(1);
+      expect(run.stderr).toBe(`${problemIn(sharingProduction) ?? 'a problem'}\n`);
+      expect(run.stdout).toBe('');
+    } finally {
+      copy.remove();
+    }
   });
 });

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { z } from "zod";
 import { normalizeSqlFormatting } from "../check-production-d1-schema-lib";
+import { errorMessage } from "../lib/error-message";
 import { execTool, type ToolName } from "../lib/run-tool";
 import { readSqlOnlySchema } from "../lib/sql-only-schema";
 import { parseWranglerResultSets } from "../lib/wrangler-json";
@@ -45,12 +46,12 @@ const indexRowSchema = z.object({
 });
 const indexColumnRowSchema = z.object({ source_index: z.string(), name: z.unknown() });
 
-function run(tool: ToolName, args: string[], options: { capture?: boolean } = {}): string {
+function run(tool: ToolName, args: string[]): string {
   return execTool(tool, args, {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 20 * 1024 * 1024,
   });
 }
@@ -69,7 +70,6 @@ function wranglerJson(persistPath: string, statement: string): unknown[] {
       "--command",
       statement,
     ],
-    { capture: true },
   );
   return parseWranglerResultSets(output)[0]?.results ?? [];
 }
@@ -98,7 +98,6 @@ function wranglerUnion(persistPath: string, statements: readonly string[]): unkn
       "--command",
       statements.map((statement) => statement.trim().replace(/;$/, "")).join(" UNION ALL "),
     ],
-    { capture: true },
   );
   return parseWranglerResultSets(output).flatMap(({ results }) => results ?? []);
 }
@@ -329,13 +328,13 @@ async function main() {
     run("wrangler", [
       "d1", "migrations", "apply", database,
       "--local", "--persist-to", authoritativePersist,
-    ], { capture: true });
+    ]);
     run("drizzle-kit", [
       "generate",
       "--dialect", "sqlite",
       "--schema", "./db/schema/index.ts",
       "--out", generatedOutput,
-    ], { capture: true });
+    ]);
     const sqlFiles = readdirSync(generatedOutput).filter((name) => name.endsWith(".sql"));
     const [sqlFile] = sqlFiles;
     assert.equal(sqlFiles.length, 1, "expected exactly one generated baseline SQL file");
@@ -345,7 +344,7 @@ async function main() {
     run("wrangler", [
       "d1", "execute", database,
       "--local", "--persist-to", generatedPersist, "--file", generatedSqlPath,
-    ], { capture: true });
+    ]);
 
     const authoritative = await loadCatalog(authoritativePersist);
     const generated = await loadCatalog(generatedPersist);
@@ -372,6 +371,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 });

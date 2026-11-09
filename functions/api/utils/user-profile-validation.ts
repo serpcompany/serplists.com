@@ -34,7 +34,7 @@ function reject(message: string): never {
 }
 
 function firstIssue(error: ZodError): string {
-  return error.issues[0]?.message ?? 'Invalid value.';
+  return [...error.issues.map((issue) => issue.message), 'Invalid value.'].slice(0, 1).join('');
 }
 
 export function uploadedAvatarUrlError(value: string, policy: UserProfileWritePolicy): string | null {

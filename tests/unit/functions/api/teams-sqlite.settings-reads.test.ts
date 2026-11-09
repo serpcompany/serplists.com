@@ -10,16 +10,33 @@ function addTeamAudit(id: string, metadataJson: string | null) {
   );
 }
 
+function archiveTheOrganizationJustBeforeItIsRead() {
+  d1.setStatementHook((sql) => {
+    if (!/^select .* from "teams" where/.test(sql)) return;
+    d1.setStatementHook(null);
+    d1.run("UPDATE teams SET archived_at = ? WHERE id = 'team-1'", createdAt);
+  });
+}
+
 describe("Organization settings and activity, against SQLite", () => {
   beforeEach(openTheSeededOrganization);
   afterEach(expectOneActiveOwnerAndClose);
 
-  it("answers 404 to a settings change once the Organization is archived, and keeps its name", async () => {
-    d1.run("UPDATE teams SET archived_at = ? WHERE id = 'team-1'", createdAt);
+  it.each([
+    ["once the Organization is archived", () => d1.run("UPDATE teams SET archived_at = ? WHERE id = 'team-1'", createdAt)],
+    ["on an Organization archived after its member was checked", archiveTheOrganizationJustBeforeItIsRead],
+  ])("answers 404 to a settings change %s, and keeps its name", async (_when, archive) => {
+    archive();
 
     expect(await asUser("admin-user", "PUT", "/team-1", { name: "Renamed" }))
       .toMatchObject({ status: 404, data: { error: "Organization not found" } });
     expect(d1.rows("SELECT name FROM teams WHERE id = 'team-1'")).toEqual([{ name: "Acme" }]);
+  });
+
+  it("answers 404 to a read of an Organization archived after its member was checked", async () => {
+    archiveTheOrganizationJustBeforeItIsRead();
+
+    expect(await asUser("member-user", "GET", "/team-1")).toMatchObject({ status: 404, data: { error: "Organization not found" } });
   });
 
   it("lists activity with metadata that is not JSON as none", async () => {

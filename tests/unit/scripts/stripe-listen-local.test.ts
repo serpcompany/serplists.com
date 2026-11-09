@@ -7,6 +7,7 @@ import { z } from "zod";
 import { stringMatching } from "../../support/asymmetricMatchers";
 import { STRIPE_CLI_LISTEN_STAND_IN } from "../../fixtures/stripeCliListenStandIn";
 import { processEnvWithout, runScriptProcess } from "../../support/scriptProcess";
+import { askForASignal, SIGNAL_WHEN_ASKED, signalWhenAskedEnv } from "../../support/signalWhenAsked";
 
 const SCRIPT = "scripts/stripe/listen-local.ts";
 const TEST_KEY = "STRIPE_SECRET_KEY=sk_test_listener\n";
@@ -47,15 +48,20 @@ function startDevAllOn(port: number) {
   writeFileSync(inCheckout("tmp/dev-session.json"), JSON.stringify({ port, pid: process.pid, startedAt: Date.now() }));
 }
 
-function listen({ devVars = TEST_KEY, env = {} }: { devVars?: string; env?: Record<string, string> } = {}) {
+function listen({ devVars = TEST_KEY, env = {}, preloads = [] }: { devVars?: string; env?: Record<string, string>; preloads?: string[] } = {}) {
   writeFileSync(inCheckout(".dev.vars"), devVars);
   const inherited = processEnvWithout(["STRIPE_"]);
   const pathName = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
   return runScriptProcess(SCRIPT, {
     cwd: checkout,
     env: { ...inherited, [pathName]: `${stripeCliBin}${path.delimiter}${process.env[pathName] ?? ""}`, ...env },
+    preloads,
   });
 }
+
+const FORWARD_TO = "http://localhost:4100/api/stripe/webhook";
+const forwardedTo = () => stripeCliCalls().map(({ args }) => args.at(-1));
+const restarts = (stdout: string) => stdout.split("\n").filter((line) => line.endsWith("Restarting the listener."));
 
 describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => {
   it("runs stripe listen with the test key, saves the webhook secret to .dev.vars and never prints it", async () => {
@@ -101,6 +107,43 @@ describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => 
     expect(forwardedTo[0]).not.toBe(forwardedTo[1]);
     expect(run.stdout).toContain("dev:all is not running in this checkout yet.");
     expect(run.stdout).toContain("This checkout's API is at http://localhost:4999/api/stripe/webhook. Restarting the listener.");
+  }, 30_000);
+
+  it("keeps forwarding to the URL it is given while dev:all runs on another port, checking each time dev:all could have moved", async () => {
+    startDevAllOn(4999);
+
+    const run = await listen({ env: { STRIPE_LOCAL_WEBHOOK_URL: FORWARD_TO, STRIPE_CLI_STAND_IN_RUNS_FOR_MS: "3000" } });
+
+    expect(run.status).toBe(0);
+    expect(forwardedTo()).toEqual([FORWARD_TO]);
+    expect(restarts(run.stdout)).toEqual([]);
+  }, 30_000);
+
+  it("restarts once on dev:all's port when the listener it stops takes longer than a check to stop", async () => {
+    const listening = listen({ env: { STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1", STRIPE_CLI_STAND_IN_SLOW_TO_STOP_MS: "2500" } });
+    await vi.waitFor(() => expect(stripeCliCalls()).toHaveLength(1), { timeout: 20_000, interval: 50 });
+    startDevAllOn(4998);
+
+    const run = await listening;
+
+    expect(run.status).toBe(0);
+    expect(forwardedTo()).toEqual([stringMatching(/^http:\/\/localhost:\d+\/api\/stripe\/webhook$/), "http://localhost:4998/api/stripe/webhook"]);
+    expect(restarts(run.stdout)).toEqual(["[stripe-listen] This checkout's API is at http://localhost:4998/api/stripe/webhook. Restarting the listener."]);
+  }, 30_000);
+
+  it.each(["SIGINT", "SIGTERM"] as const)("stops the listener when it is sent %s, as a terminal's Ctrl+C or a stop does, and ends with status 1", async (signal) => {
+    const requestFile = inCheckout("signal-request");
+    const listening = listen({
+      env: { STRIPE_LOCAL_WEBHOOK_URL: FORWARD_TO, STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1", ...signalWhenAskedEnv(requestFile) },
+      preloads: [SIGNAL_WHEN_ASKED],
+    });
+    await vi.waitFor(() => expect(stripeCliCalls()).toHaveLength(1), { timeout: 20_000, interval: 50 });
+
+    askForASignal(requestFile, signal);
+    const run = await listening;
+
+    expect(run.status).toBe(1);
+    expect(forwardedTo()).toEqual([FORWARD_TO]);
   }, 30_000);
 
   it("needs a test key", async () => {

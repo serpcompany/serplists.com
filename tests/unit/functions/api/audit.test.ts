@@ -355,4 +355,10 @@ describe('buildTemplateVersionValues', () => {
   it('stores the change summary it is given', async () => {
     expect((await buildTemplateVersionValues({ ...version, changeSummary: 'template.updated' })).change_summary).toBe('template.updated');
   });
+
+  it('stores an empty object, hashed, for a snapshot whose JSON form is nothing at all', async () => {
+    const values = await buildTemplateVersionValues({ ...version, snapshot: { toJSON: () => undefined } });
+
+    expect(values).toMatchObject({ snapshot_json: '{}', content_hash: await sha256Hex('{}') });
+  });
 });

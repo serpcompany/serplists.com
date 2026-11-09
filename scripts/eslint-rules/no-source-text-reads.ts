@@ -141,10 +141,10 @@ const firstSourcePath = (texts: readonly string[], options: { folderIsSource: bo
 function sourcePathNamedBy(text: string, { folderIsSource }: { folderIsSource: boolean }): string | null {
   const segments = text.replace(/\\/g, "/").split("/");
   let start = 0;
-  while (start < segments.length && ["", ".", ".."].includes((segments[start] ?? "").replaceAll(UNKNOWN, ""))) start += 1;
-  if (start >= segments.length || !SOURCE_FOLDERS.has(segments[start] ?? "")) return null;
+  while (start < segments.length && ["", ".", ".."].includes(String(segments[start]).replaceAll(UNKNOWN, ""))) start += 1;
+  if (start >= segments.length || !SOURCE_FOLDERS.has(String(segments[start]))) return null;
   const named = segments.slice(start).join("/").replaceAll(UNKNOWN, "*");
-  const last = segments.at(-1) ?? "";
+  const last = String(segments.at(-1));
   const knownEnd = last.slice(last.lastIndexOf(UNKNOWN) + 1);
   if (last.includes(UNKNOWN) && !NAMED_FILE.test(knownEnd)) return named;
   if (!NAMED_FILE.test(knownEnd)) return folderIsSource ? named : null;

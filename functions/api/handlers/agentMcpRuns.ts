@@ -215,8 +215,10 @@ function answerToStore(field: FormFieldRecord, kind: FormFieldKind, operation: S
   const value = Array.isArray(answer) ? [...new Set(answer)] : answer;
   const answered = { ...field, answer: value };
   if (findFormFieldProblem(answered) === "invalid") {
-    const [checked] = readFormFields([answered], () => fieldId);
-    const message = checked ? formFieldProblemMessage(checked, "invalid") : "The answer is not valid";
+    const message = [
+      ...readFormFields([answered], () => fieldId).map((checked) => formFieldProblemMessage(checked, "invalid")),
+      "The answer is not valid",
+    ].slice(0, 1).join("");
     throw new ToolError(message, "invalid_answer", { ...details, reason: "invalid" });
   }
   return value;

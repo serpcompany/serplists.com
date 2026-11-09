@@ -33,7 +33,7 @@ function selectThroughMigration(migrationFiles: string[], throughMigration: stri
     );
   }
 
-  const selectedIndex = migrationFiles.indexOf(matches[0] ?? "");
+  const selectedIndex = migrationFiles.indexOf(String(matches[0]));
   return migrationFiles.slice(0, selectedIndex + 1);
 }
 

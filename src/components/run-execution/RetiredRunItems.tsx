@@ -105,10 +105,6 @@ function RetiredEntry({ entry }: { entry: RetiredRunItem }): JSX.Element {
           </p>
         </div>
       );
-    default: {
-      const unreachable: never = entry;
-      return unreachable;
-    }
   }
 }
 

@@ -35,6 +35,15 @@ const generateFrom = (context: unknown) => handleGenerateTemplateFromClipy(reque
   getUserId: vi.fn().mockResolvedValue('user-1'),
 });
 
+async function imagesOfTheSteps(context: unknown): Promise<string[]> {
+  const payload = await readJson(await generateFrom(context), clipyDraftBody);
+  return sectionAt(payload.draft, 0).items
+    .slice(1)
+    .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
+    .filter((content: { type: string }) => content.type === 'image')
+    .map((content: { value: string }) => content.value);
+}
+
 async function expectNotReady(context: unknown) {
   const response = await generateFrom(context);
 
@@ -166,19 +175,24 @@ describe('Clipy template generation', () => {
         frameUrl: 'https://cdn.clipy.online/key-moments/demo/second.jpg',
       },
     ];
-    const response = await generateFrom(context);
-    const payload = await readJson(response, clipyDraftBody);
 
-    expect(
-      sectionAt(payload.draft, 0).items
-        .slice(1)
-        .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
-        .filter((content: { type: string }) => content.type === 'image')
-        .map((content: { value: string }) => content.value),
-    ).toEqual([
+    expect(await imagesOfTheSteps(context)).toEqual([
       'https://cdn.clipy.online/key-moments/demo/first.jpg',
       'https://cdn.clipy.online/key-moments/demo/second.jpg',
       'https://cdn.clipy.online/key-moments/demo/third.jpg',
+    ]);
+  });
+
+  it('gives a moment its caption matched to one step only, filling the other steps in time order with the rest', async () => {
+    const context = completeContext();
+    context.keyMoments.moments = [
+      { tMs: 10_000, caption: 'Opens the dashboard', frameUrl: 'https://cdn.clipy.online/key-moments/demo/dashboard.jpg' },
+      { tMs: 20_000, caption: 'Provides a descriptive title', frameUrl: 'https://cdn.clipy.online/key-moments/demo/title.jpg' },
+    ];
+
+    expect(await imagesOfTheSteps(context)).toEqual([
+      'https://cdn.clipy.online/key-moments/demo/dashboard.jpg',
+      'https://cdn.clipy.online/key-moments/demo/title.jpg',
     ]);
   });
 });

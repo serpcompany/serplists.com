@@ -13,6 +13,10 @@ import {
   revocationAndAcceptance,
   revokedInviteAudits,
 } from "../../../support/teamsSqlite";
+import { transferTeamOwnership } from "@functions/api/handlers/team-membership";
+import { createDb } from "@functions/api/db";
+import { apiEnv } from "../../../support/apiEnv";
+import { apiErrorBody, readJson } from "../../../support/readJson";
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -83,6 +87,32 @@ describe("Organization membership writes against SQLite, which leave every Organ
 
       expect(result.status).toBe(409);
       expect(member("owner-member")).toEqual({ role: "owner", status: "active" });
+      expect(member("member-m")).toEqual({ role: "editor", status: "active" });
+      expect(auditActions("team.owner_transferred")).toHaveLength(0);
+    });
+
+    it("answers a transfer by a membership that has no id as not found, and changes nothing", async () => {
+      const env = apiEnv({ DB: d1.binding });
+      const membership = {
+        id: null,
+        team_id: "team-1",
+        user_id: "owner-user",
+        role: "owner",
+        status: "active",
+        invited_by_user_id: null,
+        joined_at: createdAt,
+        created_at: createdAt,
+        updated_at: createdAt,
+      };
+      const request = new Request("http://localhost/api/teams/team-1/owner", { method: "PUT" });
+
+      const response = await transferTeamOwnership(
+        { db: createDb(env), env, request, teamId: "team-1", userId: "owner-user", membership },
+        { memberId: "member-m" },
+      );
+
+      expect(response.status).toBe(404);
+      expect((await readJson(response, apiErrorBody)).error).toBe("Organization not found");
       expect(member("member-m")).toEqual({ role: "editor", status: "active" });
       expect(auditActions("team.owner_transferred")).toHaveLength(0);
     });

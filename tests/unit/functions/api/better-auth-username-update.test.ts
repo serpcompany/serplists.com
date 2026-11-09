@@ -50,12 +50,18 @@ vi.mock('better-auth/adapters/drizzle', () => ({
   },
 }));
 
+vi.mock('@functions/api/utils/username-conflict', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@functions/api/utils/username-conflict')>();
+  return { ...actual, assertUsernameAvailableForUpdate: vi.fn(actual.assertUsernameAvailableForUpdate) };
+});
+
 vi.mock('@functions/api/db', () => ({
   createDb: vi.fn(() => ({})),
   schema: {},
 }));
 
-import { isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
+import { assertUsernameAvailableForUpdate, isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
+import { lastOf, present } from '../../../support/elements';
 import { postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 import { betterAuthErrorBody, readJson } from '../../../support/readJson';
 import { apiEnv } from '../../../support/apiEnv';
@@ -158,6 +164,15 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
     expect(refused.map((response) => response.status)).toEqual([422, 422, 422]);
     expect(userRow('bob@example.com')).toMatchObject({ username: 'bob-smith' });
     expect(userRow('alice@example.com')).toMatchObject({ username: 'alex' });
+  });
+
+  it('checks no username for an update whose context has no signed-in caller', async () => {
+    expect((await authRequest('update-user', { cookie: bobCookie, body: { username: 'robert' } })).status).toBe(200);
+    const context = present(lastOf(vi.mocked(assertUsernameAvailableForUpdate).mock.calls)[1], 'the update context');
+    const withoutACaller = { ...context, context: { ...context.context, session: null } };
+
+    await expect(assertUsernameAvailableForUpdate({ username: 'alex' }, context)).rejects.toThrow(/already taken/i);
+    await expect(assertUsernameAvailableForUpdate({ username: 'alex' }, withoutACaller)).resolves.toBeUndefined();
   });
 
   it('saves a free username and a name-only change', async () => {

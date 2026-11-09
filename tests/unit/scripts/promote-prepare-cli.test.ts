@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PROMOTION_BODY_FILE } from '../../../scripts/promote-prepare-lib';
 import { aGhStandIn, type GhAnswer } from '../../support/ghStandIn';
-import { runRepositoryScript } from '../../support/repositoryScriptRun';
+import { runRepositoryScriptWhileServing } from '../../support/repositoryScriptRun';
 import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 import { theUtcDayAfter, utcDate, withTheDatesAround } from '../../support/utcDates';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
@@ -42,7 +42,7 @@ function aCheckoutWithAThrowawayOrigin() {
     originGit('update-ref', 'refs/heads/staging', heads.staging);
   };
   const promote = (args: string[] = ['--dry-run'], ghAnswers: Record<string, GhAnswer> = {}) =>
-    runRepositoryScript('scripts/promote-prepare.ts', args, {
+    runRepositoryScriptWhileServing('scripts/promote-prepare.ts', args, {
       cwd: checkout,
       env: { ...env, PATH: aGhStandIn(path.join(folder, 'bin'), checkout, ghAnswers) },
     });
@@ -77,29 +77,29 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
     expect(originGit('for-each-ref', '--format=%(refname)', 'refs/heads/promote')).toBe('');
   });
 
-  it('stops, naming the pull request and how to sign in, when gh cannot read a promoted pull request', () => {
+  it('stops, naming the pull request and how to sign in, when gh cannot read a promoted pull request', async () => {
     const { checkout, commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     const promoted = commit({ 'README.md': 'one' }, 'feat: the first change');
     branches({ main: commit({ 'README.md': 'one' }, 'chore: promote'), staging: commit({ 'README.md': 'two' }, 'feat: the second change (#7)', [promoted]) });
 
-    const result = promote();
+    const result = await promote();
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('gh could not read pull request #7, whose Closes lines the promotion carries to main. Sign in with gh auth login, then run this again.');
     expect(existsSync(path.join(checkout, PROMOTION_BODY_FILE))).toBe(false);
   });
 
-  it('says there is nothing to promote when main already has the files on staging', () => {
+  it('says there is nothing to promote when main already has the files on staging', async () => {
     const { commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     branches({ main: commit({ 'README.md': 'same' }, 'chore: main'), staging: commit({ 'README.md': 'same' }, 'chore: staging') });
 
-    const result = promote();
+    const result = await promote();
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe("main already has staging's files; there is nothing to promote.");
   });
 
-  it('refuses while main holds a hotfix staging lacks, listing the files it changed', () => {
+  it('refuses while main holds a hotfix staging lacks, listing the files it changed', async () => {
     const { commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     const promotion = commit({ 'README.md': 'one' }, 'chore: promote staging to main (#4)');
     const promoted = commit({ 'README.md': 'one' }, 'feat: the first change (#1)');
@@ -108,24 +108,24 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
       staging: commit({ 'README.md': 'two' }, 'feat: the second change (#2)', [promoted]),
     });
 
-    const result = promote();
+    const result = await promote();
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('main has changes that are not in staging (for example a hotfix). Bring them into\nstaging through a normal PR first');
     expect(result.stderr).toContain('Files changed on main:\nhotfix.ts');
   });
 
-  it('refuses when main never had any of the files staging has had', () => {
+  it('refuses when main never had any of the files staging has had', async () => {
     const { commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     branches({ main: commit({ 'README.md': 'elsewhere' }, 'chore: start main'), staging: commit({ 'README.md': 'two' }, 'feat: staging') });
 
-    const result = promote();
+    const result = await promote();
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Files changed on main:\n(no earlier promotion found)');
   });
 
-  it('promotes once a hotfix on main has been merged back into staging', () => {
+  it('promotes once a hotfix on main has been merged back into staging', async () => {
     const { commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     const promotion = commit({ 'README.md': 'one' }, 'chore: promote staging to main (#4)');
     const hotfix = commit({ 'README.md': 'one', 'hotfix.ts': 'fixed' }, 'fix: a hotfix on main (#5)', [promotion]);
@@ -133,14 +133,14 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
     const mergedBack = commit({ 'README.md': 'one', 'hotfix.ts': 'fixed' }, "Merge branch 'main' into staging", [promoted, hotfix]);
     branches({ main: hotfix, staging: commit({ 'README.md': 'two', 'hotfix.ts': 'fixed' }, 'feat: the second change', [mergedBack]) });
 
-    const result = promote();
+    const result = await promote();
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('No issue: none of the promoted pull requests closes one.');
     expect(result.stdout).toContain('Dry run: would push');
   });
 
-  it('points at the promotion branch already on origin for this staging commit instead of pushing another', () => {
+  it('points at the promotion branch already on origin for this staging commit instead of pushing another', async () => {
     const { originGit, commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
     const promoted = commit({ 'README.md': 'one' }, 'feat: the first change');
     const staging = commit({ 'README.md': 'two' }, 'feat: the second change', [promoted]);
@@ -149,12 +149,34 @@ describe('pnpm run promote:prepare against a throwaway origin', { timeout: 60_00
     const promotionBranches = [today, theUtcDayAfter(today)].map((date) => `promote/staging-${date}-${staging.slice(0, 7)}`);
     for (const branch of promotionBranches) originGit('update-ref', `refs/heads/${branch}`, staging);
 
-    const result = promote([]);
+    const result = await promote([]);
     const pointedAt = promotionBranches.filter((branch) => result.stdout.includes(`${branch} already exists for staging ${staging.slice(0, 7)}. Open the promotion PR:`));
 
     expect(result.status).toBe(0);
     expect(pointedAt).toHaveLength(1);
     expect(result.stdout).toContain(`gh pr create --base main --head ${pointedAt.join('')}`);
     expect(originGit('for-each-ref', '--format=%(objectname)', 'refs/heads/promote')).toBe(`${staging}\n${staging}`);
+  });
+
+  it("pushes staging's files to a new promotion branch on origin, with main recorded as merged, and says how to open the pull request", async () => {
+    const { originGit, commit, branches, promote } = aCheckoutWithAThrowawayOrigin();
+    const promoted = commit({ 'README.md': 'one' }, 'feat: the first change');
+    const staging = commit({ 'README.md': 'two' }, 'feat: the second change', [promoted]);
+    const main = commit({ 'README.md': 'one' }, 'chore: promote');
+    branches({ main, staging });
+
+    const { result, dates } = await withTheDatesAround(() => promote([]));
+    const pushed = originGit('for-each-ref', '--format=%(refname:short)', 'refs/heads/promote');
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(dates.map((date) => `promote/staging-${date}-${staging.slice(0, 7)}`)).toContain(pushed);
+    expect(originGit('rev-parse', `${pushed}^{tree}`)).toBe(originGit('rev-parse', `${staging}^{tree}`));
+    expect(originGit('rev-list', '--parents', '-n', '1', pushed).split(' ').slice(1)).toEqual([staging, main]);
+    expect(result.stdout).toContain(
+      `Pushed ${pushed}: staging ${staging.slice(0, 7)} with main ${main.slice(0, 7)} recorded as merged.\n` +
+        `Open the promotion PR:\n  gh pr create --base main --head ${pushed} --title "chore: promote staging ${staging.slice(0, 7)} to main" ` +
+        `--body-file ${PROMOTION_BODY_FILE}\n`,
+    );
   });
 });

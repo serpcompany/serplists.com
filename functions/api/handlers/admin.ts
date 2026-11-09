@@ -42,9 +42,9 @@ async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean>
   const provided = request.headers.get("X-Admin-Secret");
   if (!provided) return false;
   const [expected, actual] = await Promise.all([sha256(env.ENTITLEMENTS_ADMIN_SECRET), sha256(provided)]);
-  let difference = expected.length === actual.length ? 0 : 1;
+  let difference = expected.length ^ actual.length;
   expected.forEach((byte, index) => {
-    difference |= byte ^ (actual[index] ?? 0);
+    difference |= byte ^ Number(actual[index]);
   });
   return difference === 0;
 }

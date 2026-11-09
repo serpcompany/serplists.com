@@ -228,10 +228,7 @@ export function reconcileRunSections(
   );
   const earlierRetired = createEarlierRetiredLookup(previousRetired);
   const previousById = new Map(
-    normalizedPreviousSections.flatMap((section) => {
-      const id = getId(section);
-      return id ? [[id, section] as const] : [];
-    }),
+    normalizedPreviousSections.flatMap((section) => [getId(section)].filter((id) => id !== null).map((id) => [id, section] as const)),
   );
   const previousItems = normalizedPreviousSections.flatMap((section) => taskRecordsIn(section.items));
   const items = createRunMatcher('item', previousItems, earlierRetired);
@@ -239,7 +236,7 @@ export function reconcileRunSections(
   const fields = createRunMatcher('formAnswer', previousItems.flatMap(getFormFields), earlierRetired);
 
   const matchedSections = normalizedTemplateSections.map((templateSection) => {
-    const id = getId(templateSection) ?? '';
+    const id = [getId(templateSection)].join('');
     const previous: SectionRecord | undefined = previousById.get(id) ?? earlierRetired.take('section', id);
     const previousItems = taskRecordsIn(previous?.items);
     return { templateSection, id, previousItems, parent: indexById(previousItems) };
@@ -288,7 +285,7 @@ export function reconcileRunSections(
         retired.push({
           kind: 'subItem',
           sectionId,
-          itemId: getId(templateItem) ?? '',
+          itemId: [getId(templateItem)].join(''),
           ...(typeof templateItem.title === 'string' ? { itemTitle: templateItem.title } : {}),
           subItem,
         });

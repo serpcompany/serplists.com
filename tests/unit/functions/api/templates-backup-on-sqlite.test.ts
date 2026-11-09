@@ -37,6 +37,23 @@ describe("template import and export for an Organization on the Free plan", () =
     expect(response.status).toBe(403);
     expect(await readJson(response, apiErrorBody)).toMatchObject({ code: "upgrade_required" });
   });
+
+  it.each([["GET", undefined], ["POST", []]])("answers %s for an Organization the member may not add Templates to with 403, and imports nothing", async (method, body) => {
+    addOrganizationWithMember(database, "viewer");
+
+    const response = await handleTemplates(apiRequest("templates/backup?teamId=team-1", method, body), apiEnvOn(database));
+
+    expect(response.status).toBe(403);
+    expect(await readJson(response, apiErrorBody)).toMatchObject({ error: "Forbidden" });
+    expect(importedTemplates()).toEqual([]);
+  });
+
+  it("answers for an Organization the user is not in with 404", async () => {
+    const response = await handleTemplates(apiRequest("templates/backup?teamId=team-9", "GET"), apiEnvOn(database));
+
+    expect(response.status).toBe(404);
+    expect(await readJson(response, apiErrorBody)).toMatchObject({ error: "Organization not found" });
+  });
 });
 
 describe("template import for a Pro user", () => {

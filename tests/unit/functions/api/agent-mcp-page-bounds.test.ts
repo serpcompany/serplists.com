@@ -5,6 +5,7 @@ import { toolErrorOf } from "../../../support/agentMcp";
 const unit = (json: string): Unit => ({ json, bytes: new TextEncoder().encode(json).byteLength });
 
 const ROOM_FOR_THE_QUOTES_AND_EIGHTEEN_BYTES = 20;
+const ROOM_FOR_THE_QUOTES_ALONE = 2;
 
 const partEnd = (json: string, offset = 0) =>
   pack([unit(json)], { ...START, offset }, ROOM_FOR_THE_QUOTES_AND_EIGHTEEN_BYTES).part?.to;
@@ -35,5 +36,11 @@ describe("a part of an entry too large for one result, measured as JSON text", (
 
   it("counts the lone half of an emoji a part starts inside as six bytes, and the whole emoji after it as four", () => {
     expect(partEnd("\u{1F680}".repeat(20), 1)).toBe(8);
+  });
+
+  it("refuses with result_too_large when not one character of an entry fits the room left", () => {
+    const error = toolErrorOf(() => pack([unit("\"Release SOP\"")], START, ROOM_FOR_THE_QUOTES_ALONE));
+
+    expect(error.code).toBe("result_too_large");
   });
 });

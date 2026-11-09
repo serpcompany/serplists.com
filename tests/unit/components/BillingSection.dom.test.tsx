@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { clickTheLastButtonReading } from '../../support/recordedButtons';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -396,6 +397,18 @@ describe('BillingSection actions in the browser', () => {
 
     expect(screen.getByRole('button', { name: 'Upgrade unavailable' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('Billing checkout is currently unavailable.')).toBeTruthy();
+  });
+
+  it.each([
+    ['Upgrade unavailable', { plan: 'free' as const }, () => api.createBillingCheckout],
+    ['Manage subscription', { ...proSubscriber, billingEnabled: false }, () => api.createBillingPortal],
+  ])('opens nothing from %s while billing is unavailable, even if its click arrives', async (label, billingData, request) => {
+    await mountAt('/dashboard/settings/', { billingEnabled: false, ...billingData });
+
+    await act(() => clickTheLastButtonReading(label));
+
+    expect(toast.error).toHaveBeenCalledWith('Billing is temporarily unavailable. Please contact support.');
+    expect(request()).not.toHaveBeenCalled();
   });
 
   it('says a canceled checkout was canceled and drops the billing parameter from the address', async () => {

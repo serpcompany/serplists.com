@@ -18,6 +18,16 @@ describe('run-at-low-priority', { timeout: 60_000 }, () => {
     expect(result.stderr.trim()).toBe('Usage: node --import tsx scripts/run-at-low-priority.ts <command> [arguments]');
   });
 
+  it('fails with status 1 when the shell ends with no exit status, as a killed shell, or one that cannot start, does', () => {
+    const shellVariable = Object.keys(process.env).find((name) => name.toUpperCase() === 'COMSPEC') ?? 'ComSpec';
+
+    const result = runRepositoryScript('scripts/run-at-low-priority.ts', ['kill', '-9', '$$'], {
+      env: { [shellVariable]: path.join(workDir, 'no-such-shell.exe') },
+    });
+
+    expect([result.status, result.output]).toEqual([1, '']);
+  });
+
   it('leaves a run that already has a lower priority at that priority, rather than raising it', () => {
     const printPriority = path.join(workDir, 'print-priority.cjs');
     writeFileSync(printPriority, "console.log(require('node:os').getPriority());\n");
