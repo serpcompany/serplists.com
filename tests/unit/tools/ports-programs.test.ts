@@ -39,6 +39,16 @@ describe('the ports of a checkout whose git answers what an older or broken git 
     expect(deleted.stdout.trim()).toBe('This checkout uses the main ports. Only a worktree has a block to give up.');
   }, 30_000);
 
+  it('are the main ports when git names the checkout with folders this system cannot open, as an MSYS2 git prints /e/... on Windows', async () => {
+    const msys = path.join(path.sep, 'msys-only', 'e', 'checkout');
+    const portsUnder = aCheckoutWhoseGitAnswers([msys, path.join(msys, '.git'), path.join(msys, '.git')], 0);
+
+    const asked = await portsUnder(['--json']);
+
+    expect(asked.stderr).toBe('');
+    expect(portsSchema.parse(JSON.parse(asked.stdout))).toEqual(mainPorts);
+  }, 30_000);
+
   it('keep every block while git cannot list the worktrees: a worktree takes the next free block, and prune gives up nothing', async () => {
     const outside = scratch();
     const common = path.join(outside, 'git');

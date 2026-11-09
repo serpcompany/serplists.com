@@ -70,7 +70,10 @@ export function pnpmScripts(code: string): string[] {
   });
 }
 
-export const proseScripts = (prose: string) => [...prose.matchAll(/(?<=\bpnpm run )[a-z][\w:.-]*\w/g)].map(([name]) => name);
+const PNPM_RUN = "pnpm run ";
+
+export const proseScripts = (prose: string) =>
+  [...prose.matchAll(/\bpnpm run [a-z][\w:.-]*\w/g)].map(([invocation]) => invocation.slice(PNPM_RUN.length));
 
 export const missingScript = (name: string, known: KnownCommands) => !known.scripts.has(name) && !known.binaries.has(name);
 

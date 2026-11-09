@@ -37,6 +37,14 @@ const usage = `Usage:
   ports.mjs prune            gives up the ports of worktrees that are gone
 Roles: ${roles.join(", ")}`;
 
+const real = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+};
+
 export function portsFor(slot) {
   if (slot === 0) return { ...mainPorts };
   const first = firstWorktreePort + portsPerWorktree * slot;
@@ -54,7 +62,7 @@ function checkoutIn(folder) {
   const [top, gitDir, commonDir] = found
     .split("\n")
     .filter(Boolean)
-    .map((path) => realpathSync(resolve(folder, path)));
+    .map((path) => real(resolve(folder, path)));
   if (!top || !gitDir || !commonDir) return undefined;
   return { top, worktree: gitDir !== commonDir, claims: join(commonDir, claimsFolder) };
 }
@@ -66,7 +74,7 @@ function worktreesIn(folder) {
     .split("\n")
     .filter((line) => line.startsWith("worktree "))
     .map((line) => line.slice("worktree ".length));
-  return new Set(paths.filter((path) => existsSync(path)).map((path) => realpathSync(path)));
+  return new Set(paths.filter((path) => existsSync(path)).map(real));
 }
 
 function claimsIn(folder) {
@@ -253,7 +261,7 @@ function main([command, ...rest], folder = process.cwd()) {
   for (const role of roles) console.log(`${role.padEnd(9)}${addressOf(ports[role])}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(real(process.argv[1])).href) {
   try {
     main(process.argv.slice(2));
   } catch (error) {
