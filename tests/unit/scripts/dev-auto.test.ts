@@ -15,8 +15,10 @@ import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 const copy = aCopyOfTheCheckoutWithStandIns(NEXT_DEV_STAND_IN);
 const workDir = aWorkDirRemovedAfterAll('dev-auto-');
 const idle: IdleProcess[] = [];
+const devAlls: ReturnType<typeof startTheCopysScript>[] = [];
 
 afterAll(() => {
+  for (const each of devAlls) each.child.kill();
   for (const each of idle) each.stop();
   copy.remove();
 });
@@ -48,8 +50,11 @@ const NODE_IS_MOVED_AWAY_BEFORE_THE_FIRST_SPAWN = [
 
 type StartOptions = { env?: Record<string, string | undefined>; execPath?: string; preloads?: readonly string[] };
 
-const startDevAll = (cwd: string, { env = devAllEnv(), execPath, preloads = [] }: StartOptions = {}) =>
-  startTheCopysScript(copy, 'scripts/dev-auto.ts', { cwd, env, preloads, ...(execPath === undefined ? {} : { execPath }) });
+const startDevAll = (cwd: string, { env = devAllEnv(), execPath, preloads = [] }: StartOptions = {}) => {
+  const started = startTheCopysScript(copy, 'scripts/dev-auto.ts', { cwd, env, preloads, ...(execPath === undefined ? {} : { execPath }) });
+  devAlls.push(started);
+  return started;
+};
 
 describe('pnpm run dev:all with a stand-in next dev', { timeout: 300_000 }, () => {
   it("starts next dev on the port it records, with .dev.vars and the Worker vars for that port, and ends with next dev's exit code", async () => {

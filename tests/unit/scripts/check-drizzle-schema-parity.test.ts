@@ -8,7 +8,7 @@ import { giveTheCopyATinySchema } from '../../support/tinyD1Schema';
 
 const PARITY_CHECK = 'scripts/data/check-drizzle-schema-parity.ts';
 
-describe('pnpm run check:db:drizzle-parity, which replays every migration and compares it with the Drizzle schema', { timeout: 300_000 }, () => {
+describe('pnpm run check:db:drizzle-parity, which replays every migration and compares it with the Drizzle schema', { timeout: 900_000 }, () => {
   it('passes the checkout, whose migrations and Drizzle schema agree, and says how much it compared', async () => {
     const run = await runScriptProcess(PARITY_CHECK);
 

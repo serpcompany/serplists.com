@@ -126,7 +126,7 @@ function leaveEntryPointsToTheirProcesses(inProcessReport: string, processReport
 export default function recordChildProcessCoverage(project: TestProject): (() => void) | undefined {
   const { coverage, root } = project.globalConfig;
   if (!coverage.enabled) return undefined;
-  const reportsDirectory = `${coverage.reportsDirectory}-children`;
+  const reportsDirectory = path.resolve(root, `${coverage.reportsDirectory}-children`);
   const rawDirectory = `${reportsDirectory}-raw`;
   rmSync(rawDirectory, { recursive: true, force: true });
   rmSync(reportsDirectory, { recursive: true, force: true });
