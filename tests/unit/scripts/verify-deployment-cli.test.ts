@@ -8,7 +8,7 @@ import { stringContaining } from '../../support/asymmetricMatchers';
 import { unlinkWithoutFollowing } from '../../support/checkoutCopy';
 import { whileServingLocally } from '../../support/localHttpServer';
 import { runRepositoryScript, runRepositoryScriptWhileServing } from '../../support/repositoryScriptRun';
-import { ranToTheEnd } from '../../support/scriptProcess';
+import { processEnvWithout, ranToTheEnd } from '../../support/scriptProcess';
 import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const COMMIT = '07ec182950550883a30578a6e5b50658f1134ed7';
@@ -59,7 +59,7 @@ describe('node scripts/verify-deployment.ts, as the deploy workflows run it', { 
     symlinkSync(REPO_ROOT, linked, 'junction');
     try {
       const { command, args } = buildScriptInvocation(path.join(linked, SCRIPT));
-      const result = await ranToTheEnd(command, args, { cwd: REPO_ROOT, env: WITHOUT_INPUTS });
+      const result = await ranToTheEnd(command, args, { cwd: REPO_ROOT, env: processEnvWithout(['DEPLOY_URL', 'RELEASE_COMMIT', 'SITE_ENV']) });
 
       expect(result.status).toBe(1);
       expect(result.stdout).toContain('::error::The smoke test needs DEPLOY_URL, RELEASE_COMMIT and SITE_ENV');
