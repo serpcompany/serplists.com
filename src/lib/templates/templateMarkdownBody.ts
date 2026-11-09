@@ -1,5 +1,7 @@
-const SECTION_TITLE = /(?<=^## ).+$/;
-const ITEM_TITLE = /(?<=^### ).+$/;
+const SECTION_PREFIX = "## ";
+const ITEM_PREFIX = "### ";
+const SECTION_HEADING = /^## .+$/;
+const ITEM_HEADING = /^### .+$/;
 const BLOCK_OPENER = /^`{3,}serplists:.*$/;
 const BLOCK_TYPE_PREFIX = "serplists:";
 const MIN_FENCE_LENGTH = 3;
@@ -74,12 +76,10 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
       continue;
     }
 
-    const sectionTitle = SECTION_TITLE.exec(line);
-    const itemTitle = section ? ITEM_TITLE.exec(line) : null;
-    if (sectionTitle) {
-      sections.push({ title: sectionTitle[0].trim(), items: [] });
-    } else if (section && itemTitle) {
-      section.items.push({ title: itemTitle[0].trim(), description: "", blocks: [], lines: [] });
+    if (SECTION_HEADING.test(line)) {
+      sections.push({ title: line.slice(SECTION_PREFIX.length).trim(), items: [] });
+    } else if (section && ITEM_HEADING.test(line)) {
+      section.items.push({ title: line.slice(ITEM_PREFIX.length).trim(), description: "", blocks: [], lines: [] });
     } else if (!section) {
       descriptionLines.push(unescapeDescriptionLine(line));
     } else {

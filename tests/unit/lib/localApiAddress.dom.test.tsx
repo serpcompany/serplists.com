@@ -46,9 +46,13 @@ describe('the same build loaded with no window, as a server render loads it', ()
     expect(request.getAgentMcpEndpoint()).toBe('/api/mcp');
   });
 
-  it('builds its auth client without reading the page that is not there', async () => {
+  it('asks its own /api for the sign-in options', async () => {
     const authClient = await loadForALocalApi(() => import('@/lib/auth-client'), 'in a server render');
+    const fetchStatus = vi.fn(async (_url: string, _init: RequestInit) => Response.json(authStatusWith()));
+    vi.stubGlobal('fetch', fetchStatus);
 
-    expect(authClient.authClient).toBeDefined();
+    await expect(authClient.getAuthStatus()).resolves.toEqual(authStatusWith());
+
+    expect(fetchStatus.mock.calls.map(([url]) => url)).toEqual(['/api/auth/status']);
   });
 });
