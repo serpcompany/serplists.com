@@ -51,7 +51,7 @@ const buildRepoTemplateId = (
   fromPortablePack: boolean,
 ): string => {
   const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1).replace('.json', '');
-  const fallbackId = `${fileName || 'template'}-${index + 1}`;
+  const fallbackId = fileName && index === 0 ? fileName : `${fileName || 'template'}-${index + 1}`;
   const ownId = fromPortablePack ? '' : template.id?.trim();
   const baseId = ownId || template.slug?.trim() || fallbackId;
   return baseId.startsWith('repo:') ? baseId : `repo:${baseId}`;

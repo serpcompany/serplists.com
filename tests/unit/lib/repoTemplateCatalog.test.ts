@@ -95,14 +95,14 @@ describe("repo template catalog", () => {
     templates: [slugless("Launch prep"), slugless("Launch day")],
   });
 
-  it("keeps every template of a pack that gives them no slug, each with an id that holds across loads", () => {
+  it("keeps every template of a pack that gives them no slug, the first named for its file as before and each later one numbered, with ids that hold across loads", () => {
     const source = { "../data/public-template-packs/launch.json": { default: sluglessPack() } };
 
     const ids = normalizeRepoTemplateSources(source).map(({ id, title }) => ({ id, title }));
 
     expect(ids).toEqual([
       { id: "repo:launch-2", title: "Launch day" },
-      { id: "repo:launch-1", title: "Launch prep" },
+      { id: "repo:launch", title: "Launch prep" },
     ]);
     expect(normalizeRepoTemplateSources(source).map(({ id }) => id)).toEqual(ids.map(({ id }) => id));
   });
