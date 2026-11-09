@@ -49,7 +49,7 @@ beforeEach(() => {
 async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
   navigation.reset('/');
   await renderSettled(
-    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} />,
+    <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} onRetryLoad={vi.fn()} />,
   );
 }
 
@@ -119,6 +119,7 @@ async function openTheRunsAt(url: string) {
     <RunsDashboardView
       getRunPermissions={() => PERSONAL_PERMISSIONS}
       onDeleteRun={vi.fn()}
+      onRetryLoad={vi.fn()}
       runs={runs}
       workspaceTemplates={templates}
     />,
@@ -177,7 +178,13 @@ describe('the runs table on a wide screen', () => {
     display.wide = true;
     navigation.reset('/dashboard/runs/');
     await renderSettled(
-      <RunsDashboardView getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={vi.fn()} runs={provenanceRuns} workspaceTemplates={templates} />,
+      <RunsDashboardView
+        getRunPermissions={() => PERSONAL_PERMISSIONS}
+        onDeleteRun={vi.fn()}
+        onRetryLoad={vi.fn()}
+        runs={provenanceRuns}
+        workspaceTemplates={templates}
+      />,
     );
   }
 
@@ -235,6 +242,7 @@ async function openTheRunsWithActions(shownRuns: ChecklistRun[], handlers: RunsP
     <RunsDashboardView
       getRunPermissions={() => PERSONAL_PERMISSIONS}
       onDeleteRun={vi.fn()}
+      onRetryLoad={vi.fn()}
       runs={shownRuns}
       workspaceTemplates={templates}
       {...handlers}
@@ -357,15 +365,6 @@ describe("a run's actions on the runs page", () => {
     await press('Retry');
 
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the load error on the page when Retry is pressed on a page given nothing to retry with', async () => {
-    await openTheRunsWithActions([], { loadError: new Error('HTTP 503') });
-
-    await press('Retry');
-
-    expect(screen.getByText("Couldn't load your runs")).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 });
 

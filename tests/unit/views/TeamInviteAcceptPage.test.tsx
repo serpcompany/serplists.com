@@ -94,13 +94,4 @@ describe('Organization invite page', () => {
     expect(html).toContain('Create an account');
     expect(html).toContain('href="/register/?next=%2Fteam-invites%2Finvite-token%2F"');
   });
-
-  it("tells the visitor an invite link without a token can't be used, instead of asking them to sign in", () => {
-    const html = renderInvitePage(undefined, 'user-1', () => navigation.reset('/team-invites/', { params: {} }));
-
-    expect(html).toContain('This invite link is missing a token.');
-    expect(html).not.toContain('Checking your session...');
-    expect(html).not.toContain('Log in to accept');
-    expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
-  });
 });

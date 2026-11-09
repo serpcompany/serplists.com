@@ -13,10 +13,7 @@ type UploadKind = {
   mimeTypes: readonly string[];
 };
 
-const typeStoredForUntypedFile = (kind: UploadKind): string | null => {
-  const types: readonly [...string[], null] = [...kind.mimeTypes, null];
-  return types[0];
-};
+const typeStoredForUntypedFile = (kind: UploadKind): string | null => kind.mimeTypes[0] ?? null;
 
 const IMAGE_KINDS: readonly UploadKind[] = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },
@@ -136,11 +133,7 @@ export const uploadAcceptAttribute = (bucket: UploadBucket): string => {
 export const describeUploadTypes = (bucket: UploadBucket): string => {
   const { kinds, noun } = UPLOAD_KINDS[bucket];
   const labels = kinds.map((kind) => kind.label);
-  const list =
-    labels.length > 1
-      ? `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`
-      : labels[0];
-  return `${list} ${noun}`;
+  return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]} ${noun}`;
 };
 
 export const unsupportedUploadMessage = (bucket: UploadBucket): string =>

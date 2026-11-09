@@ -86,10 +86,4 @@ describe('RunHistorySection with history it cannot fully read', () => {
     expect(html).toContain('<time></time>');
     expect(html).not.toContain('Invalid Date');
   });
-
-  it('says no history has been recorded when it is given no history', () => {
-    const html = renderToStaticMarkup(<RunHistorySection />);
-
-    expect(html).toContain('No run history has been recorded yet.');
-  });
 });

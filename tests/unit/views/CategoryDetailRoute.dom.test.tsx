@@ -77,21 +77,4 @@ describe('category page route', () => {
     expect(lastRender()).toEqual({ param: 'HR', slugAtMount: 'hr' });
     expect(probe.mounts).toBe(1);
   });
-
-  it('treats an address with no category as Business, keeping the page when Business is named', async () => {
-    navigation.reset('/categories/', { routes: ['/categories/[categorySlug]', '/categories'] });
-    render(<CategoryDetailRoute />);
-    expect(lastRender()).toEqual({ param: undefined, slugAtMount: undefined });
-
-    await act(async () => {
-      navigation.router.push('/categories/business');
-    });
-    expect(lastRender()).toEqual({ param: 'business', slugAtMount: undefined });
-    expect(probe.mounts).toBe(1);
-
-    await act(async () => {
-      navigation.router.push('/categories/hr');
-    });
-    expect(probe.mounts).toBe(2);
-  });
 });

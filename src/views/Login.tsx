@@ -35,7 +35,6 @@ import {
 import {
   getPostSignInDestination,
   getReturnPath,
-  toSameOriginPath,
   withReturnPath,
 } from "@/lib/auth/returnPath";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
@@ -136,13 +135,12 @@ const Login = () => {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      const destination = toSameOriginPath(from, window.location.origin) ?? getPostSignInDestination(null);
-      const target = new URL(destination, window.location.origin);
+      const target = new URL(from, window.location.origin);
       if (needsFullPageLoad(target.pathname, target.search, window)) {
-        window.location.replace(destination);
+        window.location.replace(from);
         return;
       }
-      router.replace(destination);
+      router.replace(from);
     }
   }, [from, isAuthenticated, isLoading, router]);
 

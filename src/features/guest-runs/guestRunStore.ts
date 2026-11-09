@@ -51,7 +51,9 @@ const newGuestRunId = (): string =>
     ? crypto.randomUUID()
     : `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
-const toRun = (stored: StoredGuestRun): ChecklistRun => {
+type RevisedRun = ChecklistRun & { revision: number };
+
+const toRun = (stored: StoredGuestRun): RevisedRun => {
   const sections = normalizeSections(stored.sections);
   return {
     id: stored.id,
@@ -66,8 +68,6 @@ const toRun = (stored: StoredGuestRun): ChecklistRun => {
     userId: '',
   };
 };
-
-type RevisedRun = ChecklistRun & { revision: number };
 
 const writeGuestRun = (run: RevisedRun, storage: StringStorage): void => {
   const stored: StoredGuestRun = {
@@ -87,7 +87,7 @@ const writeGuestRun = (run: RevisedRun, storage: StringStorage): void => {
 export const readGuestRun = (
   templateId: string,
   storage: StringStorage = safeLocalStorage,
-): ChecklistRun | null => {
+): RevisedRun | null => {
   const raw = storage.getItem(guestRunKey(templateId));
   if (!raw) return null;
   try {
@@ -136,7 +136,7 @@ export const saveGuestRun = (
     throw new ApiError({ status: 409, code: 'edit_conflict', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
   }
 
-  const saved: RevisedRun = { ...run, revision: Number([stored.revision, 1].find((revision) => revision !== undefined)) + 1 };
+  const saved: RevisedRun = { ...run, revision: stored.revision + 1 };
   writeGuestRun(saved, storage);
   return saved;
 };

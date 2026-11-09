@@ -108,10 +108,14 @@ describe('saving a form answer on the Run page', () => {
     expect(findTaskFormField(withoutFields, 'field-site')).toBeUndefined();
   });
 
-  it('queues a cleared answer under the same key every time it is cleared', () => {
+  it('queues a cleared answer under one key, so a second clear while the first saves is dropped but a clear after an answer is not', () => {
     const saves = bindRunSaves({ dependencies: { updateRun: savingRun() }, noteDrafts: () => ({}) });
+    const cleared = saves.answer('item-form', 'field-name', undefined).key;
 
-    expect(saves.answer('item-form', 'field-name', undefined).key).toBe('answer:item-form:field-name:null');
+    expect(saves.answer('item-form', 'field-name', undefined).key).toBe(cleared);
+    expect(saves.answer('item-form', 'field-name', 'Acme').key).not.toBe(cleared);
+    expect(saves.answer('item-form', 'field-name', '').key).not.toBe(cleared);
+    expect(saves.answer('item-form', 'field-other', undefined).key).not.toBe(cleared);
   });
 
   it('queues each answer under its own key, so a double save is dropped but a changed answer is not, and retries only when no one else changed it', () => {

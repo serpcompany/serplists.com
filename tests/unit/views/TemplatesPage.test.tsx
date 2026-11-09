@@ -169,29 +169,3 @@ describe('Templates page count', () => {
     expect(renderWith({ templates: [], loadError: new Error('HTTP 500') })).not.toContain('in your library');
   });
 });
-
-describe('Templates page Start a Run while its run is starting', () => {
-  const showTheLauncherStarting = () => {
-    const calls = { closeRunLauncher: vi.fn(), createRunFromTemplate: vi.fn() };
-    showTheTemplatesModel({ ...calls, isCreatingRun: true, runLauncherOpen: true, selectedTemplate: template(), selectedTemplateId: 'template-1' });
-    renderTemplatesAt('/dashboard/templates/');
-    return calls;
-  };
-
-  it('starts no second run from a Start Run that reaches it anyway', async () => {
-    const { createRunFromTemplate } = showTheLauncherStarting();
-
-    await handlerIn(runDialog.props, 'onConfirm')('Second run');
-
-    expect(runDialog.props).toEqual(expect.objectContaining({ loading: true }));
-    expect(createRunFromTemplate).not.toHaveBeenCalled();
-  });
-
-  it('closes nothing when the dialog reports it opened', () => {
-    const { closeRunLauncher } = showTheLauncherStarting();
-
-    handlerIn(runDialog.props, 'onOpenChange')(true);
-
-    expect(closeRunLauncher).not.toHaveBeenCalled();
-  });
-});

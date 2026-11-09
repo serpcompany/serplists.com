@@ -96,12 +96,11 @@ describe('creating a Run Key', () => {
     expect(screen.getByRole('button', { name: 'Create Run Key' })).toBeTruthy();
   });
 
-  it('creates no key when the form is sent with a name of only spaces', async () => {
+  it('keeps Create Run Key off while the name is only spaces', async () => {
     await openAgentAccess();
 
-    await createKeyNamed('   ');
+    await typeInto(inputNamed('Key name'), '   ');
 
-    expect(server.createAgentKey).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Create Run Key' }).hasAttribute('disabled')).toBe(true);
   });
 

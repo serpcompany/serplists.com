@@ -4,7 +4,6 @@ import { FormProvider, useForm, type UseFormReturn } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
-import { FormFieldEditor } from '@/components/template-editor/content-types/FormFieldEditor';
 import {
   buildTemplateEditorFormValues,
   type TemplateEditorFormField,
@@ -180,30 +179,5 @@ describe('the Form block in the Template editor', () => {
 
     expect(screen.getByText(`A field can have up to ${MAX_FORM_FIELD_OPTIONS} options.`)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add option' }).hasAttribute('disabled')).toBe(true);
-  });
-});
-
-describe('a form field editor whose field is not in the form', () => {
-  it('shows an unlabeled short text field rather than failing', async () => {
-    function Harness() {
-      const methods = useForm<TemplateEditorFormValues>({ defaultValues: buildTemplateEditorFormValues({ sections: [] }) });
-      return (
-        <FormProvider {...methods}>
-          <FormFieldEditor
-            count={1}
-            fieldIndex={0}
-            onMove={vi.fn()}
-            onMoved={vi.fn()}
-            onRemove={vi.fn()}
-            path="sections.0.items.0.contents.0.fields.0"
-            stableId="field_gone"
-          />
-        </FormProvider>
-      );
-    }
-    await renderSettled(<Harness />);
-
-    expect(inputNamed('Field 1 Label').value).toBe('');
-    expect(screen.getByRole('combobox', { name: 'Field 1 Type' }).textContent).toContain('Short text');
   });
 });

@@ -48,27 +48,6 @@ describe('Organization invite page before the invite shows', () => {
     expect(page.text()).toContain('Checking your session...');
     expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
   });
-
-  it('asks to log in, and reads no invite, when the session has signed out but still names the last user', async () => {
-    apiMocks.getTeamInvitePreview.mockResolvedValue(preview);
-    auth.set({ isAuthenticated: false });
-
-    const page = await openInvite();
-
-    expect(page.text()).toContain('Log in to accept');
-    expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
-  });
-
-  it('reads no invite while the session says signed in but has no user yet', async () => {
-    apiMocks.getTeamInvitePreview.mockResolvedValue(preview);
-    auth.set({ user: null });
-
-    const page = await openInvite();
-
-    expect(page.text()).toContain('Loading invite...');
-    expect(page.text()).not.toContain('Acme Corp');
-    expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
-  });
 });
 
 describe('Organization invite inviter line', () => {

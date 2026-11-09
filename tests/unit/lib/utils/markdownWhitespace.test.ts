@@ -13,10 +13,6 @@ describe('rehypeTrimBlockNewlines', () => {
     expect(textAfter({ type: 'element', tagName: 'p' })).toEqual(['element', 'next line']);
   });
 
-  it('keeps the line break after an element with no tag name, which it cannot tell is a block', () => {
-    expect(textAfter({ type: 'element' })).toEqual(['element', '\nnext line']);
-  });
-
   it('keeps a space between two blocks that holds no line break, and drops one that does', () => {
     const paragraph = () => ({ type: 'element', tagName: 'p', children: [] });
     const tree = {

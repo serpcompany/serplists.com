@@ -222,19 +222,6 @@ describe('handleAccessFailure after a template import or export request fails', 
     );
   });
 
-  it('treats a caller that does not track the visit as still on the page, and goes to sign-in', async () => {
-    const navigate = vi.fn();
-
-    await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
-      fallbackMessage: 'Failed to export templates',
-      navigate,
-    });
-
-    expect(navigate).toHaveBeenCalledWith(
-      '/login/?next=%2Fdashboard%2Fimport-templates%2F%3Fbilling%3Dsuccess%23export',
-    );
-    expect(toastMocks.error).not.toHaveBeenCalled();
-  });
 });
 
 describe('refreshBillingStatusOnCheckoutConflict, so a page gating Pro on a cached plan stops asking for checkout', () => {

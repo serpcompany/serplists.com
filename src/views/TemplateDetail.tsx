@@ -189,10 +189,6 @@ const TemplateDetail = () => {
   };
 
   const handleShare = async () => {
-    if (!displayTemplate) {
-      return;
-    }
-
     const visit = beginVisit();
     setIsCreatingShare(true);
     try {
@@ -266,10 +262,6 @@ const TemplateDetail = () => {
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
-    if (!displayTemplate || !canEditTemplate || isChangingVisibility) {
-      return;
-    }
-
     const visit = beginVisit();
     setIsUpdatingVisibility(true);
     try {

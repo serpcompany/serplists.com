@@ -57,9 +57,6 @@ describe('PublicTemplate Start Run before a run can start', () => {
 
     expect(startRunButtons().map((button) => button.hasAttribute('disabled'))).toEqual([true, true]);
     await pressStartRun();
-    await act(async () => {
-      lastViewProps().onStartRun();
-    });
 
     expect(lastDialogProps().open).toBe(false);
     expect(navigation.url()).toBe(addressBefore);

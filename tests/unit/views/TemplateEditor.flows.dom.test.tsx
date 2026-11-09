@@ -70,10 +70,23 @@ vi.mock('@/components/template-editor/EditorPanels', () => ({
   },
 }));
 vi.mock('@/components/template-editor/GenerateFromClipy', () => ({
-  GenerateFromClipy: ({ confirmReplace, onGenerated }: { confirmReplace: () => boolean; onGenerated: (values: unknown) => void }) => (
-    <button type="button" onClick={() => confirmReplace() && onGenerated(editor.generatedDraft)}>
-      Generate from Clipy
-    </button>
+  GenerateFromClipy: ({
+    confirmReplace,
+    onGenerated,
+    onGeneratingChange,
+  }: {
+    confirmReplace: () => boolean;
+    onGenerated: (values: unknown) => void;
+    onGeneratingChange: (generating: boolean) => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => confirmReplace() && onGenerated(editor.generatedDraft)}>
+        Generate from Clipy
+      </button>
+      <button type="button" onClick={() => onGeneratingChange(true)}>
+        Start writing a draft
+      </button>
+    </>
   ),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -220,6 +233,16 @@ describe('TemplateEditor new Template from Clipy', () => {
 
     expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
     expect(titleField().value).toBe('From the recording');
+  });
+
+  it('turns Save off and says Generating... while Clipy writes the draft', async () => {
+    await openTheEditor('/dashboard/templates/new/');
+
+    await pressTheButton('Start writing a draft');
+
+    const save = screen.getByRole('button', { name: 'Generating...' });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 });
 

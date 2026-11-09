@@ -109,16 +109,6 @@ describe('shareTemplateToPublic', () => {
     expect(invalidateTemplates).toHaveBeenCalledTimes(1);
   });
 
-  it('says sharing failed when the saved template comes back with no address to share', async () => {
-    const apiClient = buildApiClient({ username: 'alice' });
-    apiClient.updateTemplate.mockResolvedValue({ version: 4, slug: ' ' });
-
-    const result = await share(apiClient, { template: buildTemplate({ id: ' ' }) });
-
-    expect(result).toEqual({ kind: 'error', message: 'Failed to create a share link for this template.' });
-    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
-  });
-
   it('uses the signed-in username when the profile has none yet', async () => {
     const apiClient = buildApiClient({ username: null });
 

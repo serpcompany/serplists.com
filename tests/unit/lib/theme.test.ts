@@ -240,19 +240,6 @@ describe('theme changes from another tab, which arrive only as a storage event a
     expect(harness.isDark()).toBe(false);
   });
 
-  it('ignores a storage event whose key is neither text nor a cleared storage', () => {
-    const harness = createThemeHarness();
-    const target = new EventTarget();
-    const onChange = vi.fn();
-    subscribeToThemeChanges(onChange, { documentRef: harness.document, localStorageArea: harness.storage, storage: harness.storage, target });
-
-    harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
-    target.dispatchEvent(Object.assign(new Event('storage'), { key: 42, storageArea: harness.storage }));
-
-    expect(onChange).not.toHaveBeenCalled();
-    expect(harness.isDark()).toBe(false);
-  });
-
   it('keeps subscribers and the document in step, and unsubscribes both listeners', () => {
     const harness = createThemeHarness();
     const target = new EventTarget();

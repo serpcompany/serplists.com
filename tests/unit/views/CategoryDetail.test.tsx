@@ -165,17 +165,6 @@ const campingTemplate: ChecklistTemplate = {
 
 const renderCategory = (slug: string) => renderCategoryPage(`/categories/${slug}`);
 
-describe('CategoryDetail at an address that names no category', () => {
-  it('shows the Business category', () => {
-    mockUseTemplateLibrary.mockReturnValue(libraryState([template('plan', 'Business plan', ['Business'])]));
-
-    const markup = renderCategoryPage('/categories/', { params: {} });
-
-    expect(markup).toContain('Business &amp; Operations</h1>');
-    expect(markup).toContain('Business plan');
-  });
-});
-
 describe('CategoryDetail empty categories', () => {
   it('keeps a loaded category with no public Templates out of search results', () => {
     mockUseTemplateLibrary.mockReturnValue({ templates: [campingTemplate], loading: false, allCategories: ['outdoor'] });

@@ -48,15 +48,10 @@ const storedSectionsSchema = z.array(sectionSchema);
 export function findStoredSectionsIssue(sections: unknown): string | null {
   const result = storedSectionsSchema.safeParse(sections);
   if (result.success) return null;
-  return [
-    ...result.error.issues.map((issue) => {
-      const path = issue.path.map((part) => (typeof part === "number" ? `[${part}]` : `.${part}`)).join("");
-      return `sections${path}: ${issue.message}`;
-    }),
-    "sections: Invalid input",
-  ]
-    .slice(0, 1)
-    .join("");
+  const [issue] = result.error.issues;
+  if (!issue) return "sections: Invalid input";
+  const path = issue.path.map((part) => (typeof part === "number" ? `[${part}]` : `.${part}`)).join("");
+  return `sections${path}: ${issue.message}`;
 }
 
 export const isSectionedList = (values: readonly unknown[]): boolean => {

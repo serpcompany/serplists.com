@@ -100,13 +100,9 @@ export function PublicTemplateView({
   const ownerName = resolvePublicTemplateOwnerName(template) || 'Template Library';
   const TypeIcon = template.type === 'recipe' ? List : FileText;
   const lastUpdated = template.updatedAt || template.createdAt;
-  const updatedDate = formatLocalDate(lastUpdated);
+  const updatedDateTime = normalizeDbTimestamp(lastUpdated);
 
   const handleShare = async () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     if (await copyTextToClipboard(window.location.href)) {
       toast.success('Link copied to clipboard');
       return;
@@ -189,9 +185,9 @@ export function PublicTemplateView({
           ) : (
             <div className="flex items-center gap-2">{owner}</div>
           )}
-          {updatedDate ? (
+          {updatedDateTime ? (
             <p>
-              Updated <time dateTime={[normalizeDbTimestamp(lastUpdated)].find((timestamp) => timestamp !== null)}>{updatedDate}</time>
+              Updated <time dateTime={updatedDateTime}>{formatLocalDate(lastUpdated)}</time>
             </p>
           ) : null}
           {template.categories?.length ? (

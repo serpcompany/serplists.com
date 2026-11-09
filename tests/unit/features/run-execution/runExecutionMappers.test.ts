@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { sectionAt, taskAt } from '../../../support/elements';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
@@ -367,24 +367,6 @@ describe('mapChecklistRuns', () => {
 
     expect(runs.map((run) => run.id)).toEqual(['run-broken', 'run-ok']);
     expect(runs[0]).toEqual(objectContaining({ sections: [], progress: 0 }));
-  });
-
-  it('keeps a run whose content throws while it is read, with no tasks, and logs which run it was', () => {
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const unreadableSection = {
-      id: 's1',
-      title: 'S',
-      get items(): unknown[] {
-        throw new Error('The stored content could not be read');
-      },
-    };
-
-    const runs = mapChecklistRuns([{ id: 'run-unreadable', title: 'Unreadable', items: [unreadableSection] }, valid]);
-
-    expect(runs.map((run) => run.id)).toEqual(['run-unreadable', 'run-ok']);
-    expect(runs[0]).toEqual(objectContaining({ sections: [], progress: 0 }));
-    expect(errors).toHaveBeenCalledWith('Unable to read run content', objectContaining({ runId: 'run-unreadable' }));
-    errors.mockRestore();
   });
 });
 

@@ -13,6 +13,7 @@ import type {
   PortableTemplatePack,
 } from "@/lib/schemas/checklistSchema";
 import { toPortableSections } from "@/lib/schemas/portableSections";
+import { isUploadedAsset } from "@/lib/schemas/portableTemplatePack";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { normalizeStringArray, parseJsonArray } from "@/lib/schemas/jsonArrays";
@@ -60,9 +61,7 @@ const withImportedLinkSources = (sections: ChecklistSection[]): ChecklistSection
     ),
   }));
 
-const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
-  const parsed = parseJsonArray(input);
-  if (!parsed) return null;
+const sectionsFromList = (parsed: unknown[], templateTitle: string): ChecklistSection[] => {
   if (parsed.length === 0) return [];
   const sections = isSectionsShape(parsed) ? parsed : [sectionHoldingLegacyItems(parsed)];
   const invalidEntry = findInvalidImportSectionEntry(sections);
@@ -70,6 +69,11 @@ const coerceSections = (input: unknown, templateTitle: string): ChecklistSection
     throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
   return withImportedLinkSources(normalizeSections(sections));
+};
+
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
+  const parsed = parseJsonArray(input);
+  return parsed ? sectionsFromList(parsed, templateTitle) : null;
 };
 
 const normalizeImportTemplate = (
@@ -111,10 +115,7 @@ const normalizePortableTemplate = (
   template: PortableChecklistTemplate,
   now = new Date().toISOString(),
 ): ChecklistTemplate => {
-  const sections = coerceSections(template.sections, template.title);
-  if (!sections) {
-    throw new Error(`Template "${template.title}" has invalid sections`);
-  }
+  const sections = sectionsFromList(template.sections, template.title);
 
   return {
     id: generateTempId("portable"),
@@ -149,22 +150,10 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   const warnings: TemplateImportWarning[] = [];
 
   templates.forEach((template) => {
-    let assetCount = 0;
-    template.sections.forEach((section) => {
-      section.items.forEach((item) => {
-        item.contents?.forEach((content) => {
-          const value = typeof content.value === "string" ? content.value : "";
-          const isUpload =
-            content.uploadType === "upload" ||
-            value.includes("/api/uploads/file") ||
-            value.includes("uploads/file?key=");
-
-          if (content.type === "image" || content.type === "video" || content.type === "file") {
-            if (isUpload) assetCount += 1;
-          }
-        });
-      });
-    });
+    const assetCount = template.sections
+      .flatMap((section) => section.items)
+      .flatMap((item) => item.contents ?? [])
+      .filter(isUploadedAsset).length;
 
     if (assetCount > 0) {
       warnings.push({
@@ -177,10 +166,14 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
+export type PortableExportPack = PortableTemplatePack & {
+  manifest: NonNullable<PortableTemplatePack["manifest"]> & { assetWarnings: number };
+};
+
 export const exportPortableTemplatesToJSON = (
   templates: ChecklistTemplate[],
   exportedBy?: string
-): PortableTemplatePack => {
+): PortableExportPack => {
   const warnings = collectAssetWarnings(templates);
   const results = templates.map((template) => parsePortableTemplate({
     title: template.title,
@@ -322,7 +315,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof ZodError) {
       throw new Error(`Template validation failed: ${formatValidationError(error)}`);
     }
-    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
+    throw new Error(formatValidationError(error));
   }
 };
 

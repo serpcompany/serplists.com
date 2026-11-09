@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 
@@ -27,17 +27,8 @@ const whatTheTaskEffectsSeeFocused = async (Reveal: typeof TaskHeaderReveal) => 
   return focused;
 };
 
-describe('TaskHeaderReveal loaded with a window, as in a browser, or with none, as on the server', () => {
+describe('TaskHeaderReveal in a browser', () => {
   it("focuses the next task's title before the effects of what it holds run, in a browser", async () => {
     expect(await whatTheTaskEffectsSeeFocused(TaskHeaderReveal)).toEqual(['BODY', 'H2']);
-  });
-
-  it('focuses it in an effect of its own when loaded with no window, which runs after the effects of what it holds', async () => {
-    vi.resetModules();
-    vi.stubGlobal('window', undefined);
-    const loaded = await import('@/components/run-execution/TaskHeaderReveal');
-    vi.unstubAllGlobals();
-
-    expect(await whatTheTaskEffectsSeeFocused(loaded.TaskHeaderReveal)).toEqual(['BODY', 'BODY']);
   });
 });

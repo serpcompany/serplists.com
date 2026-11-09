@@ -1,7 +1,6 @@
 import {
   clickTheButton,
   renderTheTemplateEditorPanels,
-  renderTheTemplateEditorPanelsOn,
   thePanelHeading,
 } from '../../../support/templateEditorPanels';
 import { act } from 'react';
@@ -69,15 +68,6 @@ describe('the template editor outline', () => {
 
     expect(toast.error).toHaveBeenCalledWith('You must have at least one section');
     expect(editor.values().sections).toHaveLength(1);
-  });
-
-  it('adds the first task to a section the form holds with no id, and opens it', async () => {
-    const editor = await renderTheTemplateEditorPanelsOn({ title: 'One', sections: [{ title: 'Prep', items: [] }] });
-
-    await clickTheButton('Add task to Prep');
-
-    expect(editor.values().sections[0]?.items).toHaveLength(1);
-    expect(thePanelHeading()).toBe('Task Details');
   });
 
   it('adds a task to a collapsed section, expanding it and opening the new task', async () => {
@@ -196,21 +186,6 @@ describe('the template editor outline', () => {
 
     expect(editor.values().sections[0]?.items.map((item) => item.id)).toEqual(['task-2', 'task-1', 'task-3']);
     expect(inputNamed('Task Title').value).toBe('Write notes');
-  });
-
-  it('keeps each task the form holds with a blank id in a row of its own, and moves it', async () => {
-    const errors = vi.spyOn(console, 'error');
-    const editor = await renderTheTemplateEditorPanelsOn({
-      title: 'One',
-      sections: [{ id: 's', title: 'Prep', items: [{ id: '', title: 'First' }, { id: '', title: 'Second' }] }],
-    });
-
-    await clickTheButton('Move Second up');
-
-    expect(editor.values().sections[0]?.items.map((item) => item.title)).toEqual(['Second', 'First']);
-    expect(outlineButtons()).toEqual(expect.arrayContaining(['Second', 'First']));
-    expect(errors.mock.calls.flat().join(' ')).not.toMatch(/key/i);
-    errors.mockRestore();
   });
 
   it('moves a section with its move buttons while a task in it stays selected', async () => {

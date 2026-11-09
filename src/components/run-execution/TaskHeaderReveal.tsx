@@ -1,10 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { createTaskRevealer } from '@/features/run-execution/taskReveal';
 import { cn } from '@/lib/utils';
 import { ignoreRepeatClicksBriefly } from '@/lib/utils/repeatClick';
-
-const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface TaskHeaderRevealProps {
   children: ReactNode;
@@ -16,7 +14,7 @@ export function TaskHeaderReveal({ children, className, taskId }: TaskHeaderReve
   const headerRef = useRef<HTMLDivElement>(null);
   const [reveal] = useState(createTaskRevealer);
 
-  useBrowserLayoutEffect(() => {
+  useLayoutEffect(() => {
     reveal(taskId, () => {
       const header = headerRef.current;
       const title = header?.querySelector<HTMLElement>('h2');

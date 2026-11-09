@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { skipToken } from '@tanstack/react-query';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRunHistoryResponse, TemplateHistoryEvent } from '@/lib/api';
 import {
@@ -20,12 +21,17 @@ const response = (count: number): ChecklistRunHistoryResponse => ({
   events: Array.from({ length: count }, (_, index) => event(index)),
 });
 
+const fetchTheHistory = (query: ReturnType<typeof buildRunHistoryQuery>) => {
+  assert(query.queryFn !== skipToken, 'a query for a known run makes a request');
+  return query.queryFn();
+};
+
 describe('run history query', () => {
   it("requests only the events the page shows, instead of the server's default of 50 audit rows and their users", async () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(8)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client });
 
-    await query.queryFn();
+    await fetchTheHistory(query);
 
     expect(RUN_HISTORY_PREVIEW_LIMIT).toBe(8);
     expect(client.getChecklistHistory).toHaveBeenCalledWith('run-1', { limit: RUN_HISTORY_PREVIEW_LIMIT });
@@ -46,13 +52,10 @@ describe('run history query', () => {
     expect(buildRunHistoryQuery({ runId: undefined, mode: 'private', client }).enabled).toBe(false);
   });
 
-  it('names no run when the history of a run not yet known is fetched anyway, and keys it apart from every run', async () => {
-    const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(0)) };
-    const query = buildRunHistoryQuery({ runId: undefined, mode: 'private', client });
+  it('has no request to make before the run is known, and keys that query apart from every run', () => {
+    const query = buildRunHistoryQuery({ runId: undefined, mode: 'private', client: { getChecklistHistory: vi.fn() } });
 
-    await query.queryFn();
-
-    expect(client.getChecklistHistory).toHaveBeenCalledWith('', { limit: RUN_HISTORY_PREVIEW_LIMIT });
+    expect(query.queryFn).toBe(skipToken);
     expect(query.queryKey).toEqual(['checklist-run-history', 'none', { limit: RUN_HISTORY_PREVIEW_LIMIT }]);
   });
 
@@ -60,7 +63,7 @@ describe('run history query', () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(100)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client, showingAll: true });
 
-    await query.queryFn();
+    await fetchTheHistory(query);
 
     expect(client.getChecklistHistory).toHaveBeenCalledWith('run-1', { limit: 100 });
     expect(query.queryKey).toEqual(['checklist-run-history', 'run-1', { limit: 100 }]);

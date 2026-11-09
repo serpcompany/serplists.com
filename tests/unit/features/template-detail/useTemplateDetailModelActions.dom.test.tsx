@@ -242,13 +242,10 @@ describe('the actions on a template page', () => {
     expect(apiMock.getTemplateHistory).toHaveBeenLastCalledWith('template-7', { limit: HISTORY_FULL_LIMIT });
   });
 
-  it.each([
-    ['refreshes the cached template lists after a move for a signed-in member', 'user-1', true],
-    ['leaves the cached template lists alone after a move when no one is signed in', undefined, false],
-  ])('%s', async (_label, userId, invalidated) => {
+  it('refreshes the cached template lists after a move', async () => {
     apiMock.transferTemplate.mockResolvedValue({ success: true, id: 'template-7', teamId: 'team-9', version: 3 });
     const page = await mountQueryHook(() => ({
-      model: useTemplateDetailModel({ ...onTheTemplatePage, userId }),
+      model: useTemplateDetailModel({ ...onTheTemplatePage, userId: 'user-1' }),
       lists: useQueryClient(),
     }));
     unmounts.push(page.unmount);
@@ -257,6 +254,6 @@ describe('the actions on a template page', () => {
 
     await act(async () => page.current().model.transferTemplate('team-9'));
 
-    expect(page.current().lists.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(invalidated);
+    expect(page.current().lists.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
   });
 });

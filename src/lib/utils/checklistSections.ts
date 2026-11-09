@@ -88,13 +88,15 @@ const shownFields = (fields: unknown[], fieldIdPrefix: string): { fields: Checkl
 });
 
 const shownContents = (contents: unknown[], itemId: string): ChecklistItemContent[] =>
-  contents.flatMap((content, contentIndex) =>
-    [shownContentSchema.safeParse(content)].filter((parsed) => parsed.success).map(({ data: { id, subItems, fields, ...shown } }) => ({
+  contents.map((content, contentIndex) => {
+    const { id, subItems, fields, ...shown } = shownContentSchema.parse(content);
+    return {
       ...shown,
       ...textIdField(id),
       ...(subItems ? { subItems: subItems.map(shownSubItem) } : {}),
       ...(shown.type === "form" ? shownFields(fields, `${itemId}-form-${contentIndex + 1}`) : {}),
-    })));
+    };
+  });
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];

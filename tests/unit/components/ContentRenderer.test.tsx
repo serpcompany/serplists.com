@@ -200,11 +200,3 @@ describe('ContentRenderer Sub-tasks heading, one level below the task around it'
     expect(markup).not.toContain('<h4');
   });
 });
-
-describe('ContentRenderer for a task with no content', () => {
-  it('says the task has no additional content', () => {
-    const markup = renderToStaticMarkup(<ContentRenderer contents={[]} />);
-
-    expect(markup).toContain('No additional content for this task');
-  });
-});

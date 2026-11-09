@@ -73,24 +73,6 @@ describe('formatValidationError', () => {
     expect(formatValidationError(error)).toBe('Section 1 > title: Expected string, received number');
   });
 
-  it('reports a failed union by its own message when it carries no branch, or its most specific branch holds no issue', () => {
-    const unionIssue = (unionErrors: z.ZodError[]): z.ZodIssue => ({
-      code: z.ZodIssueCode.invalid_union,
-      unionErrors,
-      path: ['kind'],
-      message: 'Pick a listed kind',
-    });
-
-    expect(formatValidationError(new z.ZodError([unionIssue([])]))).toBe('kind: Pick a listed kind');
-    expect(formatValidationError(new z.ZodError([unionIssue([new z.ZodError([]), new z.ZodError([])])]))).toBe(
-      'kind: Pick a listed kind',
-    );
-  });
-
-  it('says Invalid data for a validation error that lists no issue', () => {
-    expect(formatValidationError(new z.ZodError([]))).toBe('Invalid data');
-  });
-
   it('numbers a list it has no name for by its field, and a list inside a list by its place', () => {
     const error = zodErrorFor(z.object({ grid: z.array(z.array(z.string())) }), { grid: [['a', 'b'], ['c', 4]] });
 

@@ -50,13 +50,4 @@ describe('usePageVisit loaded with a window, as in a browser, or with none, as o
   it('enters the visit before the effects of what the page renders, in a browser', async () => {
     expect(await whatAChildEffectSeesOnTheFirstRender(usePageVisit)).toBe(true);
   });
-
-  it('enters it in an effect of its own when loaded with no window, which runs after the effects of what the page renders', async () => {
-    vi.resetModules();
-    vi.stubGlobal('window', undefined);
-    const loaded = await import('@/hooks/usePageVisit');
-    vi.unstubAllGlobals();
-
-    expect(await whatAChildEffectSeesOnTheFirstRender(loaded.usePageVisit)).toBe(false);
-  });
 });

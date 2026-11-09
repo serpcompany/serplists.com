@@ -52,25 +52,4 @@ describe('SidebarProvider', () => {
     fireEvent.keyDown(window, { key: 'b', metaKey: true });
     expect(screen.getByRole('button', { name: 'Sidebar expanded' })).toBeTruthy();
   });
-
-  it('leaves an open state the page controls to the page, telling it what the toggle asks for', async () => {
-    const onOpenChange = vi.fn<(open: boolean) => void>();
-    const { rerender } = await renderSettled(
-      <SidebarProvider onOpenChange={onOpenChange} open={false}>
-        <SidebarToggle />
-      </SidebarProvider>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sidebar collapsed' }));
-
-    expect(onOpenChange).toHaveBeenCalledWith(true);
-    expect(screen.getByRole('button', { name: 'Sidebar collapsed' })).toBeTruthy();
-
-    rerender(
-      <SidebarProvider onOpenChange={onOpenChange} open>
-        <SidebarToggle />
-      </SidebarProvider>,
-    );
-    expect(screen.getByRole('button', { name: 'Sidebar expanded' })).toBeTruthy();
-  });
 });

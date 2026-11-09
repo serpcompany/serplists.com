@@ -1,6 +1,6 @@
-const SECTION_HEADING = /^## (.+)$/;
-const ITEM_HEADING = /^### (.+)$/;
-const BLOCK_OPENER = /^(`{3,})serplists:(.*)$/;
+const SECTION_TITLE = /(?<=^## ).+$/;
+const ITEM_TITLE = /(?<=^### ).+$/;
+const BLOCK_OPENER = /^`{3,}serplists:.*$/;
 const BLOCK_TYPE_PREFIX = "serplists:";
 const MIN_FENCE_LENGTH = 3;
 const STRUCTURAL_LINE_ESCAPED_OR_NOT = /^\\*(?:#{2,3} |`{3,}serplists:)/;
@@ -40,8 +40,6 @@ export const escapeTemplateMarkdownDescription = (description: string): string =
 const unescapeDescriptionLine = (line: string): string =>
   ESCAPED_STRUCTURAL_LINE.test(line) ? line.slice(1) : line;
 
-const capturedText = (match: RegExpExecArray, group: number): string => [match[group]].join("");
-
 export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody => {
   const lines = body.split("\n")[Symbol.iterator]();
   const descriptionLines: string[] = [];
@@ -50,11 +48,10 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
   for (let next = lines.next(); !next.done; next = lines.next()) {
     const line = next.value;
     const section = sections.at(-1);
-    const opener = BLOCK_OPENER.exec(line);
-
-    if (opener) {
-      const type = capturedText(opener, 2).trim();
-      const closer = new RegExp(`^\`{${capturedText(opener, 1).length}}\\s*$`);
+    if (BLOCK_OPENER.test(line)) {
+      const fenceLength = line.length - line.replace(/^`+/, "").length;
+      const type = line.slice(fenceLength + BLOCK_TYPE_PREFIX.length).trim();
+      const closer = new RegExp(`^\`{${fenceLength}}\\s*$`);
       const blockLines: string[] = [];
       let closingFence: string | undefined;
       for (let blockLine = lines.next(); !blockLine.done; blockLine = lines.next()) {
@@ -77,12 +74,12 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
       continue;
     }
 
-    const sectionHeading = SECTION_HEADING.exec(line);
-    const itemHeading = section ? ITEM_HEADING.exec(line) : null;
-    if (sectionHeading) {
-      sections.push({ title: capturedText(sectionHeading, 1).trim(), items: [] });
-    } else if (section && itemHeading) {
-      section.items.push({ title: capturedText(itemHeading, 1).trim(), description: "", blocks: [], lines: [] });
+    const sectionTitle = SECTION_TITLE.exec(line);
+    const itemTitle = section ? ITEM_TITLE.exec(line) : null;
+    if (sectionTitle) {
+      sections.push({ title: sectionTitle[0].trim(), items: [] });
+    } else if (section && itemTitle) {
+      section.items.push({ title: itemTitle[0].trim(), description: "", blocks: [], lines: [] });
     } else if (!section) {
       descriptionLines.push(unescapeDescriptionLine(line));
     } else {

@@ -1,8 +1,8 @@
-import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
-import { formatExportSummaryMessage, type PortableExportSummary } from '@/lib/templates/templateImportSummary';
+import { formatExportSummaryMessage } from '@/lib/templates/templateImportSummary';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
+  type PortableExportPack,
 } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -29,7 +29,7 @@ const buildTemplateExportFilename = (template: ChecklistTemplate): string => {
 
 export const buildTemplateExportFile = (
   template: ChecklistTemplate,
-): { filename: string; pack: PortableTemplatePack } => ({
+): { filename: string; pack: PortableExportPack } => ({
   filename: buildTemplateExportFilename(template),
   pack: exportPortableTemplatesToJSON([template]),
 });
@@ -41,7 +41,7 @@ export type TemplateExportResult =
 
 export const exportTemplateFile = (params: {
   billingState: TemplateDetailBillingState;
-  download?: (pack: PortableTemplatePack, filename: string) => void;
+  download?: (pack: PortableExportPack, filename: string) => void;
   template: ChecklistTemplate | null;
 }): TemplateExportResult => {
   if (!params.template) {
@@ -61,16 +61,13 @@ export const exportTemplateFile = (params: {
   }
 
   const { filename, pack } = buildTemplateExportFile(params.template);
-  if (pack.templates.length === 0) {
-    const skippedLists: readonly [...PortableExportSummary['skipped'][], PortableExportSummary['skipped']] = [
-      ...[pack.manifest?.skippedTemplates].filter((list) => list !== undefined),
-      [],
-    ];
-    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped: skippedLists[0] }).message };
+  const { assetWarnings, skippedTemplates } = pack.manifest;
+  if (skippedTemplates) {
+    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped: skippedTemplates }).message };
   }
   (params.download ?? downloadBackupFile)(pack, filename);
 
-  return { kind: 'ok', assetWarnings: Number([pack.manifest?.assetWarnings, 0].find((count) => count !== undefined)) };
+  return { kind: 'ok', assetWarnings };
 };
 
 export const getTemplateExportLabel = (

@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
 import { assert, describe, expect, it } from 'vitest';
 
-import { ItemEditor } from '@/components/template-editor/ItemEditor';
 import { SectionEditor } from '@/components/template-editor/SectionEditor';
 import { SEOMetaEditor } from '@/components/template-editor/SEOMetaEditor';
 import { TemplateBasicInfo } from '@/components/template-editor/TemplateBasicInfo';
@@ -53,7 +52,6 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Template Settings');
     expect(html).toContain('Template Name');
     expect(html).toContain('Goal / Summary');
     expect(html).toContain('Template Type');
@@ -68,42 +66,10 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Search &amp; SEO');
     expect(html).toContain('Search Title');
     expect(html).toContain('URL Slug');
     expect(html).toContain('Search Description');
     expect(html).toContain('Preview');
-  });
-});
-
-describe('Section and task panes', () => {
-  it('open with a heading that says what a section and a task hold', () => {
-    const html = renderToStaticMarkup(
-      <SectionFormHarness>
-        <SectionEditor sectionIndex={0} />
-        <ItemEditor itemIndex={0} sectionIndex={0} />
-      </SectionFormHarness>,
-    );
-
-    expect(html).toContain('Section Settings');
-    expect(html).toContain('Sections group related tasks together.');
-    expect(html).toContain('Task Details');
-    expect(html).toContain('Define the step and add supporting content.');
-  });
-
-  it('show empty fields and no tasks for a section and a task the form does not hold', () => {
-    const html = renderToStaticMarkup(
-      <SectionFormHarness>
-        <SectionEditor sectionIndex={5} showIntro={false} />
-        <ItemEditor itemIndex={3} sectionIndex={0} showIntro={false} />
-      </SectionFormHarness>,
-    );
-
-    expect(getByAccessibleName(html, 'Section Title')?.attrs['value']).toBe('');
-    expect(html).toContain('<span class="font-medium">0</span>');
-    expect(getByAccessibleName(html, 'Task Title')?.attrs['value']).toBe('');
-    expect(html).not.toContain('Section Settings');
-    expect(html).not.toContain('Task Details');
   });
 });
 

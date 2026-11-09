@@ -1,11 +1,10 @@
 import 'server-only';
 
-export function routeParam(value: string | string[] | undefined): string {
-  const raw = (Array.isArray(value) ? value[0] : value) ?? '';
+export function routeParam(value: string): string {
   try {
-    return decodeURIComponent(raw);
+    return decodeURIComponent(value);
   } catch {
-    return raw;
+    return value;
   }
 }
 

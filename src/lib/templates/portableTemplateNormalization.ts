@@ -19,9 +19,9 @@ const normalizeStringArray = (values?: string[]) => {
 };
 
 const normalizeSubItems = (subItems: { title: string }[]) =>
-  [subItems].filter((list) => list.length > 0).map((list) => list.map((subItem) => ({
+  subItems.map((subItem) => ({
     title: subItem.title.trim(),
-  })))[0];
+  }));
 
 type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
 type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];
@@ -101,8 +101,7 @@ const normalizeContents = (contents?: PortableContent[]) => {
     }
 
     if (content.type === "subItems") {
-      const normalizedSubItems = normalizeSubItems(content.subItems);
-      if (normalizedSubItems) nextContent.subItems = normalizedSubItems;
+      nextContent.subItems = normalizeSubItems(content.subItems);
     }
 
     if (content.type === "form") nextContent.fields = content.fields.map(normalizeFormField);

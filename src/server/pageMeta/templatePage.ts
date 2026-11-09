@@ -37,7 +37,7 @@ const toFoundSeo = (template: FoundTemplatePage): TemplatePageLookup => {
       keywords: template.categories ?? ['checklist', 'template'],
       type: 'article',
       publishedTime: template.createdAt || undefined,
-      path: [template.canonicalPath].find((path) => path !== null),
+      path: template.canonicalPath ?? undefined,
     },
   };
 };

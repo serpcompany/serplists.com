@@ -3,8 +3,6 @@ export type ViewModePreferenceSurface =
   | 'category-templates'
   | 'dashboard-templates';
 
-import { succeedsWithoutThrowing } from '@/lib/browserStorage';
-
 type ViewModeStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 const VIEW_MODE_PREFERENCE_VERSION = 1;
@@ -18,27 +16,20 @@ export const buildViewModePreferenceKey = (
 };
 
 export const readViewModePreference = (
-  storage: Pick<ViewModeStorage, 'getItem'> | undefined,
+  storage: Pick<ViewModeStorage, 'getItem'>,
   key: string,
   fallback: ViewMode,
 ): ViewMode => {
-  if (!storage) return fallback;
-
-  try {
-    const storedValue = storage.getItem(key);
-    return storedValue === 'grid' || storedValue === 'list'
-      ? storedValue
-      : fallback;
-  } catch {
-    return fallback;
-  }
+  const storedValue = storage.getItem(key);
+  return storedValue === 'grid' || storedValue === 'list'
+    ? storedValue
+    : fallback;
 };
 
 export const writeViewModePreference = (
-  storage: Pick<ViewModeStorage, 'setItem'> | undefined,
+  storage: Pick<ViewModeStorage, 'setItem'>,
   key: string,
   value: ViewMode,
 ): void => {
-  if (!storage) return;
-  succeedsWithoutThrowing(() => storage.setItem(key, value));
+  storage.setItem(key, value);
 };

@@ -39,21 +39,4 @@ describe('view mode preferences', () => {
     storage.setItem(key, 'unsupported');
     expect(readViewModePreference(storage, key, 'grid')).toBe('grid');
   });
-
-  it('uses the screen default when there is no storage, and remembers nothing', () => {
-    const key = buildViewModePreferenceKey('user-1', 'dashboard-templates');
-
-    expect(readViewModePreference(undefined, key, 'list')).toBe('list');
-    expect(() => writeViewModePreference(undefined, key, 'grid')).not.toThrow();
-  });
-
-  it('uses the screen default when the browser refuses to read storage', () => {
-    const refusing = {
-      getItem: (): string | null => {
-        throw new DOMException('The operation is insecure.', 'SecurityError');
-      },
-    };
-
-    expect(readViewModePreference(refusing, buildViewModePreferenceKey('user-1', 'category-templates'), 'grid')).toBe('grid');
-  });
 });

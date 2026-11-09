@@ -119,7 +119,7 @@ export const storedFormFieldSchema = z.discriminatedUnion("kind", [
 
 const formOptionFallbackId = (index: number): string => `option-${index + 1}`;
 
-export function withFormOptionIds(options: FormOptionRecord[]): Array<FormOptionRecord & { id: string }> {
+export function withFormOptionIds<Option extends FormOptionRecord>(options: Option[]): Array<Option & { id: string }> {
   const used = new Set<string>();
   return options.map((option, index) => {
     const stored = readTextId(option.id);
@@ -140,20 +140,25 @@ function storedAnswerFor(kind: FormFieldKind, answer: unknown): unknown {
   return fitsFormAnswerShape(kind, answer) ? answer : undefined;
 }
 
-function sanitizeStoredOptions(value: unknown): FormOptionRecord[] {
+type SanitizedFormOption = FormOptionRecord & { label: string };
+
+type SanitizedFormField = FormFieldRecord & { kind: FormFieldKind; label: string; required: boolean };
+
+function sanitizeStoredOptions(value: unknown): SanitizedFormOption[] {
   return formOptionRecordsIn(value).map((option) => ({
     ...option,
     label: typeof option.label === "string" ? option.label : "",
   }));
 }
 
-export function sanitizeStoredFormFields(value: unknown): FormFieldRecord[] {
+export function sanitizeStoredFormFields(value: unknown): SanitizedFormField[] {
   return formFieldRecordsIn(value).flatMap((field) => {
     const { kind } = field;
     if (!isFormFieldKind(kind)) return [];
     const { options, min, max, answer, description, ...rest } = field;
-    const next: FormFieldRecord = {
+    const next: SanitizedFormField = {
       ...rest,
+      kind,
       label: typeof field.label === "string" ? field.label : "",
       required: field.required === true,
     };
@@ -182,26 +187,24 @@ function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | unde
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined;
 }
 
-const textOrEmpty = (value: unknown): string => [value].filter((text) => typeof text === "string").join("");
-
 export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
-  return sanitizeStoredFormFields(value).flatMap((field, index) =>
-    [field.kind].filter(isFormFieldKind).map((kind): ChecklistFormField => {
-      const answer = readFormAnswer(kind, field.answer);
-      return {
-        id: readTextId(field.id) || fallbackId(index),
-        label: textOrEmpty(field.label),
-        kind,
-        required: field.required === true,
-        ...(typeof field.description === "string" ? { description: field.description } : {}),
-        ...(isFormChoiceKind(kind)
-          ? { options: withFormOptionIds(formOptionRecordsIn(field.options)).map(({ id, label }) => ({ id, label: textOrEmpty(label) })) }
-          : {}),
-        ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
-        ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
-        ...(answer === undefined ? {} : { answer }),
-      };
-    }));
+  return sanitizeStoredFormFields(value).map((field, index): ChecklistFormField => {
+    const { kind } = field;
+    const answer = readFormAnswer(kind, field.answer);
+    return {
+      id: readTextId(field.id) || fallbackId(index),
+      label: field.label,
+      kind,
+      required: field.required,
+      ...(typeof field.description === "string" ? { description: field.description } : {}),
+      ...(isFormChoiceKind(kind)
+        ? { options: withFormOptionIds(sanitizeStoredOptions(field.options)).map(({ id, label }) => ({ id, label })) }
+        : {}),
+      ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
+      ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
+      ...(answer === undefined ? {} : { answer }),
+    };
+  });
 }
 
 export function withoutFormAnswers(fields: unknown): unknown[] {

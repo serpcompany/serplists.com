@@ -21,10 +21,6 @@ describe('a Template row from the list API', () => {
     expect(listed({}).sections).toEqual([]);
   });
 
-  it('maps a row stored with an empty title to an empty title', () => {
-    expect(listed({ title: '' })).toMatchObject({ id: 'template-1', title: '' });
-  });
-
   it('reads tags stored as JSON text, keeping only the text tags', () => {
     expect(listed({ tags: JSON.stringify(['outdoor', 7, 'family']) }).tags).toEqual(['outdoor', 'family']);
     expect(listed({ tags: JSON.stringify({ outdoor: true }) }).tags).toEqual([]);

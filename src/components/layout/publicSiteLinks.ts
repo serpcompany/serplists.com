@@ -19,15 +19,17 @@ export type PublicSiteLink = {
   label: string;
 };
 
+export type PublicMenuLink = PublicSiteLink & { description: string };
+
 export type PublicHeaderItem =
   | { kind: 'link'; link: PublicSiteLink }
-  | { kind: 'menu'; label: string; links: readonly PublicSiteLink[]; sectionPath?: string };
+  | { kind: 'menu'; label: string; links: readonly PublicMenuLink[]; sectionPath?: string };
 
 export type PublicFooterGroup = { title: string; items: readonly PublicSiteLink[] };
 
 export type PublicSocialLink = { href: string; label: string; network: SocialNetwork };
 
-const templateLinks: readonly PublicSiteLink[] = [
+const templateLinks: readonly PublicMenuLink[] = [
   {
     description: TEMPLATE_LIBRARY_PAGE_TEXT.description,
     href: buildPublicTemplatesPath(),
@@ -40,7 +42,7 @@ const templateLinks: readonly PublicSiteLink[] = [
   },
 ];
 
-const featureLinks: readonly PublicSiteLink[] = FEATURES.map((feature) => ({
+const featureLinks: readonly PublicMenuLink[] = FEATURES.map((feature) => ({
   description: feature.description,
   href: buildPublicFeaturePath(feature.slug),
   label: feature.title,

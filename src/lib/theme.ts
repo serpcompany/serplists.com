@@ -77,12 +77,6 @@ export const toggleDocumentTheme = (
 
 type ThemeStorageEvent = { key: string | null; storageArea: unknown };
 
-const readStorageEvent = (event: Event): ThemeStorageEvent | null => {
-  if (!('key' in event) || !('storageArea' in event)) return null;
-  const { key, storageArea } = event;
-  return key === null || typeof key === 'string' ? { key, storageArea } : null;
-};
-
 const isThemeOrClearedKey = (key: string | null): boolean => key === null || key === THEME_STORAGE_KEY;
 
 const isFromAnotherStorageArea = (event: ThemeStorageEvent, localStorageArea: unknown): boolean =>
@@ -102,7 +96,7 @@ interface ThemeSubscriptionOptions {
   documentRef?: ThemeDocument;
   localStorageArea?: unknown;
   storage?: Pick<Storage, 'getItem'> | null;
-  target?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+  target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }
 
 export const subscribeToThemeChanges = (
@@ -116,11 +110,9 @@ export const subscribeToThemeChanges = (
     const detail: unknown = event instanceof CustomEvent ? event.detail : undefined;
     onChange(isTheme(detail) ? detail : getDocumentTheme(documentRef));
   };
-  const handleStorage = (event: Event) => {
-    const storageEvent = readStorageEvent(event);
-    if (!storageEvent) return;
+  const handleStorage = (event: StorageEvent) => {
     const theme = syncThemeFromStorageEvent(
-      storageEvent,
+      event,
       documentRef,
       options.storage ?? safeLocalStorage,
       'localStorageArea' in options ? options.localStorageArea : getLocalStorage(),

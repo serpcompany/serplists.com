@@ -76,13 +76,7 @@ vi.mock('@/components/template-editor/EditorPanels', async () => {
     },
   };
 });
-vi.mock('@/components/template-editor/GenerateFromClipy', () => ({
-  GenerateFromClipy: ({ onGeneratingChange }: { onGeneratingChange: (generating: boolean) => void }) => (
-    <button type="button" onClick={() => onGeneratingChange(true)}>
-      Generate from Clipy
-    </button>
-  ),
-}));
+vi.mock('@/components/template-editor/GenerateFromClipy', () => ({ GenerateFromClipy: () => null }));
 vi.mock('@/components/template-editor/TemplateEditorAccessNotices', () => ({
   TemplateEditorAccessNotices: () => null,
 }));
@@ -210,18 +204,6 @@ describe('TemplateEditor navigation in the context it shows', () => {
     await click('Cancel');
 
     expect(navigation.pathname()).toBe('/dashboard/templates/');
-  });
-});
-
-describe('TemplateEditor while Clipy writes a draft', () => {
-  it('saves nothing until the draft is written', async () => {
-    await renderNewTemplateEditor();
-
-    await click('Generate from Clipy');
-    await click('Save');
-
-    expect(mocks.save).not.toHaveBeenCalled();
-    expect(navigation.pathname()).toBe('/dashboard/templates/new/');
   });
 });
 

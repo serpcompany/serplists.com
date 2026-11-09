@@ -1,13 +1,9 @@
 import { clickTheButton, renderTheTemplateEditorPanels } from '../../../support/templateEditorPanels';
-import React, { act } from 'react';
+import { act } from 'react';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { FormProvider, useForm } from 'react-hook-form';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { TemplateBasicInfo } from '@/components/template-editor/TemplateBasicInfo';
-import type { TemplateEditorDetailsFormValues } from '@/lib/forms/templateEditorDetailsForm';
-
-import { inputNamed, renderSettled, typeInto } from '../../../support/renderInTheDom';
+import { inputNamed, typeInto } from '../../../support/renderInTheDom';
 import { chooseTheOption } from '../../../support/selectOptions';
 
 afterEach(cleanup);
@@ -107,29 +103,5 @@ describe('the Template Settings panel', () => {
     });
 
     expect(editor.values().isPublic).toBe(false);
-  });
-});
-
-describe('the Template Settings panel on a form that holds no tags or categories yet', () => {
-  it('shows no tags and no chosen category, then adds the first tag', async () => {
-    const held: { tags: () => string[] | undefined } = { tags: () => undefined };
-    function Settings() {
-      const form = useForm<TemplateEditorDetailsFormValues>({ defaultValues: { title: 'Bread' } });
-      held.tags = () => form.getValues('tags');
-      return (
-        <FormProvider {...form}>
-          <TemplateBasicInfo />
-        </FormProvider>
-      );
-    }
-    await renderSettled(<Settings />);
-
-    expect(screen.queryByRole('button', { name: /^Remove tag / })).toBeNull();
-    expect(held.tags()).toBeUndefined();
-    await typeInto(inputNamed('Tags'), 'rye');
-    await pressEnter(inputNamed('Tags'));
-
-    expect(held.tags()).toEqual(['rye']);
-    expect(screen.getByRole('button', { name: 'Remove tag rye' })).toBeTruthy();
   });
 });

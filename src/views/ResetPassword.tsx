@@ -42,13 +42,20 @@ const ResetPassword = () => {
     removeResetTokenFromUrl();
   }, [search]);
 
+  if (error || !token) {
+    return (
+      <AuthPageShell
+        title="Reset link expired"
+        description="That reset link is no longer valid."
+        footer={<Link href={buildForgotPasswordPath()}>Request a new link</Link>}
+      >
+        <StatusNotice icon={<TriangleAlert />}>Please request a new reset email to continue.</StatusNotice>
+      </AuthPageShell>
+    );
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    if (!token) {
-      toast.error("Reset token is missing or invalid.");
-      return;
-    }
 
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
@@ -78,18 +85,6 @@ const ResetPassword = () => {
       setIsSubmitting(false);
     }
   };
-
-  if (error || !token) {
-    return (
-      <AuthPageShell
-        title="Reset link expired"
-        description="That reset link is no longer valid."
-        footer={<Link href={buildForgotPasswordPath()}>Request a new link</Link>}
-      >
-        <StatusNotice icon={<TriangleAlert />}>Please request a new reset email to continue.</StatusNotice>
-      </AuthPageShell>
-    );
-  }
 
   return (
     <AuthPageShell
