@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import http from 'node:http';
+import { describe, expect, it, vi } from 'vitest';
 
 import { checkSiteStandards, checkSiteStandardsUntilItPasses, getWithoutFollowingRedirects } from '../../../scripts/check-site-standards-lib';
 import { stringMatching } from '../../support/asymmetricMatchers';
@@ -40,6 +41,25 @@ describe('a request the site standards check sends', () => {
     const answer = await aSiteAnswering(200, {}, [])((origin) => getWithoutFollowingRedirects(`${origin}/`));
 
     expect([answer.status, answer.location]).toEqual([200, null]);
+  });
+
+  it('reads an answer that carries no status code as status 0', async () => {
+    const requestForReal = http.request;
+    const request = vi
+      .spyOn(http, 'request')
+      .mockImplementation((url: string | URL, options: http.RequestOptions, respond?: (response: http.IncomingMessage) => void) =>
+        requestForReal(url, options, respond).prependListener('response', (response) => {
+          response.statusCode = undefined;
+        }),
+      );
+
+    try {
+      const answer = await aSiteAnswering(200, {}, [])((origin) => getWithoutFollowingRedirects(`${origin}/`));
+
+      expect([answer.status, answer.body]).toEqual([0, 'the body']);
+    } finally {
+      request.mockRestore();
+    }
   });
 
   it('gives up on a site that does not answer in time, naming the URL', async () => {

@@ -66,12 +66,13 @@ function loopSource(sourceCode: SourceCode, variable: Scope.Variable | null): ES
   return loop?.type === "ForOfStatement" && loop.left === definition.parent ? loop.right : null;
 }
 
-const pathFunction = (node: ESTree.Node | null): ESTree.ArrowFunctionExpression | null =>
-  node?.type === "ArrowFunctionExpression" &&
-  node.body.type !== "BlockStatement" &&
-  node.params.every((param) => param.type === "Identifier")
-    ? node
-    : null;
+type PathFunction = Omit<ESTree.ArrowFunctionExpression, "params"> & { params: ESTree.Identifier[] };
+
+const takesOnlyNamedParams = (node: ESTree.ArrowFunctionExpression): node is PathFunction =>
+  node.params.every((param) => param.type === "Identifier");
+
+const pathFunction = (node: ESTree.Node | null): PathFunction | null =>
+  node?.type === "ArrowFunctionExpression" && node.body.type !== "BlockStatement" && takesOnlyNamedParams(node) ? node : null;
 
 const combine = (parts: readonly string[][]) =>
   parts.reduce<string[]>(
@@ -121,7 +122,7 @@ function createEvaluator(sourceCode: SourceCode) {
         const scope = sourceCode.getScope(local.body);
         const inner: Bindings = new Map(bindings);
         local.params.forEach((param, index) => {
-          const variable = param.type === "Identifier" ? findVariable(scope, param.name) : null;
+          const variable = findVariable(scope, param.name);
           if (variable) inner.set(variable, next(node.arguments[index]));
         });
         return next(local.body, inner);

@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { DEV_FALLBACK_AUTH_SECRET } from '../../../scripts/dev-auto-lib';
 import { parseDevBindings } from '../../../scripts/lib/dev-bindings';
+import { CHILD_ENDING_STAND_IN, childrenEndAsEnv, RAISED_ON_ITSELF } from '../../support/childEndingStandIn';
 import { aCopyOfTheCheckoutWithStandIns, startTheCopysScript } from '../../support/checkoutCopyWithStandIns';
 import { aFolderIn } from '../../support/foldersOfFiles';
 import { devSessionPath, NEXT_DEV_READY, NEXT_DEV_STAND_IN, theDevSessionIn, whatNextDevWasStartedWith } from '../../support/nextDevStandIn';
@@ -81,6 +82,30 @@ describe('pnpm run dev:all with a stand-in next dev', { timeout: 300_000 }, () =
     expect(readFileSync(path.join(checkout, 'tmp', 'logs', 'dev-all.log'), 'utf8')).toContain(`✓ ${NEXT_DEV_READY}${session.port}\n`);
     expect(run.status).toBe(3);
     expect(existsSync(devSessionPath(checkout))).toBe(false);
+  });
+
+  const endedAs = async (ending: Parameters<typeof childrenEndAsEnv>[0]) => {
+    const checkout = aFolderIn(workDir);
+    const devAll = startDevAll(checkout, { env: devAllEnv(childrenEndAsEnv(ending)), preloads: [CHILD_ENDING_STAND_IN] });
+    await devAll.printed(NEXT_DEV_READY);
+    await fetch(`http://127.0.0.1:${theDevSessionIn(checkout).port}/exit?code=0`);
+    return { run: await devAll.finished, sessionLeft: existsSync(devSessionPath(checkout)) };
+  };
+
+  it('clears its session and raises on itself the signal that ended next dev, rather than exiting with a code of its own', async () => {
+    const { run, sessionLeft } = await endedAs({ code: null, signal: 'SIGTERM' });
+
+    expect(run.stderr).toContain(`${RAISED_ON_ITSELF} SIGTERM\n`);
+    expect(run.status).toBe(0);
+    expect(sessionLeft).toBe(false);
+  });
+
+  it('clears its session and fails when next dev ends with neither an exit code nor a signal', async () => {
+    const { run, sessionLeft } = await endedAs({ code: null, signal: null });
+
+    expect(run.stderr).not.toContain(RAISED_ON_ITSELF);
+    expect(run.status).toBe(1);
+    expect(sessionLeft).toBe(false);
   });
 
   it('turns colour on for next dev unless something set FORCE_COLOR, and dev:stop stops it and the next dev it started', async () => {

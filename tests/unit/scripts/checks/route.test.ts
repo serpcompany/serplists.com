@@ -29,16 +29,52 @@ describe('which checks a hook runs', () => {
   });
 });
 
+const ROUTE = pathToFileURL(path.join(REPO_ROOT, 'tools', 'checks', 'route.mjs')).href;
+
+const withSpawnSyncAnswering = (commandExpression: string, answer: object, code: string) =>
+  runModuleCodeProcess(
+    [
+      "import childProcess from 'node:child_process';",
+      "import { syncBuiltinESMExports } from 'node:module';",
+      'const spawnSyncForReal = childProcess.spawnSync;',
+      `childProcess.spawnSync = (command, ...rest) => (command === ${commandExpression} ? ${JSON.stringify(answer)} : spawnSyncForReal(command, ...rest));`,
+      'syncBuiltinESMExports();',
+      `const route = await import(${JSON.stringify(ROUTE)});`,
+      code,
+    ].join('\n'),
+  );
+
 describe('what git says to the hooks', () => {
   it('is nothing, rather than a failure, for a folder git cannot run in', { timeout: 60_000 }, async () => {
-    const route = pathToFileURL(path.join(REPO_ROOT, 'tools', 'checks', 'route.mjs')).href;
     const missing = path.join(scratchFolder('route'), 'removed');
 
     const run = await runModuleCodeProcess(
-      `import { gitOutput } from ${JSON.stringify(route)}; process.stdout.write(JSON.stringify(gitOutput(${JSON.stringify(missing)}, 'status')));`,
+      `import { gitOutput } from ${JSON.stringify(ROUTE)}; process.stdout.write(JSON.stringify(gitOutput(${JSON.stringify(missing)}, 'status')));`,
     );
 
     expect([run.status, run.stdout]).toEqual([0, '""']);
+  });
+
+  it('names no checkout when git succeeds without printing one', { timeout: 60_000 }, async () => {
+    const run = await withSpawnSyncAnswering(
+      "'git'",
+      { status: 0, stdout: null, stderr: null },
+      `process.stdout.write(String(route.owningCheckout(${JSON.stringify(scratchFolder('route'))})));`,
+    );
+
+    expect([run.status, run.stdout]).toEqual([0, 'undefined']);
+  });
+});
+
+describe("what a hook passes on from the checkout's checks", () => {
+  it('fails when the checks end without an exit code, as a process a signal killed does', { timeout: 60_000 }, async () => {
+    const run = await withSpawnSyncAnswering(
+      'process.execPath',
+      { status: null, signal: 'SIGKILL', stdout: 'the checks began\n', stderr: '' },
+      `route.runInCheckout({ kind: 'run', checkout: ${JSON.stringify(scratchFolder('route'))}, script: 'hook.ts' }, {});`,
+    );
+
+    expect([run.status, run.stdout]).toEqual([1, 'the checks began\n']);
   });
 });
 

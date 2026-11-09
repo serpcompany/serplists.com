@@ -59,4 +59,14 @@ describe('pnpm run check:db:drizzle-parity, with a Wrangler whose JSON answer le
     expect(run.stderr).toBe(`${refusal}\n`);
     expect(run.stdout).toBe('');
   });
+
+  it('compares indexes by whether they are unique or partial when Wrangler lists no columns for any of them', async () => {
+    const noIndexColumns: WranglerAnswer = { when: 'pragma_index_info', answer: [{ success: true, meta: {} }] };
+
+    const run = await runTheCopysScript(copy, PARITY_CHECK, { env: { ...process.env, ...wranglerAnswering(noIndexColumns) } });
+
+    expect(run.stderr).toBe('');
+    expect(run.stdout).toBe('Drizzle schema parity ok: 5 tables, 1 named indexes, 1 foreign keys, 0 SQL-only triggers.\n');
+    expect(run.status).toBe(0);
+  });
 });

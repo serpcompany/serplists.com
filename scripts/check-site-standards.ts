@@ -33,6 +33,4 @@ async function main() {
   process.exit(result.failed ? 1 : 0);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  await main();
-}
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await main();

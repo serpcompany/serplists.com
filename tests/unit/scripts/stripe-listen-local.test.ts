@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { z } from "zod";
 
 import { stringMatching } from "../../support/asymmetricMatchers";
+import { CHILD_ENDING_STAND_IN, childrenEndAsEnv } from "../../support/childEndingStandIn";
 import { STRIPE_CLI_LISTEN_STAND_IN } from "../../fixtures/stripeCliListenStandIn";
 import { processEnvWithout, runScriptProcess } from "../../support/scriptProcess";
 import { askForASignal, SIGNAL_WHEN_ASKED, signalWhenAskedEnv } from "../../support/signalWhenAsked";
@@ -120,7 +121,10 @@ describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => 
   }, 30_000);
 
   it("restarts once on dev:all's port when the listener it stops takes longer than a check to stop", async () => {
-    const listening = listen({ env: { STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1", STRIPE_CLI_STAND_IN_SLOW_TO_STOP_MS: "2500" } });
+    const listening = listen({
+      env: { STRIPE_CLI_STAND_IN_RUNS_KEPT_ALIVE: "1", STRIPE_CLI_STAND_IN_SLOW_TO_STOP_MS: "2500", ...childrenEndAsEnv({ afterMs: 2500 }) },
+      preloads: [CHILD_ENDING_STAND_IN],
+    });
     await vi.waitFor(() => expect(stripeCliCalls()).toHaveLength(1), { timeout: 20_000, interval: 50 });
     startDevAllOn(4998);
 
@@ -143,6 +147,16 @@ describe("pnpm run stripe:local:listen (scripts/stripe/listen-local.ts)", () => 
     const run = await listening;
 
     expect(run.status).toBe(1);
+    expect(forwardedTo()).toEqual([FORWARD_TO]);
+  }, 30_000);
+
+  it("ends with status 0 when stripe listen ends with neither an exit code nor a signal", async () => {
+    const run = await listen({
+      env: { STRIPE_LOCAL_WEBHOOK_URL: FORWARD_TO, STRIPE_CLI_STAND_IN_EXIT_CODE: "3", ...childrenEndAsEnv({ code: null, signal: null }) },
+      preloads: [CHILD_ENDING_STAND_IN],
+    });
+
+    expect(run.status).toBe(0);
     expect(forwardedTo()).toEqual([FORWARD_TO]);
   }, 30_000);
 

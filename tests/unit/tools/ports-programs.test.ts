@@ -4,9 +4,10 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { mainPorts, portsFor } from '../../../tools/checks/ports.mjs';
+import { CHILD_ENDING_STAND_IN, childrenEndAsEnv } from '../../support/childEndingStandIn';
 import { aGitStandIn } from '../../support/gitStandIn';
 import { aPreloadedProgram, PORTS_SCRIPT, portsEnvironment, portsSchema, repository, scratch, worktree } from '../../support/portsCheckouts';
-import { ranToTheEnd } from '../../support/scriptProcess';
+import { ranToTheEnd, runScriptProcess } from '../../support/scriptProcess';
 
 const A_SPAWN_THAT_CANNOT_START = [
   "import childProcess from 'node:child_process';",
@@ -76,6 +77,20 @@ describe('ports.mjs alongside other programs', () => {
 
     expect(run.status).toBe(127);
     expect(run.stderr).toBe("node didn't start: spawn node ENOENT\n");
+  }, 30_000);
+
+  it('fails when the command it runs ends with neither an exit code nor a signal', async () => {
+    const finishes = path.join(scratch(), 'finishes.mjs');
+    writeFileSync(finishes, "process.stdout.write('finished');\n");
+
+    const run = await runScriptProcess('tools/checks/ports.mjs', {
+      args: ['run', 'dev', '--', 'node', finishes],
+      cwd: repository(),
+      env: portsEnvironment(childrenEndAsEnv({ code: null, signal: null })),
+      preloads: [CHILD_ENDING_STAND_IN],
+    });
+
+    expect([run.status, run.stdout]).toEqual([1, 'finished']);
   }, 30_000);
 
   it('passes a stop signal on to the command it runs, and fails when the signal ends that command', async () => {

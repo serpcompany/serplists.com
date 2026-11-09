@@ -38,17 +38,17 @@ export async function ranToTheEnd(command: string, args: readonly string[], opti
   return printedUntilClosed(spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] }));
 }
 
+export function withPreloads(invocationArgs: readonly string[], preloads: readonly string[]): string[] {
+  const preloadFlags = preloads.flatMap((preload) => ['--import', pathToFileURL(path.join(REPO_ROOT, preload)).href]);
+  return [...invocationArgs.slice(0, AFTER_THE_TSX_LOADER), ...preloadFlags, ...invocationArgs.slice(AFTER_THE_TSX_LOADER)];
+}
+
 export function runScriptProcess(
   script: string,
   { args = [], cwd = REPO_ROOT, env = process.env, preloads = [] }: ScriptProcessOptions = {},
 ): Promise<ScriptProcessRun> {
   const { command, args: invocationArgs, options } = buildScriptInvocation(path.join(REPO_ROOT, script), args);
-  const preloadFlags = preloads.flatMap((preload) => ['--import', pathToFileURL(path.join(REPO_ROOT, preload)).href]);
-  return ranToTheEnd(
-    command,
-    [...invocationArgs.slice(0, AFTER_THE_TSX_LOADER), ...preloadFlags, ...invocationArgs.slice(AFTER_THE_TSX_LOADER)],
-    { ...options, cwd, env },
-  );
+  return ranToTheEnd(command, withPreloads(invocationArgs, preloads), { ...options, cwd, env });
 }
 
 export function runModuleCodeProcess(code: string): Promise<ScriptProcessRun> {
