@@ -64,13 +64,20 @@ describe('the comment check', { timeout: 60_000 }, () => {
     ]);
   });
 
-  it('fails a comment on a line that ends in a lone carriage return, at the line ESLint counts, showing that line', async () => {
-    expect(await commentsIn({ 'src/old-mac.ts': 'export const a = 1;\r// why\r' })).toEqual(['src/old-mac.ts:2  // why']);
-    expect(await commentsIn({ 'src/separated.ts': `export const a = 1;${String.fromCodePoint(0x2028)}// why\n` })).toEqual(['src/separated.ts:2  // why']);
+  it.each([
+    ['a lone carriage return', 'export const a = 1;\r// why\r'],
+    ['a Windows line ending', 'export const a = 1;\r\n// why\r\n'],
+    ['a line separator', `export const a = 1;${String.fromCodePoint(0x2028)}// why\n`],
+    ['a paragraph separator', `export const a = 1;${String.fromCodePoint(0x2029)}// why\n`],
+  ])('fails a comment in a script after %s, at the line ESLint counts, showing that line', async (_ending, text) => {
+    expect(await commentsIn({ 'src/ended.ts': text })).toEqual(['src/ended.ts:2  // why']);
   });
 
-  it('fails a comment in a stylesheet whose lines end in a lone carriage return at the line it counts, showing that line', async () => {
+  it('fails a comment in a stylesheet at the line it counts by newlines alone, showing that line', async () => {
     expect(await commentsIn({ 'src/old-mac.css': '.a { color: red; }\r/* why */\r' })).toEqual(['src/old-mac.css:1  .a { color: red; }\r/* why */ (CSS)']);
+    expect(await commentsIn({ 'src/separated.css': `.a { color: red; }${String.fromCodePoint(0x2028)}/* why */\n` })).toEqual([
+      `src/separated.css:1  .a { color: red; }${String.fromCodePoint(0x2028)}/* why */ (CSS)`,
+    ]);
   });
 
   it('fails a file it cannot parse, rather than passing it unread', async () => {
