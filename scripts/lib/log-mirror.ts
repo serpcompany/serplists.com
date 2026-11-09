@@ -11,17 +11,20 @@ export function mirrorOutputToLog(
   logPath: string,
   { stdout = process.stdout, stderr = process.stderr }: { stdout?: NodeJS.WritableStream; stderr?: NodeJS.WritableStream } = {},
 ): WriteStream {
+  const { stdout: childStdout, stderr: childStderr } = child;
+  if (!childStdout || !childStderr) {
+    throw new Error(`Cannot mirror a child's output to ${logPath}: spawn it with stdout and stderr piped.`);
+  }
   mkdirSync(path.dirname(logPath), { recursive: true });
   const logFile = createWriteStream(logPath, { flags: "w" });
-  const forward = (source: NodeJS.ReadableStream | null, target: NodeJS.WritableStream) => {
-    if (!source) throw new Error(`Cannot mirror a child's output to ${logPath}: spawn it with stdout and stderr piped.`);
+  const forward = (source: NodeJS.ReadableStream, target: NodeJS.WritableStream) => {
     source.on("data", (chunk: Buffer | string) => {
       target.write(chunk);
       logFile.write(stripVTControlCharacters(chunk.toString()));
     });
   };
-  forward(child.stdout, stdout);
-  forward(child.stderr, stderr);
+  forward(childStdout, stdout);
+  forward(childStderr, stderr);
   child.on("exit", () => logFile.end());
   return logFile;
 }

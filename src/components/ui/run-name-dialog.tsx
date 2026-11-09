@@ -41,7 +41,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
+    if (loading || !open) return;
     void onConfirm(resolveRunName(runName, templateTitle));
   };
 

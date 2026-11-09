@@ -54,6 +54,23 @@ describe('the docs check', () => {
     );
   });
 
+  it('follows a link with a broken percent escape as written, and passes over a link left unclosed', () => {
+    const code = `${REPOSITORY['docs/agents/code.md']}\nThe [sale price](../../src/a%zz.txt), [the app](/src/app.ts), and [a link left open](guide.md\n`;
+    expect(docsProblems({ 'docs/agents/code.md': code, 'src/a%zz.txt': 'sale\n' })).toEqual([]);
+  });
+
+  it("leaves web links alone, and the paths and scripts a third-party reference names, which describe another project", () => {
+    const reference = '# Next.js\n\nSee [the docs](https://nextjs.org/docs). Its `src/server/render.ts` runs on `pnpm build:next`.\n';
+    expect(docsProblems({ ...linkedFromAgents('docs/references/nextjs.md'), 'docs/references/nextjs.md': reference })).toEqual([]);
+  });
+
+  it("fails a pnpm script a fenced block runs that package.json lacks, and passes a command node_modules/.bin holds", () => {
+    const code = `${REPOSITORY['docs/agents/code.md']}\nRun \`pnpm knip\`, then:\n\n\`\`\`sh\npnpm run verify\npnpm run tidy\n\`\`\`\n`;
+    expect(docsProblems({ 'docs/agents/code.md': code, 'node_modules/.bin/knip.cmd': '' })).toEqual([
+      "docs/agents/code.md:11  runs pnpm tidy, which package.json doesn't define",
+    ]);
+  });
+
   it('fails a link to a heading that is not there, in the same doc or another', () => {
     const problems = docsProblems({
       'docs/agents/code.md': '# Code\n\n## File size\n\n[Run](#run) and [tooling](agent-tooling.md#skills).\n',
@@ -83,7 +100,7 @@ describe('the docs check', () => {
 
   it('fails a pnpm script package.json lacks, in either form, but not pnpm commands', () => {
     const problems = docsProblems({
-      'docs/agents/code.md': '# Code\n\n## File size\n\nRun pnpm run lint:all, `pnpm deploy:preview` and `pnpm install`.\n',
+      'docs/agents/code.md': '# Code\n\n## File size\n\nRun pnpm run lint:all, `pnpm deploy:preview`, `pnpm install` and `pnpm --silent`.\n',
     });
     expect(problems).toEqual([
       "docs/agents/code.md:5  runs pnpm deploy:preview, which package.json doesn't define",

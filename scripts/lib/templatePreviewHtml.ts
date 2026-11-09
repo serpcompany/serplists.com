@@ -26,13 +26,15 @@ const renderFormField = (field: PortableFormField) => {
   return `<li><div class="form-label">${escapeHtml(field.label)} <span class="card-meta">${escapeHtml(describeFormField(field))}</span></div>${help}${optionsMarkup}</li>`;
 };
 
-const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number]): string => {
+type PreviewContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
+
+const renderPreviewCard = (content: PreviewContent): string => {
   if (content.type === "text") {
     return `<div class="content-block text-block"><div class="card-label">Text</div><div class="text-markdown"><pre>${escapeHtml(content.value.trim())}</pre></div></div>`;
   }
 
   if (content.type === "subItems") {
-    const items = (content.subItems ?? [])
+    const items = content.subItems
       .map((subItem) => `<li><span class="checkbox" aria-hidden="true"></span><span>${escapeHtml(subItem.title)}</span></li>`)
       .join("");
     return `<div class="content-block card"><div class="card-label">Checklist</div><ul class="subitem-list">${items}</ul></div>`;
@@ -51,19 +53,16 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
   }
 
   if (content.type === "file") {
-    return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
+    const fileSize = formatBytes(content.fileSize);
+    return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${fileSize ? ` <span>· ${escapeHtml(fileSize)}</span>` : ""}</div></div>`;
   }
 
-  if (content.type === "embed") {
-    const embedLink = getEmbedLinkUrl(content.value);
-    const embedBody = embedLink
-      ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
-      : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(content.value)}</pre>`;
-    return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url">${embedBody}</div></div>`;
-  }
-
-  const unhandled: never = content;
-  return unhandled;
+  const embed: Extract<PreviewContent, { type: "embed" }> = content;
+  const embedLink = getEmbedLinkUrl(embed.value);
+  const embedBody = embedLink
+    ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
+    : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(embed.value)}</pre>`;
+  return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(embed.value))}</div><div class="embed-url">${embedBody}</div></div>`;
 };
 
 export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) => {

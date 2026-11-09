@@ -83,9 +83,6 @@ export async function reissueTeamInviteLink({
 
   const token = createInviteToken();
   const tokenHash = await sha256Hex(token);
-  if (!tokenHash) {
-    return jsonError("Unable to create invite token", 500);
-  }
 
   const role = parsed.data?.role ?? invite.role;
   const expiresAt = new Date(Date.now() + INVITE_LIFETIME_MS).toISOString();

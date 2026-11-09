@@ -5,8 +5,10 @@ import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
   findPublicTemplateByIdentifier,
+  isRepoTemplate,
   mergeAccountTemplateCollections,
   mergePublicTemplateCollections,
+  resolvePublicTemplateOwnerName,
 } from "@/lib/repoTemplateCatalog";
 
 const bundledCampingStarter = (): ChecklistTemplate => ({
@@ -100,6 +102,31 @@ describe("repo template catalog", () => {
     expect(findPublicTemplateByIdentifier(templates, "repo:camping-checklist-001")?.slug).toBe(
       "ultimate-camping-checklist",
     );
+  });
+
+  it("leaves private templates out of the public catalog, and keys a slugless one by its id", () => {
+    const slugless = userTemplate({ id: "user-template-3", title: "No Slug", isPublic: true, ownerProfile: { username: "alice" } });
+    const merged = mergePublicTemplateCollections([], [userTemplate({ id: "private-1", title: "Private" }), slugless, { ...slugless }]);
+
+    expect(merged.map((template) => template.id)).toEqual(["user-template-3"]);
+  });
+
+  it("names a public template's owner by the Organization, or else by the person, falling back from name to handle", () => {
+    const organization = (displayName: string | null, publicHandle: string | null) =>
+      resolvePublicTemplateOwnerName({ ...userPublicTemplate(), owner: { type: "team", teamId: "org-1", displayName, publicHandle } });
+
+    expect(organization(" Acme Launch ", "acme")).toBe("Acme Launch");
+    expect(organization("  ", "acme")).toBe("acme");
+    expect(organization(null, null)).toBeNull();
+    expect(resolvePublicTemplateOwnerName({ ...userPublicTemplate(), ownerType: "team", teamId: "org-1" })).toBeNull();
+    expect(resolvePublicTemplateOwnerName({ ...userPublicTemplate(), ownerProfile: { full_name: "Alice Doe", username: "alice" } })).toBe("Alice Doe");
+    expect(resolvePublicTemplateOwnerName({ ...userPublicTemplate(), ownerProfile: { full_name: " ", username: "alice" } })).toBe("alice");
+    expect(resolvePublicTemplateOwnerName(userPublicTemplate())).toBeNull();
+  });
+
+  it("treats a missing template as not a repo template", () => {
+    expect(isRepoTemplate(null)).toBe(false);
+    expect(isRepoTemplate(bundledCampingStarter())).toBe(true);
   });
 
   it("keeps user-owned private templates in the account collection", () => {

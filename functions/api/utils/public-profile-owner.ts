@@ -15,12 +15,14 @@ export async function findPublicProfileOwner(env: Env, handle: string): Promise<
       userName: users.name,
       userAvatarUrl: users.avatar_url,
       userCreatedAt: users.created_at,
-      teamId: teams.id,
-      teamSlug: teams.slug,
-      teamName: teams.name,
-      teamAvatarUrl: teams.avatar_url,
-      teamDescription: teams.description,
-      teamArchivedAt: teams.archived_at,
+      team: {
+        id: teams.id,
+        slug: teams.slug,
+        name: teams.name,
+        avatarUrl: teams.avatar_url,
+        description: teams.description,
+        archivedAt: teams.archived_at,
+      },
     })
     .from(publicHandles)
     .leftJoin(users, and(eq(publicHandles.owner_type, 'user'), eq(users.id, publicHandles.owner_id)))
@@ -44,17 +46,18 @@ export async function findPublicProfileOwner(env: Env, handle: string): Promise<
     };
   }
 
-  const teamHandle = row.teamSlug?.trim();
-  if (row.teamId && teamHandle && !row.teamArchivedAt) {
+  const { team } = row;
+  const teamHandle = team?.slug?.trim();
+  if (team?.id && teamHandle && !team.archivedAt) {
     return {
       type: 'team',
-      id: row.teamId,
+      id: team.id,
       profile: {
         type: 'team',
         handle: teamHandle,
-        name: row.teamName ?? teamHandle,
-        avatar_url: row.teamAvatarUrl,
-        description: row.teamDescription,
+        name: team.name,
+        avatar_url: team.avatarUrl,
+        description: team.description,
       },
     };
   }

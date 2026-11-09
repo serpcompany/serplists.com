@@ -24,6 +24,15 @@ describe("buildAccountUpdatePayload", () => {
     expect(payload).toEqual({ username: "devinschumacher" });
   });
 
+  it("sends no name for a user who has none and left the name empty", () => {
+    const payload = buildAccountUpdatePayload(
+      { fullName: "", username: "devin", avatar_url: "" },
+      { username: "devin", image: "" }
+    );
+
+    expect(payload).toEqual({});
+  });
+
   it("returns empty payload when nothing changed", () => {
     const payload = buildAccountUpdatePayload(
       {

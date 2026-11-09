@@ -32,6 +32,16 @@ describe('signOutAndLeave', () => {
   });
 });
 
+describe('signOutAndLeave without a reason from the server', () => {
+  it('shows the standard sign-out failure message', async () => {
+    const onError = vi.fn();
+
+    await signOutAndLeave({ logout: async () => ({ ok: false }), onSignedOut: vi.fn(), onError });
+
+    expect(onError).toHaveBeenCalledWith('Sign out failed. Check your connection and try again.');
+  });
+});
+
 describe('signOutAndReturn, which switches accounts from a page such as an invite for another email', () => {
   it('opens the login page only after sign-out finishes, since it sends a signed-in visitor straight to the return path it carries', async () => {
     const logout = deferred<{ ok: boolean }>();

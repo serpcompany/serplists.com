@@ -62,6 +62,10 @@ describe('page metadata branding', () => {
     });
   });
 
+  it('leaves the publish date out of an article that has none', () => {
+    expect(buildPageJsonLd({ title: 'Audit', type: 'article' })).not.toHaveProperty('datePublished');
+  });
+
   it('describes other pages as the website, with the default description and keywords', () => {
     const metadata = buildPageMetadata({ title: 'About' });
 

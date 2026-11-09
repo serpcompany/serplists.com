@@ -84,7 +84,7 @@ export async function updateChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun, userId),
+    subject: getRunSubject(existingRun),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.updated',
     before: existingRun,

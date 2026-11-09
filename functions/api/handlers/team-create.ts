@@ -40,7 +40,7 @@ export async function createTeam(
     return teamSlugInUseError();
   }
   const base = teamSlugBase(parsed.data.name, teamId);
-  let slug = requestedSlug ?? (await generateUniqueTeamSlug(db, base, teamId));
+  const firstSlug = requestedSlug ?? (await generateUniqueTeamSlug(db, base, teamId));
 
   const membership = {
     id: crypto.randomUUID(),
@@ -54,7 +54,7 @@ export async function createTeam(
     updated_at: now,
   };
 
-  for (let attempt = 1; ; attempt += 1) {
+  const attemptCreate = async (attempt: number, slug: string): Promise<Response> => {
     const team = {
       id: teamId,
       name: parsed.data.name,
@@ -88,8 +88,7 @@ export async function createTeam(
       if (attempt >= MAX_CREATE_ATTEMPTS) {
         return jsonError("Could not reserve an Organization slug. Try again.", 409, { code: "team_slug_exists" });
       }
-      slug = suffixTeamSlug(base, crypto.randomUUID().slice(0, 8));
-      continue;
+      return attemptCreate(attempt + 1, suffixTeamSlug(base, crypto.randomUUID().slice(0, 8)));
     }
 
     return json({
@@ -100,5 +99,7 @@ export async function createTeam(
       role: "owner",
       slug,
     });
-  }
+  };
+
+  return attemptCreate(1, firstSlug);
 }

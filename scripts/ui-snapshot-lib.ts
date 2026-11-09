@@ -41,11 +41,7 @@ function resolveSnapshotPaths(outArg: string | undefined, slug: string): Snapsho
   if (!EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.includes(ext)) {
     throw new Error(`--out must end in ${EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.join(", ")} (lowercase), got "${outPath}".`);
   }
-  const ariaPath = path.join(dir, `${name}.aria.yml`);
-  if (path.resolve(ariaPath) === path.resolve(outPath)) {
-    throw new Error(`--out "${outPath}" would be overwritten by the accessibility YAML.`);
-  }
-  return { outPath, ariaPath };
+  return { outPath, ariaPath: path.join(dir, `${name}.aria.yml`) };
 }
 
 function parseUiSnapOptions(args: string[]) {

@@ -51,6 +51,13 @@ async function categoryPaths(db: SqliteD1): Promise<string[]> {
 }
 
 describe('category sitemap entries', () => {
+  it('lists no page for a category with nothing a slug can be made of', async () => {
+    const db = categoryDatabase();
+    addTemplate(db, 't-punctuation', 'alice', '***');
+
+    expect((await categoryPaths(db)).filter((path) => !/^\/categories\/[a-z0-9-]+\/$/.test(path) && path !== '/categories/')).toEqual([]);
+  });
+
   it('lists a category that a public template with a public owner URL uses', async () => {
     const db = categoryDatabase();
     addTemplate(db, 't-listed', 'alice', 'Zymurgy Listed');

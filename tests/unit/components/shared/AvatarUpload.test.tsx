@@ -152,6 +152,17 @@ describe('AvatarUpload', () => {
     expect(view.onAvatarUpdate).toHaveBeenCalledWith('');
   });
 
+  it('removes nothing when no one is signed in', async () => {
+    auth.user = null;
+    const view = render();
+
+    await view.remove();
+
+    expect(authClient.updateUser).not.toHaveBeenCalled();
+    expect(api.deleteFromR2).not.toHaveBeenCalled();
+    expect(view.onAvatarUpdate).not.toHaveBeenCalled();
+  });
+
   it('uploads the small square image the browser prepared, not the original, so a large photo is shrunk instead of refused', async () => {
     vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null });
     const photo = new File([new Uint8Array(12 * 1024 * 1024)], 'photo.png', { type: 'image/png' });

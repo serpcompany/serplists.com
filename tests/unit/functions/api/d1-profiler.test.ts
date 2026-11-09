@@ -22,10 +22,40 @@ class CountingStatement extends D1StatementDouble {
     return d1Result([], { rows_read: 1, rows_written: 2 });
   }
 
-  protected async rawRows() {
+  protected async rawRows(columnNames: boolean) {
     this.calls.raw += 1;
-    return [["a", "A"]];
+    return columnNames ? [["id", "title"], ["a", "A"]] : [["a", "A"]];
   }
+}
+
+class StatementOfRows extends D1StatementDouble {
+  constructor(private readonly result: D1Result<Record<string, unknown>>) {
+    super("select id, title from templates");
+  }
+
+  protected async allRows() {
+    return this.result;
+  }
+
+  protected async rawRows() {
+    return [];
+  }
+}
+
+class DatabaseOfRows extends D1DatabaseDouble {
+  constructor(private readonly result: D1Result<Record<string, unknown>>) {
+    super();
+  }
+
+  prepare(): StatementOfRows {
+    return new StatementOfRows(this.result);
+  }
+}
+
+function profiledStatementAnswering(result: D1Result<Record<string, unknown>>) {
+  const records: D1QueryRecord[] = [];
+  const statement = withD1Profiling(new DatabaseOfRows(result), (r) => records.push(r)).prepare("select id, title from templates");
+  return { statement, records };
 }
 
 class CountingDatabase extends D1DatabaseDouble {
@@ -72,5 +102,40 @@ describe("withD1Profiling", () => {
     await profiled.prepare("update runs set progress = 1").run();
     await profiled.batch([profiled.prepare("select 1"), profiled.prepare("select 2")]);
     expect(records.map((r) => r.sql)).toEqual(["update runs set progress = 1", "select 1", "select 2"]);
+  });
+
+  it("hands raw() its column names on a read, measured by a separate all()", async () => {
+    const { db, calls } = fakeDatabase();
+    const rows = await withD1Profiling(db, () => undefined).prepare("select id, title from templates").raw({ columnNames: true });
+
+    expect(rows).toEqual([["id", "title"], ["a", "A"]]);
+    expect(calls).toMatchObject({ all: 1, raw: 1 });
+  });
+
+  it("answers raw() with column names on a write from its one all(), naming no columns when it returns no rows", async () => {
+    const { db, calls } = fakeDatabase();
+    const rows = await withD1Profiling(db, () => undefined).prepare("insert into session values (?) returning id, title").raw({ columnNames: true });
+    const empty = await withD1Profiling(new DatabaseOfRows(d1Result([])), () => undefined).prepare("delete from session returning id").raw({ columnNames: true });
+
+    expect(rows).toEqual([["id", "title"], ["a", "A"]]);
+    expect(calls).toMatchObject({ all: 1, raw: 0 });
+    expect(empty).toEqual([[]]);
+  });
+
+  it("answers first() from one measured all(): the first row, one of its columns, or null", async () => {
+    const { statement, records } = profiledStatementAnswering(d1Result([{ id: "a", title: "A" }, { id: "b", title: "B" }], { rows_read: 2 }));
+
+    expect(await statement.first()).toEqual({ id: "a", title: "A" });
+    expect(await statement.first("title")).toBe("A");
+    expect(await statement.first("missing")).toBeNull();
+    expect(records).toHaveLength(3);
+    expect(records[0]).toMatchObject({ rowsRead: 2, rowsReturned: 2 });
+    expect(await profiledStatementAnswering(d1Result([])).statement.first()).toBeNull();
+  });
+
+  it("is not mistaken for a promise when an async function returns a profiled statement", async () => {
+    const { statement } = profiledStatementAnswering(d1Result([]));
+
+    expect(await Promise.resolve(statement)).toBe(statement);
   });
 });

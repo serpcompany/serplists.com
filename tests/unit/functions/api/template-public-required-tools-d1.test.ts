@@ -35,6 +35,15 @@ describe("GET /api/templates/public/required-tools, the export page's read of th
     expect(await toolsRead([withTools, withoutTools])).toEqual([{ id: withTools, requiredTools: [TIME_TRACKER, SLIDESHOW_APP] }]);
   });
 
+  it("answers nothing for a public Template whose stored tools are an empty list or cannot be read", async () => {
+    const emptied = await createTemplateAs("alice", { title: "Public, tools removed", is_public: true });
+    const unreadable = await createTemplateAs("alice", { title: "Public, tools unreadable", is_public: true });
+    d1.run("UPDATE templates SET required_tools = '[]' WHERE id = ?", emptied);
+    d1.run("UPDATE templates SET required_tools = 'not json' WHERE id = ?", unreadable);
+
+    expect(await toolsRead([emptied, unreadable])).toEqual([]);
+  });
+
   it("leaves out a private, deleted or unknown Template, so it reveals nothing a public read would not", async () => {
     const privateTemplate = await createTemplateAs("alice", { title: "Private tools", requiredTools: [TIME_TRACKER] });
     const deletedTemplate = await createTemplateAs("alice", { title: "Deleted tools", requiredTools: [TIME_TRACKER], is_public: true });

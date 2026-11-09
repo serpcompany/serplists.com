@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach } from 'vitest';
@@ -8,12 +8,15 @@ import { throwawayRepositoryEnvironment } from '../../../support/throwawayGitRep
 
 const folders: string[] = [];
 
+const READABLE_BY_ANY_USER_AS_A_CHECKOUT_IS = 0o755;
+
 afterEach(() => {
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
 });
 
 export function scratchFolder(name: string): string {
   const folder = realpathSync(mkdtempSync(path.join(tmpdir(), `serplists-${name}-`)));
+  chmodSync(folder, READABLE_BY_ANY_USER_AS_A_CHECKOUT_IS);
   folders.push(folder);
   return folder;
 }

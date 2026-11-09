@@ -84,9 +84,9 @@ function openSubscriptionConflict(openStatus: string | null): Response | null {
   );
 }
 
-function storedSubscriptionConflict(openStatus: string): Response {
+function storedSubscriptionConflict(openStatus: string | null): Response | null {
   if (openStatus === "incomplete") return checkoutIncomplete();
-  return openSubscriptionConflict(openStatus) ?? alreadySubscribed();
+  return openSubscriptionConflict(openStatus);
 }
 
 async function statusKeepingMissingCustomer(
@@ -141,8 +141,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   const storedOpen = await listOpenStoredSubscriptions(db, userId);
 
   if (!existingCustomer?.stripe_customer_id) {
-    const openStatus = mostUrgentOpenStatus(storedOpen.map((subscription) => subscription.status));
-    if (openStatus) return storedSubscriptionConflict(openStatus);
+    const conflict = storedSubscriptionConflict(mostUrgentOpenStatus(storedOpen.map((subscription) => subscription.status)));
+    if (conflict) return conflict;
   }
 
   const successUrl = `${origin}${PERSONAL_SETTINGS_PATH}?billing=success`;
@@ -187,8 +187,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
         });
         return billingUnavailable();
       }
-      const keptStatus = await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds);
-      if (keptStatus) return storedSubscriptionConflict(keptStatus);
+      const keptConflict = storedSubscriptionConflict(await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds));
+      if (keptConflict) return keptConflict;
       stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
       canReplaceCustomer = false;
       reusableSessionUrl = null;
@@ -248,8 +248,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     session = await createSession(stripeCustomerId);
   } catch (error) {
     if (!canReplaceCustomer || !isMissingStripeCustomer(error)) throw error;
-    const keptStatus = await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds);
-    if (keptStatus) return storedSubscriptionConflict(keptStatus);
+    const keptConflict = storedSubscriptionConflict(await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds));
+    if (keptConflict) return keptConflict;
     stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
     session = await createSession(stripeCustomerId);
   }

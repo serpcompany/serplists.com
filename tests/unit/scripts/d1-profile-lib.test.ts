@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, type PathLike, readFileSync, rmSync, type RmOptions, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { sectionRecordsIn } from '@/lib/schemas/jsonRecords';
 
 import {
@@ -20,6 +20,21 @@ import {
   saveSnapshot,
   scenarios,
 } from '../../../scripts/d1-profile-lib';
+
+const folderHeldOpen = vi.hoisted(() => ({ path: '' }));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    rmSync: (target: PathLike, options?: RmOptions) => {
+      if (target === folderHeldOpen.path) {
+        throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${folderHeldOpen.path}'`), { code: 'EBUSY' });
+      }
+      actual.rmSync(target, options);
+    },
+  };
+});
 
 const syntheticSections = [
   { id: 's1', title: 'Section', items: [{ id: 'i1', title: 'Task one' }, { id: 'i2', title: 'Task two' }] },
@@ -128,18 +143,24 @@ describe('resolveDatasetPlan', () => {
 
 describe('pristine snapshot', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'serplists-d1-profile-'));
-  const statePath = path.join(root, 'd1-profile-state');
-  const snapshotPath = path.join(root, 'd1-profile-pristine');
   const database = path.join('v3', 'd1', 'miniflare-D1DatabaseObject', 'db.sqlite');
   const meta = { scale: 1, datasetKey: 'key' };
 
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  it('restores the data as built, dropping the previous run writes', () => {
+  function aSavedDataset() {
+    const folder = mkdtempSync(path.join(root, 'dataset-'));
+    const statePath = path.join(folder, 'd1-profile-state');
+    const snapshotPath = path.join(folder, 'd1-profile-pristine');
     mkdirSync(path.dirname(path.join(statePath, database)), { recursive: true });
     writeFileSync(path.join(statePath, database), 'built');
     writeFileSync(path.join(statePath, `${database}-wal`), 'wal');
     saveSnapshot({ statePath, snapshotPath, meta });
+    return { folder, statePath, snapshotPath };
+  }
+
+  it('restores the data as built, dropping the previous run writes', () => {
+    const { statePath, snapshotPath } = aSavedDataset();
     expect(readSnapshotMeta(snapshotPath)).toEqual(meta);
 
     writeFileSync(path.join(statePath, database), 'mutated by the workload');
@@ -151,13 +172,32 @@ describe('pristine snapshot', () => {
     expect(existsSync(path.join(statePath, 'extra-file'))).toBe(false);
   });
 
+  it('asks whoever runs it to stop the process holding the dataset open when it cannot reset it, and leaves the dataset as it was', () => {
+    const { statePath, snapshotPath } = aSavedDataset();
+    writeFileSync(path.join(statePath, database), 'still open in wrangler');
+    folderHeldOpen.path = statePath;
+    try {
+      expect(() => restoreSnapshot({ snapshotPath, statePath })).toThrow(
+        `Could not reset ${statePath}; stop any d1:profile or wrangler process using it and retry. Error: EBUSY: resource busy or locked, rmdir '${statePath}'`,
+      );
+    } finally {
+      folderHeldOpen.path = '';
+    }
+
+    expect(readFileSync(path.join(statePath, database), 'utf8')).toBe('still open in wrangler');
+  });
+
   it('never reuses a snapshot whose copy did not finish or whose meta is unreadable', () => {
+    const { folder, snapshotPath } = aSavedDataset();
     rmSync(path.join(snapshotPath, 'meta.json'));
     expect(readSnapshotMeta(snapshotPath)).toBeNull();
 
     writeFileSync(path.join(snapshotPath, 'meta.json'), '{"scale":"one"}');
     expect(readSnapshotMeta(snapshotPath)).toBeNull();
 
-    expect(readSnapshotMeta(path.join(root, 'missing'))).toBeNull();
+    writeFileSync(path.join(snapshotPath, 'meta.json'), '{"scale":1,"datasetK');
+    expect(readSnapshotMeta(snapshotPath)).toBeNull();
+
+    expect(readSnapshotMeta(path.join(folder, 'missing'))).toBeNull();
   });
 });

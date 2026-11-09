@@ -42,6 +42,7 @@ describe('uploaded asset deletion helpers', () => {
     expect(isUploadedAssetUrl('https://example.com/image.png')).toBe(false);
     expect(isUploadedAssetUrl('/api/uploads/file')).toBe(false);
     expect(getUploadedAssetKey('not a url')).toBeNull();
+    expect(getUploadedAssetKey('http://[serplists/api/uploads/file?key=avatars/user/a.png')).toBeNull();
   });
 
   it('deletes an uploaded avatar through the shared API delete path', async () => {
@@ -60,6 +61,15 @@ describe('uploaded asset deletion helpers', () => {
     await expect(deleteUploadedAsset(`/api/uploads/file?key=${key}`)).resolves.toBe(false);
 
     expect(api.deleteFromR2).not.toHaveBeenCalled();
+  });
+
+  it('reports an avatar it could not delete as kept, and logs why', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(api.deleteFromR2).mockRejectedValueOnce(new Error('Storage is unavailable'));
+
+    await expect(deleteUploadedAsset('/api/uploads/file?key=avatars/user/avatar.png')).resolves.toBe(false);
+    expect(logged).toHaveBeenCalledWith('Delete error:', new Error('Storage is unavailable'));
+    logged.mockRestore();
   });
 
   it('skips deletion for non-owned URLs', async () => {

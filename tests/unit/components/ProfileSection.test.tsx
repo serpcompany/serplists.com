@@ -32,13 +32,13 @@ describe('ProfileSection', () => {
     expect(html).toMatch(new RegExp(`<input[^>]*id="fullName"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
 
-  const renderSection = (username: string, savedUsername: string | undefined) => {
+  const renderSection = (username: string, savedUsername: string | undefined, loading = false) => {
     navigation.reset('/dashboard/settings/');
     return renderToStaticMarkup(
       <ProfileSection
         profileData={{ email: 'john@test.com', fullName: 'John', username, avatar_url: '' }}
         savedUsername={savedUsername}
-        loading={false}
+        loading={loading}
         onProfileDataChange={vi.fn()}
         onProfileUpdate={vi.fn()}
         onAvatarUpdate={vi.fn()}
@@ -67,6 +67,13 @@ describe('ProfileSection', () => {
 
     expect(html).toContain('href="/profile/janedoe/"');
     expect(html).not.toContain('/profile/JaneDoe');
+  });
+
+  it('turns Update Profile off and says it is updating while the profile saves', () => {
+    const html = renderSection('john', 'john', true);
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Updating\.\.\.<\/button>/);
+    expect(html).not.toContain('Update Profile');
   });
 
   it('keeps the placeholder while the username is empty', () => {

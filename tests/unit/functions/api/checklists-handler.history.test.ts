@@ -75,6 +75,31 @@ describe('Checklists Handlers', () => {
     expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(expected);
   });
 
+  it.each([
+    ['an error', new Error('D1_ERROR: no such table: audit_events: SQLITE_ERROR')],
+    ['text', 'no such table: audit_events'],
+  ])('answers an empty history for a run when its read fails with %s naming the missing audit table', async (_label, failure) => {
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([personalRunRow(startedJustNow())])
+      .mockRejectedValueOnce(failure);
+
+    const response = await readHistory();
+
+    expect(response.status).toBe(200);
+    expect(await readJson(response, runHistoryBody)).toEqual({ checklistId: 'run-1', subject: { type: 'user', id: 'user-123' }, events: [] });
+  });
+
+  it('passes on any other failure to read a run history', async () => {
+    const locked = new Error('D1_ERROR: database is locked');
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([personalRunRow(startedJustNow())])
+      .mockRejectedValueOnce(locked);
+
+    await expect(readHistory()).rejects.toBe(locked);
+  });
+
   it('should not expose personal checklist run history to other users', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       personalRunRow({ user_id: 'other-user', title: 'Other Run', ...startedJustNow() }),

@@ -5,7 +5,8 @@ import { applyTemplateOperation } from "@functions/api/handlers/agentMcpTemplate
 import { templateOperationArgs } from "@functions/api/handlers/agentMcpTemplateTools";
 import { parseToolArguments } from "@functions/api/handlers/agentMcpTools";
 import { toolErrorOf } from "../../../support/agentMcp";
-import { recordsIn } from "../../../support/mcpResponses";
+import { recordIn, recordsIn } from "../../../support/mcpResponses";
+import { stringMatching } from "../../../support/asymmetricMatchers";
 import { storedSections } from "../../../support/storedJson";
 
 type JsonRecord = Record<string, unknown>;
@@ -37,6 +38,7 @@ const outline = (sections: JsonRecord[]) =>
 const SECTION_ID = /^section_[0-9a-f-]{36}$/;
 const ITEM_ID = /^item_[0-9a-f-]{36}$/;
 const SUBITEM_ID = /^subitem_[0-9a-f-]{36}$/;
+const FIELD_ID = /^field_[0-9a-f-]{36}$/;
 
 describe("update_template operations", () => {
   it("replace_section changes the fields it is given and keeps the rest", () => {
@@ -142,6 +144,17 @@ describe("update_template operations", () => {
     expect(outline(removed.sections)[0]).toEqual(["s1", ["t2"]]);
     expect(removed).not.toHaveProperty("taskId");
     expect(toolErrorOf(() => applyParsed({ operation: "remove_task", taskId: "t3" })).code).toBe("invalid_template");
+  });
+
+  it("replace_task keeps a stored form entry that is not a field as it is, and gives the fields their ids", () => {
+    const form = { id: "t1-form", type: "form", value: "", fields: ["not a field", { label: "Owner", kind: "text" }] };
+    const stored = [{ id: "s1", title: "Prepare", items: [task("t1", { contents: [form] })] }];
+
+    const replaced = applyParsed({ operation: "replace_task", taskId: "t1", task: { title: "Renamed" } }, stored);
+
+    const [replacedTask] = recordsIn(recordIn(firstOf(replaced.sections)).items);
+    const [replacedForm] = recordsIn(recordIn(replacedTask)["contents"]);
+    expect(recordIn(replacedForm)["fields"]).toEqual(["not a field", { label: "Owner", kind: "text", id: stringMatching(FIELD_ID) }]);
   });
 
   it("names the argument whose id it cannot find", () => {

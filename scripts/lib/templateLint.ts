@@ -92,23 +92,7 @@ const checkMarkdownRoundTrip = (details: TemplateSourceDetails, filePath: string
 const validateTemplateRules = (template: PortableChecklistTemplate, filePath: string): TemplateLintIssue[] => {
   const issues: TemplateLintIssue[] = [];
 
-  if (!template.sections.length) {
-    issues.push({
-      filePath,
-      code: "empty-template",
-      message: "Template must include at least one section",
-    });
-  }
-
   template.sections.forEach((section, sectionIndex) => {
-    if (!section.items.length) {
-      issues.push({
-        filePath,
-        code: "empty-section",
-        message: `Section ${sectionIndex + 1} "${section.title}" must include at least one item`,
-      });
-    }
-
     section.items.forEach((item, itemIndex) => {
       const hasDescription = Boolean(item.description?.trim());
       const hasContents = Boolean(item.contents?.length);
@@ -119,24 +103,6 @@ const validateTemplateRules = (template: PortableChecklistTemplate, filePath: st
           message: `Item ${sectionIndex + 1}.${itemIndex + 1} "${item.title}" should include a description or at least one content block`,
         });
       }
-
-      item.contents?.forEach((content, contentIndex) => {
-        if ((content.type === "image" || content.type === "video" || content.type === "file" || content.type === "embed") && !content.value?.trim()) {
-          issues.push({
-            filePath,
-            code: "empty-content-value",
-            message: `Item ${sectionIndex + 1}.${itemIndex + 1} content block ${contentIndex + 1} (${content.type}) requires a value`,
-          });
-        }
-
-        if (content.type === "subItems" && (!content.subItems || content.subItems.length === 0)) {
-          issues.push({
-            filePath,
-            code: "empty-subitems",
-            message: `Item ${sectionIndex + 1}.${itemIndex + 1} sub-items content must include at least one sub-item`,
-          });
-        }
-      });
     });
   });
 
@@ -246,13 +212,11 @@ export const lintYamlTemplateBundle = async (
     markdownPath?: string | undefined;
   }
 ): Promise<TemplateLintIssue[]> => {
-  const yamlExtension = detectTemplateSourceExtension(path.basename(yamlPath));
-  if (!yamlExtension) return unsupportedFileType(yamlPath);
   const issues: TemplateLintIssue[] = [];
 
   try {
     const yamlSource = await readSourceWithLfEndings(yamlPath);
-    const yamlDetails = parseSingleTemplateSource(yamlSource, yamlExtension);
+    const yamlDetails = parseSingleTemplateSource(yamlSource, ".yaml");
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
     issues.push(...checkMarkdownRoundTrip(yamlDetails, paths.markdownPath ?? yamlPath));

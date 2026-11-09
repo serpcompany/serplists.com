@@ -124,7 +124,7 @@ const ChecklistLibrary = ({
   }
 
   const { templates, loading, catalogError, retryCatalog, allCategories } =
-    useTemplateLibrary(undefined, templateType);
+    useTemplateLibrary(templateType);
 
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),

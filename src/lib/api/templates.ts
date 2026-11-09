@@ -136,12 +136,11 @@ export const templatesApi = {
     });
   },
 
-  async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null | undefined }) {
+  async exportTemplateBackup(params?: { teamId?: string | null | undefined }) {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
-    search.set('format', params?.format ?? 'portable');
-    const query = search.toString();
-    return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, exportedTemplatePackSchema);
+    search.set('format', 'portable');
+    return apiRequest(`/templates/backup?${search.toString()}`, exportedTemplatePackSchema);
   },
 
   async getPublicRequiredTools(templateIds: readonly string[]) {

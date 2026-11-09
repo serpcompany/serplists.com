@@ -16,8 +16,8 @@ const formatRunHistoryTime = (value?: string): string => {
   });
 };
 
-export function RunHistorySection({ history }: { history?: RunExecutionHistoryState }) {
-  const runHistoryEntries = selectRunHistoryPreview(history?.data, history?.showingAll);
+export function RunHistorySection({ history }: { history: RunExecutionHistoryState }) {
+  const runHistoryEntries = selectRunHistoryPreview(history.data, history.showingAll);
 
   return (
     <section className="flex flex-col gap-4 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10">
@@ -34,10 +34,10 @@ export function RunHistorySection({ history }: { history?: RunExecutionHistorySt
           time: formatRunHistoryTime(entry.createdAt),
         }))}
         errorLabel="Run history is unavailable right now."
-        isError={Boolean(history?.isError)}
-        isLoading={Boolean(history?.isLoading)}
+        isError={history.isError}
+        isLoading={history.isLoading}
         loadingLabel="Loading run history..."
-        viewAll={history ? { onViewAll: history.onViewAll, showingAll: history.showingAll } : undefined}
+        viewAll={{ onViewAll: history.onViewAll, showingAll: history.showingAll }}
       />
     </section>
   );

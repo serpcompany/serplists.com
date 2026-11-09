@@ -88,10 +88,11 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
     expect(overrideRows()).toEqual([]);
   });
 
-  it('rejects a body with neither userId nor email', async () => {
+  it('rejects a body with neither userId nor email, saying one is required', async () => {
     const response = await post({ plan: 'pro' });
 
     expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe('userId or email required');
     expect(overrideRows()).toEqual([]);
   });
 
@@ -168,6 +169,51 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
     vi.useFakeTimers();
     vi.setSystemTime((expiresAt + 1) * 1000);
     expect((await getEntitlementsForUser(env, 'user-1')).plan).toBe('free');
+  });
+});
+
+describe('DELETE /api/admin/entitlements/override on the migrated tables', () => {
+  let database: SqliteD1;
+  let env: Env;
+
+  beforeEach(() => {
+    database = new SqliteD1();
+    env = apiEnv({ DB: database.binding, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET });
+    for (const id of ['user-1', 'user-2']) {
+      database.sqlite.prepare('INSERT INTO users (id, email, name) VALUES (?, ?, ?)').run(id, `${id}@example.com`, id);
+      database.sqlite
+        .prepare("INSERT INTO entitlement_overrides (user_id, plan, created_at, updated_at) VALUES (?, 'pro', 'now', 'now')")
+        .run(id);
+    }
+  });
+
+  afterEach(() => {
+    database.sqlite.close();
+  });
+
+  const remove = (query: string) => handleAdmin(
+    new Request(`http://localhost/api/admin/entitlements/override${query}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Secret': ADMIN_SECRET },
+    }),
+    env,
+  );
+  const remainingUsers = () => database.sqlite.prepare('SELECT user_id FROM entitlement_overrides ORDER BY user_id').all();
+
+  it("removes only the named user's override", async () => {
+    const response = await remove('?userId=user-1');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(remainingUsers()).toEqual([{ user_id: 'user-2' }]);
+  });
+
+  it.each(['', '?userId='])('answers 400 and removes nothing when the query is %j', async (query) => {
+    const response = await remove(query);
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe('userId required');
+    expect(remainingUsers()).toEqual([{ user_id: 'user-1' }, { user_id: 'user-2' }]);
   });
 });
 

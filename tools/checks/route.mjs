@@ -30,7 +30,7 @@ export const gitOutput = (folder, ...args) => git(folder, args).stdout ?? ''
 
 export function owningCheckout(folder) {
   const found = git(folder, ['rev-parse', '--show-toplevel'])
-  const checkout = found.status === 0 ? (found.stdout ?? '').trim() : ''
+  const checkout = found.status === 0 ? found.stdout.trim() : ''
   return checkout || undefined
 }
 

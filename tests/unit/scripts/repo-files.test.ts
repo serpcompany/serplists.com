@@ -26,6 +26,7 @@ git('init', '-q');
 writeFixture('.gitignore', 'ignored/\n*.log\n');
 writeFixture('docs/plans/active/.gitkeep');
 writeFixture('docs/plans/completed/done.md', '# Done\n');
+writeFixture('docs/plans/completed/notes.txt', 'notes');
 writeFixture('docs/plans/completed/node_modules/skip.md', '# Skip\n');
 git('add', '.gitignore', 'docs/plans/active/.gitkeep', 'docs/plans/completed/done.md');
 mkdirSync(path.join(fixtureRoot, 'docs', 'plans', 'emptied'), { recursive: true });

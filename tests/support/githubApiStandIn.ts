@@ -8,7 +8,7 @@ export type Route = (request: SentRequest) => Answer | undefined;
 type ScriptRun = { status: number | null; output: string; requests: SentRequest[] };
 
 const NOT_FOUND: Answer = { status: 404, body: { message: 'Not Found' } };
-const KEPT_VARIABLES = ['PATH', 'SYSTEMROOT', 'WINDIR'];
+const KEPT_VARIABLES = ['PATH', 'SYSTEMROOT', 'WINDIR', 'NODE_V8_COVERAGE'];
 
 function standInFor(route: Route, requests: SentRequest[]) {
   return (incoming: IncomingMessage, outgoing: ServerResponse) => {

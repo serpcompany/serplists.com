@@ -16,16 +16,7 @@ const cssCommentTokenSchema = z.tuple([z.literal("comment"), z.string(), z.numbe
 export function lineLocator(text: string): (offset: number) => number {
   const lineStarts = [0];
   for (let index = text.indexOf("\n"); index !== -1; index = text.indexOf("\n", index + 1)) lineStarts.push(index + 1);
-  return (offset) => {
-    let low = 0;
-    let high = lineStarts.length - 1;
-    while (low < high) {
-      const middle = Math.ceil((low + high) / 2);
-      if ((lineStarts[middle] ?? Number.POSITIVE_INFINITY) <= offset) low = middle;
-      else high = middle - 1;
-    }
-    return low + 1;
-  };
+  return (offset) => lineStarts.findLastIndex((start) => start <= offset) + 1;
 }
 
 function lineEnd(text: string, position: number): number {

@@ -21,6 +21,20 @@ describe('uploadFile image handling', () => {
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: '/api/uploads/file?key=k' });
   });
 
+  it.each([
+    ['with its message', new Error('File is too large'), 'File is too large'],
+    ['as failed when it carries no message', 'offline', 'Upload failed'],
+  ])('reports an upload the API refused %s', async (_label, refusal, error) => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(api.uploadToR2).mockRejectedValueOnce(refusal);
+
+    await expect(uploadFile(new File([new Uint8Array(10)], 'brief.pdf', { type: 'application/pdf' }), 'template-files')).resolves.toEqual({
+      success: false,
+      error,
+    });
+    logged.mockRestore();
+  });
+
   it('uploads an image attached to a File block as the original bytes', async () => {
     const png = new File([new Uint8Array(10)], 'screenshot.png', { type: 'image/png' });
 

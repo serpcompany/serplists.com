@@ -55,6 +55,31 @@ describe('the comment check', { timeout: 60_000 }, () => {
     ).toEqual([]);
   });
 
+  it('shows the first 77 characters of a long line that holds a comment, with the line ending left off', async () => {
+    const longLine = `export const message = '${'x'.repeat(80)}'; // why`;
+
+    expect(await commentsIn({ 'src/long.ts': `${longLine}\r\n`, 'config.yml': 'a: 1\r\n  # why\r\n' })).toEqual([
+      `src/long.ts:1  ${longLine.slice(0, 77)}...`,
+      'config.yml:2  # why (YAML)',
+    ]);
+  });
+
+  it.each([
+    ['a lone carriage return', 'export const a = 1;\r// why\r'],
+    ['a Windows line ending', 'export const a = 1;\r\n// why\r\n'],
+    ['a line separator', `export const a = 1;${String.fromCodePoint(0x2028)}// why\n`],
+    ['a paragraph separator', `export const a = 1;${String.fromCodePoint(0x2029)}// why\n`],
+  ])('fails a comment in a script after %s, at the line ESLint counts, showing that line', async (_ending, text) => {
+    expect(await commentsIn({ 'src/ended.ts': text })).toEqual(['src/ended.ts:2  // why']);
+  });
+
+  it('fails a comment in a stylesheet at the line it counts by newlines alone, showing that line', async () => {
+    expect(await commentsIn({ 'src/old-mac.css': '.a { color: red; }\r/* why */\r' })).toEqual(['src/old-mac.css:1  .a { color: red; }\r/* why */ (CSS)']);
+    expect(await commentsIn({ 'src/separated.css': `.a { color: red; }${String.fromCodePoint(0x2028)}/* why */\n` })).toEqual([
+      `src/separated.css:1  .a { color: red; }${String.fromCodePoint(0x2028)}/* why */ (CSS)`,
+    ]);
+  });
+
   it('fails a file it cannot parse, rather than passing it unread', async () => {
     const problems = await commentsIn({ 'src/broken.ts': 'export const = ;\n', 'src/broken.css': '.a { content: "unclosed }\n' });
     expect(problems).toEqual([

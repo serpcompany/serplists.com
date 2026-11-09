@@ -64,6 +64,21 @@ describe('formatValidationError', () => {
     expect(message).toBe('Section 1 > title: Expected string, received number');
   });
 
+  it('reports the most specific branch of a failed union whichever order its branches come in', () => {
+    const error = zodErrorFor(
+      z.object({ sections: z.union([z.string(), z.array(z.object({ title: z.string() }))]) }),
+      { sections: [{ title: 5 }] },
+    );
+
+    expect(formatValidationError(error)).toBe('Section 1 > title: Expected string, received number');
+  });
+
+  it('numbers a list it has no name for by its field, and a list inside a list by its place', () => {
+    const error = zodErrorFor(z.object({ grid: z.array(z.array(z.string())) }), { grid: [['a', 'b'], ['c', 4]] });
+
+    expect(formatValidationError(error)).toBe('grid 2 > #2: Expected string, received number');
+  });
+
   it('keeps custom refinement messages', () => {
     const schema = z.object({ value: z.string() }).superRefine((_, ctx) => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'image content requires a value', path: ['value'] });
@@ -89,5 +104,11 @@ describe('formatValidationError', () => {
     });
 
     expect(formatValidationError(yamlError)).toBe('Invalid YAML at line 3: bad indentation of a mapping entry');
+  });
+
+  it('gives a YAML error with no position its reason alone', () => {
+    const yamlError = Object.assign(new Error('unexpected end of the stream'), { name: 'YAMLException', reason: 'unexpected end of the stream' });
+
+    expect(formatValidationError(yamlError)).toBe('Invalid YAML: unexpected end of the stream');
   });
 });

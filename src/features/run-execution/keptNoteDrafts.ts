@@ -92,7 +92,7 @@ export const useKeptRunNoteDrafts = ({
   const keepNoteDrafts = useCallback(() => {
     const { userId: owner, privateRun: run, noteDrafts: drafts } = latest.current;
     if (!run) return true;
-    return Boolean(owner) && keepRunNoteDrafts({ userId: owner ?? '', runId: run.id }, drafts, run);
+    return owner ? keepRunNoteDrafts({ userId: owner, runId: run.id }, drafts, run) : false;
   }, []);
 
   const runId = privateRun?.id;

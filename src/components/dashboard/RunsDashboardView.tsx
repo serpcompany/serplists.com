@@ -57,7 +57,7 @@ interface RunsDashboardViewProps {
   onStopSharingRun?: ((runId: string) => Promise<void>) | undefined;
   loading?: boolean;
   loadError?: unknown;
-  onRetryLoad?: () => void;
+  onRetryLoad: () => void;
 }
 
 const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
@@ -85,7 +85,7 @@ export function RunsDashboardView({
   onStopSharingRun,
   loading = false,
   loadError,
-  onRetryLoad = () => undefined,
+  onRetryLoad,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -121,8 +121,10 @@ export function RunsDashboardView({
     }),
     [runs, templateFilter, templatesById],
   );
-  const filterTemplateTitle = templateFilter ? templateLabels[templateFilter] : undefined;
-  const templateHasNoRuns = templateFilter !== null && !runs.some((run) => run.templateId === templateFilter);
+  const noRunsTemplateTitle =
+    templateFilter !== null && !runs.some((run) => run.templateId === templateFilter)
+      ? (templatesById.get(templateFilter)?.title ?? UNKNOWN_TEMPLATE_LABEL)
+      : null;
   const isFiltering = Boolean(searchQuery) || statusFilter !== 'all' || templateFilter !== null;
   const templateFor = (run: ChecklistRun) => findRunTemplate(templatesById, run.templateId);
   const controlsFor = (run: ChecklistRun): RunRowControls => ({
@@ -208,11 +210,11 @@ export function RunsDashboardView({
           </ItemGroup>
         ) : loadError && runs.length === 0 ? (
           <ListLoadErrorState error={loadError} listName="runs" onRetry={onRetryLoad} />
-        ) : filteredRuns.length === 0 && templateHasNoRuns ? (
+        ) : filteredRuns.length === 0 && noRunsTemplateTitle !== null ? (
           <DashboardEmptyState
             icon={<ListChecks />}
             title="No runs of this template yet"
-            description={`Runs started from ${filterTemplateTitle ?? 'this template'} appear here.`}
+            description={`Runs started from ${noRunsTemplateTitle} appear here.`}
             action={
               <Button onClick={() => setTemplateFilter(null)} variant="outline">
                 Show all runs

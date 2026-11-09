@@ -29,6 +29,8 @@ export function findRunTemplate<T>(
 
 export type RunTemplateOption = { id: string; title: string | null };
 
+const sortTitle = (option: RunTemplateOption): string => option.title ?? '';
+
 export function runTemplateFilterOptions(
   runs: readonly ChecklistRun[],
   lookup: ReadonlyMap<string, Pick<RunSourceTemplate, 'title'>>,
@@ -42,7 +44,7 @@ export function runTemplateFilterOptions(
   if (selectedTemplateId && !options.some((option) => option.id === selectedTemplateId)) {
     options.push({ id: selectedTemplateId, title: lookup.get(selectedTemplateId)?.title ?? null });
   }
-  return options.sort((left, right) => (left.title ?? '').localeCompare(right.title ?? ''));
+  return options.sort((left, right) => sortTitle(left).localeCompare(sortTitle(right)));
 }
 
 export function filterDashboardRuns(

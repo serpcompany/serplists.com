@@ -51,4 +51,20 @@ describe('Activity and its View all', () => {
     expect(screen.queryByText('Showing the latest 100 entries.')).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Activity' })).getAllByRole('listitem')).toHaveLength(42);
   });
+
+  it('says it is loading until entries arrive, keeps showing entries while it reloads, and says when it failed', () => {
+    const states = (count: number, flags: { isLoading?: boolean; isError?: boolean }) => (
+      <ActivityList emptyLabel="Nothing yet." entries={entries(count)} errorLabel="Unavailable." loadingLabel="Loading..." {...flags} />
+    );
+    const { rerender } = render(states(0, { isLoading: true }));
+    expect(screen.getByText('Loading...')).toBeTruthy();
+
+    rerender(states(2, { isLoading: true }));
+    expect(screen.queryByText('Loading...')).toBeNull();
+    expect(within(screen.getByRole('list', { name: 'Activity' })).getAllByRole('listitem')).toHaveLength(2);
+
+    rerender(states(2, { isError: true }));
+    expect(screen.getByText('Unavailable.')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Activity' })).toBeNull();
+  });
 });

@@ -94,7 +94,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => {
       if (!user) throw new Error("User must be logged in to create a template");
       
-      const finalIsPublic = templateData.isPublic ?? true;
+      const finalIsPublic = templateData.isPublic;
 
       if (!templateData.teamId) assertWorkspaceReady(workspaceStatus);
       const teamId = templateData.teamId ?? activeTeamId;
@@ -183,8 +183,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (apiPayload.teamId === activeTeamId) assertWorkspaceReady(workspaceStatus);
       const result = await api.createChecklist(apiPayload);
-      
-      if (!result) throw new Error("Failed to create checklist run");
       
       return {
         id: result.id,

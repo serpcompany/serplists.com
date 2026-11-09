@@ -51,7 +51,9 @@ const newGuestRunId = (): string =>
     ? crypto.randomUUID()
     : `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
-const toRun = (stored: StoredGuestRun): ChecklistRun => {
+type RevisedRun = ChecklistRun & { revision: number };
+
+const toRun = (stored: StoredGuestRun): RevisedRun => {
   const sections = normalizeSections(stored.sections);
   return {
     id: stored.id,
@@ -67,7 +69,7 @@ const toRun = (stored: StoredGuestRun): ChecklistRun => {
   };
 };
 
-const writeGuestRun = (run: ChecklistRun, storage: StringStorage): void => {
+const writeGuestRun = (run: RevisedRun, storage: StringStorage): void => {
   const stored: StoredGuestRun = {
     id: run.id,
     templateId: run.templateId,
@@ -75,7 +77,7 @@ const writeGuestRun = (run: ChecklistRun, storage: StringStorage): void => {
     status: run.status,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
-    revision: run.revision ?? 1,
+    revision: run.revision,
     sections: run.sections,
   };
   storage.setItem(guestRunKey(run.templateId), JSON.stringify({ format: FORMAT, run: stored }));
@@ -85,7 +87,7 @@ const writeGuestRun = (run: ChecklistRun, storage: StringStorage): void => {
 export const readGuestRun = (
   templateId: string,
   storage: StringStorage = safeLocalStorage,
-): ChecklistRun | null => {
+): RevisedRun | null => {
   const raw = storage.getItem(guestRunKey(templateId));
   if (!raw) return null;
   try {
@@ -110,7 +112,7 @@ export const startGuestRun = (
   if (active?.status === 'in_progress') return active;
 
   const startedAt = new Date();
-  const run: ChecklistRun = {
+  const run: RevisedRun = {
     id: newGuestRunId(),
     templateId: template.id,
     title: resolveRunName(runName, template.title, startedAt).slice(0, RUN_TITLE_MAX).trimEnd(),
@@ -134,7 +136,7 @@ export const saveGuestRun = (
     throw new ApiError({ status: 409, code: 'edit_conflict', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
   }
 
-  const saved: ChecklistRun = { ...run, revision: (stored.revision ?? 1) + 1 };
+  const saved: RevisedRun = { ...run, revision: stored.revision + 1 };
   writeGuestRun(saved, storage);
   return saved;
 };

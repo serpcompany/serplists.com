@@ -1,4 +1,4 @@
-import { count, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { sitemapProfileRevisions, teams, templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
@@ -73,8 +73,7 @@ const selectListedOrganizations = (db: Db) => db
   .where(listedOrganizationCondition)
   .orderBy(teams.id);
 
-const countListedUsers = async (db: Db): Promise<number> =>
-  (await db.select({ total: count() }).from(users).where(validUsernameCondition)).at(0)?.total ?? 0;
+const countListedUsers = (db: Db): Promise<number> => db.$count(users, validUsernameCondition);
 
 const loadListedProfiles = (db: Db, page: SitemapRowPage): Promise<ProfileRow[]> => loadRowsOfTwoLists(
   { load: ({ limit, offset }) => selectListedUsers(db).limit(limit).offset(offset), count: () => countListedUsers(db) },

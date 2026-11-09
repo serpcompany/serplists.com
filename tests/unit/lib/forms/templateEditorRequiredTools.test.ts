@@ -7,7 +7,7 @@ import {
   findTemplateEditorRequiredToolsIssues,
   normalizeTemplateEditorRequiredTools,
 } from '@/lib/forms/templateEditorRequiredTools';
-import { REQUIRED_TOOLS_MAX } from '@/lib/schemas/requiredTools';
+import { REQUIRED_TOOL_URL_MAX, REQUIRED_TOOLS_MAX } from '@/lib/schemas/requiredTools';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
 
 const timer = { name: 'Time tracker', url: 'https://example.com/track', required: true };
@@ -34,6 +34,12 @@ describe('the Required tools the Template editor saves', () => {
       'Required tools: give tool 2 a name.',
       "Required tools: tool 3's URL must start with http:// or https:// and have no spaces.",
       "Required tools: tool 4's URL must start with http:// or https:// and have no spaces.",
+    ]);
+  });
+
+  it("says how long a URL may be when a tool's URL is too long to store", () => {
+    expect(findTemplateEditorRequiredToolsIssues([{ ...timer, url: `https://example.com/${'a'.repeat(REQUIRED_TOOL_URL_MAX)}` }])).toEqual([
+      `Required tools: tool 1's URL must be ${REQUIRED_TOOL_URL_MAX} characters or fewer.`,
     ]);
   });
 

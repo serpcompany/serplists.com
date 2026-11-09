@@ -154,6 +154,24 @@ describe('the browser error reporter', () => {
     ]);
   });
 
+  it('reports the frames of a thrown object that names no error type, read below the top V8 gives it', () => {
+    const sent: ClientErrorReport[] = [];
+    const stack = `Error: Save failed
+    at onClick (${SITE_CHUNK}:1:2)`;
+
+    reporterInto(sent)('boundary', { message: 'Save failed', stack });
+
+    expect(sent).toEqual([{ kind: 'boundary', stack: 'at onClick (/_next/static/chunks/0a1b2c3d.js:1:2)', path: '/templates/', release: COMMIT }]);
+  });
+
+  it('sends no frame from a nameless thrown object whose message is not text, since nothing marks where its message ends', () => {
+    const sent: ClientErrorReport[] = [];
+
+    reporterInto(sent)('boundary', { name: '', message: { code: 7 }, stack: `    at onClick (${SITE_CHUNK}:1:2)` });
+
+    expect(sent.map((report) => report.stack)).toEqual([undefined]);
+  });
+
   it('sends only the unbroken run of frames below the top, so nothing appended after them, such as a cause', () => {
     const sent: ClientErrorReport[] = [];
     const stack = ['Error: Save failed', `    at onClick (${SITE_CHUNK}:5:6)`, `Caused by: TypeError: ${SAVE_FAILURE}`, `    at load (${SITE_CHUNK}:7:8)`];

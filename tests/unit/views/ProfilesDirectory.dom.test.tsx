@@ -1,5 +1,6 @@
 import { navigation } from '../../support/mockedNextNavigation';
-import React, { act } from 'react';
+import React, { act, Suspense } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +20,9 @@ const { useProfileDirectory } = vi.hoisted(() => ({ useProfileDirectory: vi.fn<(
 
 vi.mock('@/features/profile/useProfileDirectory', () => ({ useProfileDirectory }));
 
-import { metadata } from '@/app/(site)/profiles/page';
+import ProfilesPage, { metadata } from '@/app/(site)/profiles/page';
+import { PROFILES_DIRECTORY_PAGE_TEXT } from '@/lib/publicPageMeta';
+import { findElement, isElement } from '../../support/elementTree';
 import ProfilesDirectory from '@/views/ProfilesDirectory';
 
 const alice: ProfileDirectoryEntry = { handle: 'alice', name: 'Alice Example', avatar_url: null, public_template_count: 1 };
@@ -100,6 +103,18 @@ describe('the Profiles directory page', () => {
     });
   });
 
+  it('offers only Next on the first page and only Previous on the last', async () => {
+    useProfileDirectory.mockReturnValue(loaded([alice], { nextCursor: 'bob' }));
+    await onTheDirectoryAt('/profiles/', async () => {
+      expect(linkPaths(screen.getByRole('navigation', { name: 'People pages' }))).toEqual(['/profiles/?after=bob']);
+    });
+
+    useProfileDirectory.mockReturnValue(loaded([bob], { previousCursor: 'bob' }));
+    await onTheDirectoryAt('/profiles/?after=alice', async () => {
+      expect(linkPaths(screen.getByRole('navigation', { name: 'People pages' }))).toEqual(['/profiles/?before=bob']);
+    });
+  });
+
   it('reads an address it does not understand as the first page of People', async () => {
     useProfileDirectory.mockReturnValue(loaded([alice]));
 
@@ -110,6 +125,15 @@ describe('the Profiles directory page', () => {
 });
 
 describe('the states of a Profiles collection', () => {
+  it('shows the directory heading and a loading line until the address can be read', () => {
+    const fallback = findElement(ProfilesPage(), (element) => element.type === Suspense)?.props['fallback'];
+    if (!isElement(fallback)) throw new Error('The profiles page has no Suspense fallback');
+    const html = renderToStaticMarkup(fallback);
+
+    expect(html).toContain(PROFILES_DIRECTORY_PAGE_TEXT.title);
+    expect(html).toContain('Loading profiles...');
+  });
+
   it('says so while it loads, and offers Retry when it fails', async () => {
     useProfileDirectory.mockReturnValue({ ...loaded([]), listQuery: { data: undefined, isError: false, isLoading: true } });
     await onTheDirectoryAt('/profiles/', async (page) => {

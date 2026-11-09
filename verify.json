@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/@serpcompany/verify/verify.schema.json",
+  "files": {
+    "thirdParty": {
+      "src/components/ui/alert-dialog.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/alert.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/avatar.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/badge.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/breadcrumb.tsx": "shadcn base-nova registry (shadcn add), with its lucide icon",
+      "src/components/ui/button.tsx": "shadcn base-nova registry (shadcn add), with its variants in button-variants.ts",
+      "src/components/ui/button-variants.ts": "shadcn base-nova registry (shadcn add): button.tsx's variants, split out",
+      "src/components/ui/checkbox.tsx": "shadcn base-nova registry (shadcn add), with its lucide icon",
+      "src/components/ui/collapsible.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/command.tsx": "shadcn base-nova registry (shadcn add), with its lucide icons",
+      "src/components/ui/dropdown-menu.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/empty.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/field.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/input.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/item.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/label.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/navigation-menu.tsx": "shadcn base-nova registry (shadcn add), with its lucide icon",
+      "src/components/ui/navigation-menu-trigger-style.ts": "shadcn base-nova registry (shadcn add): navigation-menu.tsx's trigger style, split out",
+      "src/components/ui/popover.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/progress.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/select.tsx": "shadcn base-nova registry (shadcn add), with its lucide icons",
+      "src/components/ui/separator.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/sheet.tsx": "shadcn base-nova registry (shadcn add), with its lucide icon",
+      "src/components/ui/sidebar.tsx": "shadcn base-nova registry (shadcn add), with its menu in sidebar-menu.tsx",
+      "src/components/ui/sidebar-menu.tsx": "shadcn base-nova registry (shadcn add): sidebar.tsx's menu, split out",
+      "src/components/ui/use-sidebar.ts": "shadcn base-nova registry (shadcn add): sidebar.tsx's context hook, split out",
+      "src/components/ui/skeleton.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/spinner.tsx": "shadcn base-nova registry (shadcn add), with its lucide icon",
+      "src/components/ui/switch.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/table.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/tabs.tsx": "shadcn base-nova registry (shadcn add), trimmed to the parts the app uses",
+      "src/components/ui/textarea.tsx": "shadcn base-nova registry (shadcn add)",
+      "src/components/ui/tooltip.tsx": "shadcn base-nova registry (shadcn add)"
+    }
+  },
+  "tests": {
+    "patterns": ["tests/**", "**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]
+  },
+  "coverage": {
+    "reports": [
+      "coverage/tests/lcov.info",
+      "coverage/tests-children/lcov.info"
+    ]
+  }
+}

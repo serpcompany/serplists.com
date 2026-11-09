@@ -44,17 +44,18 @@ const resolveRepoPackTimestamp = (sourceData: unknown): string => {
     : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
 };
 
+const declaredIdOf = (template: ChecklistTemplate, fromPortablePack: boolean): string =>
+  (fromPortablePack ? '' : template.id?.trim()) || template.slug?.trim() || '';
+
 const buildRepoTemplateId = (
   sourcePath: string,
-  template: ChecklistTemplate,
+  declaredId: string,
   index: number,
-  fromPortablePack: boolean,
+  namedForTheFile: boolean,
 ): string => {
-  const fallbackId =
-    sourcePath.split('/').pop()?.replace('.json', '') ||
-    `template-${index + 1}`;
-  const ownId = fromPortablePack ? '' : template.id?.trim();
-  const baseId = ownId || template.slug?.trim() || fallbackId;
+  const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1).replace('.json', '');
+  const fallbackId = fileName && namedForTheFile ? fileName : `${fileName || 'template'}-${index + 1}`;
+  const baseId = declaredId || fallbackId;
   return baseId.startsWith('repo:') ? baseId : `repo:${baseId}`;
 };
 
@@ -70,14 +71,18 @@ export const normalizeRepoTemplateSources = (
       timestampForUndatedTemplates: resolveRepoPackTimestamp(sourceData),
     });
 
+    const lastUndeclared = templates
+      .map((template) => declaredIdOf(template as ChecklistTemplate, fromPortablePack))
+      .lastIndexOf('');
+
     templates.forEach((template, index) => {
       const repoTemplate: ChecklistTemplate = {
         ...template,
         id: buildRepoTemplateId(
           sourcePath,
-          template as ChecklistTemplate,
+          declaredIdOf(template as ChecklistTemplate, fromPortablePack),
           index,
-          fromPortablePack,
+          index === lastUndeclared,
         ),
         isPublic: true,
         userId: REPO_TEMPLATE_USER_ID,

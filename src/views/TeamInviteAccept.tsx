@@ -60,7 +60,7 @@ export default function TeamInviteAccept() {
   const router = useAppRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const { consoleContext } = useWorkspace();
-  const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
+  const invite = useTeamInviteLink(token, !isLoading && user ? user.id : null);
   const preview = invite.preview;
   const invitePath = useCurrentPath();
   const [signOutFlight] = useState(() => createSingleFlight());

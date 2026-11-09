@@ -8,41 +8,32 @@ export function isClipyHost(hostname: string): boolean {
   return CLIPY_HOSTS.has(hostname);
 }
 
-function isClipyUrl(value: string): boolean {
+function parseClipyUrl(value: string): URL | null {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'https:' && CLIPY_HOSTS.has(parsed.hostname);
+    return parsed.protocol === 'https:' && CLIPY_HOSTS.has(parsed.hostname) ? parsed : null;
   } catch {
-    return false;
+    return null;
   }
 }
+
+const withReferral = (clipyUrl: URL): string => {
+  clipyUrl.hostname = 'clipy.online';
+  clipyUrl.searchParams.set('ref', CLIPY_REFERRER);
+  clipyUrl.searchParams.set('utm_source', CLIPY_UTM_SOURCE);
+  return clipyUrl.toString();
+};
 
 export function clipyVideoId(parsed: URL): string | null {
   if (!CLIPY_HOSTS.has(parsed.hostname)) return null;
   return parsed.pathname.match(CLIPY_VIDEO_PATH)?.[1] ?? null;
 }
 
-export function withSerpListsClipyRef(value: string): string {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== 'https:' || !CLIPY_HOSTS.has(parsed.hostname)) {
-      return value;
-    }
-
-    parsed.hostname = 'clipy.online';
-    parsed.searchParams.set('ref', CLIPY_REFERRER);
-    parsed.searchParams.set('utm_source', CLIPY_UTM_SOURCE);
-    return parsed.toString();
-  } catch {
-    return value;
-  }
-}
+export const withSerpListsClipyRef = (clipyUrl: string): string => withReferral(new URL(clipyUrl));
 
 export function getOutboundLinkProps(value: string) {
-  const href = isClipyUrl(value) ? withSerpListsClipyRef(value) : value;
-  return {
-    href,
-    target: '_blank' as const,
-    rel: isClipyUrl(href) ? 'nofollow noopener noreferrer' : 'noopener noreferrer',
-  };
+  const clipyUrl = parseClipyUrl(value);
+  return clipyUrl
+    ? { href: withReferral(clipyUrl), target: '_blank' as const, rel: 'nofollow noopener noreferrer' }
+    : { href: value, target: '_blank' as const, rel: 'noopener noreferrer' };
 }

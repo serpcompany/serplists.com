@@ -47,6 +47,14 @@ describe('actionlint', () => {
     });
   });
 
+  it('fails with what the installed actionlint reports when Docker cannot run it', () => {
+    const { runner } = runnerAnswering({ actionlint: ran(1, '.github/workflows/ci.yml:3:5: unexpected key "job" [syntax-check]') });
+    expect(linterReport(runActionlint('/repository', FILES, runner), false)).toEqual({
+      passed: false,
+      findings: ['actionlint (the installed actionlint):', '.github/workflows/ci.yml:3:5: unexpected key "job" [syntax-check]'],
+    });
+  });
+
   it('falls back to an installed copy when Docker is missing or its daemon is down', () => {
     const daemonDown = ran(1, 'failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine');
     for (const docker of [ran(null, '', true), daemonDown, ran(125, 'Unable to find image')]) {

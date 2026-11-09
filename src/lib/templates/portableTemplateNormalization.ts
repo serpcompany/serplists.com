@@ -18,12 +18,10 @@ const normalizeStringArray = (values?: string[]) => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const normalizeSubItems = (subItems?: { title: string }[]) => {
-  if (!Array.isArray(subItems) || subItems.length === 0) return undefined;
-  return subItems.map((subItem) => ({
+const normalizeSubItems = (subItems: { title: string }[]) =>
+  subItems.map((subItem) => ({
     title: subItem.title.trim(),
   }));
-};
 
 type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
 type PortableFormField = Extract<PortableContent, { type: "form" }>["fields"][number];
@@ -89,11 +87,7 @@ const normalizeContents = (contents?: PortableContent[]) => {
       type: content.type,
     };
 
-    const normalizedValue = holdsNoValue(content.type)
-      ? ""
-      : typeof content.value === "string"
-        ? content.value.trim()
-        : "";
+    const normalizedValue = holdsNoValue(content.type) ? "" : content.value.trim();
 
     if (!holdsNoValue(content.type)) {
       nextContent.value = normalizedValue;
@@ -107,8 +101,7 @@ const normalizeContents = (contents?: PortableContent[]) => {
     }
 
     if (content.type === "subItems") {
-      const normalizedSubItems = normalizeSubItems(content.subItems);
-      if (normalizedSubItems) nextContent.subItems = normalizedSubItems;
+      nextContent.subItems = normalizeSubItems(content.subItems);
     }
 
     if (content.type === "form") nextContent.fields = content.fields.map(normalizeFormField);
@@ -161,8 +154,8 @@ export const normalizePortableTemplate = (template: PortableChecklistTemplate): 
     normalizedTemplate.rules = validated.rules.map((rule) => ({
       type: rule.type.trim(),
       path: rule.path.trim(),
-      severity: rule.severity ?? "error",
-      ...(trimOptionalString(rule.id) ? { id: trimOptionalString(rule.id) } : {}),
+      severity: rule.severity,
+      id: rule.id.trim(),
       ...(typeof rule.value === "undefined" ? {} : { value: rule.value }),
     }));
   }

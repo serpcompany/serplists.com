@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -23,7 +24,7 @@ export const readWorkflowFile = (file: string): unknown => yaml.load(readFileSyn
 
 export function aWorkDirRemovedAfterAll(prefix: string) {
   const workDir = mkdtempSync(path.join(tmpdir(), prefix));
-  afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+  afterAll(() => rm(workDir, { recursive: true, force: true, maxRetries: 3 }), 60_000);
   return workDir;
 }
 

@@ -61,6 +61,18 @@ describe('keyboard reordering', () => {
     expect(remapIndexAfterMove(0, 2, 0)).toBe(1);
     expect(remapIndexAfterMove(1, 0, 2)).toBe(0);
   });
+
+  it('leaves an index outside the moved range where it was', () => {
+    expect(remapIndexAfterMove(3, 0, 2)).toBe(3);
+    expect(remapIndexAfterMove(0, 3, 1)).toBe(0);
+    expect(remapIndexAfterMove(3, 2, 1)).toBe(3);
+  });
+
+  it('leaves the list as it was when the entry to move is no longer in it', () => {
+    const items = ['a', 'b'];
+
+    expect(moveArrayEntry(items, 2, 0)).toBe(items);
+  });
 });
 
 describe('focus after a move, which can re-insert the moved row and drop its focus', () => {
@@ -116,6 +128,31 @@ describe('focus after a move, which can re-insert the moved row and drop its foc
 
     expect(up.focus).not.toHaveBeenCalled();
     expect(down.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands focus to Move up when a move down reached the end of the list', () => {
+    const up = control('reorderMove', 'task:a:up');
+    const down = control('reorderMove', 'task:a:down', true);
+    const page = stubPage([up, down]);
+
+    moveWithButton('down', { count: 3, handleId: 'task:a', index: 1, label: 'A' }, vi.fn());
+    page.renderFrame();
+
+    expect(down.focus).not.toHaveBeenCalled();
+    expect(up.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('focuses nothing when the moved entry left the page before the move rendered', () => {
+    const other = control('reorderHandle', 'task:b');
+    const otherMove = control('reorderMove', 'task:b:up');
+    const page = stubPage([other, otherMove]);
+
+    handleKeyboardReorder(key('ArrowDown'), { count: 3, handleId: 'task:a', index: 0, label: 'A' }, vi.fn());
+    moveWithButton('up', { count: 3, handleId: 'task:a', index: 1, label: 'A' }, vi.fn());
+    page.renderFrame();
+
+    expect(other.focus).not.toHaveBeenCalled();
+    expect(otherMove.focus).not.toHaveBeenCalled();
   });
 });
 

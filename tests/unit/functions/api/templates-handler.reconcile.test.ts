@@ -38,6 +38,7 @@ describe('Templates Handlers', () => {
           },
         ]),
         version: 1,
+        content_version: 1,
         is_public: false,
         slug: 'existing-template',
         created_at: new Date().toISOString(),

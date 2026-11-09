@@ -1,19 +1,14 @@
+import '../../../support/mockedToasts';
+import '../../../support/cleanupAfterEachTest';
+import '../../../support/mockedClipboard';
 import React, { act } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
 import { RunProvenancePanel } from '@/components/run-execution/RunProvenancePanel';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import type { ChecklistRun, RunProvenance } from '@/types/checklist';
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/lib/clipboard', () => ({ copyTextToClipboard: vi.fn() }));
-
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
 
 const alice = { userId: 'user-a', name: 'Alice Admin', username: 'alice' };
 const bob = { userId: 'user-b', name: 'Bob Runner', username: 'bob' };
@@ -138,5 +133,59 @@ describe("the Run page's provenance", () => {
 
     expect(copyTextToClipboard).toHaveBeenCalledWith('run-1234');
     expect(toast.success).toHaveBeenCalledWith('Run ID copied');
+  });
+
+  it("says when the run ID can't be copied", async () => {
+    vi.mocked(copyTextToClipboard).mockResolvedValue(false);
+    render(<RunProvenancePanel run={runWith(fullProvenance({}))} />);
+    await openTheDetails();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy run ID' }));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("Couldn't copy the run ID");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('fills what a run stored without a name: its Template, Organization and Run Key', async () => {
+    render(
+      <RunProvenancePanel
+        run={runWith(
+          fullProvenance({
+            origin: 'mcp',
+            owner: { type: 'organization', id: 'org-1', name: null },
+            template: { id: null, title: null, version: 2 },
+            agentKeyName: null,
+          }),
+          { revision: 0 },
+        )}
+      />,
+    );
+
+    await openTheDetails();
+
+    expect(details()).toMatchObject({
+      Template: 'Unavailable',
+      'Template version': '2',
+      'Resource owner': 'Organization',
+      'Run Key': 'Not recorded',
+      'Authorized by': 'Not recorded',
+    });
+    expect(Object.keys(details())).not.toContain('Revision');
+  });
+
+  it("takes the Template version from the run, or 1, when the run has no Template record", async () => {
+    const { templateVersion, ...unversioned } = runWith(undefined);
+    render(<RunProvenancePanel run={runWith(undefined, { templateVersion: 4 })} />);
+    await openTheDetails();
+    expect(details()['Template version']).toBe('4');
+    cleanup();
+
+    render(<RunProvenancePanel run={unversioned} />);
+    await openTheDetails();
+
+    expect(details()['Template version']).toBe('1');
+    expect(Object.keys(details())).not.toContain('Origin');
   });
 });

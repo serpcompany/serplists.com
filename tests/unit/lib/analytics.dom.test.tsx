@@ -38,9 +38,13 @@ describe('the in-memory analytics', () => {
     expect(sends()).toEqual([0, 0, 0]);
   });
 
-  it('keeps window errors and rejections, with message and URL, and sends none', () => {
+  it('keeps window errors and rejections, with message and URL, and sends none', async () => {
     const sends = watchEveryWayToSend();
     window.history.replaceState(null, '', '/templates/?q=launch');
+
+    await vi.waitFor(() =>
+      expect(analytics.getEvents().at(-1)).toMatchObject({ event: 'page_view', properties: objectContaining({ path: '/templates/' }) }),
+    );
 
     window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught TypeError: Cannot save "Q3 launch plan"' }));
     window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new TypeError('Failed to fetch') }));
@@ -51,5 +55,25 @@ describe('the in-memory analytics', () => {
     ]);
     expect(window.location.href).toContain('?q=launch');
     expect(sends()).toEqual([0, 0, 0]);
+  });
+
+  it('keeps a rejection that carries no reason with an empty message', () => {
+    window.dispatchEvent(new Event('unhandledrejection'));
+
+    expect(analytics.getEvents().at(-1)?.properties).toMatchObject({ message: '', context: 'unhandled_promise_rejection' });
+  });
+});
+
+describe('the analytics loaded where there is no window, as in a server render', () => {
+  it('keeps no events, not even for a page error once a window exists', async () => {
+    vi.resetModules();
+    vi.stubGlobal('window', undefined);
+    const { analytics: loadedWithoutAWindow } = await import('@/lib/analytics');
+    vi.unstubAllGlobals();
+
+    loadedWithoutAWindow.trackTemplateView('template-1', 'Launch plan');
+    window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught TypeError: Cannot save' }));
+
+    expect(loadedWithoutAWindow.getEvents()).toEqual([]);
   });
 });

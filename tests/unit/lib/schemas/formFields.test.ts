@@ -73,6 +73,28 @@ describe('stored form fields', () => {
     ]);
   });
 
+  it('reads help text, number limits and every kind of answer, and drops answers that do not fit their kind', () => {
+    expect(readFormFields([
+      { id: 'seats', label: 'Seats', kind: 'number', description: 'Up to nine', min: 1, max: 9, answer: 4 },
+      { id: 'brief', label: 'Brief', kind: 'file', answer: { url: '/api/uploads/file?key=a', fileName: 'a.pdf', fileSize: 3 } },
+      { id: 'scan', label: 'Scan', kind: 'file', answer: { fileName: 'b.pdf' } },
+      { id: 'tags', label: 'Tags', kind: 'multiSelect', options: [{ id: 'a', label: 7 }], answer: 'a' },
+      { id: 'agree', label: 'Agree', kind: 'checkbox', answer: true },
+      { id: '', label: 'Name', kind: 'text', answer: 5 },
+    ], fallbackId)).toEqual([
+      { id: 'seats', label: 'Seats', kind: 'number', required: false, description: 'Up to nine', min: 1, max: 9, answer: 4 },
+      { id: 'brief', label: 'Brief', kind: 'file', required: false, answer: { url: '/api/uploads/file?key=a', fileName: 'a.pdf', fileSize: 3 } },
+      { id: 'scan', label: 'Scan', kind: 'file', required: false },
+      { id: 'tags', label: 'Tags', kind: 'multiSelect', required: false, options: [{ id: 'a', label: '' }] },
+      { id: 'agree', label: 'Agree', kind: 'checkbox', required: false, answer: true },
+      { id: 'i1-field-6', label: 'Name', kind: 'text', required: false },
+    ]);
+  });
+
+  it('gives an option whose place id another option already holds the next free copy of it', () => {
+    expect(withFormOptionIds([{ id: 'option-2', label: 'A' }, { label: 'B' }]).map(({ id }) => id)).toEqual(['option-2', 'option-2-2']);
+  });
+
   it('gives options without an id, or with a repeated one, a positional id that stays the same', () => {
     const options = [{ id: 'a', label: 'A' }, { id: 'a', label: 'B' }, { label: 'C' }, { id: 'option-2', label: 'D' }];
 

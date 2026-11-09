@@ -91,9 +91,7 @@ export function TeamSettingsSection() {
     ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug, description: editTeamDescription }, activeWorkspace)
     : null;
 
-  const saveOrganizationAvatar = async (avatarUrl: string | null): Promise<string | null> => {
-    if (!activeTeamId) return 'Select an Organization before updating its settings';
-    const teamId = activeTeamId;
+  const saveOrganizationAvatar = async (teamId: string, avatarUrl: string | null): Promise<string | null> => {
     try {
       const result = await saveTeamSettings(teamId, { avatar_url: avatarUrl });
       patchTeam(teamId, { avatar_url: result.team.avatar_url ?? null });
@@ -105,13 +103,8 @@ export function TeamSettingsSection() {
     return null;
   };
 
-  const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>) => {
+  const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>, teamId: string) => {
     event.preventDefault();
-
-    if (!activeTeamId) {
-      toast.error('Select an Organization before updating its settings');
-      return;
-    }
 
     const update = changedTeamSettings;
     if (!update) {
@@ -123,7 +116,6 @@ export function TeamSettingsSection() {
       return;
     }
 
-    const teamId = activeTeamId;
     const submitted = { name: editTeamName, slug: editTeamSlug, description: editTeamDescription };
     setIsUpdatingTeam(true);
     try {
@@ -151,14 +143,10 @@ export function TeamSettingsSection() {
   };
 
   const handleUpdateMember = async (
+    teamId: string,
     member: TeamMember,
     updates: { role?: AssignableTeamRole; status?: TeamMemberStatus },
   ) => {
-    if (!activeTeamId) {
-      return;
-    }
-
-    const teamId = activeTeamId;
     setUpdatingMemberId(member.id);
     try {
       await runTeamWrite({
@@ -176,11 +164,7 @@ export function TeamSettingsSection() {
     }
   };
 
-  const handleTransferOwnership = async (member: TeamMember) => {
-    if (!activeTeamId) {
-      return;
-    }
-
+  const handleTransferOwnership = async (teamId: string, member: TeamMember) => {
     const memberName = member.name || member.email || member.user_id;
     if (
       typeof window !== 'undefined' &&
@@ -189,7 +173,6 @@ export function TeamSettingsSection() {
       return;
     }
 
-    const teamId = activeTeamId;
     setTransferringOwnerMemberId(member.id);
     try {
       await runTeamWrite({
@@ -236,13 +219,13 @@ export function TeamSettingsSection() {
             currentAvatarUrl={activeWorkspace.avatarUrl ?? null}
             editable={canManageTeam}
             fallbackIcon={Users}
-            saveAvatar={saveOrganizationAvatar}
+            saveAvatar={(avatarUrl) => saveOrganizationAvatar(activeWorkspace.teamId, avatarUrl)}
             size="lg"
           />
         </Field>
 
         {canManageTeam ? (
-          <form className="grid gap-3 md:grid-cols-2" onSubmit={handleUpdateTeam}>
+          <form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => void handleUpdateTeam(event, activeWorkspace.teamId)}>
             <Field>
               <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
               <Input
@@ -280,7 +263,7 @@ export function TeamSettingsSection() {
           </form>
         ) : null}
 
-        {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
+        {canManageTeam ? <TeamInvitesPanel teamId={activeWorkspace.teamId} /> : null}
 
         {!canManageTeam ? (
           <p className="text-sm text-muted-foreground">
@@ -295,8 +278,8 @@ export function TeamSettingsSection() {
           members={members}
           membersQuery={membersQuery}
           onRetry={() => void reload.members()}
-          onTransferOwnership={(member) => void handleTransferOwnership(member)}
-          onUpdateMember={(member, updates) => void handleUpdateMember(member, updates)}
+          onTransferOwnership={(member) => void handleTransferOwnership(activeWorkspace.teamId, member)}
+          onUpdateMember={(member, updates) => void handleUpdateMember(activeWorkspace.teamId, member, updates)}
           transferringOwnerMemberId={transferringOwnerMemberId}
           updatingMemberId={updatingMemberId}
         />

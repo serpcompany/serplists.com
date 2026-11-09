@@ -165,8 +165,6 @@ async function callTool(
       const omitted = data.taskOmitted === true ? " The task is too large for one result; read it with get_run and taskId." : "";
       return { data, text: `Updated run "${boundedText(titleOf(data.run))}".${omitted}` };
     }
-    default:
-      throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
   }
 }
 

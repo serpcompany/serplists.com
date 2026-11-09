@@ -147,6 +147,14 @@ describe("Personal run key management handler", () => {
     ]);
   });
 
+  it("rejects a body that is not JSON without minting a secret", async () => {
+    const response = await handleAgentKeys(new Request("http://localhost/api/agent-keys", { method: "POST", body: "{name" }), mockEnv);
+
+    expect(response.status).toBe(400);
+    expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
+    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
+  });
+
   it("rejects blank and oversized names without minting a secret", async () => {
     await expectEachRefusedWithoutMintingASecret(["   ", "x".repeat(81)].map((name) => ({ name })));
   });
@@ -306,6 +314,18 @@ describe("Personal run key management handler", () => {
 
     expect(response.status).toBe(404);
     expect(dbMocks.db.select).not.toHaveBeenCalled();
+    expect(dbMocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["PUT", "http://localhost/api/agent-keys"],
+    ["POST", "http://localhost/api/agent-keys/key-1"],
+    ["DELETE", "http://localhost/api/agent-keys"],
+  ])("answers %s %s with 404 without touching any key", async (method, url) => {
+    const response = await handleAgentKeys(new Request(url, { method }), mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.insert).not.toHaveBeenCalled();
     expect(dbMocks.db.update).not.toHaveBeenCalled();
   });
 });

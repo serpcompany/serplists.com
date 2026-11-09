@@ -1,3 +1,4 @@
+import { runKeysServer as apiMocks } from '../../support/signedInRunKeysApi';
 import { openAndConfirm, theDialogsToClose } from '../../support/confirmDialogs';
 import React, { act } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -13,21 +14,6 @@ import { toast } from 'sonner';
 
 import { ACTIVE_AGENT_KEY } from '../../fixtures/agentKeys';
 import { createTestQueryClient } from '../../fixtures/queryClient';
-
-const apiMocks = vi.hoisted(() => ({
-  getAgentKeys: vi.fn(),
-  getAgentMcpConnection: vi.fn(),
-  revokeAgentKey: vi.fn(),
-}));
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api')>()),
-  api: apiMocks,
-}));
 
 const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 

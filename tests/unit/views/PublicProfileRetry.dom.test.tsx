@@ -87,3 +87,25 @@ describe('PublicProfile in another letter case', () => {
     });
   });
 });
+
+describe('PublicProfile after the address moved to another profile', () => {
+  it('ignores the answer for the profile it left, which would otherwise send it back there', async () => {
+    const slowAcme = deferred<LoadPublicProfileResult>();
+    loadPublicProfile.mockReturnValueOnce(slowAcme.promise).mockResolvedValueOnce(alice);
+
+    await onTheProfileAt('acme-launch', async (page) => {
+      await act(async () => {
+        navigation.router.push('/profile/alice/');
+        await settle();
+      });
+      await act(async () => {
+        slowAcme.resolve(acme);
+        await settle();
+      });
+
+      expect(navigation.url()).toBe('/profile/alice/');
+      expect(navigation.log.filter((entry) => entry.kind === 'replace')).toEqual([]);
+      expect(page.textContent).toContain('Alice Example');
+    });
+  });
+});

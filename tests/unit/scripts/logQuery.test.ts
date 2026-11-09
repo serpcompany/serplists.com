@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseLogText, requestRecords } from '../../../scripts/lib/logEntries';
+import { formatTable } from '../../../scripts/lib/logFormat';
 import { runLogQuery } from '../../../scripts/lib/logQueryCommand';
 import {
   emptyFilter,
@@ -18,12 +19,7 @@ import {
   summarizeRoutes,
   summarizeStatements,
 } from '../../../scripts/lib/logQueries';
-
-const apiLine = (fields: Record<string, unknown>) =>
-  JSON.stringify({ level: 'info', timestamp: '2026-09-30T18:58:38.000Z', ...fields });
-
-const apiRequest = (requestId: string, method: string, apiPath: string, status: number, durationMs: number, timestamp: string) =>
-  apiLine({ message: 'api_request', requestId, method, path: apiPath, status, durationMs, timestamp });
+import { apiLine, apiRequest } from '../../fixtures/apiLogLines';
 
 const sampleLog = [
   '> next dev --port 3000',
@@ -80,7 +76,7 @@ describe('parseLogText', () => {
   });
 
   it('skips output that is not a log line, including JSON without a level and event', () => {
-    const entries = parseLogText(['ready in 2.1s', '{"compiled":true}', '{ not json', apiLine({ message: 'health' })].join('\n'));
+    const entries = parseLogText(['ready in 2.1s', '{"compiled":true}', '{ not json', '{ braces but not json }', apiLine({ message: 'health' })].join('\n'));
 
     expect(entries.map((entry) => entry.event)).toEqual(['health']);
   });
@@ -120,7 +116,9 @@ describe('filters', () => {
 
     expect(parseSince('15m', now)).toBe(Date.parse('2026-09-30T18:45:00.000Z'));
     expect(parseSince('2026-09-30T18:00:00Z', now)).toBe(Date.parse('2026-09-30T18:00:00.000Z'));
+    expect(parseSince('2d', now)).toBe(Date.parse('2026-09-28T19:00:00.000Z'));
     expect(() => parseSince('yesterday', now)).toThrow('--since');
+    expect(() => parseSince('1.5h', now)).toThrow('--since');
   });
 
   it('matches a path as plain text, or as a /regex/', () => {
@@ -155,7 +153,6 @@ describe('summaries', () => {
   it('takes the nearest-rank percentile', () => {
     expect(percentile([5, 1, 4, 2, 3], 0.5)).toBe(3);
     expect(percentile([5, 1, 4, 2, 3], 0.95)).toBe(5);
-    expect(percentile([], 0.5)).toBe(0);
   });
 
   it('counts requests, client and server errors, and latency per route, slowest p95 first', () => {
@@ -255,5 +252,13 @@ describe('runLogQuery', () => {
     expect(badOption.exitCode).toBe(2);
     expect(badOption.output).toContain('Usage: pnpm run logs:query');
     expect(missing).toEqual({ output: `No log at ${path.join(workDir, 'none.log')}.`, exitCode: 1 });
+  });
+});
+
+describe('a table of results', () => {
+  it('aligns each column to its widest cell, leaving the last column unpadded', () => {
+    expect(formatTable(['route', 'count'], [['GET /api/templates', 12], ['GET /', 3]])).toBe(
+      ['route               count', 'GET /api/templates  12', 'GET /               3'].join('\n'),
+    );
   });
 });

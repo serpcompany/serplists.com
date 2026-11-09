@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
-import { buildAuditEventValues, type AuditEventInput } from '@functions/api/utils/audit';
+import { buildAuditEventValues, buildTemplateVersionValues, type AuditEventInput } from '@functions/api/utils/audit';
 import { sha256Hex } from '@functions/api/utils/crypto';
 import { insertRowWhere } from '@functions/api/utils/guarded-insert';
 import { SqliteD1, toSqliteValue } from '../../../support/sqlite-d1';
@@ -304,7 +304,49 @@ describe("buildAuditEventValues records where a change came from, never the clie
     expect(other).not.toBe(await ipHashUnder(withAuthSecret));
   });
 
+  it.each([
+    ['True-Client-IP', { 'True-Client-IP': CLIENT_IP }],
+    ['the first X-Forwarded-For address', { 'X-Forwarded-For': `${CLIENT_IP}, 10.0.0.1` }],
+  ])('hashes the address from %s when Cloudflare sent none', async (_label, headers) => {
+    const values = await buildAuditEventValues(input({ request: new Request('https://serplists.com/api/teams', { headers }) }));
+
+    expect(values.ip_hash).toBe(await ipHashUnder(withAuthSecret));
+  });
+
+  it('records no address for an empty forwarded list, and the Cloudflare ray as the request id when there is no X-Request-Id', async () => {
+    const request = new Request('https://serplists.com/api/teams', { headers: { 'X-Forwarded-For': ' , 10.0.0.1', 'CF-Ray': 'ray-1' } });
+
+    expect(await buildAuditEventValues(input({ request }))).toMatchObject({ ip_hash: null, request_id: 'ray-1', user_agent: null });
+  });
+
   it('stores no IP hash without the auth secret, rather than a plain SHA-256', async () => {
     expect(await ipHashUnder({})).toBeNull();
+  });
+});
+
+describe('buildTemplateVersionValues', () => {
+  const version = {
+    templateId: 'template-1',
+    version: 2,
+    changedByUserId: 'user-1',
+    subject: { type: 'user', id: 'user-1' },
+    snapshot: { title: 'Plan', sections: [] },
+    createdAt: '2026-01-01T00:00:00.000Z',
+  } as const;
+
+  it('stores the snapshot with the SHA-256 of its JSON, and no change summary for a version written without one', async () => {
+    const values = await buildTemplateVersionValues(version);
+
+    expect(values).toMatchObject({
+      template_id: 'template-1',
+      version: 2,
+      snapshot_json: '{"title":"Plan","sections":[]}',
+      content_hash: await sha256Hex('{"title":"Plan","sections":[]}'),
+      change_summary: null,
+    });
+  });
+
+  it('stores the change summary it is given', async () => {
+    expect((await buildTemplateVersionValues({ ...version, changeSummary: 'template.updated' })).change_summary).toBe('template.updated');
   });
 });

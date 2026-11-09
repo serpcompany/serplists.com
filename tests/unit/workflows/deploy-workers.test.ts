@@ -64,8 +64,8 @@ describe.each(ENVIRONMENTS)('the $name deploy', ({ name, workflow, branch, migra
     expect(caller.if).toBe(`github.event_name == 'push' && github.ref_name == '${branch}'`);
     expect(caller.secrets).toEqual(Object.fromEntries(CLOUDFLARE_SECRETS.map((secret) => [secret, `\${{ secrets.${secret} }}`])));
     expect(Object.keys(on.workflow_call.secrets)).toEqual(CLOUDFLARE_SECRETS);
-    expect(caller.permissions).toEqual({ contents: 'read', actions: 'read' });
-    expect(deployJob.permissions).toEqual({ contents: 'read', actions: 'read' });
+    expect(caller.permissions).toEqual({ packages: 'read', contents: 'read', actions: 'read' });
+    expect(deployJob.permissions).toEqual({ packages: 'read', contents: 'read', actions: 'read' });
   });
 
   it('runs one at a time, never cancelled part way', () => {

@@ -119,7 +119,7 @@ export const storedFormFieldSchema = z.discriminatedUnion("kind", [
 
 const formOptionFallbackId = (index: number): string => `option-${index + 1}`;
 
-export function withFormOptionIds(options: FormOptionRecord[]): Array<FormOptionRecord & { id: string }> {
+export function withFormOptionIds<Option extends FormOptionRecord>(options: Option[]): Array<Option & { id: string }> {
   const used = new Set<string>();
   return options.map((option, index) => {
     const stored = readTextId(option.id);
@@ -140,20 +140,25 @@ function storedAnswerFor(kind: FormFieldKind, answer: unknown): unknown {
   return fitsFormAnswerShape(kind, answer) ? answer : undefined;
 }
 
-function sanitizeStoredOptions(value: unknown): FormOptionRecord[] {
+type SanitizedFormOption = FormOptionRecord & { label: string };
+
+type SanitizedFormField = FormFieldRecord & { kind: FormFieldKind; label: string; required: boolean };
+
+function sanitizeStoredOptions(value: unknown): SanitizedFormOption[] {
   return formOptionRecordsIn(value).map((option) => ({
     ...option,
     label: typeof option.label === "string" ? option.label : "",
   }));
 }
 
-export function sanitizeStoredFormFields(value: unknown): FormFieldRecord[] {
+export function sanitizeStoredFormFields(value: unknown): SanitizedFormField[] {
   return formFieldRecordsIn(value).flatMap((field) => {
     const { kind } = field;
     if (!isFormFieldKind(kind)) return [];
     const { options, min, max, answer, description, ...rest } = field;
-    const next: FormFieldRecord = {
+    const next: SanitizedFormField = {
       ...rest,
+      kind,
       label: typeof field.label === "string" ? field.label : "",
       required: field.required === true,
     };
@@ -183,23 +188,22 @@ function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | unde
 }
 
 export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
-  return sanitizeStoredFormFields(value).flatMap((field, index) => {
+  return sanitizeStoredFormFields(value).map((field, index): ChecklistFormField => {
     const { kind } = field;
-    if (!isFormFieldKind(kind)) return [];
     const answer = readFormAnswer(kind, field.answer);
-    return [{
+    return {
       id: readTextId(field.id) || fallbackId(index),
-      label: typeof field.label === "string" ? field.label : "",
+      label: field.label,
       kind,
-      required: field.required === true,
+      required: field.required,
       ...(typeof field.description === "string" ? { description: field.description } : {}),
       ...(isFormChoiceKind(kind)
-        ? { options: withFormOptionIds(formOptionRecordsIn(field.options)).map(({ id, label }) => ({ id, label: typeof label === "string" ? label : "" })) }
+        ? { options: withFormOptionIds(sanitizeStoredOptions(field.options)).map(({ id, label }) => ({ id, label })) }
         : {}),
       ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
       ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
       ...(answer === undefined ? {} : { answer }),
-    }];
+    };
   });
 }
 

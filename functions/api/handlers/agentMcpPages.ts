@@ -97,11 +97,13 @@ export function findTask(
   taskId: string,
   sectionId?: string,
   idArgumentName = "taskId",
-): { sectionIndex: number; taskIndex: number } {
+): { sectionIndex: number; taskIndex: number; section: SectionRecord; task: TaskRecord } {
   const candidates = sectionId === undefined ? sections.map((_, index) => index) : [findSection(sections, sectionId)];
   for (const sectionIndex of candidates) {
-    const taskIndex = tasksOf(sectionAt(sections, sectionIndex)).findIndex((task) => task.id === taskId);
-    if (taskIndex >= 0) return { sectionIndex, taskIndex };
+    const section = sectionAt(sections, sectionIndex);
+    for (const [taskIndex, task] of tasksOf(section).entries()) {
+      if (task.id === taskId) return { sectionIndex, taskIndex, section, task };
+    }
   }
   throw new ToolError(
     `Task not found (${sectionId === undefined ? idArgumentName : `${idArgumentName} in sectionId`})`,

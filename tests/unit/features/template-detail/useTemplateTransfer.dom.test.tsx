@@ -147,4 +147,15 @@ describe('Transfer to Organization on a Template page', () => {
     expect(transfer).toHaveBeenCalledWith('org-acme');
     expect(navigate).toHaveBeenCalledWith('/dashboard/organization/org-acme/templates/tpl-1/');
   });
+
+  it('sends a person whose session ended to sign in instead of transferring', async () => {
+    const transfer = vi.fn().mockResolvedValue({ kind: 'login_required' });
+    await renderSettled(<TransferHarness transfer={transfer} />);
+
+    await clickTransfer(await openTheTransferDialog());
+
+    expect(loginRequired).toHaveBeenCalledTimes(1);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 });

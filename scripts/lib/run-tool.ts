@@ -12,6 +12,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
 
+import { errorMessage } from "./error-message";
+
 export interface Invocation {
   command: string;
   args: string[];
@@ -128,7 +130,7 @@ export function killProcessTree(
 const spawnErrorSchema = z.object({ code: z.string() });
 
 export function describeSpawnError(error: unknown, label: string): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   const code = spawnErrorSchema.safeParse(error).data?.code;
   if (code === "ENOENT" || code === "EINVAL") {
     return `Could not start ${label}: ${message}. Launch tools through scripts/lib/run-tool.ts, and run "pnpm install" if node_modules is missing.`;

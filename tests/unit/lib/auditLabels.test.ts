@@ -29,6 +29,10 @@ describe('audit action labels', () => {
     expect(formatAuditAction(RUN_HISTORY_LABELS, 'checklist_run.share_expired')).toBe('Share expired');
     expect(formatAuditAction(RUN_HISTORY_LABELS, 'toString')).toBe('ToString');
   });
+
+  it('shows an action with no words after its last dot as it came, rather than a blank label', () => {
+    expect(formatAuditAction(RUN_HISTORY_LABELS, 'checklist_run._')).toBe('checklist_run._');
+  });
 });
 
 describe('getAuditActorName', () => {
@@ -51,6 +55,14 @@ describe('getAuditActorName', () => {
     expect(
       getAuditActorName({ userId: 'user-1', email: 'jane@example.com' }, { source: 'mcp', personalRunKeyName: ' Codex ' }),
     ).toBe('Codex via MCP · authorized by jane@example.com');
+  });
+
+  it('names the person alone for an MCP update whose Run Key has a blank name', () => {
+    expect(getAuditActorName({ userId: 'user-1', name: 'Jane' }, { source: 'mcp', personalRunKeyName: '  ' })).toBe('Jane');
+  });
+
+  it('says the Run Key was authorized by an unknown user once that person is gone', () => {
+    expect(getAuditActorName(nobody, { source: 'mcp', personalRunKeyName: 'Codex' })).toBe('Codex via MCP · authorized by Unknown user');
   });
 
   it('uses the given fallback for an actor with no name', () => {

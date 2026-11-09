@@ -7,6 +7,7 @@ import {
   toggleRunSubItem,
 } from '@/features/run-execution/runExecutionActions';
 import { isRunItemFinished } from '@/features/run-execution/runExecutionMappers';
+import { findTaskFormField } from '@/features/run-execution/runFormAnswers';
 import { createRunSaver } from '@/features/run-execution/runSaver';
 import { ApiError } from '@/lib/api-errors';
 import { FORM_INCOMPLETE_CODE } from '@/lib/schemas/formValidation';
@@ -100,6 +101,23 @@ describe('saving a form answer on the Run page', () => {
     expect(apiClient.updateSharedChecklist).not.toHaveBeenCalled();
   });
 
+  it('finds a field by its id, and none in a form block stored without a field list', () => {
+    const withoutFields: ChecklistItem = { id: 'item-form', title: 'Collect details', contents: [{ id: 'form-1', type: 'form', value: '' }] };
+
+    expect(findTaskFormField(formTask(), 'field-site')?.label).toBe('Website');
+    expect(findTaskFormField(withoutFields, 'field-site')).toBeUndefined();
+  });
+
+  it('queues a cleared answer under one key, so a second clear while the first saves is dropped but a clear after an answer is not', () => {
+    const saves = bindRunSaves({ dependencies: { updateRun: savingRun() }, noteDrafts: () => ({}) });
+    const cleared = saves.answer('item-form', 'field-name', undefined).key;
+
+    expect(saves.answer('item-form', 'field-name', undefined).key).toBe(cleared);
+    expect(saves.answer('item-form', 'field-name', 'Acme').key).not.toBe(cleared);
+    expect(saves.answer('item-form', 'field-name', '').key).not.toBe(cleared);
+    expect(saves.answer('item-form', 'field-other', undefined).key).not.toBe(cleared);
+  });
+
   it('queues each answer under its own key, so a double save is dropped but a changed answer is not, and retries only when no one else changed it', () => {
     const saves = bindRunSaves({ dependencies: { updateRun: savingRun() }, noteDrafts: () => ({}) });
     const before = runWith(formTask());
@@ -137,6 +155,21 @@ describe('a task whose form blocks it', () => {
     );
 
     expect(result).toMatchObject({ code: FORM_INCOMPLETE_CODE, message: "Finish this task's form first. Website: Enter a URL that starts with http:// or https://." });
+  });
+
+  it('names only what is missing for a required field with no label', async () => {
+    const unlabelled: ChecklistItem = {
+      id: 'item-form',
+      title: 'Collect details',
+      contents: [{ id: 'form-1', type: 'form', value: '', fields: [{ id: 'field-code', label: '  ', kind: 'text', required: true }] }],
+    };
+
+    const result = await toggleRunItem(
+      { isCompleted: true, itemId: 'item-form', run: runWith(unlabelled) },
+      { apiClient: runExecutionApiClient(), updateRun: savingRun() },
+    );
+
+    expect(result).toMatchObject({ message: "Finish this task's form first. Fill in this field." });
   });
 
   it('can still be unticked, and is completed once its required fields are answered', async () => {

@@ -70,6 +70,12 @@ describe("save results after the editor moved on", () => {
     });
   });
 
+  it("names a failed save of the previous template that came back with no reason", () => {
+    expect(resolveTemplateSaveFeedback({ id: "template-a", result: { success: false, errors: [], stale: true } }).errorMessage).toBe(
+      "Template not saved: Failed to save template",
+    );
+  });
+
   it("keeps the usual feedback for a save on the current editor", () => {
     expect(resolveTemplateSaveFeedback({ id: undefined, result: { success: true, errors: [] } })).toEqual({
       successMessage: "Template created",

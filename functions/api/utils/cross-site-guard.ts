@@ -6,7 +6,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export type CrossSiteRefusal = 'unsupported_media_type' | 'origin_not_allowed';
 
 function mediaType(contentType: string | null): string {
-  return ((contentType ?? '').split(';')[0] ?? '').trim().toLowerCase();
+  return (contentType ?? '').replace(/;.*/s, '').trim().toLowerCase();
 }
 
 export function crossSiteJsonRefusal(request: Request, env: Env): CrossSiteRefusal | null {

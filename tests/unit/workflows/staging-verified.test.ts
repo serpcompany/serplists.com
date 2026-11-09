@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { nodeOptionsWithAFetchStandIn, type FetchAnswer } from '../../support/fetchStandIn';
+import { aFolderIn } from '../../support/foldersOfFiles';
 import { runAgainstAGitHubStandIn, type Route } from '../../support/githubApiStandIn';
+import { aWorkDirRemovedAfterAll } from '../../support/workflowGuards';
 
 const REPOSITORY = 'serpcompany/serplists.com';
 const MAIN_COMMIT = '0fad76c2a08d3d0c75c6a0f010b9005ad1e42e8c';
@@ -36,12 +39,14 @@ const github =
     return run ? { status: 200, body: { jobs: run.jobs } } : undefined;
   };
 
-const gate = (runs: StagingRun[], refuse = false) =>
+const gateWith = (route: Route, env: Record<string, string> = {}) =>
   runAgainstAGitHubStandIn(
     { script: '.github/actions/staging-verified/staging-verified.cjs' },
-    { GITHUB_REPOSITORY: REPOSITORY, GITHUB_SHA: MAIN_COMMIT, WORKFLOW: 'ci.yml', JOB: DEPLOY, BRANCH: 'staging' },
-    github(runs, refuse),
+    { GITHUB_REPOSITORY: REPOSITORY, GITHUB_SHA: MAIN_COMMIT, WORKFLOW: 'ci.yml', JOB: DEPLOY, BRANCH: 'staging', ...env },
+    route,
   );
+
+const gate = (runs: StagingRun[], refuse = false) => gateWith(github(runs, refuse));
 
 describe('the staging-verified action, which lets Production deploy only files Staging has deployed and checked', () => {
   it("passes when a push run on staging built main's tree and its staging deploy passed, naming that run", async () => {
@@ -89,5 +94,51 @@ describe('the staging-verified action, which lets Production deploy only files S
     expect(status).not.toBe(0);
     expect(output).toContain("::error title=Couldn't tell whether Staging deployed these files::");
     expect(output).toContain('/actions/workflows/ci.yml/runs returned 403');
+  });
+});
+
+describe('the staging-verified action, given answers it cannot read', () => {
+  const answering = (path: string, body: unknown): Route => (request) =>
+    request.path === path ? { status: 200, body } : github([stagingRun(238, TREE, [finished(DEPLOY, 'success')])])(request);
+
+  it.each<[string, string, unknown, string]>([
+    ['a commit without a tree', `/repos/${REPOSITORY}/git/commits/${MAIN_COMMIT}`, { sha: MAIN_COMMIT }, `GitHub named no tree for commit ${MAIN_COMMIT}`],
+    ['runs that are not a list', RUNS, { total_count: 0 }, 'GitHub listed no runs of ci.yml'],
+    ['jobs that are not a list', `/repos/${REPOSITORY}/actions/runs/7238/jobs`, { total_count: 0 }, 'GitHub listed no jobs for run 238'],
+  ])('fails, deploying nothing, on %s', async (_case, path, body, message) => {
+    const { status, output } = await gateWith(answering(path, body));
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(`::error title=Couldn't tell whether Staging deployed these files::${message}`);
+  });
+
+  it('fails without asking GitHub when it is not told which branch Staging deploys', async () => {
+    const { status, output, requests } = await gateWith(github([]), { BRANCH: '' });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('WORKFLOW, JOB, BRANCH and GITHUB_SHA must be set.');
+    expect(requests).toEqual([]);
+  });
+});
+
+describe('the staging-verified action on a runner that names no GitHub API URL', () => {
+  const workDir = aWorkDirRemovedAfterAll('staging-verified-');
+  const commitOnGitHub = `https://api.github.com/repos/${REPOSITORY}/git/commits/${MAIN_COMMIT}`;
+  const gateAnsweredBy = (answer: FetchAnswer) =>
+    gateWith(github([]), { GITHUB_API_URL: '', NODE_OPTIONS: nodeOptionsWithAFetchStandIn(aFolderIn(workDir), { [commitOnGitHub]: answer }) });
+
+  it('asks api.github.com for the commit it checks', { timeout: 120_000 }, async () => {
+    const { status, output, requests } = await gateAnsweredBy({ status: 200, body: JSON.stringify({ sha: MAIN_COMMIT }) });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(`::error title=Couldn't tell whether Staging deployed these files::GitHub named no tree for commit ${MAIN_COMMIT}`);
+    expect(requests).toEqual([]);
+  });
+
+  it('reports a request that cannot reach GitHub by the error fetch fails with', { timeout: 120_000 }, async () => {
+    const { status, output } = await gateAnsweredBy({ unreachable: 'getaddrinfo ENOTFOUND api.github.com' });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain("::error title=Couldn't tell whether Staging deployed these files::fetch failed");
   });
 });

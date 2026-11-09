@@ -353,8 +353,8 @@ existing content, invent nothing):
     (`tests/e2e/site-navigation.spec.ts`).
   - The footer's "Network" column is left out until someone confirms the address of its "SERP DR"
     link, which pointed at `https://serp.dr`, under a top-level domain that does not exist. It comes
-    back as an external https link, with its domain added to the allowlist in
-    `tests/unit/components/publicSiteLinks.test.ts`.
+    back as an external https link (`external: true`, opened in a new tab), with a test in
+    `tests/unit/components/publicSiteLinks.test.ts` that its domain is one confirmed to be ours.
   - The footer's column titles are h2s since step 2b, so a page whose last heading is its h1
     (My Runs, a sign-in page on a phone) never skips a level into them.
   - The social links (`publicSocialLinks` in `src/components/layout/publicSiteLinks.ts`) are a

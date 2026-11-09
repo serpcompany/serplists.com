@@ -121,11 +121,10 @@ export function applyTemplateOperation(stored: SectionRecord[], args: TemplateOp
         return { sections, taskId: args.taskId };
       }
       const from = findTask(sections, args.taskId);
-      const [task] = tasksAt(from.sectionIndex).splice(from.taskIndex, 1);
-      if (!task) throw new ToolError("Task not found (taskId)", "task_not_found");
+      const moved = tasksAt(from.sectionIndex).splice(from.taskIndex, 1);
       const { tasks, at } = taskInsertionPoint(sections, args.sectionId, args.beforeTaskId);
       if (tasksAt(from.sectionIndex).length === 0 && tasks !== tasksAt(from.sectionIndex)) throw needsATask();
-      tasks.splice(at, 0, task);
+      tasks.splice(at, 0, ...moved);
       return { sections, taskId: args.taskId };
     }
     case "remove_task": {

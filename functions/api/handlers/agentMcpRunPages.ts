@@ -179,23 +179,13 @@ export function startedRunResult(view: RunView): JsonRecord {
   ]);
 }
 
-function locateTask(sections: SectionRecord[], taskId: string) {
-  try {
-    return findTask(sections, taskId);
-  } catch {
-    return undefined;
-  }
-}
-
 export function updatedRunResult(header: RunHeader, sections: SectionRecord[], operation: UpdateRunArgs): JsonRecord {
   const run = fits({ run: header }) ? header : minimalRun(header);
   if (operation.operation === "set_run_status") return { run };
-  const at = locateTask(sections, operation.taskId);
-  const section = at ? sections[at.sectionIndex] : undefined;
-  const ids = { ...(section ? frameId("sectionId", section.id) : {}), ...frameId("taskId", operation.taskId) };
-  const task = at && section ? tasksOf(section)[at.taskIndex] : undefined;
+  const { section, task } = findTask(sections, operation.taskId);
+  const ids = { ...frameId("sectionId", section.id), ...frameId("taskId", operation.taskId) };
   return firstFittingOr({ run: minimalRun(header), taskOmitted: true }, [
-    ...(task ? [{ run, ...ids, task: agentTaskView(task) }] : []),
+    { run, ...ids, task: agentTaskView(task) },
     { run, ...ids, taskOmitted: true },
   ]);
 }

@@ -25,6 +25,14 @@ const NEVER_TEST_FILES = [
   '.claude/worktrees/**',
 ];
 
+const TESTS_ON_A_LOCAL_D1 = [
+  'tests/integration/*-local-d1.test.ts',
+  'tests/integration/local-d1-fixtures.test.ts',
+  'tests/integration/setup-local-seed.test.ts',
+];
+
+const HAND_CHILD_COVERAGE_TO_SPAWNED_PROCESSES = './tests/support/childProcessCoverageHandOff.ts';
+
 const workerLimit = testWorkerLimit(process.env, availableParallelism());
 
 const EVERY_TEST_FILE = {
@@ -49,17 +57,33 @@ export default defineConfig({
   test: {
     ...EVERY_TEST_FILE,
     ...(workerLimit === null ? {} : { maxWorkers: workerLimit }),
+    setupFiles: [EVERY_TEST_FILE.setupFiles, HAND_CHILD_COVERAGE_TO_SPAWNED_PROCESSES],
     name: 'node',
+    globalSetup: './tests/support/childProcessCoverage.ts',
     environment: 'node',
-    exclude: [...NEVER_TEST_FILES, TESTS_THAT_RENDER_INTO_THE_DOM],
+    exclude: [...NEVER_TEST_FILES, TESTS_THAT_RENDER_INTO_THE_DOM, ...TESTS_ON_A_LOCAL_D1],
     projects: [
       './vitest.config.ts',
       {
         resolve,
         test: {
           ...EVERY_TEST_FILE,
+          name: 'local-d1',
+          environment: 'node',
+          sequence: { groupOrder: 1 },
+          testTimeout: 20_000,
+          include: TESTS_ON_A_LOCAL_D1,
+          exclude: NEVER_TEST_FILES,
+        },
+      },
+      {
+        resolve,
+        test: {
+          ...EVERY_TEST_FILE,
+          setupFiles: [EVERY_TEST_FILE.setupFiles, HAND_CHILD_COVERAGE_TO_SPAWNED_PROCESSES],
           name: 'dom',
           environment: 'happy-dom',
+          testTimeout: 15_000,
           environmentOptions: { happyDOM: { settings: { navigation: HAPPY_DOM_FOLLOWS_NO_LINK } } },
           include: [TESTS_THAT_RENDER_INTO_THE_DOM],
           exclude: NEVER_TEST_FILES,
@@ -68,18 +92,17 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
-      reportsDirectory: 'coverage',
-      include: ['src/**/*.{ts,tsx}', 'functions/**/*.{ts,tsx}'],
-      exclude: [
-        '**/node_modules/**',
-        '**/dist/**',
-        '**/tmp/**',
-        '**/tests/**',
-        '**/*.d.ts',
-        'tests/e2e/**',
+      reporter: ['text-summary', 'lcov'],
+      reportsDirectory: 'coverage/tests',
+      include: [
+        'src/**/*.{ts,tsx}',
+        'functions/**/*.{ts,tsx}',
+        'db/**/*.ts',
+        'scripts/**/*.ts',
+        'tools/**/*.mjs',
+        '.claude/skills/**/*.ts',
+        '.github/actions/**/*.cjs',
       ],
-      all: true,
     },
   },
   resolve,

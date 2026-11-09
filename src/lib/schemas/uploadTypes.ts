@@ -106,7 +106,7 @@ export const resolveUploadContentType = (
   file: { name: string; type: string },
 ): string | null => {
   const { kinds } = UPLOAD_KINDS[bucket];
-  const type = (file.type.split(';')[0] ?? '').trim().toLowerCase();
+  const type = file.type.replace(/;.*$/s, '').trim().toLowerCase();
 
   if (!UNKNOWN_TYPES.has(type)) {
     return kinds.some((kind) => kind.mimeTypes.includes(type)) ? type : null;
@@ -133,11 +133,7 @@ export const uploadAcceptAttribute = (bucket: UploadBucket): string => {
 export const describeUploadTypes = (bucket: UploadBucket): string => {
   const { kinds, noun } = UPLOAD_KINDS[bucket];
   const labels = kinds.map((kind) => kind.label);
-  const list =
-    labels.length > 1
-      ? `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`
-      : labels[0];
-  return `${list} ${noun}`;
+  return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]} ${noun}`;
 };
 
 export const unsupportedUploadMessage = (bucket: UploadBucket): string =>

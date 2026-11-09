@@ -10,6 +10,11 @@ const EXPIRES_AT_MESSAGE =
   "expiresAt must be a whole number of Unix seconds in the future and at most 5 years away, " +
   "or null (or omitted) for no expiry";
 
+type NamesAUser = { userId: string; email?: string | undefined } | { userId?: undefined; email: string };
+
+const namesAUser = <Body extends { userId?: string | undefined; email?: string | undefined }>(body: Body): body is Body & NamesAUser =>
+  body.userId !== undefined || body.email !== undefined;
+
 const overrideBodySchema = z
   .object({
     userId: z.string().trim().min(1, "userId must be a non-empty string").optional(),
@@ -30,22 +35,20 @@ const overrideBodySchema = z
       }),
     note: z.string().max(500, "note must be at most 500 characters").nullable().optional(),
   })
-  .refine((body) => body.userId !== undefined || body.email !== undefined, {
-    message: "userId or email required",
-  });
+  .refine(namesAUser, { message: "userId or email required" });
 
-const sha256 = async (value: string): Promise<Uint8Array> =>
-  new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+const sha256 = async (value: string): Promise<DataView> =>
+  new DataView(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 
 async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean> {
   if (!env.ENTITLEMENTS_ADMIN_SECRET) return false;
   const provided = request.headers.get("X-Admin-Secret");
   if (!provided) return false;
   const [expected, actual] = await Promise.all([sha256(env.ENTITLEMENTS_ADMIN_SECRET), sha256(provided)]);
-  let difference = expected.length === actual.length ? 0 : 1;
-  expected.forEach((byte, index) => {
-    difference |= byte ^ (actual[index] ?? 0);
-  });
+  let difference = 0;
+  for (let offset = 0; offset < expected.byteLength; offset += 1) {
+    difference |= expected.getUint8(offset) ^ actual.getUint8(offset);
+  }
   return difference === 0;
 }
 
@@ -71,20 +74,23 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
 async function upsertOverride(request: Request, env: Env): Promise<Response> {
   const read = await readJsonPayload(request, overrideBodySchema, "Invalid override payload");
   if ("response" in read) return read.response;
-  const { userId, email, plan, expiresAt } = read.payload;
-  const note = read.payload.note ?? null;
+  const { payload } = read;
+  const { plan, expiresAt } = payload;
+  const note = payload.note ?? null;
 
   const db = createDb(env);
-  const idFromUserId = userId === undefined ? undefined : await findUserIdById(db, userId);
-  const idFromEmail = email === undefined ? undefined : await findUserIdByEmail(db, email);
-  if (idFromUserId === null || idFromEmail === null) {
+  const resolvedUserId = payload.userId === undefined
+    ? await findUserIdByEmail(db, payload.email)
+    : await findUserIdById(db, payload.userId);
+  const idFromEmail = payload.userId !== undefined && payload.email !== undefined
+    ? await findUserIdByEmail(db, payload.email)
+    : undefined;
+  if (resolvedUserId === null || idFromEmail === null) {
     return jsonError("User not found", 404);
   }
-  if (idFromUserId !== undefined && idFromEmail !== undefined && idFromUserId !== idFromEmail) {
+  if (idFromEmail !== undefined && idFromEmail !== resolvedUserId) {
     return jsonError("userId and email belong to different users", 400);
   }
-  const resolvedUserId = idFromUserId ?? idFromEmail;
-  if (resolvedUserId === undefined) return jsonError("userId or email required", 400);
 
   const { entitlementOverrides } = schema;
   const nowIso = new Date().toISOString();

@@ -65,11 +65,7 @@ export function useSectionOutline({
     });
   }
 
-  function expandSection(sectionId: string | undefined): void {
-    if (!sectionId) {
-      return;
-    }
-
+  function expandSection(sectionId: string): void {
     setCollapsedSectionIds((current) => {
       if (!current.has(sectionId)) {
         return current;
@@ -105,7 +101,7 @@ export function useSectionOutline({
   }
 
   function handleAddTask(sectionIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    const currentItems = getValues(`sections.${sectionIndex}.items`);
     setValue(
       `sections.${sectionIndex}.items`,
       [...currentItems, createTemplateEditorItem()],
@@ -117,7 +113,7 @@ export function useSectionOutline({
   }
 
   function handleRemoveTask(sectionIndex: number, itemIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    const currentItems = getValues(`sections.${sectionIndex}.items`);
     setValue(
       `sections.${sectionIndex}.items`,
       currentItems.filter((_, index) => index !== itemIndex),
@@ -205,7 +201,7 @@ export function useSectionOutline({
   }
 
   function moveTask(sectionIndex: number, fromIndex: number, toIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    const currentItems = getValues(`sections.${sectionIndex}.items`);
     setValue(
       `sections.${sectionIndex}.items`,
       moveArrayEntry(currentItems, fromIndex, toIndex),

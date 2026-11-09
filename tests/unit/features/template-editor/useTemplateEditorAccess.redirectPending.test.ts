@@ -27,6 +27,7 @@ const values: TemplateEditorFormValues = buildTemplateEditorFormValues({ title: 
 const options = {
   isCreate: true,
   getValues: () => values,
+  getVersion: () => undefined,
   allowLeave: vi.fn(),
   guardLeave: vi.fn(),
 };

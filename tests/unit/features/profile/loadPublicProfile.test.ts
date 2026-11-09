@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadPublicProfile } from '@/features/profile/loadPublicProfile';
 import { ApiError, createApiError, UNREADABLE_RESPONSE_CODE, UNREADABLE_RESPONSE_MESSAGE } from '@/lib/api-errors';
@@ -108,6 +108,56 @@ describe('loadPublicProfile for a User', () => {
   });
 });
 
+describe('loadPublicProfile for the library account', () => {
+  const libraryRow = { ...profileRow, id: 'user-serp', username: REPO_TEMPLATE_OWNER_SLUG, full_name: 'SERP' };
+  const [bundled] = repoTemplates;
+
+  it('lists the bundled templates with the ones the account published, newest first, each slug once', async () => {
+    if (!bundled?.slug) throw new Error('The bundle holds no template with a slug');
+    const published = { ...templateRow, id: 'template-new', slug: 'fresh-launch', title: 'Fresh Launch', created_at: '2099-01-01T00:00:00.000Z' };
+    const unslugged = { ...templateRow, id: 'template-plain', slug: '  ', title: 'Plain', created_at: '2000-01-01T00:00:00.000Z' };
+    const sameSlugAsTheBundle = { ...templateRow, id: 'template-copy', slug: bundled.slug, title: 'Copy' };
+    const apiClient = buildApiClient({
+      getPublicProfileByHandle: vi.fn().mockResolvedValue(libraryRow),
+      getPublicTemplatesForUser: vi.fn().mockResolvedValue([published, unslugged, sameSlugAsTheBundle]),
+    });
+
+    const result = await loadPublicProfile(REPO_TEMPLATE_OWNER_SLUG, { apiClient });
+    const ids = result.kind === 'user' ? result.templates.map((template) => template.id) : [];
+
+    expect(ids).toHaveLength(repoTemplates.length + 2);
+    expect(ids[0]).toBe('template-new');
+    expect(ids.at(-1)).toBe('template-plain');
+    expect(ids).toContain(bundled.id);
+    expect(ids).not.toContain('template-copy');
+  });
+
+  it('still lists the bundled templates when the published ones could not load', async () => {
+    const apiClient = buildApiClient({
+      getPublicProfileByHandle: vi.fn().mockResolvedValue(libraryRow),
+      getPublicTemplatesForUser: vi.fn().mockRejectedValue(createApiError(503)),
+    });
+
+    const result = await loadPublicProfile(REPO_TEMPLATE_OWNER_SLUG, { apiClient });
+
+    expect(result).toMatchObject({ kind: 'user', profile: { id: 'user-serp' }, templates: repoTemplates });
+  });
+});
+
+describe('loadPublicProfile on the profile page, through the app API', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the API for the handle and says the profile was not found on a 404', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: 'Profile not found' }), { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(loadPublicProfile('ghost')).resolves.toEqual({ kind: 'not_found' });
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0]), 'http://localhost').searchParams.get('handle')).toBe('ghost');
+  });
+});
+
 describe('loadPublicProfile for an Organization', () => {
   it('loads the Organization the handle names and its public templates by its handle', async () => {
     const organizationTemplate = { ...templateRow, owner_type: 'team', owner: { type: 'team', publicHandle: 'Acme-Launch', displayName: 'Acme Launch' } };
@@ -129,6 +179,18 @@ describe('loadPublicProfile for an Organization', () => {
         name: 'Acme Launch',
       },
       templates: [objectContaining({ id: 'template-1', ownerType: 'team' })],
+    });
+  });
+
+  it('shows an Organization with no avatar or description without them', async () => {
+    const apiClient = buildApiClient({
+      getPublicProfileByHandle: vi.fn().mockResolvedValue({ type: 'team', handle: 'Quiet-Co', name: 'Quiet Co' }),
+    });
+
+    expect(await loadPublicProfile('quiet-co', { apiClient })).toEqual({
+      kind: 'organization',
+      organization: { avatar_url: null, description: null, handle: 'Quiet-Co', name: 'Quiet Co' },
+      templates: [],
     });
   });
 

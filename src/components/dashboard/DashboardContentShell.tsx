@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { PageContainer } from '@/components/layout/page-shell';
 import type { PageContainerWidth } from '@/components/layout/page-shell.styles';
@@ -91,7 +91,7 @@ export function DashboardPageBody({ children, className }: DashboardPageBodyProp
 interface DashboardEmptyStateProps {
   action?: ReactNode;
   description: ReactNode;
-  icon?: ReactNode;
+  icon: ReactElement;
   title: ReactNode;
   titleAs?: 'h1' | 'h2' | 'h3' | undefined;
 }
@@ -106,7 +106,7 @@ export function DashboardEmptyState({
   return (
     <Empty className="border" data-dashboard-empty-state="true">
       <EmptyHeader>
-        {icon ? <EmptyMedia variant="icon">{icon}</EmptyMedia> : null}
+        <EmptyMedia variant="icon">{icon}</EmptyMedia>
         <EmptyTitle>
           <Title>{title}</Title>
         </EmptyTitle>

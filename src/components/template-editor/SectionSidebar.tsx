@@ -240,7 +240,7 @@ export function SectionSidebar({
 
                     return (
                       <div
-                        key={item.id || `${sectionField.fieldId}-${itemIndex}`}
+                        key={item.id}
                         className={cn(
                           "group relative flex min-h-9 min-w-0 items-center gap-1 rounded-md px-1 transition-colors",
                           itemSelected ? "bg-muted" : "hover:bg-muted/50",

@@ -300,7 +300,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                       <ul aria-label={`Permissions for ${key.name}`} className="flex flex-wrap gap-1">
                         {key.permissions.map((permission) => (
                           <Badge key={permission} render={<li />} variant="outline">
-                            {RUN_KEY_PERMISSION_DETAILS[permission]?.label ?? permission}
+                            {RUN_KEY_PERMISSION_DETAILS[permission].label}
                           </Badge>
                         ))}
                       </ul>
@@ -360,12 +360,9 @@ export function AgentAccessSection() {
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const name = keyName.trim();
-    if (!name) return;
-
     setIsCreating(true);
     try {
-      const result = await createKey(name, permissions);
+      const result = await createKey(keyName.trim(), permissions);
       setCreatedKey(result);
       setKeyName('');
       setPermissions([...DEFAULT_RUN_KEY_PERMISSIONS]);

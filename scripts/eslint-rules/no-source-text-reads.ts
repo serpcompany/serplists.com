@@ -66,12 +66,13 @@ function loopSource(sourceCode: SourceCode, variable: Scope.Variable | null): ES
   return loop?.type === "ForOfStatement" && loop.left === definition.parent ? loop.right : null;
 }
 
-const pathFunction = (node: ESTree.Node | null): ESTree.ArrowFunctionExpression | null =>
-  node?.type === "ArrowFunctionExpression" &&
-  node.body.type !== "BlockStatement" &&
-  node.params.every((param) => param.type === "Identifier")
-    ? node
-    : null;
+type PathFunction = Omit<ESTree.ArrowFunctionExpression, "params"> & { params: ESTree.Identifier[] };
+
+const takesOnlyNamedParams = (node: ESTree.ArrowFunctionExpression): node is PathFunction =>
+  node.params.every((param) => param.type === "Identifier");
+
+const pathFunction = (node: ESTree.Node | null): PathFunction | null =>
+  node?.type === "ArrowFunctionExpression" && node.body.type !== "BlockStatement" && takesOnlyNamedParams(node) ? node : null;
 
 const combine = (parts: readonly string[][]) =>
   parts.reduce<string[]>(
@@ -121,7 +122,7 @@ function createEvaluator(sourceCode: SourceCode) {
         const scope = sourceCode.getScope(local.body);
         const inner: Bindings = new Map(bindings);
         local.params.forEach((param, index) => {
-          const variable = param.type === "Identifier" ? findVariable(scope, param.name) : null;
+          const variable = findVariable(scope, param.name);
           if (variable) inner.set(variable, next(node.arguments[index]));
         });
         return next(local.body, inner);
@@ -139,12 +140,12 @@ const firstSourcePath = (texts: readonly string[], options: { folderIsSource: bo
   texts.map((text) => sourcePathNamedBy(text, options)).find(Boolean) ?? null;
 
 function sourcePathNamedBy(text: string, { folderIsSource }: { folderIsSource: boolean }): string | null {
-  const segments = text.replace(/\\/g, "/").split("/");
-  let start = 0;
-  while (start < segments.length && ["", ".", ".."].includes((segments[start] ?? "").replaceAll(UNKNOWN, ""))) start += 1;
-  if (start >= segments.length || !SOURCE_FOLDERS.has(segments[start] ?? "")) return null;
-  const named = segments.slice(start).join("/").replaceAll(UNKNOWN, "*");
-  const last = segments.at(-1) ?? "";
+  const slashed = text.replace(/\\/g, "/");
+  const segments = slashed.split("/");
+  const first = segments.find((segment) => !["", ".", ".."].includes(segment.replaceAll(UNKNOWN, "")));
+  if (first === undefined || !SOURCE_FOLDERS.has(first)) return null;
+  const named = segments.slice(segments.indexOf(first)).join("/").replaceAll(UNKNOWN, "*");
+  const last = slashed.slice(slashed.lastIndexOf("/") + 1);
   const knownEnd = last.slice(last.lastIndexOf(UNKNOWN) + 1);
   if (last.includes(UNKNOWN) && !NAMED_FILE.test(knownEnd)) return named;
   if (!NAMED_FILE.test(knownEnd)) return folderIsSource ? named : null;

@@ -3,7 +3,7 @@ import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment';
+import { SIGN_IN_PATH, verifyDeployment } from '../../../scripts/verify-deployment-lib';
 import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 import { listeningPort } from '../../support/listeningPort';
 
@@ -135,6 +135,14 @@ describe('the smoke test of a new deployment', () => {
     expect(callsTo(calls, 'GET /api/templates')).toHaveLength(6);
   });
 
+  it('fails when the release page keeps answering something other than 200', async () => {
+    const { exitCode, output, calls } = await smokeTest({ 'GET /about/': [{ status: 500 }] });
+
+    expect(exitCode).toBe(1);
+    expect(output).toContain(`::error::GET ${BASE_URL}/about/ answered 500, not 200`);
+    expect(callsTo(calls, 'GET /about/')).toHaveLength(6);
+  });
+
   it('fails when /api/health answers something other than 200', async () => {
     const { exitCode, output } = await smokeTest({ 'GET /api/health': [{ status: 401 }] });
 
@@ -160,8 +168,8 @@ describe('the smoke test of a new deployment', () => {
     expect(output).toContain(`::error::GET ${BASE_URL}/api/health reports commit unknown, not ${COMMIT}, the commit just deployed`);
   });
 
-  it('fails when the health route answers without a release', async () => {
-    const { exitCode, output } = await smokeTest({ 'GET /api/health': [{ status: 200, body: '{"status":"ok"}' }] });
+  it.each(['{"status":"ok"}', '<html>Internal error</html>'])('fails when the health route answers %s, without a release', async (body) => {
+    const { exitCode, output } = await smokeTest({ 'GET /api/health': [{ status: 200, body }] });
 
     expect(exitCode).toBe(1);
     expect(output).toContain('answered without {"status":"ok","release":');
@@ -177,12 +185,20 @@ describe('the smoke test of a new deployment', () => {
 
   it.each([
     ['carries no release tag', { status: 200, body: '<html><head></head></html>' }, 'has no <meta name="serplists-release"'],
+    ['has a release tag without its content', { status: 200, body: '<meta name="serplists-release">' }, 'has no <meta name="serplists-release"'],
     ['names another commit', page(OLDER_COMMIT), `names release ${OLDER_COMMIT}, not ${COMMIT}`],
   ])('fails when a page %s, since a page can answer from an older build than the health route', async (_case, reply, message) => {
     const { exitCode, output } = await smokeTest({ 'GET /about/': [reply] });
 
     expect(exitCode).toBe(1);
     expect(output).toContain(message);
+  });
+
+  it('fails when the sign-in never gives an HTTP response', async () => {
+    const { exitCode, output } = await smokeTest({ [SIGN_IN]: [noResponse()] });
+
+    expect(exitCode).toBe(1);
+    expect(output).toContain(`::error::POST ${BASE_URL}${SIGN_IN_PATH} gave no response (ECONNREFUSED)`);
   });
 
   it('passes when the sign-in is refused as forbidden', async () => {
@@ -231,5 +247,23 @@ describe('the smoke test of a new deployment', () => {
 
     expect(exitCode).toBe(1);
     expect(lines.join('\n')).toContain('gave no response');
+  });
+});
+
+describe('why the smoke test says a request failed', () => {
+  it.each<[string, unknown, string]>([
+    ['an error without a code, by its name', new RangeError('Invalid URL'), 'RangeError'],
+    ['an object without a name or a code', {}, 'request failed'],
+    ['something that is not an object', 'socket hang up', 'request failed'],
+  ])('names %s', async (_case, thrown, reason) => {
+    const lines: string[] = [];
+    const throwing = async () => {
+      throw thrown;
+    };
+
+    const exitCode = await verifyDeployment(INPUTS, { attempts: 1, fetchImpl: throwing, log: (line: string) => lines.push(line) });
+
+    expect(exitCode).toBe(1);
+    expect(lines).toEqual([`::error::GET ${BASE_URL}/api/health gave no response (${reason}). Check the Worker's deployment logs, bindings and build.`]);
   });
 });

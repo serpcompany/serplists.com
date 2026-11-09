@@ -5,6 +5,7 @@ import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMock
 import {
   authenticatePersonalRunKey,
   createPersonalRunKeySecret,
+  insertPersonalRunKeyWithinCap,
   markPersonalRunKeyUsed,
 } from "@functions/api/utils/personal-run-key";
 import { apiEnv } from "../../../support/apiEnv";
@@ -105,5 +106,22 @@ describe("personal run key utility", () => {
       lastUsedAt: new Date().toISOString(),
     });
     expect(dbMocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["one row inserted", { meta: { changes: 1 } }, true],
+    ["no row inserted, at the cap", { meta: { changes: 0 } }, false],
+  ])("counts a new key as made only when the insert reports one row: %s", async (_label, result, made) => {
+    Object.assign(dbMocks.db, { run: vi.fn().mockResolvedValue(result) });
+
+    expect(await insertPersonalRunKeyWithinCap(mockEnv, {
+      id: "key-1",
+      user_id: "user-1",
+      name: "Codex",
+      key_prefix: "slrk_abcdefgh",
+      key_hash: "hash",
+      created_at: "2026-10-01T00:00:00.000Z",
+      permissions: ["runs:read"],
+    })).toBe(made);
   });
 });

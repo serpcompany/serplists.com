@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { IconTile } from '@/components/layout/IconTile';
 import { PageBreadcrumb, type BreadcrumbTrailItem } from '@/components/layout/PageBreadcrumb';
@@ -6,7 +6,9 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-type DetailPageLayoutProps = {
+type DetailPageVisual = { icon: ReactElement; media?: undefined } | { icon?: undefined; media: ReactElement };
+
+type DetailPageLayoutProps = DetailPageVisual & {
   actions?: ReactNode;
   aside?: ReactNode;
   breadcrumbs?: BreadcrumbTrailItem[];
@@ -14,8 +16,6 @@ type DetailPageLayoutProps = {
   children?: ReactNode;
   className?: string;
   description?: ReactNode;
-  icon?: ReactNode;
-  media?: ReactNode;
   meta?: ReactNode;
   notice?: ReactNode;
   subtitle?: ReactNode;
@@ -45,7 +45,7 @@ export function DetailPageLayout({
 
       <div className={cn('grid gap-8', aside && 'lg:grid-cols-2 lg:items-start lg:gap-12')}>
         <div className="flex min-w-0 flex-col items-start gap-4" data-slot="detail-page-header">
-          {media ?? (icon ? <IconTile size="lg">{icon}</IconTile> : null)}
+          {media ?? <IconTile size="lg">{icon}</IconTile>}
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-3xl font-semibold tracking-tight text-balance wrap-break-word sm:text-4xl">{title}</h1>
             {subtitle ? <p className="text-sm wrap-anywhere text-muted-foreground">{subtitle}</p> : null}

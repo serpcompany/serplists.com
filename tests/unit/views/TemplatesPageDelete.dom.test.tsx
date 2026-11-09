@@ -51,6 +51,18 @@ describe('My Templates delete', () => {
     await theDialogsToClose();
   });
 
+  it('deletes nothing more for a Delete pressed again while the dialog closes', async () => {
+    const removeTemplate = vi.fn(async () => undefined);
+    await renderTemplates(removeTemplate);
+    const { dialog } = await openTheDeleteDialogWithNoneOpenBefore();
+
+    await clickInTheDialog(dialog, 'Delete');
+    await clickInTheDialog(dialog, 'Delete');
+
+    expect(removeTemplate.mock.calls).toEqual([['template-1']]);
+    await theDialogsToClose();
+  });
+
   it('says the Template could not be deleted when the request fails without a message', async () => {
     await renderTemplates(vi.fn(async () => Promise.reject('offline')));
 

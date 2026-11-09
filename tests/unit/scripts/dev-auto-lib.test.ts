@@ -4,7 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { firstOf } from "../../support/elements";
+import { firstOf, present } from "../../support/elements";
 import { listeningPort } from "../../support/listeningPort";
 import {
   buildCorsAllowedOrigins,
@@ -181,6 +181,19 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
     }
   });
 
+  it("calls a port busy while a connection holds it as its own end, though nothing listens on it", async () => {
+    const server = net.createServer((socket) => socket.on("error", () => socket.destroy()));
+    await new Promise<void>((listening) => server.listen({ host: "127.0.0.1", port: 0 }, () => listening()));
+    const connection = net.connect({ host: "127.0.0.1", port: listeningPort(server) });
+    await new Promise<void>((connected) => connection.once("connect", () => connected()));
+    try {
+      expect(await isPortAvailable(present(connection.localPort, "the connection's own port"))).toBe(false);
+    } finally {
+      connection.destroy();
+      await new Promise<void>((closed) => server.close(() => closed()));
+    }
+  });
+
   it("calls a port nothing holds free", async () => {
     const port = await new Promise<number>((resolve) => {
       const server = net.createServer().listen({ host: "127.0.0.1", port: 0 }, () => {
@@ -277,6 +290,17 @@ describe("the session file", () => {
     });
   });
 
+  it("is no session when the file is missing or is not JSON", () => {
+    withSessionPath((sessionPath) => {
+      expect(readDevSession(sessionPath)).toBeNull();
+
+      mkdirSync(path.dirname(sessionPath), { recursive: true });
+      writeFileSync(sessionPath, '{"port": 3001,');
+
+      expect(readDevSession(sessionPath)).toBeNull();
+    });
+  });
+
   it("is removed by the launcher that wrote it, and only by that one", () => {
     withSessionPath((sessionPath) => {
       writeDevSession({ port: 3001, pid: 1111, startedAt: 1_000 }, sessionPath);
@@ -301,6 +325,13 @@ describe("isProcessAlive", () => {
 
   it("treats a process we may not signal (EPERM) as not ours, since the launcher runs as the current user", () => {
     expect(isProcessAlive(1234, failingKill("EPERM"))).toBe(false);
+  });
+
+  it("is false, without signalling anything, for a pid no process can have", () => {
+    const kill = vi.fn(() => true);
+
+    expect([null, 0, -1, 1.5].map((pid) => isProcessAlive(pid, kill))).toEqual([false, false, false, false]);
+    expect(kill).not.toHaveBeenCalled();
   });
 });
 
@@ -396,5 +427,23 @@ describe("stopDevSession", () => {
       }),
     ).rejects.toThrow("boom");
     expect(removeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the session file of the checkout it runs in when it is given no other way to clear the session", async () => {
+    const checkout = mkdtempSync(path.join(tmpdir(), "dev-stop-checkout-"));
+    const startedIn = process.cwd();
+    try {
+      process.chdir(checkout);
+      writeDevSession(session);
+      const recorded = existsSync(path.join(checkout, "tmp", "dev-session.json"));
+
+      const result = await stopDevSession({ session, isOwned: async () => false, killTree: vi.fn() });
+
+      expect([recorded, existsSync(path.join(checkout, "tmp", "dev-session.json"))]).toEqual([true, false]);
+      expect(result).toEqual({ stopped: [], skipped: [1111], failed: [] });
+    } finally {
+      process.chdir(startedIn);
+      rmSync(checkout, { recursive: true, force: true });
+    }
   });
 });

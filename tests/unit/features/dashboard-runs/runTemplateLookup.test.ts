@@ -128,6 +128,10 @@ describe('runTemplateFilterOptions', () => {
 
   it('also offers the chosen Template when none of the runs came from it, untitled when it is unknown', () => {
     expect(runTemplateFilterOptions(runs, lookup, 'tpl-quiet').map((option) => option.id)).toEqual(['tpl-a', 'tpl-b', 'tpl-quiet']);
-    expect(runTemplateFilterOptions(runs, lookup, 'tpl-gone')).toContainEqual({ id: 'tpl-gone', title: null });
+    expect(runTemplateFilterOptions(runs, lookup, 'tpl-gone')).toEqual([
+      { id: 'tpl-gone', title: null },
+      { id: 'tpl-a', title: 'Alpha Audit' },
+      { id: 'tpl-b', title: 'Beta Launch' },
+    ]);
   });
 });

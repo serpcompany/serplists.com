@@ -60,11 +60,14 @@ describe("resolveWebhookForwardTarget", () => {
     expect(target).toEqual({ url: "http://localhost:9999/api/stripe/webhook", source: "env" });
   });
 
-  it("rejects a STRIPE_LOCAL_WEBHOOK_URL that is not an http(s) URL", async () => {
-    await expect(
-      resolveWebhookForwardTarget({ envUrl: "localhost:3001", session: null, isAlive, portAvailable: allFree }),
-    ).rejects.toThrow(/STRIPE_LOCAL_WEBHOOK_URL/);
-  });
+  it.each(["localhost:3001", "3001/api/stripe/webhook"])(
+    "rejects a STRIPE_LOCAL_WEBHOOK_URL that is not an http(s) URL: %s",
+    async (envUrl) => {
+      await expect(
+        resolveWebhookForwardTarget({ envUrl, session: null, isAlive, portAvailable: allFree }),
+      ).rejects.toThrow(`STRIPE_LOCAL_WEBHOOK_URL must be an http(s) URL, got "${envUrl}".`);
+    },
+  );
 });
 
 describe("retargetForDevSession", () => {

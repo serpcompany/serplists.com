@@ -8,6 +8,7 @@ import { queryKeys } from '@/lib/queryKeys';
 
 import { inputNamed, renderSettled, typeInto } from '../../support/renderInTheDom';
 import { present } from '../../support/elements';
+import { savedTeam } from '../../fixtures/savedTeam';
 import type { api } from '@/lib/api';
 
 type TeamWorkspace = {
@@ -132,17 +133,6 @@ const descriptionField = () => {
   return field;
 };
 
-const serverSaved = (team: { name: string; slug: string; description?: string | null }) => ({
-  success: true as const,
-  team: {
-    id: 'team-1',
-    created_at: '2026-01-01T00:00:00.000Z',
-    created_by_user_id: 'user-1',
-    membership: { id: 'member-1', status: 'active' as const, role: 'owner' as const },
-    ...team,
-  },
-});
-
 const submitTheSettingsForm = async () => {
   await act(async () => {
     fireEvent.submit(organizationSettingsForm());
@@ -199,7 +189,7 @@ describe('TeamSettingsSection keeps what the user typed in the Organization name
   });
 
   it('shows what the server saved after Save, even when it adjusted the slug, leaving nothing to save', async () => {
-    workspace.updateTeam.mockResolvedValue(serverSaved({ name: 'Acme Marketing', slug: 'acme-mkt-2' }));
+    workspace.updateTeam.mockResolvedValue(savedTeam({ name: 'Acme Marketing', slug: 'acme-mkt-2' }));
     await mount();
     await typeInto(nameField(), ' Acme Marketing ');
     await typeInto(slugField(), 'acme-mkt');
@@ -213,7 +203,7 @@ describe('TeamSettingsSection keeps what the user typed in the Organization name
   });
 
   it('keeps a typed description through a rebuild, then saves it trimmed and shows what the server stored', async () => {
-    workspace.updateTeam.mockResolvedValue(serverSaved({ name: 'Acme', slug: 'acme', description: 'Paid search agency' }));
+    workspace.updateTeam.mockResolvedValue(savedTeam({ name: 'Acme', slug: 'acme', description: 'Paid search agency' }));
     await mount();
     await typeInto(descriptionField(), ' Paid search agency ');
 

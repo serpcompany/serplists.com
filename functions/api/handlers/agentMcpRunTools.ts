@@ -59,7 +59,6 @@ export async function startRun(
   const limit = await assertActiveRunCapacity(env, owner);
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
-  if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
   const sections = resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)));
   assertRunContentFits(sections);
 

@@ -42,6 +42,13 @@ describe('createShareLinkAndCopy', () => {
     expect(copy).not.toHaveBeenCalled();
   });
 
+  it('says the link could not be created when the failure carries no message', async () => {
+    await expect(createShareLinkAndCopy(async () => { throw new Error(''); }, vi.fn())).resolves.toEqual({
+      kind: 'error',
+      message: 'Failed to create share link',
+    });
+  });
+
   it('does nothing when no link was created (a double click the save queue ignored)', async () => {
     const copy = vi.fn();
 

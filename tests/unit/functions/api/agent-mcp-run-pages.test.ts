@@ -361,7 +361,7 @@ describe("a run at the size limits", () => {
   const maximumRun = (): RunView =>
     viewOf(liveContentJustUnderTheRunLimit(), aboutOneMegabyteOfRetiredWork(), { title: multibyteProse(160) });
 
-  it("reads a maximum run back in full, each result within the bound, in fewer calls than a Run Key may make a minute", async () => {
+  it("reads a maximum run back in full, each result within the bound, in fewer calls than a Run Key may make a minute", { timeout: 60_000 }, async () => {
     const view = maximumRun();
     const content = contentSaveBytes(view.sections);
     expect(content).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);

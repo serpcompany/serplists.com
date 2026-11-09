@@ -51,6 +51,31 @@ const createTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTe
 });
 
 describe('portable template utilities', () => {
+  it("exports a form's fields and options with only the keys a pack holds, and no answers", () => {
+    const form = {
+      id: 'content-2',
+      type: 'form' as const,
+      value: '',
+      fields: [
+        { id: 'plan', label: 'Plan', kind: 'select' as const, required: true, options: [{ id: 'pro', label: 'Pro' }], answer: 'pro' },
+        { id: 'seats', label: 'Seats', kind: 'number' as const, required: false, min: 1, answer: 4 },
+      ],
+    };
+    const template = createTemplate({ rules: [], sections: [{ id: 'section-1', title: 'Prep', items: [{ id: 'item-1', title: 'Order', contents: [form] }] }] });
+
+    expect(firstOf(exportPortableTemplatesToJSON([template]).templates).sections[0]?.items[0]?.contents).toEqual([
+      {
+        id: 'content-2',
+        type: 'form',
+        value: '',
+        fields: [
+          { id: 'plan', label: 'Plan', kind: 'select', required: true, options: [{ id: 'pro', label: 'Pro' }] },
+          { id: 'seats', label: 'Seats', kind: 'number', required: false, min: 1 },
+        ],
+      },
+    ]);
+  });
+
   it('exports a portable template pack', () => {
     const result = exportPortableTemplatesToJSON([createTemplate()], 'john@test.com');
 

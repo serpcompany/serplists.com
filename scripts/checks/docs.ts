@@ -59,7 +59,7 @@ function resolveLink(from: string, target: string): string {
 }
 
 const markdownIn = (tree: Tree, folder: string) =>
-  [...tree.files].filter((file) => file.endsWith(".md") && posix.dirname(file) === posix.normalize(folder || "."));
+  [...tree.files].filter((file) => file.endsWith(".md") && posix.dirname(file) === posix.normalize(folder));
 
 function linkProblems(doc: string, docs: Docs, linked: string[]): Problem[] {
   const problems: Problem[] = [];

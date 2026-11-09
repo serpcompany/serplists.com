@@ -9,7 +9,6 @@ import {
   resolveTemplateSaveFailureNotice,
   shouldLoadTemplateCountForLimit,
 } from "@/features/template-editor/templateEditorAccess";
-import { BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.";
@@ -43,7 +42,15 @@ describe("resolveTemplateSaveFailureNotice", () => {
     );
 
     expect(notice?.action).toBeNull();
-    expect(notice?.message).toContain(BILLING_UNAVAILABLE_MESSAGE);
+    expect(notice?.message).toBe(
+      "Template limit reached. Upgrade to create more templates. Billing is temporarily unavailable. Please contact support.",
+    );
+  });
+
+  it("says an upgrade is unavailable, with no action, when the server could not start checkout", () => {
+    expect(
+      resolveTemplateSaveFailureNotice({ kind: "billing_unavailable", message: "Checkout could not start." }, personal),
+    ).toEqual({ title: "Upgrade unavailable", message: "Checkout could not start.", action: null });
   });
 
   it("offers sign-in when the session ended", () => {

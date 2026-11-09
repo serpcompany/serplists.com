@@ -37,6 +37,10 @@ describe('TemplateHeader', () => {
     expect(html).not.toContain('Draft');
     expect(html).not.toContain('Cancel');
   });
+
+  it('names a Template that has no name yet Untitled Template', () => {
+    expect(renderHeader({ title: '' })).toContain('Untitled Template');
+  });
 });
 
 describe('TemplateHeader while a file uploads', () => {

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, type SpawnOptions } from 'node:child_process';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -6,6 +6,7 @@ import { root } from '../../../../scripts/checks/files';
 import { editHookReport, onceUntilFixed, stopHookReport } from '../../../../scripts/checks/hooks';
 import { commentRule, stopRule } from '../../../../scripts/checks/rules';
 import { toldFile } from '../../../../tools/checks/route.mjs';
+import { printedUntilClosed } from '../../../support/scriptProcess';
 import { throwawayRepositoryEnvironment } from '../../../support/throwawayGitRepository';
 import { git, scratchFolder, scratchRepository, writeFiles } from './scratch';
 
@@ -71,46 +72,66 @@ async function blockOnABrokenLink(checkout: string): Promise<string> {
   return report;
 }
 
-const hook = (script: 'hook.mjs' | 'stop-hook.mjs', input: object, inGitHubActions = false) =>
-  spawnSync(process.execPath, [path.join(root, 'tools', 'checks', script)], {
-    input: JSON.stringify(input),
-    encoding: 'utf8',
+type HookScript = 'hook.mjs' | 'stop-hook.mjs';
+
+const runHook = (script: HookScript, input: string, options: SpawnOptions) => {
+  const child = spawn(process.execPath, [path.join(root, 'tools', 'checks', script)], { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
+  child.stdin.end(input);
+  return printedUntilClosed(child);
+};
+
+const hook = (script: HookScript, input: object, inGitHubActions = false) =>
+  runHook(script, JSON.stringify(input), {
     env: throwawayRepositoryEnvironment({ CLAUDE_PROJECT_DIR: root, GITHUB_ACTIONS: inGitHubActions ? 'true' : '' }),
   });
 
 const edit = (file: string, inGitHubActions = false) => hook('hook.mjs', { tool_input: { file_path: file } }, inGitHubActions);
 
 describe('the edit hook', { timeout: 60_000 }, () => {
-  it('runs the checks of the checkout that owns the file, not the one the session started in', () => {
+  it('runs the checks of the checkout that owns the file, not the one the session started in', async () => {
     const checkout = otherCheckout('hook.ts', true);
-    const result = edit(path.join(checkout, 'probe.ts'));
+    const result = await edit(path.join(checkout, 'probe.ts'));
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('checked by its own checkout');
     expect(result.stderr).toContain(JSON.stringify(path.join(checkout, 'probe.ts')));
   });
 
-  it("finds a relative file_path from the session's cwd, not from the folder the hook was started in", () => {
+  it("finds a relative file_path from the session's cwd, not from the folder the hook was started in", async () => {
     const checkout = otherCheckout('hook.ts', true);
-    const result = hook('hook.mjs', { cwd: checkout, tool_input: { file_path: 'probe.ts' } });
+    const result = await hook('hook.mjs', { cwd: checkout, tool_input: { file_path: 'probe.ts' } });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(JSON.stringify(path.join(checkout, 'probe.ts')));
   });
 
-  it('asks for an install where the owning checkout has none, except in a GitHub Actions job', () => {
-    const checkout = otherCheckout('hook.ts', false);
-    const result = edit(path.join(checkout, 'probe.ts'));
-    expect(result.status).toBe(2);
-    expect(result.stderr).toContain(`The checks can't run in ${git(checkout, 'rev-parse', '--show-toplevel').stdout.trim()}`);
-    expect(edit(path.join(checkout, 'probe.ts'), true).status).toBe(0);
+  it('finds a relative file_path from the folder the hook was started in when the call names no cwd', async () => {
+    const result = await hook('hook.mjs', { tool_input: { file_path: 'scripts/checks/rules.ts' } });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
   });
 
-  it('leaves alone a file git ignores, a deleted file, a file outside every repository, and a repository without these checks', () => {
+  it.each([
+    ['no input at all', ''],
+    ['a call without a tool input', '{}'],
+    ['an edit that names no file', '{"tool_input":{"file_path":""}}'],
+  ])('leaves alone %s', async (_what, input) => {
+    const result = await runHook('hook.mjs', input, { env: throwawayRepositoryEnvironment() });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  });
+
+  it('asks for an install where the owning checkout has none, except in a GitHub Actions job', async () => {
+    const checkout = otherCheckout('hook.ts', false);
+    const result = await edit(path.join(checkout, 'probe.ts'));
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(`The checks can't run in ${git(checkout, 'rev-parse', '--show-toplevel').stdout.trim()}`);
+    expect((await edit(path.join(checkout, 'probe.ts'), true)).status).toBe(0);
+  });
+
+  it('leaves alone a file git ignores, a deleted file, a file outside every repository, and a repository without these checks', async () => {
     const checkout = otherCheckout('hook.ts', true);
     const outside = scratchFolder('hooks');
     writeFiles(outside, { 'probe.ts': 'export const probe = 1;\n' });
     const elsewhere = scratchRepository('hooks', { 'probe.ts': 'export const probe = 1;\n' });
     for (const file of [path.join(checkout, 'ignored.ts'), path.join(checkout, 'deleted.ts'), path.join(outside, 'probe.ts'), path.join(elsewhere, 'probe.ts')]) {
-      const result = edit(file);
+      const result = await edit(file);
       expect({ file, status: result.status, stderr: result.stderr }).toEqual({ file, status: 0, stderr: '' });
     }
   });
@@ -120,10 +141,10 @@ describe('the stop hook', { timeout: 60_000 }, () => {
   it.each([
     ['its checks fail', true],
     ['its packages are missing', false],
-  ])('never blocks the stop that follows a block, where %s', (_where, installed) => {
+  ])('never blocks the stop that follows a block, where %s', async (_where, installed) => {
     const checkout = committed(otherCheckout('stop-hook.ts', installed));
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
-    const result = stopAfterABlock(checkout);
+    const result = await stopAfterABlock(checkout);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
   });
@@ -135,65 +156,101 @@ describe('the stop hook', { timeout: 60_000 }, () => {
     const checkout = checkoutWithDocs(THE_CHECKS_PASS);
     const report = await blockOnABrokenLink(checkout);
     writeFiles(checkout, { 'AGENTS.md': fixed });
-    expect(stopAfterABlock(checkout).status).toBe(0);
+    expect((await stopAfterABlock(checkout)).status).toBe(0);
     expect(await blockOnABrokenLink(checkout)).toBe(report);
   });
 
   it('stays quiet about a failure the stop after its block still finds', async () => {
     const checkout = checkoutWithDocs(ECHO_THE_CALL);
     await blockOnABrokenLink(checkout);
-    expect(stopAfterABlock(checkout).status).toBe(0);
+    expect((await stopAfterABlock(checkout)).status).toBe(0);
     expect(await stopHookReport(checkout, ['AGENTS.md'], 'session-1')).toBe('');
   });
 
-  it('runs the checks of the checkout the session works in, on the files changed since the last commit and new ones', () => {
+  it('runs the checks of the checkout the session works in, on the files changed since the last commit and new ones', async () => {
     const checkout = committed(otherCheckout('stop-hook.ts', true));
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n', 'new.ts': 'export const created = 1;\n' });
-    const result = hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' });
+    const result = await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('checked by its own checkout: {"changed":["new.ts","probe.ts"],"session":"session-1"}');
   });
 
-  it('passes a checkout without packages while nothing has changed', () => {
-    const result = hook('stop-hook.mjs', { cwd: committed(otherCheckout('stop-hook.ts', false)), session_id: 'session-1' });
+  it('runs the checks with no session when the call names none it can use', async () => {
+    const checkout = committed(otherCheckout('stop-hook.ts', true));
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    const result = await hook('stop-hook.mjs', { cwd: checkout, session_id: 7 });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('checked by its own checkout: {"changed":["probe.ts"]}');
+  });
+
+  it('passes a checkout without packages while nothing has changed', async () => {
+    const result = await hook('stop-hook.mjs', { cwd: committed(otherCheckout('stop-hook.ts', false)), session_id: 'session-1' });
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
   });
 
-  it('asks a session once for an install, where a change waits to be checked', () => {
+  it('asks a session once for an install, where a change waits to be checked', async () => {
     const checkout = committed(otherCheckout('stop-hook.ts', false));
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
-    const first = hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' });
+    const first = await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' });
     expect(first.status).toBe(2);
     expect(first.stderr).toContain("The checks can't run in");
-    expect(hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' }).status).toBe(0);
-    expect(hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-2' }).status).toBe(2);
+    expect((await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' })).status).toBe(0);
+    expect((await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-2' })).status).toBe(2);
   });
 
-  it('asks a session again for an install when a change comes back after a turn with nothing to check', () => {
+  it('asks a session again for an install when a change comes back after a turn with nothing to check', async () => {
     const checkout = committed(otherCheckout('stop-hook.ts', false));
-    const stop = () => hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' }).status;
+    const stop = async () => (await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' })).status;
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
-    expect(stop()).toBe(2);
+    expect(await stop()).toBe(2);
     writeFiles(checkout, { 'probe.ts': 'export const probe = 1;\n' });
-    expect(stop()).toBe(0);
+    expect(await stop()).toBe(0);
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
-    expect(stop()).toBe(2);
+    expect(await stop()).toBe(2);
   });
 
   it.each([
     ['installed nothing', false],
     ['installed its packages', true],
-  ])('leaves a GitHub Actions job that %s to its own checks', (_job, installed) => {
+  ])('leaves a GitHub Actions job that %s to its own checks', async (_job, installed) => {
     const checkout = committed(otherCheckout('stop-hook.ts', installed));
     writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
-    const result = hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' }, true);
+    const result = await hook('stop-hook.mjs', { cwd: checkout, session_id: 'session-1' }, true);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
   });
 
-  it('leaves a folder outside every repository alone', () => {
-    expect(hook('stop-hook.mjs', { cwd: scratchFolder('hooks') }).status).toBe(0);
+  it('leaves a folder outside every repository alone', async () => {
+    expect((await hook('stop-hook.mjs', { cwd: scratchFolder('hooks') })).status).toBe(0);
+  });
+
+  it('reads a call with no input as one from the folder the hook was started in', async () => {
+    const result = await runHook('stop-hook.mjs', '', { cwd: scratchFolder('hooks'), env: throwawayRepositoryEnvironment() });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  });
+
+  it('asks for an install at every stop when the call names no session to remember the ask in', async () => {
+    const checkout = committed(otherCheckout('stop-hook.ts', false));
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    expect((await hook('stop-hook.mjs', { cwd: checkout })).status).toBe(2);
+    expect((await hook('stop-hook.mjs', { cwd: checkout })).status).toBe(2);
+  });
+});
+
+describe("what a hook passes on from the checkout's checks", { timeout: 60_000 }, () => {
+  const checkoutWhoseEditChecks = (checks: string) =>
+    scratchRepository('hooks', { 'scripts/checks/hook.ts': checks, 'probe.ts': 'export const probe = 1;\n', ...A_LOADER_THAT_RUNS_TYPESCRIPT_FILES_AS_JAVASCRIPT });
+
+  it('passes on what the checks print and their exit code', async () => {
+    const checkout = checkoutWhoseEditChecks("process.stdout.write('all checks ran\\n');\nprocess.exit(0);\n");
+    const result = await edit(path.join(checkout, 'probe.ts'));
+    expect({ status: result.status, stdout: result.stdout }).toEqual({ status: 0, stdout: 'all checks ran\n' });
+  });
+
+  it('fails when the checks are killed before they can exit', async () => {
+    const checkout = checkoutWhoseEditChecks("process.kill(process.pid, 'SIGKILL');\n");
+    expect((await edit(path.join(checkout, 'probe.ts'))).status).toBe(1);
   });
 });
 
@@ -205,6 +262,19 @@ describe('the checks the hooks run', { timeout: 60_000 }, () => {
     expect(report).toContain(commentRule);
     expect(await editHookReport(checkout, path.join(checkout, 'src', 'clean.ts'))).toBe('');
     expect(await editHookReport(checkout, path.join(scratchFolder('hooks'), 'probe.ts'))).toBe('');
+  });
+
+  it('check no file for an edit to a file git ignores, and only the docs at a stop whose changed files git ignores', async () => {
+    const checkout = scratchRepository('hooks', {
+      '.gitignore': 'ignored.ts\n',
+      'ignored.ts': 'export const ignored = 1; // why\n',
+      'AGENTS.md': AGENTS_MAP_WITH_A_BROKEN_LINK,
+      'package.json': '{}\n',
+    });
+    expect(await editHookReport(checkout, path.join(checkout, 'ignored.ts'))).toBe('');
+    const report = await stopHookReport(checkout, ['ignored.ts'], undefined);
+    expect(report).toContain("AGENTS.md:3  links to docs/agents/code.md, which doesn't exist in the repository");
+    expect(report).not.toContain('ignored.ts');
   });
 
   it('report a broken doc link before the turn ends, with the stop rule, once per session', async () => {

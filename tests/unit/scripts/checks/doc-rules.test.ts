@@ -4,7 +4,7 @@ import { anchorOf, headingAnchors, headingSlug } from '../../../../scripts/check
 import { budgetProblem, staleAllowances, wrappedLines } from '../../../../scripts/checks/doc-rules/budgets';
 import { misnamed, misnamedDecision, outOfLayout } from '../../../../scripts/checks/doc-rules/layout';
 import { markdownLinks, proseLines } from '../../../../scripts/checks/doc-rules/markdown';
-import { namedPath, repositoryTree } from '../../../../scripts/checks/doc-rules/paths';
+import { exists, namedPath, repositoryTree } from '../../../../scripts/checks/doc-rules/paths';
 import { missingScript, pnpmScripts, proseScripts } from '../../../../scripts/checks/doc-rules/scripts';
 import { skillProblems } from '../../../../scripts/checks/doc-rules/skills';
 
@@ -24,6 +24,8 @@ describe('heading anchors', () => {
   it('read the anchor from a link, decoded and in lower case', () => {
     expect(anchorOf('ci-agents.md#Code-Review')).toBe('code-review');
     expect(anchorOf('ci.md')).toBeNull();
+    expect(anchorOf('ci.md#Deploy%20Steps')).toBe('deploy steps');
+    expect(anchorOf('ci.md#100%-Coverage')).toBe('100%-coverage');
   });
 });
 
@@ -64,6 +66,10 @@ describe('repository paths in code spans', () => {
     expect(namedPath('src/gone.ts', tree)).toBe('src/gone.ts');
   });
 
+  it('count the empty path, like ., as the repository root', () => {
+    expect([exists(tree, ''), exists(tree, '.'), exists(tree, 'docs/agents'), exists(tree, 'docs/gone')]).toEqual([true, true, true, false]);
+  });
+
   it('leave out patterns, placeholders, commands and paths outside the tracked folders', () => {
     expect(['src/**/*.ts', 'src/<area>/', 'pnpm run verify', 'tmp/agent/verify/', '.dev.vars', 'next/link', 'node.js'].map((code) => namedPath(code, tree))).toEqual(
       [undefined, undefined, undefined, undefined, undefined, undefined, undefined],
@@ -86,6 +92,7 @@ describe('pnpm script names', () => {
   it('name a script package.json lacks, in both forms', () => {
     expect(missing('pnpm deploy:preview')).toEqual(['deploy:preview']);
     expect(missing('pnpm run lint:all')).toEqual(['lint:all']);
+    expect(missing('pnpm --filter web lint:web && pnpm --filter=web lint:all && pnpm --silent')).toEqual(['lint:web', 'lint:all']);
   });
 
   it('skip placeholders, and read only the pnpm run form in prose', () => {
@@ -147,6 +154,9 @@ describe('skills', () => {
       'has no description, which is how an agent knows when to use it',
     ]);
     expect(skillProblems(path, '# No frontmatter\n', [path])).toEqual([
+      'has no YAML frontmatter between --- lines, which Claude Code reads the skill from',
+    ]);
+    expect(skillProblems(path, skill('name: [verify-web'), [path])).toEqual([
       'has no YAML frontmatter between --- lines, which Claude Code reads the skill from',
     ]);
   });

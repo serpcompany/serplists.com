@@ -120,7 +120,7 @@ export async function handleSharedChecklist(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId,
-    subject: getRunSubject(existingSharedRun, existingSharedRun.user_id),
+    subject: getRunSubject(existingSharedRun),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',
     before: existingSharedRun,

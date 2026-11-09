@@ -55,8 +55,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
     is missing or was built at another scale or from other migrations, local seed
     (`db/seeds/local.ts` and `db/seeds/local-test-data/`) or synthetic data.
 - **Budgets, in CI:** `tests/integration/rows-read-budgets-local-d1.test.ts` fails when a
-  hot request reads more rows than its budget. It runs in `pnpm run test:local-d1`, which CI
-  runs in its D1 integration step.
+  hot request reads more rows than its budget. It runs in `pnpm run test:run` (and alone in
+  `pnpm run test:local-d1`), which the Quality Gate runs.
   - It starts local D1 with `startLocalD1()`, applies the local seed and the synthetic dataset
     at a small scale (`buildSyntheticSql(datasetCounts(0.02))`: 400 templates, 800 runs and a
     few hundred rows in each other table), and signs in the seeded users. It sends each

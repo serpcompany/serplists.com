@@ -1,35 +1,14 @@
-import { assert, describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { DashboardPageHeader } from '@/components/dashboard/DashboardContentShell';
 import { RunPageHeader } from '@/components/run-execution/RunPageHeader';
 import { Button } from '@/components/ui/button';
 
+import { runPageHeaderProps, type RunPageHeaderProps } from '../../../fixtures/runPageHeader';
 import { findAllElements, findElementOf, handlerOf } from '../../../support/elementTree';
 
-type HeaderProps = Parameters<typeof RunPageHeader>[0];
-
-const headerProps = (overrides: Partial<HeaderProps> = {}): HeaderProps => ({
-  answersExport: null,
-  canUpdateRun: true,
-  description: '2 of 3 tasks finished',
-  editTitle: 'Launch',
-  finishRunButton: null,
-  isCompleted: false,
-  isCreatingShare: false,
-  isEditingTitle: false,
-  isPublic: false,
-  onBack: vi.fn(),
-  onCancelRename: vi.fn(),
-  onEditTitleChange: vi.fn(),
-  onSaveTitle: vi.fn(),
-  onShare: vi.fn(),
-  onStartRename: vi.fn(),
-  onStopSharing: vi.fn(async () => ({ kind: 'ok' as const })),
-  progress: 66,
-  title: 'Launch',
-  titleChanged: true,
-  ...overrides,
-});
+type HeaderProps = RunPageHeaderProps;
+const headerProps = runPageHeaderProps;
 
 const clickButton = (props: HeaderProps, label: string, detail: number) => {
   const header = findElementOf(RunPageHeader(props), DashboardPageHeader);

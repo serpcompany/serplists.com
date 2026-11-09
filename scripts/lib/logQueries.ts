@@ -25,7 +25,9 @@ export const emptyFilter: LogFilter = {
   sources: [],
 };
 
-const durationUnits: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+const durationUnits = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+const relativeSinceSchema = z.object({ amount: z.string(), unit: z.enum(["s", "m", "h", "d"]) });
 
 export function parseStatusRange(text: string): StatusRange {
   const family = /^([1-5])xx$/i.exec(text);
@@ -35,8 +37,8 @@ export function parseStatusRange(text: string): StatusRange {
 }
 
 export function parseSince(text: string, nowMs: number): number {
-  const relative = /^(\d+)([smhd])$/.exec(text);
-  if (relative?.[1] && relative[2]) return nowMs - Number(relative[1]) * (durationUnits[relative[2]] ?? 0);
+  const relative = relativeSinceSchema.safeParse(/^(?<amount>\d+)(?<unit>[smhd])$/.exec(text)?.groups);
+  if (relative.success) return nowMs - Number(relative.data.amount) * durationUnits[relative.data.unit];
   const absolute = Date.parse(text);
   if (Number.isNaN(absolute)) throw new Error(`--since takes a duration such as 15m, 2h or 1d, or a date, not "${text}".`);
   return absolute;
@@ -91,7 +93,6 @@ export function normalizeRoute(path: string): string {
 }
 
 export function percentile(values: number[], fraction: number): number {
-  if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
   const rank = Math.min(sorted.length - 1, Math.max(0, Math.ceil(fraction * sorted.length) - 1));
   return sorted[rank] ?? 0;
@@ -128,22 +129,24 @@ export function rowsReadByRequest(entries: LogEntry[]): Map<string, number> {
 }
 
 export function summarizeRoutes(records: RequestRecord[], rowsRead: Map<string, number> = new Map()): RouteStats[] {
-  const groups = new Map<string, RequestRecord[]>();
+  const groups = new Map<string, { route: string; kind: RequestKind; records: RequestRecord[] }>();
   for (const record of records) {
-    const key = `${record.kind} ${record.method} ${normalizeRoute(record.path)}`;
-    groups.set(key, [...(groups.get(key) ?? []), record]);
+    const route = `${record.method} ${normalizeRoute(record.path)}`;
+    const key = `${record.kind} ${route}`;
+    const group = groups.get(key) ?? { route, kind: record.kind, records: [] };
+    group.records.push(record);
+    groups.set(key, group);
   }
   return [...groups.values()]
-    .map((group) => {
-      const first = group[0];
+    .map(({ route, kind, records: group }) => {
       const durations = group.map((record) => record.durationMs);
       const rows = group.flatMap((record) => {
         const read = record.requestId === undefined ? undefined : rowsRead.get(record.requestId);
         return read === undefined ? [] : [read];
       });
       return {
-        route: `${first?.method ?? ""} ${normalizeRoute(first?.path ?? "")}`,
-        kind: first?.kind ?? "api",
+        route,
+        kind,
         count: group.length,
         clientErrors: group.filter((record) => record.status >= 400 && record.status < 500).length,
         serverErrors: group.filter((record) => record.status >= 500).length,

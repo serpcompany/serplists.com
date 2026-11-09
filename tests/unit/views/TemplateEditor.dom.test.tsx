@@ -5,7 +5,6 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Link } from '@/components/navigation/Link';
-import { EDITOR_LOAD_LATEST_MESSAGE } from '@/features/template-editor/navigationGuards';
 import type { TemplateEditorSaveResult } from '@/features/template-editor/useTemplateEditorModel';
 import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
@@ -228,7 +227,9 @@ describe('TemplateEditor after its save met a newer version of the Template', ()
     navigation.window.confirm.mockReturnValueOnce(false);
 
     await click('Load latest version');
-    expect(navigation.window.confirm).toHaveBeenCalledWith(EDITOR_LOAD_LATEST_MESSAGE);
+    expect(navigation.window.confirm).toHaveBeenCalledWith(
+      'Load the latest saved version of this template? Your unsaved changes will be lost.',
+    );
     expect(mocks.reload).not.toHaveBeenCalled();
 
     await click('Load latest version');
