@@ -66,6 +66,11 @@ describe('the comment check', { timeout: 60_000 }, () => {
 
   it('fails a comment on a line that ends in a lone carriage return, at the line ESLint counts, showing that line', async () => {
     expect(await commentsIn({ 'src/old-mac.ts': 'export const a = 1;\r// why\r' })).toEqual(['src/old-mac.ts:2  // why']);
+    expect(await commentsIn({ 'src/separated.ts': `export const a = 1;${String.fromCodePoint(0x2028)}// why\n` })).toEqual(['src/separated.ts:2  // why']);
+  });
+
+  it('fails a comment in a stylesheet whose lines end in a lone carriage return at the line it counts, showing that line', async () => {
+    expect(await commentsIn({ 'src/old-mac.css': '.a { color: red; }\r/* why */\r' })).toEqual(['src/old-mac.css:1  .a { color: red; }\r/* why */ (CSS)']);
   });
 
   it('fails a file it cannot parse, rather than passing it unread', async () => {
