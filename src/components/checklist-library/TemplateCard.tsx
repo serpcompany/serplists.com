@@ -42,7 +42,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
     ...template,
     slug: template.slug ?? generateSlug(template.title),
   });
-  const ownerInitial = ownerLabel.charAt(0).toUpperCase();
+  const ownerInitial = `${ownerLabel}U`.charAt(0).toUpperCase();
   const TypeIcon = template.type === 'recipe' ? List : FileText;
   const owner = (
     <>
