@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 
 import { REPO_ROOT } from '../../scripts/lib/run-tool';
+import { codeLiteral } from './codeLiteral';
 
 const realPlaywright = pathToFileURL(createRequire(path.join(REPO_ROOT, 'package.json')).resolve('@playwright/test')).href.replace(/\.js$/, '.mjs');
 
@@ -13,9 +14,9 @@ const RECORD = 'playwright-stand-in.jsonl';
 const browserStandIn =
   [
     'import { appendFileSync, writeFileSync } from "node:fs";',
-    `export { devices } from ${JSON.stringify(realPlaywright)};`,
+    `export { devices } from ${codeLiteral(realPlaywright)};`,
     '',
-    `const record = (entry) => appendFileSync(${JSON.stringify(RECORD)},\`\${JSON.stringify(entry)}\\n\`);`,
+    `const record = (entry) => appendFileSync(${codeLiteral(RECORD)},\`\${JSON.stringify(entry)}\\n\`);`,
     'const all = (html, pattern) => [...html.matchAll(pattern)].map((match) => match[1]);',
     '',
     'function aPage() {',

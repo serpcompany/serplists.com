@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { REPO_ROOT } from '../../../../scripts/lib/run-tool';
 import { alreadyTold, changedPaths, installAdvice, routeHook, toldFile } from '../../../../tools/checks/route.mjs';
+import { codeLiteral } from '../../../support/codeLiteral';
 import { runModuleCodeProcess } from '../../../support/scriptProcess';
 import { scratchFolder } from './scratch';
 
@@ -37,9 +38,9 @@ const withSpawnSyncAnswering = (commandExpression: string, answer: object, code:
       "import childProcess from 'node:child_process';",
       "import { syncBuiltinESMExports } from 'node:module';",
       'const spawnSyncForReal = childProcess.spawnSync;',
-      `childProcess.spawnSync = (command, ...rest) => (command === ${commandExpression} ? ${JSON.stringify(answer)} : spawnSyncForReal(command, ...rest));`,
+      `childProcess.spawnSync = (command, ...rest) => (command === ${commandExpression} ? ${codeLiteral(answer)} : spawnSyncForReal(command, ...rest));`,
       'syncBuiltinESMExports();',
-      `const route = await import(${JSON.stringify(ROUTE)});`,
+      `const route = await import(${codeLiteral(ROUTE)});`,
       code,
     ].join('\n'),
   );
@@ -49,7 +50,7 @@ describe('what git says to the hooks', () => {
     const missing = path.join(scratchFolder('route'), 'removed');
 
     const run = await runModuleCodeProcess(
-      `import { gitOutput } from ${JSON.stringify(ROUTE)}; process.stdout.write(JSON.stringify(gitOutput(${JSON.stringify(missing)}, 'status')));`,
+      `import { gitOutput } from ${codeLiteral(ROUTE)}; process.stdout.write(JSON.stringify(gitOutput(${codeLiteral(missing)}, 'status')));`,
     );
 
     expect([run.status, run.stdout]).toEqual([0, '""']);
@@ -61,7 +62,7 @@ describe("what a hook passes on from the checkout's checks", () => {
     const run = await withSpawnSyncAnswering(
       'process.execPath',
       { status: null, signal: 'SIGKILL', stdout: 'the checks began\n', stderr: '' },
-      `route.runInCheckout({ kind: 'run', checkout: ${JSON.stringify(scratchFolder('route'))}, script: 'hook.ts' }, {});`,
+      `route.runInCheckout({ kind: 'run', checkout: ${codeLiteral(scratchFolder('route'))}, script: 'hook.ts' }, {});`,
     );
 
     expect([run.status, run.stdout]).toEqual([1, 'the checks began\n']);
