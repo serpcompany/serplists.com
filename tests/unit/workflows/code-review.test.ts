@@ -102,7 +102,7 @@ describe('the Code review workflow', () => {
 
   it('starts each review without the files an earlier one or the pull request left, and notes when', () => {
     const start = elementAt(steps, indexOf('Note when the review starts'));
-    expect(start.run).toContain('rm -f tmp/review-summary.md tmp/review-findings.json tmp/review-issues.md');
+    expect(start.run).toContain('rm -rf tmp/review-summary.md tmp/review-findings.json tmp/review-issues.md tmp/review-change');
     expect(start.run).toContain('REVIEW_STARTED_AT=');
     expect(indexOf('Note when the review starts')).toBeLessThan(reviewIndex);
   });

@@ -32,7 +32,10 @@ Stop without writing anything if the pull request is closed or a draft.
 - **The change:** `gh pr diff <number> --repo <owner>/<repo> --name-only` lists the changed files,
   and `changedFiles` counts them. `gh pr diff <number> --repo <owner>/<repo>` is the diff. Read all
   of it, never the first part: when it is too long for one read, read the rest, and read a changed
-  file itself where the diff alone doesn't show the effect. In CI the checkout's `AGENTS.md`,
+  file itself where the diff alone doesn't show the effect. In CI the workflow also writes the
+  change to `tmp/review-change/`: `files.md` lists every changed file with the part beside it that
+  holds its diff. `gh pr diff` refuses a pull request that changes more than 300 files; read the
+  change from those parts then. In CI the checkout's `AGENTS.md`,
   `CLAUDE.md`, `.claude/`, and `.mcp.json` are the base branch's: the pull request's changes to
   them are in the diff, and its own copies of the last three are under `.claude-pr/`.
 - **The rules:** `AGENTS.md`, `ARCHITECTURE.md`, `docs/agents/code.md`, and `CONTEXT.md`, as they
@@ -86,6 +89,11 @@ rules, layers, duplicates, dead code, types, and the tests. Run no build, suite,
 checks have their own workflows. Each reviewer returns the changed files it read, and its findings
 as: file, line in the new version, what is wrong, why it matters (quoting the rule when one
 applies), the fix, and its confidence (high, medium, low).
+
+When the workflow wrote the change in more than one part, a part is all one reviewer can read
+well: start one reviewer per part in place of the three, in one message, giving each the paths of
+its part and of `tmp/review-change/files.md`. Each does all three reviewers' work on the files of
+its part.
 
 Between them the reviewers read every changed file. Compare the files they read with the list:
 send a reviewer back for any that none read, unless it can't be read as text (an image, a font)
