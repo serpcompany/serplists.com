@@ -1,5 +1,6 @@
 import {
   FORM_INCOMPLETE_CODE,
+  findFormFieldProblem,
   findFormFieldProblems,
   formFieldProblemMessage,
 } from '@/lib/schemas/formValidation';
@@ -11,10 +12,11 @@ const FORM_FIRST_MESSAGE = "Finish this task's form first.";
 
 export const isTaskFormBlocking = (item: ChecklistItem): boolean => findFormFieldProblems(item).length > 0;
 
+const taskFormFields = (item: ChecklistItem): ChecklistFormField[] =>
+  item.contents?.flatMap((content) => (content.type === 'form' ? (content.fields ?? []) : [])) ?? [];
+
 export const findTaskFormField = (item: ChecklistItem, fieldId: string): ChecklistFormField | undefined =>
-  item.contents
-    ?.flatMap((content) => (content.type === 'form' ? (content.fields ?? []) : []))
-    .find((field) => field.id === fieldId);
+  taskFormFields(item).find((field) => field.id === fieldId);
 
 export const findRunFormAnswer = (run: ChecklistRun, itemId: string, fieldId: string): FormAnswer | undefined => {
   const item = run.sections.flatMap((section) => section.items).find((candidate) => candidate.id === itemId);
@@ -25,12 +27,17 @@ export const sameFormAnswer = (left: FormAnswer | undefined, right: FormAnswer |
   JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 
 const describeTaskFormBlock = (item: ChecklistItem): string | null => {
-  const [problem] = findFormFieldProblems(item);
-  if (!problem) return null;
-  const field = findTaskFormField(item, problem.fieldId);
-  if (!field) return FORM_FIRST_MESSAGE;
-  const label = field.label.trim();
-  return `${FORM_FIRST_MESSAGE} ${label ? `${label}: ` : ''}${formFieldProblemMessage(field, problem.reason)}`;
+  const firstFieldWithId = new Map<string, ChecklistFormField>();
+  for (const field of taskFormFields(item)) {
+    const named = firstFieldWithId.get(field.id) ?? field;
+    firstFieldWithId.set(field.id, named);
+    const reason = findFormFieldProblem(field);
+    if (reason) {
+      const label = named.label.trim();
+      return `${FORM_FIRST_MESSAGE} ${label ? `${label}: ` : ''}${formFieldProblemMessage(named, reason)}`;
+    }
+  }
+  return null;
 };
 
 export const refuseBlockedTask = (item: ChecklistItem): RunExecutionActionResult | null => {

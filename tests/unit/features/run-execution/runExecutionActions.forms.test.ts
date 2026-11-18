@@ -157,19 +157,29 @@ describe('a task whose form blocks it', () => {
     expect(result).toMatchObject({ code: FORM_INCOMPLETE_CODE, message: "Finish this task's form first. Website: Enter a URL that starts with http:// or https://." });
   });
 
-  it('names only what is missing for a required field with no label', async () => {
-    const unlabelled: ChecklistItem = {
-      id: 'item-form',
-      title: 'Collect details',
-      contents: [{ id: 'form-1', type: 'form', value: '', fields: [{ id: 'field-code', label: '  ', kind: 'text', required: true }] }],
-    };
-
-    const result = await toggleRunItem(
-      { isCompleted: true, itemId: 'item-form', run: runWith(unlabelled) },
+  const markCompleteATaskWith = (fields: ChecklistFormField[]) =>
+    toggleRunItem(
+      {
+        isCompleted: true,
+        itemId: 'item-form',
+        run: runWith({ id: 'item-form', title: 'Collect details', contents: [{ id: 'form-1', type: 'form', value: '', fields }] }),
+      },
       { apiClient: runExecutionApiClient(), updateRun: savingRun() },
     );
 
+  it('names only what is missing for a required field with no label', async () => {
+    const result = await markCompleteATaskWith([{ id: 'field-code', label: '  ', kind: 'text', required: true }]);
+
     expect(result).toMatchObject({ message: "Finish this task's form first. Fill in this field." });
+  });
+
+  it("names the first field with the blocking field's id, the one an answer to that id fills, when a run created through the API stores two fields under one id", async () => {
+    const result = await markCompleteATaskWith([
+      { id: 'field-1', label: 'Client name', kind: 'text', required: false },
+      { id: 'field-1', label: 'Terms', kind: 'checkbox', required: true },
+    ]);
+
+    expect(result).toMatchObject({ code: FORM_INCOMPLETE_CODE, message: "Finish this task's form first. Client name: Fill in this field." });
   });
 
   it('can still be unticked, and is completed once its required fields are answered', async () => {

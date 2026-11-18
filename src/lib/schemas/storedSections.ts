@@ -14,6 +14,7 @@ import {
   type SubTaskRecord,
   type TaskRecord,
 } from "./jsonRecords";
+import { firstIssue } from "./firstIssue";
 import { sanitizeStoredFormFields, storedFormFieldSchema } from "./formFields";
 
 export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems", "form"] as const;
@@ -48,8 +49,7 @@ const storedSectionsSchema = z.array(sectionSchema);
 export function findStoredSectionsIssue(sections: unknown): string | null {
   const result = storedSectionsSchema.safeParse(sections);
   if (result.success) return null;
-  const [issue] = result.error.issues;
-  if (!issue) return "sections: Invalid input";
+  const issue = firstIssue(result.error);
   const path = issue.path.map((part) => (typeof part === "number" ? `[${part}]` : `.${part}`)).join("");
   return `sections${path}: ${issue.message}`;
 }

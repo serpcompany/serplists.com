@@ -111,8 +111,8 @@ describe('getSelectionAfterToggle, the auto-advance that runs when a save lands 
 
 describe('mapChecklistToRun', () => {
   it('keeps the Organization that owns the run, so the page can check the member role', () => {
-    expect(mapChecklistToRun({ id: 'run-1', team_id: 'team-1', items: '[]' }, 'run-1').teamId).toBe('team-1');
-    expect(mapChecklistToRun({ id: 'run-2', team_id: null, items: '[]' }, 'run-2').teamId).toBeUndefined();
+    expect(mapChecklistToRun({ id: 'run-1', team_id: 'team-1', items: '[]' }).teamId).toBe('team-1');
+    expect(mapChecklistToRun({ id: 'run-2', team_id: null, items: '[]' }).teamId).toBeUndefined();
   });
 });
 
@@ -269,7 +269,7 @@ describe('mapChecklistToRun retired work', () => {
 
   it('exposes all three retired kinds with their completion and notes, from a JSON string or an array', () => {
     for (const value of [JSON.stringify(retired), retired]) {
-      expect(mapChecklistToRun(checklist(value), 'run-1').retiredItems).toEqual([
+      expect(mapChecklistToRun(checklist(value)).retiredItems).toEqual([
         {
           kind: 'section',
           id: 's2',
@@ -303,7 +303,7 @@ describe('mapChecklistToRun retired work', () => {
         { type: 'subItems', value: '', subItems: [{ id: 'short', title: 'Short', isCompleted: true }] },
       ],
     };
-    const [entry] = mapChecklistToRun(checklist([{ kind: 'item', sectionId: 's1', item }]), 'run-1').retiredItems ?? [];
+    const [entry] = mapChecklistToRun(checklist([{ kind: 'item', sectionId: 's1', item }])).retiredItems ?? [];
 
     expect(entry).toEqual(objectContaining({
       task: objectContaining({ subTasks: [{ id: 'short', title: 'Short', isCompleted: true }] }),
@@ -313,23 +313,23 @@ describe('mapChecklistToRun retired work', () => {
   it('drops malformed entries and tolerates a missing or broken column', () => {
     const garbage = [null, 'x', { kind: 'unknown', item: { id: 'a' } }, { kind: 'item', item: 'x' }, { kind: 'item', item: { title: 'no id' } }];
 
-    expect(mapChecklistToRun(checklist(garbage), 'run-1').retiredItems).toEqual([]);
-    expect(mapChecklistToRun(checklist('{not json'), 'run-1').retiredItems).toEqual([]);
-    expect(mapChecklistToRun(checklist(undefined), 'run-1').retiredItems).toEqual([]);
-    expect(mapChecklistToRun(checklist('[]'), 'run-1').retiredItems).toEqual([]);
+    expect(mapChecklistToRun(checklist(garbage)).retiredItems).toEqual([]);
+    expect(mapChecklistToRun(checklist('{not json')).retiredItems).toEqual([]);
+    expect(mapChecklistToRun(checklist(undefined)).retiredItems).toEqual([]);
+    expect(mapChecklistToRun(checklist('[]')).retiredItems).toEqual([]);
   });
 
   it('keeps the latest entry when an id was retired twice', () => {
     const first = { kind: 'item', sectionId: 's1', item: { id: 'dns', title: 'Check DNS', notes: 'First' } };
     const second = { kind: 'item', sectionId: 's1', item: { id: 'dns', title: 'Check DNS', notes: 'Second' } };
-    const items = mapChecklistToRun(checklist([first, second]), 'run-1').retiredItems ?? [];
+    const items = mapChecklistToRun(checklist([first, second])).retiredItems ?? [];
 
     expect(items).toHaveLength(1);
     expect(items[0]).toEqual(objectContaining({ task: objectContaining({ notes: 'Second' }) }));
   });
 
   it('never counts retired work toward progress, completion or the next task', () => {
-    const run = mapChecklistToRun(checklist(retired), 'run-1');
+    const run = mapChecklistToRun(checklist(retired));
 
     expect(run.progress).toBe(0);
     expect(countRunExecutionItems(run)).toEqual({ progress: 0, subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 1 });
@@ -348,7 +348,7 @@ describe('mapChecklistRuns', () => {
   };
 
   it('maps a run with malformed content instead of throwing (the run page showed "Unable to load run")', () => {
-    const run = mapChecklistToRun(malformed, 'run-bad');
+    const run = mapChecklistToRun(malformed);
 
     expect(taskAt(run, 0, 0).contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
     expect(run.progress).toBe(0);
@@ -385,7 +385,7 @@ describe('mapChecklistToRun', () => {
       current_template_version: 2,
     });
 
-    const mapped = mapChecklistToRun(apiRunSchema.parse(shared), 'share-token');
+    const mapped = mapChecklistToRun(apiRunSchema.parse(shared));
 
     expect(mapped).toMatchObject({
       id: 'run-1',
@@ -414,7 +414,6 @@ describe("a run's provenance and timestamps from the API", () => {
         updated_at: '2026-10-02T00:00:00.000Z',
         provenance: { origin: 'mcp', startedBy, agentKeyName: 'Codex', authorizedBy: startedBy },
       }),
-      'run-1',
     );
 
     expect(mapped).toMatchObject({
@@ -422,7 +421,7 @@ describe("a run's provenance and timestamps from the API", () => {
       updatedAt: '2026-10-02T00:00:00.000Z',
       provenance: { origin: 'mcp', startedBy, agentKeyName: 'Codex', authorizedBy: startedBy },
     });
-    expect(mapChecklistToRun(apiRunSchema.parse({ id: 'run-2', items: '[]' }), 'run-2').provenance).toBeUndefined();
+    expect(mapChecklistToRun(apiRunSchema.parse({ id: 'run-2', items: '[]' })).provenance).toBeUndefined();
   });
 });
 

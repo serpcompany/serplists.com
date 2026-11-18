@@ -14,7 +14,6 @@ import {
 
 export type PublicSiteLink = {
   description?: string;
-  external?: boolean;
   href: string;
   label: string;
 };

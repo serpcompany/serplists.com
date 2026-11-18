@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { templatePackModules } from '@/data/public-template-packs';
 import { isOrganizationTemplate } from '@/lib/templates/templateOwnership';
-import { parseTemplatesFromData } from '@/lib/utils/templateBackup';
+import { parseTemplatesFromData, type ImportedTemplate } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 export const REPO_TEMPLATE_USER_ID = 'repo-template-catalog';
@@ -61,8 +61,8 @@ const buildRepoTemplateId = (
 
 export const normalizeRepoTemplateSources = (
   sources: Record<string, unknown>,
-): ChecklistTemplate[] => {
-  const templatesByKey = new Map<string, ChecklistTemplate>();
+): ImportedTemplate[] => {
+  const templatesByKey = new Map<string, ImportedTemplate>();
 
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
@@ -76,7 +76,7 @@ export const normalizeRepoTemplateSources = (
       .lastIndexOf('');
 
     templates.forEach((template, index) => {
-      const repoTemplate: ChecklistTemplate = {
+      const repoTemplate: ImportedTemplate = {
         ...template,
         id: buildRepoTemplateId(
           sourcePath,
@@ -196,11 +196,11 @@ export const mergeAccountTemplateCollections = (
   return Array.from(merged.values());
 };
 
-export const findPublicTemplateByIdentifier = (
-  templates: ChecklistTemplate[],
+export const findPublicTemplateByIdentifier = <Template extends ChecklistTemplate>(
+  templates: Template[],
   identifier: string,
   ownerUsername?: string,
-): ChecklistTemplate | undefined => {
+): Template | undefined => {
   const owner = ownerUsername?.trim().toLowerCase();
   return templates.find(
     (template) =>

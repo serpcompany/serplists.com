@@ -88,6 +88,16 @@ describe('toEcmaDateTimeString', () => {
     expect(toEcmaDateTimeString('2025-12-26T09:18:30.000Z')).toBe('2025-12-26T09:18:30.000Z');
   });
 
+  it.each([
+    ['2025-12-26 09:18', '2025-12-26T09:18Z'],
+    ['2025-12-26T09:18+02:00', '2025-12-26T09:18+02:00'],
+    ['2025-12-26 09:18:30', '2025-12-26T09:18:30Z'],
+    ['2025-12-26 09:18:30.5', '2025-12-26T09:18:30.500Z'],
+    ['2025-12-26T09:18:30.123456-05:00', '2025-12-26T09:18:30.123-05:00'],
+  ])('writes %s as %s, keeping its minutes, seconds, milliseconds and zone', (value, expected) => {
+    expect(toEcmaDateTimeString(value)).toBe(expected);
+  });
+
   it('refuses forms whose parsing differs between engines', () => {
     expect(toEcmaDateTimeString('12/26/2025 09:18:30')).toBeNull();
     expect(toEcmaDateTimeString('Fri, 26 Dec 2025 09:18:30 GMT')).toBeNull();

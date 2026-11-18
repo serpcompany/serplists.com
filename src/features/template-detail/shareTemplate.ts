@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
-import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
+import { buildPublicTemplatePath, publicTemplateSlugOf, resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import { isOrganizationTemplate } from '@/lib/templates/templateOwnership';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -51,7 +51,8 @@ export const shareTemplateToPublic = async (params: {
         apiClient,
       );
 
-  if (!buildCanonicalPublicTemplatePath(nextTemplate)) {
+  const ownerSlug = resolvePublicTemplateOwnerSlug(nextTemplate);
+  if (!ownerSlug) {
     if (isOrganizationOwned) return { kind: 'error', message: ORGANIZATION_WITHOUT_HANDLE_MESSAGE };
     const isCreator = params.template.userId === params.userId;
     return { kind: 'error', message: isCreator ? CREATOR_WITHOUT_USERNAME_MESSAGE : SHARE_FAILED_MESSAGE };
@@ -73,8 +74,8 @@ export const shareTemplateToPublic = async (params: {
   params.onTemplateChange({ ...nextTemplate, isPublic: true });
   await tryRefreshTemplateLists(params.invalidateTemplates);
 
-  const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-  return publicPath
-    ? { kind: 'ok', shareUrl: `${params.origin}${publicPath}` }
-    : { kind: 'error', message: SHARE_FAILED_MESSAGE };
+  return {
+    kind: 'ok',
+    shareUrl: `${params.origin}${buildPublicTemplatePath(ownerSlug, publicTemplateSlugOf(nextTemplate))}`,
+  };
 };

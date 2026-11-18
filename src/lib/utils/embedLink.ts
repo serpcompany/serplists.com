@@ -14,7 +14,9 @@ export function absoluteHttpUrl(value: string): string {
   }
 }
 
-const FIRST_IFRAME_SRC_ATTRIBUTE = /<iframe\b[^>]*?\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+const FIRST_IFRAME_SRC_VALUE = /(?<=<iframe\b[^>]*?\ssrc\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)/i;
+
+const QUOTED = /^["']/;
 
 const decodeAttribute = (value: string): string =>
   value
@@ -26,17 +28,19 @@ const decodeAttribute = (value: string): string =>
 
 const withHttpsWhenProtocolRelative = (src: string): string => (src.startsWith("//") ? `https:${src}` : src);
 
+const unquoted = (value: string): string => (QUOTED.test(value) ? value.slice(1, -1) : value);
+
 export function getEmbedLinkUrl(value: string): string {
   const direct = absoluteHttpUrl(value);
   if (direct) {
     return direct;
   }
 
-  const match = value.match(FIRST_IFRAME_SRC_ATTRIBUTE);
+  const match = FIRST_IFRAME_SRC_VALUE.exec(value);
   if (!match) {
     return "";
   }
 
-  const src = decodeAttribute((match[1] ?? match[2] ?? match[3] ?? "").trim());
+  const src = decodeAttribute(unquoted(match[0]).trim());
   return absoluteHttpUrl(withHttpsWhenProtocolRelative(src));
 }

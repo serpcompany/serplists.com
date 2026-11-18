@@ -32,6 +32,24 @@ describe('the Template files the import reads', () => {
     await expect(parseTemplatesFromFile(textFile('title: Camping', 'camping.txt'))).rejects.toThrow('Unsupported template file type');
   });
 
+  const codeUnitsOf = (text: string) => Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
+  const utf8 = (text: string) => [...new TextEncoder().encode(text)];
+  const utf16LittleEndian = (text: string) => codeUnitsOf(text).flatMap((unit) => [unit & 0xff, unit >> 8]);
+  const utf16BigEndian = (text: string) => codeUnitsOf(text).flatMap((unit) => [unit >> 8, unit & 0xff]);
+
+  it.each([
+    ['UTF-8 with a byte-order mark', [0xef, 0xbb, 0xbf], utf8],
+    ['UTF-16, little-endian, as Windows Notepad saves "Unicode"', [0xff, 0xfe], utf16LittleEndian],
+    ['UTF-16, big-endian', [0xfe, 0xff], utf16BigEndian],
+  ])('reads a JSON file saved as %s, as a browser reads it', async (_encoding, byteOrderMark, encode) => {
+    const title = 'Umzug: Küche – Kartons';
+    const saved = new Uint8Array([...byteOrderMark, ...encode(JSON.stringify([createMockTemplate({ title })]))]);
+
+    const result = await parseTemplatesFromFile(new File([saved], 'umzug.json', { type: 'application/json' }));
+
+    expect(result.templates.map((template) => template.title)).toEqual([title]);
+  });
+
   it('says the file could not be read when the browser fails to read it', async () => {
     const unreadable = Object.assign(textFile('[]', 'camping.json'), { arrayBuffer: () => Promise.reject(new Error('The file was moved')) });
 

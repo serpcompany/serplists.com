@@ -158,7 +158,8 @@ wait for the session and the first request, never a background refetch of a cach
   the run lists only when it changed the checklist structure (`describeTemplateUpdate`):
   only then were the Template's in-progress runs reconciled.
 - A run whose content cannot be read stays listed with no tasks, so it can still be deleted
-  (`mapChecklistRuns`); a template that cannot be read is left out of its list.
+  (`mapChecklistToRun` reads unparseable content as no tasks rather than throwing); a template
+  that cannot be read is left out of its list.
 
 ## Refreshing after a write
 

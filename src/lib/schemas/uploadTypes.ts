@@ -7,15 +7,24 @@ export const UPLOAD_BUCKETS = [
 
 export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
+type MimeTypes = readonly [string, ...string[]];
+
 type UploadKind = {
   label: string;
   extensions: readonly string[];
-  mimeTypes: readonly string[];
+  mimeTypes: MimeTypes;
 };
 
-const typeStoredForUntypedFile = (kind: UploadKind): string | null => kind.mimeTypes[0] ?? null;
+type UploadKinds = readonly [UploadKind, ...UploadKind[]];
 
-const IMAGE_KINDS: readonly UploadKind[] = [
+const typeStoredForUntypedFile = (kind: UploadKind): string => kind.mimeTypes[0];
+
+const mimeTypesOf = ([first, ...others]: UploadKinds): MimeTypes => [
+  ...first.mimeTypes,
+  ...others.flatMap((kind) => kind.mimeTypes),
+];
+
+const IMAGE_KINDS: UploadKinds = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },
   { label: 'JPEG', extensions: ['.jpg', '.jpeg'], mimeTypes: ['image/jpeg'] },
   { label: 'WebP', extensions: ['.webp'], mimeTypes: ['image/webp'] },
@@ -80,7 +89,7 @@ const FILE_KINDS: readonly UploadKind[] = [
   {
     label: 'image',
     extensions: IMAGE_KINDS.flatMap((kind) => kind.extensions),
-    mimeTypes: IMAGE_KINDS.flatMap((kind) => kind.mimeTypes),
+    mimeTypes: mimeTypesOf(IMAGE_KINDS),
   },
 ];
 

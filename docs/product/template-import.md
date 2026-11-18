@@ -9,7 +9,8 @@ Abbreviations: **Backup API** is `tests/unit/functions/api/templates-handler.bac
 **Import file spec** is `tests/e2e/template-import-file-input.spec.ts`, **File selection** is
 `tests/unit/features/template-backup/importFileSelection.test.ts`, **Backup parse** is
 `tests/unit/lib/utils/templateBackup.parse.test.ts`, **Backup files** is
-`tests/unit/lib/utils/templateBackup.files.test.ts`, **Import prep** is
+`tests/unit/lib/utils/templateBackup.files.test.ts`, **Backup sources** is
+`tests/unit/lib/utils/templateBackup.sources.test.ts`, **Import prep** is
 `tests/unit/lib/utils/templateBackup.import.test.ts`, **Validation errors** is
 `tests/unit/lib/schemas/formatValidationError.test.ts`, **Import preview** is
 `tests/unit/components/TemplateImportPreview.test.tsx`, **Import guardrails** is
@@ -49,6 +50,13 @@ It also accepts a strict single-template Markdown file (`.md`, `.markdown`) or Y
 
 - Check: Backup files, "should parse strict markdown template files" and "should parse
   single-template YAML files".
+
+A file is read as a browser reads text: as UTF-16 when it starts with a UTF-16 byte-order mark (a
+file Windows Notepad saved as "Unicode"), otherwise as UTF-8, dropping a UTF-8 byte-order mark. A
+file the browser cannot read is refused with "Failed to parse file: Failed to read file".
+
+- Check: Backup sources, "reads a JSON file saved as %s, as a browser reads it" and "says the file
+  could not be read when the browser fails to read it".
 
 A Template needs a `title` and `sections`, or legacy `items` (a JSON array, which can be a
 stringified array). It may have `description`, `categories` or `category`, `tags`, `isPublic`,

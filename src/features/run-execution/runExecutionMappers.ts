@@ -39,14 +39,11 @@ const normalizeChecklistSections = (checklist: ApiRun): ChecklistSection[] => {
   ]);
 };
 
-export const mapChecklistToRun = (
-  checklist: ApiRun,
-  fallbackId: string,
-): ChecklistRun => {
+export const mapChecklistToRun = (checklist: ApiRun): ChecklistRun => {
   const sections = normalizeChecklistSections(checklist);
 
   return {
-    id: asString(checklist.id) ?? fallbackId,
+    id: checklist.id,
     templateId: asString(checklist.template_id) ?? '',
     title: asString(checklist.title) ?? 'Checklist Run',
     status:
@@ -75,14 +72,7 @@ export const mapChecklistToRun = (
 };
 
 export const mapChecklistRuns = (checklists: ApiRun[]): ChecklistRun[] =>
-  checklists.map((checklist) => {
-    try {
-      return mapChecklistToRun(checklist, checklist.id);
-    } catch (error) {
-      console.error('Unable to read run content', { runId: checklist.id, error });
-      return mapChecklistToRun({ ...checklist, items: '[]', sections: undefined, retired_items: '[]' }, checklist.id);
-    }
-  });
+  checklists.map((checklist) => mapChecklistToRun(checklist));
 
 export const cloneRunSections = (
   sections: ChecklistRun['sections'],

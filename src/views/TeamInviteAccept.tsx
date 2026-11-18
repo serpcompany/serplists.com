@@ -145,10 +145,6 @@ export default function TeamInviteAccept() {
   );
 
   const renderBody = () => {
-    if (!token) {
-      return <p className="text-center text-sm text-muted-foreground">This invite link is missing a token.</p>;
-    }
-
     if (isLoading) {
       return <StatusLine icon={<Spinner />}>Checking your session...</StatusLine>;
     }

@@ -16,8 +16,8 @@ const SOCIAL_NETWORK_HOSTS: Record<SocialNetwork, string> = {
 };
 
 describe('public site links in the header and every public footer', () => {
-  it('keeps internal links as app paths', () => {
-    for (const link of everyPublicSiteLink.filter((entry) => !entry.external)) {
+  it('keeps every link as an app path', () => {
+    for (const link of everyPublicSiteLink) {
       expect(link.href, link.label).toMatch(/^\/(?!\/)/);
     }
   });

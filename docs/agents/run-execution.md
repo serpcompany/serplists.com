@@ -56,8 +56,8 @@ on its first unfinished task, or on its first task when every task is finished.
   kept out of `sections`, so progress, completion and the task selection never count it. A
   malformed entry is dropped, and an id retired more than once keeps its latest entry.
 
-For the runs list, `mapChecklistRuns` lists a Run whose content cannot be read with no tasks, so
-one bad row never empties the list and the Run can still be deleted.
+It never throws on content the API can hold: an `items` column that is not JSON becomes no tasks,
+so one bad row never empties the runs list (`mapChecklistRuns`), and the Run can be deleted.
 
 ## Saving
 
