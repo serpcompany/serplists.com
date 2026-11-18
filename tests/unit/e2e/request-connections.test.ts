@@ -2,16 +2,15 @@ import http from 'node:http';
 import { request } from '@playwright/test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { disableRequestKeepAlive, playwrightHttpAgent } from '../../e2e/support/request-connections';
+import { disableRequestKeepAlive, restoreRequestKeepAlive } from '../../e2e/support/request-connections';
 import { listeningPort } from '../../support/listeningPort';
 
 let server: http.Server;
 let baseUrl: string;
 let connections: number;
-let keepAliveBefore: boolean;
 
 beforeEach(async () => {
-  keepAliveBefore = playwrightHttpAgent().keepAlive;
+  restoreRequestKeepAlive();
   connections = 0;
   server = http.createServer((_req, res) => res.end('ok'));
   server.on('connection', () => {
@@ -22,7 +21,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  playwrightHttpAgent().keepAlive = keepAliveBefore;
+  restoreRequestKeepAlive();
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
 });
@@ -40,7 +39,6 @@ async function connectionsForTwoRequests() {
 
 describe("Playwright's request client connections", () => {
   it('reuses an idle connection unless told not to (why the setting exists)', async () => {
-    playwrightHttpAgent().keepAlive = true;
     expect(await connectionsForTwoRequests()).toBe(1);
   });
 
@@ -50,12 +48,9 @@ describe("Playwright's request client connections", () => {
   });
 
   it('is turned off by playwright.config.ts before any test runs', async () => {
-    playwrightHttpAgent().keepAlive = true;
-
     const { default: config } = await import('../../../playwright.config');
 
     expect(config.testDir).toBe('./tests/e2e');
-    expect(playwrightHttpAgent().keepAlive).toBe(false);
     expect(await connectionsForTwoRequests()).toBe(2);
   });
 });

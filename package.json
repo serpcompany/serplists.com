@@ -112,7 +112,7 @@
     "@cloudflare/workers-types": "^4.20250810.0",
     "@eslint/js": "^9.9.0",
     "@opennextjs/aws": "4.1.6",
-    "@playwright/test": "^1.57.0",
+    "@playwright/test": "^1.64.1",
     "@secretlint/node": "^11.3.1",
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
     "@serpcompany/verify": "^0.2.0",

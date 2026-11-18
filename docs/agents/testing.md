@@ -266,11 +266,11 @@
   `route.fetch`) keeps idle connections with no limit of its own, so its request
   failed with `socket hang up`. Playwright has no option to stop that, so `playwright.config.ts`,
   which the runner and every worker load, calls `disableRequestKeepAlive()` from
-  `tests/e2e/support/request-connections.ts`: it turns keep-alive off on the HTTP agent
-  Playwright's request client sends every `http://` request through, so each request gets a
-  new connection, which the server reads before any idle timer applies.
-  `tests/unit/e2e/request-connections.test.ts` fails if a Playwright upgrade moves that
-  agent or stops using it.
+  `tests/e2e/support/request-connections.ts`: each Playwright request context makes its own
+  `node:http` agent for `http://` requests, so it replaces that module's `Agent` with one that
+  keeps no connection alive, and each request gets a new connection, which the server reads
+  before any idle timer applies. `tests/unit/e2e/request-connections.test.ts` fails if a
+  Playwright upgrade stops making its agents that way.
 - Wrangler's dev proxy (its ProxyWorker) keeps its connections to the worker open the same
   way, and there the risk is not one moment: while the worker is busy (a page render, the API
   calls a page sends at once), its workerd reads no new request and runs no timer, so a
