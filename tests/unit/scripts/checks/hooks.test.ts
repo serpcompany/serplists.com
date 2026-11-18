@@ -226,8 +226,11 @@ describe('the stop hook', { timeout: 60_000 }, () => {
   });
 
   it('reads a call with no input as one from the folder the hook was started in', async () => {
-    const result = await runHook('stop-hook.mjs', '', { cwd: scratchFolder('hooks'), env: throwawayRepositoryEnvironment() });
-    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+    const checkout = committed(otherCheckout('stop-hook.ts', true));
+    writeFiles(checkout, { 'probe.ts': 'export const probe = 2;\n' });
+    const result = await runHook('stop-hook.mjs', '', { cwd: checkout, env: throwawayRepositoryEnvironment({ GITHUB_ACTIONS: '' }) });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('checked by its own checkout: {"changed":["probe.ts"]}');
   });
 
   it('asks for an install at every stop when the call names no session to remember the ask in', async () => {
