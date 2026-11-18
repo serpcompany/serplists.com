@@ -90,15 +90,12 @@ async function resolveTemplateRunSource(
   }
 
   const normalizedSections = normalizeSectionsPayload(parseJsonArray(sourceTemplate.items) ?? []);
-  if (normalizedSections.error) {
-    return { error: jsonError('Template content is invalid', 500) };
-  }
 
   return {
     source: {
       effectiveTeamId,
       sections: resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalizedSections.sections))),
-      title: sourceTemplate.title || '',
+      title: sourceTemplate.title,
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
   };
@@ -111,7 +108,7 @@ export async function createChecklistRun(
   url: URL,
   userId: string,
 ): Promise<Response> {
-  const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
+  const read = await readJsonPayload(request, checklistPayloadSchema);
   if ('response' in read) return read.response;
 
   const { template_id, title, items, sections, status, teamId: payloadTeamId, team_id: payloadTeamIdSnake } = read.payload;

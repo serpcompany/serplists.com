@@ -227,6 +227,12 @@ describe('AgentAccessSection', () => {
     expect(html).not.toContain('/api/mcp');
   });
 
+  it('names an endpoint it cannot read as an address as given, in the notice that agents cannot use this address', () => {
+    const html = renderView({ mcpEndpoint: 'mcp.serplists.test/api/mcp', mcpHostMismatch: true });
+
+    expect(html).toContain('this endpoint uses mcp.serplists.test/api/mcp.');
+  });
+
   it('does not report "No Run Keys yet." when loading the keys failed', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, signedInUserAgentKeysKey);

@@ -17,7 +17,10 @@ import { schema } from '@functions/api/db';
 import {
   activeRunsInContext,
   checkActiveRunCapacity,
+  checkReopenCapacity,
+  findReopenLimitHitAfterMiss,
   isReopening,
+  reopenLimitResponse,
   runInsertStatements,
 } from '@functions/api/utils/active-run-limit';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -74,6 +77,41 @@ describe('checkActiveRunCapacity', () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
     expect(await capacityHit(env, { userId: 'owner', teamId: null })).toBeNull();
     expect(dbMocks.db.select).not.toHaveBeenCalled();
+  });
+});
+
+describe('reopening a run', () => {
+  const organizationRun = { status: 'completed', team_id: 'org-1', user_id: 'owner' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    vi.mocked(getEntitlementsForContext).mockResolvedValue(free);
+  });
+
+  it('checks the Organization plan when a share link reopens an Organization run with nobody signed in', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 3 }]);
+
+    const reopen = await checkReopenCapacity(env, organizationRun, 'in_progress', null);
+
+    expect(reopen).toEqual({ owner: { userId: 'owner', teamId: 'org-1' }, limit: 3, hit: { limit: 3, current: 3 } });
+    expect(getEntitlementsForContext).toHaveBeenCalledWith(env, { type: 'team', teamId: 'org-1', userId: 'owner' });
+    expect(reopenLimitResponse(reopen)?.status).toBe(403);
+  });
+
+  it('checks nothing when the save does not reopen the run', async () => {
+    await expect(checkReopenCapacity(env, organizationRun, 'completed', 'actor')).resolves.toBeNull();
+    expect(reopenLimitResponse(null)).toBeNull();
+    expect(getEntitlementsForContext).not.toHaveBeenCalled();
+  });
+
+  it('blames a missed reopen on the limit only when the context is full when it looks again', async () => {
+    const reopen = { owner: { userId: 'owner', teamId: 'org-1' }, limit: 3, hit: null };
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 2 }]).mockResolvedValueOnce([{ count: 3 }]);
+
+    await expect(findReopenLimitHitAfterMiss(env, reopen)).resolves.toBeNull();
+    await expect(findReopenLimitHitAfterMiss(env, reopen)).resolves.toEqual({ limit: 3, current: 3 });
   });
 });
 

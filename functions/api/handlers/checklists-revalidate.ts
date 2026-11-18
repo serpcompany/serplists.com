@@ -26,7 +26,7 @@ export async function revalidateChecklistRun(
     expected_revision: z.number().int().positive().optional(),
   }).safeParse(optionalBody);
   if (!revalidateBody.success) {
-    return invalidPayloadResponse(revalidateBody.error, 'Invalid revalidation payload');
+    return invalidPayloadResponse(revalidateBody.error);
   }
 
   const found = await findRunToUpdate(env, db, checklistId, userId, 'Checklist not found');
@@ -87,7 +87,7 @@ export async function revalidateChecklistRun(
   };
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun, userId),
+    subject: getRunSubject(existingRun),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.revalidated',
     before: existingRun,

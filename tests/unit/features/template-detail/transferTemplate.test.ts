@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { transferTemplateToOrganization } from '@/features/template-detail/transferTemplate';
 import { createApiError } from '@/lib/api-errors';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 import { buildV0DemoPrivateTemplate } from '../../../fixtures/v0DemoFixtures';
 
@@ -23,6 +24,16 @@ describe('transferTemplateToOrganization', () => {
     expect(onTemplateChange).toHaveBeenCalledWith({ ...privateTemplate, ownerType: 'team', teamId: 'org-acme', version: 6 });
     expect(invalidateTemplates).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ kind: 'ok', templateId: privateTemplate.id, teamId: 'org-acme' });
+  });
+
+  it('sends version 1, the version the server starts every Template at, for a loaded copy that carries none', async () => {
+    const apiClient = apiClientAnswering();
+    const unversioned: ChecklistTemplate = { ...privateTemplate };
+    delete unversioned.version;
+
+    await transferTemplateToOrganization({ apiClient, onTemplateChange: vi.fn(), teamId: 'org-acme', template: unversioned });
+
+    expect(apiClient.transferTemplate).toHaveBeenCalledWith(privateTemplate.id, { teamId: 'org-acme', expectedVersion: 1 });
   });
 
   it('still answers the transfer when the list refresh fails, since the Template has already moved', async () => {

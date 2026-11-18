@@ -46,6 +46,7 @@ describe('queryKeys', () => {
     client.setQueryData(queryKeys.templateDetail('t1', 'u1'), { id: 't1' });
     client.setQueryData(queryKeys.templateDetail('launch-qa', undefined), { id: 't1' });
     client.setQueryData(queryKeys.templateDetail('t2', 'u1'), { id: 't2' });
+    client.setQueryData(queryKeys.templateDetail(undefined, 'u1'), null);
 
     const matched = client
       .getQueryCache()

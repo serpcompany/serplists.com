@@ -6,6 +6,7 @@ import {
   parsePsProcessInfo,
   parseWindowsProcessInfo,
   readProcessInfo,
+  type RunCommand,
 } from '../../../scripts/lib/process-info';
 
 describe('parseWindowsProcessInfo', () => {
@@ -56,5 +57,45 @@ describe('readProcessInfo', { timeout: 30_000 }, () => {
       Object.assign(Promise.reject(new Error('powershell.exe not found')), { child: new ChildProcess() });
 
     expect(await readProcessInfo(1234, { run: failedQuery })).toBeNull();
+  });
+});
+
+describe('readProcessInfo on each operating system', () => {
+  type Query = { file: string; args: readonly string[]; env: NodeJS.ProcessEnv | undefined };
+
+  const answering = (stdout: string, queries: Query[]): RunCommand => (file, args, options) => {
+    queries.push({ file, args, env: options.env });
+    return Promise.resolve({ stdout });
+  };
+
+  it('asks ps for the start time and command line in the C locale, outside Windows', async () => {
+    const queries: Query[] = [];
+    const info = await readProcessInfo(4321, {
+      platform: 'linux',
+      run: answering('Mon Sep  8 06:30:00 2026 node scripts/dev-auto.ts all\n', queries),
+    });
+
+    expect(info).toEqual({ startedAt: new Date(2026, 8, 8, 6, 30, 0).getTime(), commandLine: 'node scripts/dev-auto.ts all' });
+    expect(queries.map(({ file, args, env }) => ({ file, args, locale: env?.['LC_ALL'] }))).toEqual([
+      { file: 'ps', args: ['-o', 'lstart=', '-o', 'args=', '-p', '4321'], locale: 'C' },
+    ]);
+  });
+
+  it('asks PowerShell for the process with that id on Windows', async () => {
+    const queries: Query[] = [];
+    const info = await readProcessInfo(4321, {
+      platform: 'win32',
+      run: answering('{"startedAt":1790599283202,"commandLine":"node"}', queries),
+    });
+
+    expect(info).toEqual({ startedAt: 1790599283202, commandLine: 'node' });
+    expect(queries[0]?.file).toBe('powershell.exe');
+    expect(queries[0]?.args.at(-1)).toContain('Get-CimInstance Win32_Process -Filter "ProcessId=4321"');
+  });
+
+  it('reads no process from no output or a start time that is not a date', () => {
+    expect(parseWindowsProcessInfo(undefined)).toBeNull();
+    expect(parsePsProcessInfo(undefined)).toBeNull();
+    expect(parsePsProcessInfo('Mon Abc  8 06:30:00 2026 node')).toBeNull();
   });
 });

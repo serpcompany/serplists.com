@@ -111,7 +111,7 @@ export function parseToolArguments<Arguments>(
     message: issue.message,
   }));
   const message = issues.map(({ path, message: text }) => (path ? `${path}: ${text}` : text)).join("; ");
-  throw new ToolError(message || "Invalid arguments", "invalid_arguments", { issues });
+  throw new ToolError(message, "invalid_arguments", { issues });
 }
 
 const nullClearsAFormAnswer: NullIsAValue = (args, name) => name === "answer" && args["operation"] === "set_form_answer";
@@ -290,7 +290,7 @@ export function toolPermission(name: string): RunKeyPermission | undefined {
   return tool ? toolPermissions[tool.name] : undefined;
 }
 
-export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {
+export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): name is ToolName {
   const permission = toolPermission(name);
   return permission !== undefined && permissions.includes(permission);
 }

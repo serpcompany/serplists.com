@@ -209,6 +209,37 @@ describe('Templates Handlers', () => {
     expect(data.events[1]).toEqual(objectContaining({ id: 'audit-3', metadata: agent }));
   });
 
+  describe('in a database the history tables have not reached yet', () => {
+    const ownTemplate = { id: 'template-1', title: 'Legacy', items: '[]', version: 1, user_id: 'user-123', owner_type: 'user', team_id: null, is_public: false };
+    const readHistory = () => handleTemplates(new Request('http://localhost/api/templates/template-1/history', { method: 'GET' }), mockEnv);
+
+    it.each([
+      ['an error', new Error('D1_ERROR: no such table: template_versions: SQLITE_ERROR')],
+      ['text', 'no such table: audit_events'],
+    ])('answers an empty history when the read fails with %s naming a missing history table', async (_label, failure) => {
+      chainTheVersionAndEventReads();
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownTemplate]).mockRejectedValueOnce(failure).mockResolvedValueOnce([]);
+
+      const response = await readHistory();
+
+      expect(response.status).toBe(200);
+      expect(historyBody.parse(await response.json())).toEqual({
+        templateId: 'template-1',
+        subject: { type: 'user', id: 'user-123' },
+        versions: [],
+        events: [],
+      });
+    });
+
+    it('passes on any other failure', async () => {
+      const locked = new Error('D1_ERROR: database is locked');
+      chainTheVersionAndEventReads();
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownTemplate]).mockRejectedValueOnce(locked).mockResolvedValueOnce([]);
+
+      await expect(readHistory()).rejects.toBe(locked);
+    });
+  });
+
   it('should not expose public template history to non-owners', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {

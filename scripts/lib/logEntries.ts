@@ -38,6 +38,10 @@ const nextAccessLine =
   /^\s*(?<method>GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)\s+(?<path>\S+)\s+(?<status>\d{3})\s+in\s+(?<duration>\d+(?:\.\d+)?)(?<unit>ms|s)(?:\s+\((?<breakdown>[^)]*)\))?\s*$/;
 const breakdownTiming = /^\s*(?<name>[\w.-]+):\s*(?<duration>\d+(?:\.\d+)?)(?<unit>ms|s)\s*$/;
 
+const timingSchema = z.object({ duration: z.string(), unit: z.string() });
+const nextAccessSchema = timingSchema.extend({ method: z.string(), path: z.string(), status: z.string(), breakdown: z.string().optional() });
+const breakdownTimingSchema = timingSchema.extend({ name: z.string() });
+
 const toMilliseconds = (duration: string, unit: string) => (unit === "s" ? Number(duration) * 1000 : Number(duration));
 
 const camelCase = (name: string) =>
@@ -68,20 +72,20 @@ export function parseApiLine(text: string): ParsedLine | null {
 }
 
 function parseNextAccessLine(text: string): ParsedLine | null {
-  const groups = nextAccessLine.exec(text)?.groups;
-  if (!groups) return null;
-  const { method, path, status, duration, unit, breakdown } = groups;
+  const access = nextAccessSchema.safeParse(nextAccessLine.exec(text)?.groups);
+  if (!access.success) return null;
+  const { method, path, status, duration, unit, breakdown } = access.data;
   const fields: LogFields = {
     method,
     path,
     status: Number(status),
-    durationMs: toMilliseconds(duration ?? "0", unit ?? "ms"),
+    durationMs: toMilliseconds(duration, unit),
   };
   for (const part of (breakdown ?? "").split(",")) {
-    const timing = breakdownTiming.exec(part)?.groups;
-    if (!timing) continue;
-    const { name, duration: timingDuration, unit: timingUnit } = timing;
-    if (name) fields[`${camelCase(name)}Ms`] = toMilliseconds(timingDuration ?? "0", timingUnit ?? "ms");
+    const timing = breakdownTimingSchema.safeParse(breakdownTiming.exec(part)?.groups);
+    if (!timing.success) continue;
+    const { name, duration: timingDuration, unit: timingUnit } = timing.data;
+    fields[`${camelCase(name)}Ms`] = toMilliseconds(timingDuration, timingUnit);
   }
   return { source: "next", level: "info", event: "next_request", timestamp: undefined, requestId: undefined, fields };
 }

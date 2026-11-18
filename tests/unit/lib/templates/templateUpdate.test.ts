@@ -42,4 +42,11 @@ describe('buildTemplateUpdateRequest', () => {
 
     expect(JSON.parse(JSON.stringify(request))).not.toHaveProperty('is_public');
   });
+
+  it('saves the stored slug when the editor has no address of its own, and none when neither is set', () => {
+    const template = { id: 'template-1', title: 'Launch plan', sections: [], version: 3 };
+
+    expect(buildTemplateUpdateRequest({ ...template, seoUrl: ' ', slug: ' launch-plan ' }).slug).toBe('launch-plan');
+    expect(buildTemplateUpdateRequest(template).slug).toBeUndefined();
+  });
 });

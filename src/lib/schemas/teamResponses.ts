@@ -18,7 +18,7 @@ export const teamSummarySchema = z.object({
   memberId: z.string(),
 });
 
-export const teamDetailSchema = z.object({
+const teamDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: optionalText,

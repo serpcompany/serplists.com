@@ -1,23 +1,21 @@
-import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import {
   apiMocks,
   inviteeAuth as auth,
   PENDING_INVITE_PREVIEW as preview,
   workspaceMocks,
 } from '../../support/teamInvitePage';
-import React, { act } from 'react';
-import { fireEvent, screen } from '@testing-library/react';
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { act } from 'react';
+import { focusManager } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import { organizationConsole, PERSONAL_CONSOLE } from '@/lib/consoleRoutes';
-import TeamInviteAccept from '@/views/TeamInviteAccept';
 
-import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
 import { deferred } from '../../support/deferred';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
-import { renderSettled, theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+import { theInMemoryBrowserAsTheWindow } from '../../support/renderInTheDom';
+import { openTheInvitePage } from '../../support/teamInvitePageInTheDom';
 
 const inviteRevoked = () =>
   new ApiError({ status: 404, message: 'Invite not found', code: 'invite_not_found' });
@@ -36,24 +34,9 @@ const switchAwayFromTheTabAndBack = async () => {
 };
 
 async function openInvite() {
-  const queryClient = createQueryClientWithAppDefaults();
-  navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
-  const { container, unmount } = await renderSettled(
-    <QueryClientProvider client={queryClient}>
-      <RoutedPages pages={{ '/team-invites/[token]': <TeamInviteAccept /> }} />
-    </QueryClientProvider>,
-  );
-  unmountTheInvitePage = unmount;
-  await letQueryUpdatesReachObservers();
-
-  const press = async (name: string) => {
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name }));
-    });
-    await letQueryUpdatesReachObservers();
-  };
-  const hrefOf = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
-  return { text: () => container.textContent, press, hrefOf };
+  const page = await openTheInvitePage();
+  unmountTheInvitePage = page.unmount;
+  return page;
 }
 
 describe('Organization invite page after the invitee answers, whose confirmation no later read of the preview may replace', () => {

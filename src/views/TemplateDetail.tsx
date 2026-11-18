@@ -145,7 +145,7 @@ const TemplateDetail = () => {
     userId: user?.id,
   });
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
-  const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
+  const updatedDate = formatLocalDate(displayTemplate?.updatedAt);
   const historyEntries = buildTemplateHistoryTimeline(history?.data, historyLimitFor(Boolean(history?.showingAll)));
 
   const handleUpgrade = () =>
@@ -189,10 +189,6 @@ const TemplateDetail = () => {
   };
 
   const handleShare = async () => {
-    if (!displayTemplate) {
-      return;
-    }
-
     const visit = beginVisit();
     setIsCreatingShare(true);
     try {
@@ -266,10 +262,6 @@ const TemplateDetail = () => {
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
-    if (!displayTemplate || !canEditTemplate || isChangingVisibility) {
-      return;
-    }
-
     const visit = beginVisit();
     setIsUpdatingVisibility(true);
     try {
@@ -437,7 +429,7 @@ const TemplateDetail = () => {
               entries={historyEntries}
               isError={Boolean(history?.isError)}
               isLoading={Boolean(history?.isLoading)}
-              viewAll={history ? { onViewAll: history.onViewAll, showingAll: history.showingAll } : undefined}
+              viewAll={{ onViewAll: history.onViewAll, showingAll: history.showingAll }}
             />
           ) : null}
         </div>

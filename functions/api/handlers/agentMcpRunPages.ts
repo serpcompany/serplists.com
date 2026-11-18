@@ -1,10 +1,9 @@
 import {
-  bounded,
+  answerPage,
   boundedText,
   byteSize,
   continuePage,
   decodeCursor,
-  describePage,
   encodeCursor,
   findTask,
   fits,
@@ -12,18 +11,16 @@ import {
   invalidCursor,
   outlinePage,
   pack,
-  partAndNextCursor,
   readCursorSchema,
   readSectionOrTask,
   roomForUnits,
   START,
   tasksOf,
-  titleOf,
   unitOf,
   type Paged,
   type Position,
   type ReadScope,
-  type ToolResult,
+  type ToolAnswer,
 } from "./agentMcpPages";
 import type { JsonRecord, SectionRecord } from "../../../src/lib/schemas/jsonRecords";
 import {
@@ -65,19 +62,25 @@ const idsInCursor = (scope: SectionAndTaskIds): ReadScope => ({
   ...(scope.taskId === undefined ? {} : { rt: scope.taskId }),
 });
 
-function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: RetiredEntryRecord[], start: Position): JsonRecord {
+function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: RetiredEntryRecord[], start: Position): ToolAnswer {
   const paged = pagedRun(view.header);
   const cursorScope = idsInCursor(scope);
   const longestCursor = encodeCursor({ t: paged.id, v: paged.version, ...cursorScope, u: entries.length, o: Number.MAX_SAFE_INTEGER });
   const frame = { run: paged.ref, retiredItems: [], retiredCount: entries.length, firstRetired: entries.length, nextCursor: longestCursor };
   const packed = pack(entries.map(unitOf), start, roomForUnits(frame));
-  return bounded({
-    run: paged.ref,
-    retiredItems: entries.slice(packed.first, packed.first + packed.count),
-    retiredCount: entries.length,
-    firstRetired: packed.first,
-    ...partAndNextCursor(paged, packed, cursorScope, (unit) => ({ of: "retiredItem", index: unit })),
-  });
+  return answerPage(
+    paged,
+    packed,
+    cursorScope,
+    (unit) => ({ of: "retiredItem", index: unit }),
+    {
+      run: paged.ref,
+      retiredItems: entries.slice(packed.first, packed.first + packed.count),
+      retiredCount: entries.length,
+      firstRetired: packed.first,
+    },
+    (more) => `Loaded retired entries ${packed.first + 1}-${packed.first + packed.count} of the ${entries.length}, too many for one result.${more}`,
+  );
 }
 
 function retiredHolds(view: RunView, scope: SectionAndTaskIds): boolean {
@@ -93,7 +96,7 @@ function taskIsLive(view: RunView, taskId: string, sectionId?: string): boolean 
     && tasksOf(section).some((task) => task.id === taskId));
 }
 
-function readRetired(view: RunView, scope: SectionAndTaskIds): JsonRecord {
+function readRetired(view: RunView, scope: SectionAndTaskIds): ToolAnswer {
   const { sectionId, taskId } = scope;
   if (sectionId !== undefined && !sectionIsLive(view, sectionId) && !retiredHolds(view, { sectionId })) {
     throw new ToolError("Section not found (sectionId)", "section_not_found");
@@ -103,7 +106,8 @@ function readRetired(view: RunView, scope: SectionAndTaskIds): JsonRecord {
   }
   const entries = retiredWorkOf(view.retired, scope);
   const whole = { run: pagedRun(view.header).ref, retiredItems: entries };
-  return fits(whole) ? whole : retiredPage(view, scope, entries, START);
+  if (!fits(whole)) return retiredPage(view, scope, entries, START);
+  return { data: whole, text: `Loaded ${entries.length} retired ${entries.length === 1 ? "entry" : "entries"}.` };
 }
 
 function refuseRetiredOnlyIds(view: RunView, { sectionId, taskId }: SectionAndTaskIds): void {
@@ -115,7 +119,7 @@ function refuseRetiredOnlyIds(view: RunView, { sectionId, taskId }: SectionAndTa
   }
 }
 
-function continueRead(view: RunView, value: string, args: RunReadArgs): JsonRecord {
+function continueRead(view: RunView, value: string, args: RunReadArgs): ToolAnswer {
   const cursor = decodeCursor(value, readCursorSchema, "get_run");
   const { header, sections } = view;
   if (cursor.t !== header.id) throw invalidCursor("It belongs to another run");
@@ -137,29 +141,15 @@ function continueRead(view: RunView, value: string, args: RunReadArgs): JsonReco
 
 export type RunReadArgs = SectionAndTaskIds & { retired?: boolean | undefined; cursor?: string | undefined };
 
-export function readRun(view: RunView, args: RunReadArgs): JsonRecord {
+export function readRun(view: RunView, args: RunReadArgs): ToolAnswer {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
   if (args.retired === true) return readRetired(view, { sectionId: args.sectionId, taskId: args.taskId });
   refuseRetiredOnlyIds(view, args);
   const sectionOrTask = readSectionOrTask(pagedRun(view.header), view.sections, args);
   if (sectionOrTask) return sectionOrTask;
   const whole = wholeRun(view);
-  return fits(whole) ? whole : outlinePage(pagedRun(view.header), view.header, view.sections, START, retiredStats(view));
-}
-
-export function describeRunRead(result: ToolResult): string {
-  const page = describePage(result, "get_run", "Run");
-  if (page) return page;
-  if (Array.isArray(result.retiredItems)) {
-    const count = result.retiredItems.length;
-    if (typeof result.firstRetired !== "number" || typeof result.retiredCount !== "number") {
-      return `Loaded ${count} retired ${count === 1 ? "entry" : "entries"}.`;
-    }
-    const more = typeof result.nextCursor === "string" ? " More follows: call get_run with cursor set to nextCursor." : "";
-    const entries = count === 0 ? "none" : `${result.firstRetired + 1}-${result.firstRetired + count}`;
-    return `Loaded retired entries ${entries} of the ${result.retiredCount}, too many for one result.${more}`;
-  }
-  return `Loaded run "${boundedText(titleOf(result.run))}".`;
+  if (!fits(whole)) return outlinePage(pagedRun(view.header), view.header, view.sections, START, retiredStats(view));
+  return { data: whole, text: `Loaded run "${boundedText(view.header.title)}".` };
 }
 
 const minimalRun = (header: RunHeader): JsonRecord => ({
@@ -172,30 +162,26 @@ const minimalRun = (header: RunHeader): JsonRecord => ({
 
 const firstFittingOr = (smallest: JsonRecord, larger: JsonRecord[]): JsonRecord => larger.find(fits) ?? smallest;
 
-export function startedRunResult(view: RunView): JsonRecord {
-  return firstFittingOr({ run: minimalRun(view.header), sectionsOmitted: true }, [
-    wholeRun(view),
-    { run: view.header, sectionsOmitted: true },
-  ]);
+export function startedRunResult(view: RunView): ToolAnswer {
+  const whole = wholeRun(view);
+  const started = `Started run "${boundedText(view.header.title)}".`;
+  if (fits(whole)) return { data: whole, text: started };
+  return {
+    data: firstFittingOr({ run: minimalRun(view.header), sectionsOmitted: true }, [{ run: view.header, sectionsOmitted: true }]),
+    text: `${started} It is too large for one result; read it with get_run.`,
+  };
 }
 
-function locateTask(sections: SectionRecord[], taskId: string) {
-  try {
-    return findTask(sections, taskId);
-  } catch {
-    return undefined;
-  }
-}
-
-export function updatedRunResult(header: RunHeader, sections: SectionRecord[], operation: UpdateRunArgs): JsonRecord {
+export function updatedRunResult(header: RunHeader, sections: SectionRecord[], operation: UpdateRunArgs): ToolAnswer {
   const run = fits({ run: header }) ? header : minimalRun(header);
-  if (operation.operation === "set_run_status") return { run };
-  const at = locateTask(sections, operation.taskId);
-  const section = at ? sections[at.sectionIndex] : undefined;
-  const ids = { ...(section ? frameId("sectionId", section.id) : {}), ...frameId("taskId", operation.taskId) };
-  const task = at && section ? tasksOf(section)[at.taskIndex] : undefined;
-  return firstFittingOr({ run: minimalRun(header), taskOmitted: true }, [
-    ...(task ? [{ run, ...ids, task: agentTaskView(task) }] : []),
-    { run, ...ids, taskOmitted: true },
-  ]);
+  const updated = `Updated run "${boundedText(header.title)}".`;
+  if (operation.operation === "set_run_status") return { data: { run }, text: updated };
+  const { section, task } = findTask(sections, operation.taskId);
+  const ids = { ...frameId("sectionId", section.id), ...frameId("taskId", operation.taskId) };
+  const withTask = { run, ...ids, task: agentTaskView(task) };
+  if (fits(withTask)) return { data: withTask, text: updated };
+  return {
+    data: firstFittingOr({ run: minimalRun(header), taskOmitted: true }, [{ run, ...ids, taskOmitted: true }]),
+    text: `${updated} The task is too large for one result; read it with get_run and taskId.`,
+  };
 }

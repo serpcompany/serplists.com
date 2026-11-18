@@ -105,3 +105,39 @@ describe('the latest-run action, which stops an old run started again from deplo
     expect(output).toContain('WORKFLOW, JOB, GITHUB_REF_NAME and GITHUB_RUN_NUMBER must be set.');
   });
 });
+
+describe('the latest-run action, given answers it cannot read', () => {
+  const answering = (path: string, body: unknown): Route => (request) =>
+    request.path === path ? { status: 200, body } : github([aRun(42, [done(STAGING)]), thisRun])(request);
+
+  it('passes a later run whose job was cancelled before it started and lists no steps', async () => {
+    const cancelled = aRun(42, [{ name: STAGING, status: 'completed', conclusion: 'cancelled' }]);
+
+    expect((await guard(STAGING, [cancelled, thisRun])).status).toBe(0);
+  });
+
+  it.each<[string, string, string]>([
+    ['runs that are not a list', RUNS, 'GitHub listed no runs of ci.yml'],
+    ['jobs that are not a list', `/repos/${REPOSITORY}/actions/runs/9042/jobs`, 'GitHub listed no jobs for run 42'],
+  ])('fails, deploying nothing, on %s', async (_case, path, message) => {
+    const { status, output } = await runAgainstAGitHubStandIn(
+      { script: '.github/actions/latest-run/latest-run.cjs' },
+      { GITHUB_REPOSITORY: REPOSITORY, GITHUB_REF_NAME: 'staging', GITHUB_RUN_NUMBER: '41', WORKFLOW: 'ci.yml', JOB: STAGING },
+      answering(path, { total_count: 0 }),
+    );
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(`::error title=Couldn't tell whether a later run exists::${message}`);
+  });
+
+  it('fails when it is not told which run this is', async () => {
+    const { status, output } = await runAgainstAGitHubStandIn(
+      { script: '.github/actions/latest-run/latest-run.cjs' },
+      { GITHUB_REPOSITORY: REPOSITORY, GITHUB_REF_NAME: 'staging', WORKFLOW: 'ci.yml', JOB: STAGING },
+      github([thisRun]),
+    );
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('WORKFLOW, JOB, GITHUB_REF_NAME and GITHUB_RUN_NUMBER must be set.');
+  });
+});

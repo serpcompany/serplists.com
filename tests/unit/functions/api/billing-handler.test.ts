@@ -349,4 +349,38 @@ describe("Billing handler", () => {
     expect(fakeStripeCustomersTable.mapping?.stripe_customer_id).toBe("cus_saved_first");
     expect(stripe.checkoutCustomers()).toEqual([]);
   });
+
+  it.each([
+    ["the frontend URL's origin", "https://app.serplists.test/some/path", "https://app.serplists.test"],
+    ["the request's origin when the frontend URL cannot be read", "not a url", "http://localhost"],
+  ])("sends Stripe back to %s after checkout", async (_label, frontendUrl, origin) => {
+    sessionMocks.getSessionUserId.mockResolvedValue(`origin-user-${origin}`);
+    const stripe = stubStripeCreatingACustomerPerNewIdempotencyKey();
+
+    const response = await handleBilling(postBilling("checkout"), { ...stripeEnv, FRONTEND_URL: frontendUrl });
+
+    expect(response.status).toBe(200);
+    const [checkout] = stripe.calls.filter((call) => call.path === "/v1/checkout/sessions" && call.body.has("success_url"));
+    expect(checkout?.body.get("success_url")?.startsWith(`${origin}/`)).toBe(true);
+  });
+
+  it("answers 404 to the billing status of an Organization the member's role may not view", async () => {
+    teamAccessMocks.canViewTeam.mockReturnValueOnce(false);
+
+    const response = await handleBilling(new Request("http://localhost/api/billing/status?teamId=team-1"), mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(entitlementsMocks.getEntitlementsForContext).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["GET", "checkout"],
+    ["GET", "nothing-here"],
+    ["POST", "status"],
+  ])("answers %s /api/billing/%s with 404", async (method, path) => {
+    const response = await handleBilling(new Request(`http://localhost/api/billing/${path}`, { method }), stripeEnv);
+
+    expect(response.status).toBe(404);
+    expect((await readJson(response, apiErrorBody)).error).toBe("Not Found");
+  });
 });

@@ -104,4 +104,11 @@ describe('compareTemplatesByRecent', () => {
       }
     }
   });
+
+  it('orders copies with the same title and dates by id, whichever comes first', () => {
+    const copy = (id: string) => ({ ...fixture(id, '2026-09-20T00:00:00.000Z', ''), title: 'Launch plan' });
+
+    expect([copy('b'), copy('a')].sort(compareTemplatesByRecent).map(({ id }) => id)).toEqual(['a', 'b']);
+    expect([copy('a'), copy('b')].sort(compareTemplatesByRecent).map(({ id }) => id)).toEqual(['a', 'b']);
+  });
 });

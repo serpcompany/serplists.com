@@ -4,6 +4,20 @@ import { withEdgeCache } from '../../../../functions/api/utils/edge-cache';
 
 let store: Map<string, Response>;
 
+describe('withEdgeCache where the runtime has no Cache API', () => {
+  it('builds the response on every request', async () => {
+    vi.stubGlobal('caches', undefined);
+    const handler = vi.fn(async () => new Response('[1]'));
+
+    await withEdgeCache(new Request('https://serplists.com/api/templates'), '/api/templates', 300, handler);
+    const second = await withEdgeCache(new Request('https://serplists.com/api/templates'), '/api/templates', 300, handler);
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(await second.text()).toBe('[1]');
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('withEdgeCache', () => {
   beforeEach(() => {
     store = new Map();

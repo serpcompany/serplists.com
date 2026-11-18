@@ -22,11 +22,9 @@ export function limitPersonalRunKey(
   window.count += 1;
   rateLimitWindows.set(identity.keyId, window);
 
-  if (rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) {
-    for (const [key, candidate] of rateLimitWindows) {
-      if (candidate.resetsAt <= now || rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) rateLimitWindows.delete(key);
-      if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
-    }
+  for (const key of rateLimitWindows.keys()) {
+    if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
+    rateLimitWindows.delete(key);
   }
 
   if (window.count <= RUN_KEY_REQUESTS_PER_MINUTE) return { allowed: true };

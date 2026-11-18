@@ -105,6 +105,12 @@ describe('catalog hashes', () => {
     expect(templates[0]).toEqual({ slug: 'a', categories: ['SEO'], contentHash: hashJson(template('a', 'x')) });
   });
 
+  it('reads a pack without templates as empty, and a template whose categories are not a list as uncategorized', () => {
+    const templates = listPublicTemplates([{}, { templates: [{ slug: 'a', visibility: 'public', categories: 'SEO' }] }]);
+
+    expect(templates.map(({ slug, categories }) => ({ slug, categories }))).toEqual([{ slug: 'a', categories: [] }]);
+  });
+
   it('hashes the category list the same with either line ending', () => {
     const templates = listPublicTemplates([{ templates: [template('a', 'x')] }]);
 

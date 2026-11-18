@@ -3,7 +3,7 @@ import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
-import { readGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
+import { readGuestRun, removeGuestRun, startGuestRun } from '@/features/guest-runs/guestRunStore';
 import type { CreateRun } from '@/features/template-detail/templateActionOutcome';
 import { ORGANIZATION_UPGRADE_MESSAGE } from '@/lib/access-flow';
 import { createApiError } from '@/lib/api-errors';
@@ -116,6 +116,69 @@ describe('Save to account, offered once a guest signs up or logs in', () => {
     expect(apiMocks.createBillingCheckout).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
     expect(hook().isSaving).toBe(false);
+    expect(readGuestRun(guestRunTemplate.id)?.title).toBe('Lake trip');
+  });
+
+  it('opens the new Run when the page has nothing to do before leaving', async () => {
+    const page = await mountQueryHook(() => useSaveGuestRunToAccount(guestRunTemplate));
+    unmounts.push(page.unmount);
+
+    await act(async () => {
+      await page.current().save();
+      await settle();
+    });
+
+    expect(navigation.url()).toBe('/dashboard/runs/run-9/');
+    expect(readGuestRun(guestRunTemplate.id)).toBeNull();
+  });
+
+  it('sends nothing when this browser holds no guest run, as after another tab saved it', async () => {
+    removeGuestRun(guestRunTemplate.id);
+
+    await saveToAccount();
+
+    expect(accountRuns.createRun).not.toHaveBeenCalled();
+    expect(navigation.log).toEqual([]);
+  });
+
+  it('sends a person whose session ended to log in, back to this page, and keeps the guest run', async () => {
+    accountRuns.createRun.mockRejectedValue(createApiError(401, { error: 'Sign in again' }));
+
+    await saveToAccount();
+
+    expect(navigation.url()).toBe(`/login/?next=${encodeURIComponent('/profile/alice/weekend-camping/run/')}`);
+    expect(readGuestRun(guestRunTemplate.id)?.title).toBe('Lake trip');
+  });
+
+  it.each([
+    ['is gone', createApiError(404, { error: 'Not found' }), 'Run not found'],
+    ['cannot be read', createApiError(500, { error: 'Database unavailable' }), 'Database unavailable'],
+  ])('says why and keeps the guest run when the new Run %s', async (_case, failure, message) => {
+    apiMocks.getChecklistById.mockRejectedValue(failure);
+
+    await saveToAccount();
+
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(accountRuns.updateRun).not.toHaveBeenCalled();
+    expect(readGuestRun(guestRunTemplate.id)?.title).toBe('Lake trip');
+    expect(navigation.log).toEqual([]);
+  });
+
+  it('says billing is unavailable instead of starting checkout when the site has billing turned off', async () => {
+    apiMocks.getBillingStatus.mockResolvedValue({ billingEnabled: false, plan: 'free' });
+    accountRuns.createRun.mockRejectedValue(createApiError(403, { code: 'limit_reached', error: 'Your plan allows 3 active runs.' }));
+    const page = await mountQueryHook(() => useSaveGuestRunToAccount(guestRunTemplate, beforeLeaving));
+    unmounts.push(page.unmount);
+    await act(settle);
+
+    await act(async () => {
+      await page.current().save();
+      await settle();
+    });
+
+    expect(apiMocks.createBillingCheckout).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Billing is temporarily unavailable. Please contact support.');
+    expect(page.current().isSaving).toBe(false);
     expect(readGuestRun(guestRunTemplate.id)?.title).toBe('Lake trip');
   });
 });

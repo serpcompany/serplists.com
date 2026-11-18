@@ -45,6 +45,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { countRunTasks } from '@/lib/utils/checklistSections';
+import type { ChecklistRun } from '@/types/checklist';
 
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
@@ -117,20 +118,13 @@ const ChecklistRunPage = () => {
   const handleBack = () =>
     router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath(runContext));
 
-  const handleTitleEdit = () => {
-    if (isSharedRun || !displayRun) {
-      return;
-    }
-
-    setEditTitle(displayRun.title);
+  const handleTitleEdit = (shownRun: ChecklistRun) => {
+    setEditTitle(shownRun.title);
     setIsEditingTitle(true);
   };
 
-  const handleTitleSave = async () => {
-    if (isSharedRun || !run) {
-      return;
-    }
-    if (editTitle.trim() === run.title) {
+  const handleTitleSave = async (shownRun: ChecklistRun) => {
+    if (editTitle.trim() === shownRun.title) {
       handleTitleCancel();
       return;
     }
@@ -239,9 +233,9 @@ const ChecklistRunPage = () => {
             onBack={handleBack}
             onCancelRename={handleTitleCancel}
             onEditTitleChange={setEditTitle}
-            onSaveTitle={() => void handleTitleSave()}
+            onSaveTitle={() => void handleTitleSave(displayRun)}
             onShare={() => void shareLinkState.createShareLink()}
-            onStartRename={handleTitleEdit}
+            onStartRename={() => handleTitleEdit(displayRun)}
             onStopSharing={shareLinkState.stopSharing}
             progress={displayProgress}
             title={displayRun.title}

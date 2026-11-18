@@ -93,7 +93,7 @@ async function storeUpload(request: Request, env: Env, url: URL): Promise<Respon
   }
 
   const filename = sanitizeFilename(file.name || 'upload');
-  const ext = filename.includes('.') ? filename.split('.').pop() ?? '' : '';
+  const ext = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1) : '';
   const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
 
   await env.R2_UPLOADS.put(key, file, {

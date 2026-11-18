@@ -4,12 +4,17 @@ import React from 'react';
 import { waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const authState = vi.hoisted(() => ({ username: 'alice' as string | null, image: null as string | null }));
+const authState = vi.hoisted(() => ({
+  email: 'alice@example.com',
+  image: null as string | null,
+  name: 'Alice' as string | undefined,
+  username: 'alice' as string | null,
+}));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
     logout: vi.fn(),
-    user: { email: 'alice@example.com', id: 'user-1', name: 'Alice', username: authState.username, image: authState.image },
+    user: { email: authState.email, id: 'user-1', name: authState.name, username: authState.username, image: authState.image },
   }),
 }));
 
@@ -100,6 +105,24 @@ describe('AccountMenu', () => {
     } finally {
       authState.image = null;
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('shows the first letter of the email when the user has an empty or no name, and U with neither', async () => {
+    const initialFor = async (name: string | undefined, email: string) => {
+      authState.name = name;
+      authState.email = email;
+      navigation.reset('/templates/');
+      const view = await renderSettled(<AccountMenu />);
+      const initial = view.getByRole('button', { name: 'Account menu' }).textContent;
+      view.unmount();
+      return initial;
+    };
+    try {
+      expect([await initialFor('', 'bob@example.com'), await initialFor(undefined, 'carol@example.com'), await initialFor('', '')]).toEqual(['B', 'C', 'U']);
+    } finally {
+      authState.name = 'Alice';
+      authState.email = 'alice@example.com';
     }
   });
 });

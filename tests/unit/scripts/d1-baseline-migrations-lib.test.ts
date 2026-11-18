@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +10,7 @@ import {
 } from '../../../scripts/d1-baseline-migrations-lib';
 import { buildScriptInvocation } from '../../../scripts/lib/run-tool';
 import { z } from 'zod';
+import { ranToTheEnd } from '../../support/scriptProcess';
 import { parseJsonText } from '../../support/storedJson';
 
 const repoRoot = process.cwd();
@@ -98,6 +98,31 @@ describe('resolveBaselineTarget against wrangler.toml', () => {
     });
     expect(target.ok).toBe(false);
   });
+
+  it('refuses a remote baseline when wrangler.toml names no production database_id', () => {
+    const withoutIds = readD1Databases(['[[d1_databases]]', 'binding = "DB"', 'preview_database_id = "s-1"'].join('\n'));
+
+    expect(
+      resolveBaselineTarget({ ...parseBaselineArgs(['--remote', '--database', 'DB', '--preview'], {}), d1: withoutIds }),
+    ).toEqual({ ok: false, error: 'wrangler.toml has no production D1 database_id.' });
+  });
+
+  it('resolves --allow-production for a database only the production environment names', () => {
+    const productionOnly = readD1Databases(
+      [
+        "d1_databases = [{ binding = 'DB', database_name = 'app', database_id = 'p-1', preview_database_id = 's-1' }]",
+        "env.production.d1_databases = [{ binding = 'ARCHIVE', database_name = 'archive', database_id = 'p-2' }]",
+      ].join('\n'),
+    );
+
+    expect(
+      resolveBaselineTarget({ ...parseBaselineArgs(['--remote', '--database', 'archive', '--allow-production'], {}), d1: productionOnly }),
+    ).toEqual({ ok: true, environment: 'production', databaseId: 'p-2', label: 'PRODUCTION archive (p-2)' });
+  });
+
+  it('leaves the database name empty, for the script to refuse, when neither --database nor D1_DATABASE_NAME names one', () => {
+    expect(parseBaselineArgs(['--through', 'latest'], {}).databaseName).toBe('');
+  });
 });
 
 describe('readD1Databases', () => {
@@ -148,25 +173,24 @@ describe('d1-baseline-migrations CLI dry runs, which never call wrangler without
     delete childEnv['CLOUDFLARE_ENV'];
     if (!env['D1_DATABASE_NAME']) delete childEnv['D1_DATABASE_NAME'];
     const { command, args: commandArgs } = buildScriptInvocation(path.join(repoRoot, 'scripts', 'd1-baseline-migrations.ts'), args);
-    return spawnSync(command, commandArgs, {
+    return ranToTheEnd(command, commandArgs, {
       cwd: repoRoot,
-      encoding: 'utf8',
       env: childEnv,
     });
   }
 
-  it('exits non-zero for a remote DB baseline without --preview or --allow-production', () => {
-    const result = dryRun(['--remote', '--database', 'DB', '--through', 'latest']);
+  it('exits non-zero for a remote DB baseline without --preview or --allow-production', async () => {
+    const result = await dryRun(['--remote', '--database', 'DB', '--through', 'latest']);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('--preview');
   });
 
-  it('exits non-zero when D1_DATABASE_NAME=DB names the remote target', () => {
-    expect(dryRun(['--remote', '--through', 'latest'], { D1_DATABASE_NAME: 'DB' }).status).not.toBe(0);
+  it('exits non-zero when D1_DATABASE_NAME=DB names the remote target', async () => {
+    expect((await dryRun(['--remote', '--through', 'latest'], { D1_DATABASE_NAME: 'DB' })).status).not.toBe(0);
   });
 
-  it('prints the resolved staging database on a preview dry run', () => {
-    const result = dryRun(['--remote', '--database', 'DB', '--preview', '--through', 'latest']);
+  it('prints the resolved staging database on a preview dry run', async () => {
+    const result = await dryRun(['--remote', '--database', 'DB', '--preview', '--through', 'latest']);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(STAGING_ID);
     expect(result.stdout).toContain('staging');

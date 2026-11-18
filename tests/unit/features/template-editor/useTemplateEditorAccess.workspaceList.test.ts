@@ -15,7 +15,7 @@ const listRequestOfAnEditor = (isCreate: boolean, maxTemplates: number | null) =
   accessHook.maxTemplates = maxTemplates;
   accessHook.listRequests = [];
   renderKeepingState(() =>
-    useTemplateEditorAccess({ isCreate, getValues: () => values, allowLeave: vi.fn(), guardLeave: vi.fn() }),
+    useTemplateEditorAccess({ isCreate, getValues: () => values, getVersion: () => undefined, allowLeave: vi.fn(), guardLeave: vi.fn() }),
   );
   return accessHook.listRequests;
 };

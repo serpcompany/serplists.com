@@ -153,7 +153,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   };
 
   const handleSave = async () => {
-    if (uploads.count() > 0 || isGeneratingClipyDraft) {
+    if (uploads.count() > 0) {
       return;
     }
 

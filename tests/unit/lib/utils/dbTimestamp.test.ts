@@ -4,6 +4,7 @@ import {
   formatLocalDate,
   formatLocalDateTime,
   formatMonthYear,
+  formatShortDate,
   normalizeDbTimestamp,
   parseDbTimestamp,
   toEcmaDateTimeString,
@@ -45,6 +46,15 @@ describe('parseDbTimestamp', () => {
     expect(parseDbTimestamp('2025-12-26')?.toISOString()).toBe('2025-12-26T00:00:00.000Z');
   });
 
+  it('reads a Date as a copy of it, so changing the result leaves the Date as it was', () => {
+    const stored = new Date('2025-12-26T09:18:30.000Z');
+    const read = parseDbTimestamp(stored);
+
+    read?.setUTCFullYear(2030);
+    expect(stored.toISOString()).toBe('2025-12-26T09:18:30.000Z');
+    expect(parseDbTimestamp(new Date(Number.NaN))).toBeNull();
+  });
+
   it('accepts epoch milliseconds', () => {
     const epoch = Date.UTC(2025, 11, 26, 9, 18, 30);
 
@@ -78,6 +88,16 @@ describe('toEcmaDateTimeString', () => {
     expect(toEcmaDateTimeString('2025-12-26T09:18:30.000Z')).toBe('2025-12-26T09:18:30.000Z');
   });
 
+  it.each([
+    ['2025-12-26 09:18', '2025-12-26T09:18Z'],
+    ['2025-12-26T09:18+02:00', '2025-12-26T09:18+02:00'],
+    ['2025-12-26 09:18:30', '2025-12-26T09:18:30Z'],
+    ['2025-12-26 09:18:30.5', '2025-12-26T09:18:30.500Z'],
+    ['2025-12-26T09:18:30.123456-05:00', '2025-12-26T09:18:30.123-05:00'],
+  ])('writes %s as %s, keeping its minutes, seconds, milliseconds and zone', (value, expected) => {
+    expect(toEcmaDateTimeString(value)).toBe(expected);
+  });
+
   it('refuses forms whose parsing differs between engines', () => {
     expect(toEcmaDateTimeString('12/26/2025 09:18:30')).toBeNull();
     expect(toEcmaDateTimeString('Fri, 26 Dec 2025 09:18:30 GMT')).toBeNull();
@@ -108,8 +128,9 @@ describe('formatMonthYear', () => {
 
 const withNarrowNoBreakSpacesAsPlainSpaces = (value: string) => value.replace(/\s/g, ' ');
 
-describe('formatLocalDate and formatLocalDateTime', () => {
+describe('formatShortDate, formatLocalDate and formatLocalDateTime', () => {
   it('shows a zoneless database timestamp as UTC in the viewer zone, so 20:30 UTC on July 5 is July 6 in Tokyo', () => {
+    expect(formatShortDate('2026-07-05 20:30:00')).toBe('Jul 6, 2026');
     expect(formatLocalDate('2026-07-05 20:30:00')).toBe('7/6/2026');
     expect(withNarrowNoBreakSpacesAsPlainSpaces(formatLocalDateTime('2026-07-05 20:30:00'))).toBe('Jul 6, 2026, 5:30 AM');
     expect(withNarrowNoBreakSpacesAsPlainSpaces(formatLocalDateTime('2026-07-05T20:30:00.000Z'))).toBe(
@@ -118,6 +139,7 @@ describe('formatLocalDate and formatLocalDateTime', () => {
   });
 
   it.each([undefined, null, '', 'not a timestamp'])('shows nothing for %s', (value) => {
+    expect(formatShortDate(value)).toBe('');
     expect(formatLocalDate(value)).toBe('');
     expect(formatLocalDateTime(value)).toBe('');
   });

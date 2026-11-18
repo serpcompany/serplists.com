@@ -1,3 +1,4 @@
+import { errorMessage } from "./error-message";
 import { logLevels, type LogEntry, type LogLevelName, type LogSource } from "./logEntries";
 import { formatEntry } from "./logFormat";
 import {
@@ -75,7 +76,7 @@ export function buildFilter(options: FilterOptions, nowMs: number): LogFilter {
       where: (options.where ?? []).map(parseWhere),
     };
   } catch (error) {
-    throw usageError(error instanceof Error ? error.message : String(error));
+    throw usageError(errorMessage(error));
   }
 }
 

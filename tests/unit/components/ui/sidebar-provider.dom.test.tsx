@@ -35,4 +35,21 @@ describe('SidebarProvider', () => {
       `sidebar_state=true; path=/; max-age=${SEVEN_DAYS_IN_SECONDS}`,
     ]);
   });
+
+  it('opens and closes the sidebar with Ctrl+B or Cmd+B, and ignores B alone', async () => {
+    await renderSettled(
+      <SidebarProvider>
+        <SidebarToggle />
+      </SidebarProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(screen.getByRole('button', { name: 'Sidebar collapsed' })).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(screen.getByRole('button', { name: 'Sidebar collapsed' })).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(screen.getByRole('button', { name: 'Sidebar expanded' })).toBeTruthy();
+  });
 });

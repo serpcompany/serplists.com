@@ -64,4 +64,22 @@ describe('waitForPersonalPro', () => {
     );
     expect(fetchStatus).toHaveBeenCalledTimes(1);
   });
+
+  it('waits a second and a half between reads, and stops when the page is left during the wait', async () => {
+    vi.useFakeTimers();
+    let cancelled = false;
+    const fetchStatus = vi.fn(async () => ({ plan: 'free' as const }));
+
+    const waiting = waitForPersonalPro(fetchStatus, { isCancelled: () => cancelled });
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+
+    cancelled = true;
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(waiting).resolves.toBe('cancelled');
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });

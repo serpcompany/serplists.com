@@ -39,4 +39,27 @@ describe('readBodyWithinLimit', () => {
   it('stops reading as soon as the body passes the limit, so a body that never ends is refused', async () => {
     await expect(readBodyWithinLimit(endlessBody(), 8 * 1024)).resolves.toBeNull();
   });
+
+  it('reads a chunk that is a view onto part of a buffer as just the bytes it views', async () => {
+    const buffer = new Uint8Array([0x78, 0x61, 0x62, 0x79]).buffer;
+    const body = new ReadableStream<unknown>({
+      start(controller) {
+        controller.enqueue(new DataView(buffer, 1, 2));
+        controller.close();
+      },
+    });
+
+    await expect(readBodyWithinLimit(body, 10)).resolves.toEqual(new Uint8Array([0x61, 0x62]));
+  });
+
+  it('refuses a stream that gives a chunk that is not bytes, such as text', async () => {
+    const body = new ReadableStream<unknown>({
+      start(controller) {
+        controller.enqueue('not bytes');
+        controller.close();
+      },
+    });
+
+    await expect(readBodyWithinLimit(body, 10)).rejects.toThrow('A body stream gave a chunk that is not bytes');
+  });
 });

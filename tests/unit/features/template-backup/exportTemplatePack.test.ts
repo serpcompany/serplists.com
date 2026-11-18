@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
-import {
-  EXPORT_PACK_UNREADABLE_MESSAGE,
-  exportTemplatePack,
-} from '@/features/template-backup/exportTemplatePack';
+import { exportTemplatePack } from '@/features/template-backup/exportTemplatePack';
 import { getAccessFailure } from '@/lib/api-errors';
 import { createSingleFlight } from '@/lib/utils/singleFlight';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
@@ -84,8 +81,17 @@ describe('exportTemplatePack', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(ZodError);
     const { message } = getAccessFailure(error, 'Failed to export templates');
-    expect(message).toBe(EXPORT_PACK_UNREADABLE_MESSAGE);
+    expect(message).toBe('The export could not be read. Try again.');
     expect(message).not.toMatch(/[{}[\]\n]/);
+    expect(dependencies.download).not.toHaveBeenCalled();
+  });
+});
+
+describe('exportTemplatePack with a server pack whose manifest is unreadable', () => {
+  it('downloads nothing and gives the readable message', async () => {
+    const dependencies = buildDependencies({ ...pack([{ title: 'Owned' }]), manifest: { skippedTemplates: 'none' } });
+
+    await expect(exportTemplatePack({ includePublic: false }, dependencies)).rejects.toThrow('The export could not be read. Try again.');
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 });
@@ -166,6 +172,41 @@ describe('exportTemplatePack with public community templates, whose catalog rows
     dependencies.loadPublicRequiredTools.mockRejectedValue(new Error('HTTP 503'));
 
     await expect(exportCommunityTemplates(dependencies)).rejects.toThrow('HTTP 503');
+    expect(dependencies.download).not.toHaveBeenCalled();
+  });
+
+  it('reads the pack and the tools from the app API when the page passes only its catalog', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input), 'http://localhost');
+      const body = url.pathname.endsWith('/templates/backup')
+        ? ownedPack()
+        : [{ id: 'with-tools-id', requiredTools: [timeTracker] }];
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const download = vi.fn<(pack: ExportedTemplatePack) => void>();
+    try {
+      await exportTemplatePack(
+        { includePublic: true, teamId: 'org-1', userId: 'user-1', ownedTemplateIds: [] },
+        { download, loadPublicCatalog: vi.fn().mockResolvedValue([communityRow('with-tools')]) },
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const downloaded = portableTemplatePackSchema.parse(firstOf(download.mock.calls)[0]);
+    expect(downloaded.templates.map(({ slug, requiredTools }) => ({ slug, requiredTools }))).toEqual([
+      { slug: 'with-tools', requiredTools: [timeTracker] },
+    ]);
+    const requested = fetchMock.mock.calls.map(([input]) => new URL(String(input), 'http://localhost'));
+    expect(Object.fromEntries(firstOf(requested).searchParams)).toEqual({ teamId: 'org-1', format: 'portable' });
+    expect(requested[1]?.searchParams.get('ids')).toBe('with-tools-id');
+  });
+
+  it('downloads nothing, with a readable message, when the server pack cannot take the public templates', async () => {
+    const dependencies = buildDependencies({ templates: [] }, [communityRow('with-tools')]);
+
+    await expect(exportCommunityTemplates(dependencies)).rejects.toThrow('The export could not be read. Try again.');
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 

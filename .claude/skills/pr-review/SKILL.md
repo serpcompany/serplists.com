@@ -32,7 +32,10 @@ Stop without writing anything if the pull request is closed or a draft.
 - **The change:** `gh pr diff <number> --repo <owner>/<repo> --name-only` lists the changed files,
   and `changedFiles` counts them. `gh pr diff <number> --repo <owner>/<repo>` is the diff. Read all
   of it, never the first part: when it is too long for one read, read the rest, and read a changed
-  file itself where the diff alone doesn't show the effect. In CI the checkout's `AGENTS.md`,
+  file itself where the diff alone doesn't show the effect. In CI the workflow also writes the
+  change to `tmp/review-change/`: `files.md` lists every changed file with the part beside it that
+  holds its diff. `gh pr diff` refuses a pull request that changes more than 300 files; read the
+  change from those parts then. In CI the checkout's `AGENTS.md`,
   `CLAUDE.md`, `.claude/`, and `.mcp.json` are the base branch's: the pull request's changes to
   them are in the diff, and its own copies of the last three are under `.claude-pr/`.
 - **The rules:** `AGENTS.md`, `ARCHITECTURE.md`, `docs/agents/code.md`, and `CONTEXT.md`, as they
@@ -69,13 +72,28 @@ the description with `gh pr view`, and the whole diff:
 3. **The issue, tests, and docs:** an acceptance criterion the change doesn't meet, changed
    behavior with no test, a behavior change without its product doc and check line in the same
    pull request, code the area's doc now describes wrongly, and known debt the change adds without
-   a row in `docs/tech-debt.md` or `docs/harness-debt.md`.
+   a row in `docs/tech-debt.md` or `docs/harness-debt.md`. It also reads every test the pull
+   request adds or changes, as SERP's
+   [test review](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/verification/tests/README.md#the-test-review)
+   sets, and flags as blocking a test that:
+   - asserts nothing, or only that nothing threw;
+   - asserts what the code computes by restating the implementation;
+   - mocks the unit under test;
+   - exists only to reach a line.
+
+   The fix is a test that drives the code the way its callers do and asserts what should happen,
+   or deleting the code the test pads.
 
 Skip what `pnpm run check` already enforces: comments, file size, doc links and paths, the lint
 rules, layers, duplicates, dead code, types, and the tests. Run no build, suite, or preview: the
 checks have their own workflows. Each reviewer returns the changed files it read, and its findings
 as: file, line in the new version, what is wrong, why it matters (quoting the rule when one
 applies), the fix, and its confidence (high, medium, low).
+
+When the workflow wrote the change in more than one part, a part is all one reviewer can read
+well: start one reviewer per part in place of the three, in one message, giving each the paths of
+its part and of `tmp/review-change/files.md`. Each does all three reviewers' work on the files of
+its part.
 
 Between them the reviewers read every changed file. Compare the files they read with the list:
 send a reviewer back for any that none read, unless it can't be read as text (an image, a font)

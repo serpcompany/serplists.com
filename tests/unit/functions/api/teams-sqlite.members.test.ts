@@ -86,6 +86,16 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(member("member-m")).toEqual({ role: "editor", status: "active" });
       expect(auditActions("team.owner_transferred")).toHaveLength(0);
     });
+
+    it("answers a transfer by an owner whose membership is stored without an id as not found, and changes nothing", async () => {
+      d1.run("UPDATE team_members SET id = NULL WHERE id = 'owner-member'");
+
+      const result = await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "member-m" });
+
+      expect(result).toMatchObject({ status: 404, data: { error: "Organization not found" } });
+      expect(member("member-m")).toEqual({ role: "editor", status: "active" });
+      expect(auditActions("team.owner_transferred")).toHaveLength(0);
+    });
   });
 
   describe("member updates", () => {

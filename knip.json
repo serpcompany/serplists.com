@@ -8,6 +8,7 @@
     "scripts/stripe/bootstrap.ts",
     "tests/e2e/preview-server.ts",
     "tests/support/nextFontGoogle.ts",
+    "tests/support/stripeApiRedirect.ts",
     "tools/checks/*.d.mts",
     "tools/checks/hook.mjs",
     "tools/checks/stop-hook.mjs"

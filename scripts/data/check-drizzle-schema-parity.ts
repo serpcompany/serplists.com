@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { z } from "zod";
 import { normalizeSqlFormatting } from "../check-production-d1-schema-lib";
+import { errorMessage } from "../lib/error-message";
 import { execTool, type ToolName } from "../lib/run-tool";
 import { readSqlOnlySchema } from "../lib/sql-only-schema";
-import { parseWranglerResultSets } from "../lib/wrangler-json";
 
 type ColumnContract = { name: string; type: string; notNull: number; default: string; primaryKeyOrder: number };
 type ForeignKeyContract = { from: unknown; table: unknown; to: unknown; onUpdate: string; onDelete: string };
@@ -44,34 +44,16 @@ const indexRowSchema = z.object({
   partial: z.unknown(),
 });
 const indexColumnRowSchema = z.object({ source_index: z.string(), name: z.unknown() });
+const localResultSetsSchema = z.array(z.object({ results: z.array(z.record(z.unknown())) }));
 
-function run(tool: ToolName, args: string[], options: { capture?: boolean } = {}): string {
+function run(tool: ToolName, args: string[]): string {
   return execTool(tool, args, {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 20 * 1024 * 1024,
   });
-}
-
-function wranglerJson(persistPath: string, statement: string): unknown[] {
-  const output = run(
-    "wrangler",
-    [
-      "d1",
-      "execute",
-      database,
-      "--local",
-      "--persist-to",
-      persistPath,
-      "--json",
-      "--command",
-      statement,
-    ],
-    { capture: true },
-  );
-  return parseWranglerResultSets(output)[0]?.results ?? [];
 }
 
 const D1_MAX_COMPOUND_SELECT_TERMS = 5;
@@ -79,12 +61,12 @@ const D1_MAX_COMPOUND_SELECT_TERMS = 5;
 function wranglerBatch(persistPath: string, statements: readonly string[]): unknown[] {
   const rows: unknown[] = [];
   for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT_TERMS) {
-    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT_TERMS)));
+    rows.push(...wranglerRows(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT_TERMS)));
   }
   return rows;
 }
 
-function wranglerUnion(persistPath: string, statements: readonly string[]): unknown[] {
+function wranglerRows(persistPath: string, statements: readonly string[]): unknown[] {
   const output = run(
     "wrangler",
     [
@@ -98,9 +80,8 @@ function wranglerUnion(persistPath: string, statements: readonly string[]): unkn
       "--command",
       statements.map((statement) => statement.trim().replace(/;$/, "")).join(" UNION ALL "),
     ],
-    { capture: true },
   );
-  return parseWranglerResultSets(output).flatMap(({ results }) => results ?? []);
+  return localResultSetsSchema.parse(JSON.parse(output)).flatMap(({ results }) => results);
 }
 
 function groupedBy<Row>(rows: readonly unknown[], rowSchema: z.ZodType<Row>, keyOf: (row: Row) => string): Map<string, Row[]> {
@@ -143,10 +124,7 @@ function indexWhere(createSql: unknown): string {
 
 async function loadCatalog(persistPath: string): Promise<Catalog> {
   const objects = z.array(schemaObjectSchema).parse(
-    wranglerJson(
-      persistPath,
-      "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,tbl_name,name;",
-    ),
+    wranglerRows(persistPath, ["SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,tbl_name,name;"]),
   );
   const tables = objects
     .filter(({ type, name }) => type === "table" && !name.startsWith("_cf_") && name !== "d1_migrations")
@@ -186,13 +164,11 @@ async function loadCatalog(persistPath: string): Promise<Catalog> {
     ({ source_table: table }) => table,
   );
   const indexNames = [...indexesByTable.values()].flat().map(({ name }) => name);
-  const indexColumnsByName = groupedBy(
+  const indexColumnRows = z.array(indexColumnRowSchema).parse(
     wranglerBatch(
       persistPath,
       indexNames.map((name) => `SELECT '${quoted(name)}' AS source_index, * FROM pragma_index_info('${quoted(name)}');`),
     ),
-    indexColumnRowSchema,
-    ({ source_index: indexName }) => indexName,
   );
 
   for (const table of tables) {
@@ -216,7 +192,7 @@ async function loadCatalog(persistPath: string): Promise<Catalog> {
     const indexes: IndexContract[] = [];
     for (const row of indexesByTable.get(table) ?? []) {
       const indexName = row.name;
-      const indexColumns = (indexColumnsByName.get(indexName) ?? []).map(({ name }) => name);
+      const indexColumns = indexColumnRows.filter(({ source_index: index }) => index === indexName).map(({ name }) => name);
       indexes.push({
         name: indexName,
         columns: indexColumns,
@@ -329,13 +305,13 @@ async function main() {
     run("wrangler", [
       "d1", "migrations", "apply", database,
       "--local", "--persist-to", authoritativePersist,
-    ], { capture: true });
+    ]);
     run("drizzle-kit", [
       "generate",
       "--dialect", "sqlite",
       "--schema", "./db/schema/index.ts",
       "--out", generatedOutput,
-    ], { capture: true });
+    ]);
     const sqlFiles = readdirSync(generatedOutput).filter((name) => name.endsWith(".sql"));
     const [sqlFile] = sqlFiles;
     assert.equal(sqlFiles.length, 1, "expected exactly one generated baseline SQL file");
@@ -345,7 +321,7 @@ async function main() {
     run("wrangler", [
       "d1", "execute", database,
       "--local", "--persist-to", generatedPersist, "--file", generatedSqlPath,
-    ], { capture: true });
+    ]);
 
     const authoritative = await loadCatalog(authoritativePersist);
     const generated = await loadCatalog(generatedPersist);
@@ -372,6 +348,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 });

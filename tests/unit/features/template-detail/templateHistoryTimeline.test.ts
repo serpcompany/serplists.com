@@ -146,7 +146,16 @@ describe('buildTemplateHistoryTimeline', () => {
       history([version('v1', 1, 'template.created', 1)], [event('e1', 'template.deleted', 1)]),
     );
 
-    expect(timeline).toHaveLength(2);
+    expect(timeline.map((entry) => entry.key)).toEqual(['version-v1', 'event-e1']);
+  });
+
+  it('orders changes made in the same minute by id, and puts a change with an unreadable time last', () => {
+    const unreadable = { ...event('e0', 'template.updated', 1), createdAt: 'not a time' };
+    const timeline = buildTemplateHistoryTimeline(
+      history([], [unreadable, event('e2', 'template.updated', 5), event('e1', 'template.updated', 5)]),
+    );
+
+    expect(timeline.map((entry) => entry.key)).toEqual(['event-e1', 'event-e2', 'event-e0']);
   });
 
   it('shows at most the display limit, from the newest', () => {

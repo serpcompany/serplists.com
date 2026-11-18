@@ -114,6 +114,17 @@ describe('portable template import/export API', () => {
     expect(data.code).toBe('unsupported_portable_schema_version');
   });
 
+  it('refuses a pack whose envelope is incomplete, naming what it lacks, and imports nothing', async () => {
+    const response = await handleTemplates(
+      apiRequest('templates/backup', 'POST', { kind: 'serplists-template-pack', exportedAt: '2026-03-21T00:00:00.000Z', templates: [] }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe('Required');
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
   const packWithAsset = (fileSize: number) => ({
     title: `Template with a ${fileSize} byte asset`,
     sections: [

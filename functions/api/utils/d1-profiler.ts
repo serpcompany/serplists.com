@@ -16,9 +16,9 @@ const statementTarget = new WeakMap<object, D1PreparedStatement>();
 function toRecord(sql: string, result: D1Result<unknown>, startedAt: number): D1QueryRecord {
   return {
     sql,
-    rowsRead: result.meta?.rows_read ?? 0,
-    rowsWritten: result.meta?.rows_written ?? 0,
-    rowsReturned: result.results?.length ?? 0,
+    rowsRead: result.meta.rows_read,
+    rowsWritten: result.meta.rows_written,
+    rowsReturned: result.results.length,
     durationMs: Date.now() - startedAt,
   };
 }
@@ -94,11 +94,8 @@ export function withD1Profiling(db: D1Database, record: Recorder): D1Database {
         return async (statements: D1PreparedStatement[]) => {
           const startedAt = Date.now();
           const results = await target.batch(statements.map((statement) => statementTarget.get(statement) ?? statement));
-          results.forEach((result, index) => {
-            const statement = statements[index];
-            const sql = statement === undefined ? undefined : statementSql.get(statement);
-            record(toRecord(sql ?? "(unknown batch statement)", result, startedAt));
-          });
+          const sqls = statements.map((statement) => statementSql.get(statement));
+          results.forEach((result, index) => record(toRecord(sqls[index] ?? "(unknown batch statement)", result, startedAt)));
           return results;
         };
       }

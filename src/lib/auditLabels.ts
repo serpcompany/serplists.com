@@ -58,7 +58,7 @@ export const ORGANIZATION_ACTIVITY_LABELS: Record<AuditAction, string> = {
 };
 
 const humanizeAuditAction = (action: string): string => {
-  const words = (action.split('.').pop() ?? action).replace(/_/g, ' ').trim();
+  const words = action.slice(action.lastIndexOf('.') + 1).replace(/_/g, ' ').trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : action;
 };
 

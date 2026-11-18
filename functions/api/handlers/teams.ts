@@ -62,18 +62,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return createTeam({ db, env, request, userId }, await readJsonOrNull(request));
   }
 
-  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[2] === "accept") {
-    const token = teamsSubpath[1];
-    if (!token) {
-      return jsonError("Invite token required", 400);
-    }
-
-    const found = await findInviteByToken(db, token);
-    if ("response" in found) {
-      return found.response;
-    }
-
-    const { invite } = found;
+  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] && teamsSubpath[2] === "accept") {
+    const invite = await findInviteByToken(db, teamsSubpath[1]);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -94,13 +84,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
   }
 
-  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[3] === "accept") {
-    const inviteId = teamsSubpath[2];
-    if (!inviteId) {
-      return jsonError("Invite id required", 400);
-    }
-
-    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, inviteId)).limit(1);
+  if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[2] && teamsSubpath[3] === "accept") {
+    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, teamsSubpath[2])).limit(1);
     if (!invite) {
       return jsonError("Invite not found", 404);
     }
@@ -152,7 +137,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       });
     }
 
-    return transferTeamOwnership({ db, env, request, teamId, userId, membership }, await readJsonOrNull(request));
+    return transferTeamOwnership({ db, env, request, teamId, userId, membership, ownerMemberId: membership.id }, await readJsonOrNull(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "activity") {

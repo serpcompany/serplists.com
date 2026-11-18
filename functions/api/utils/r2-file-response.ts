@@ -28,20 +28,17 @@ export function parseRangeHeader(value: string | null): RangeRequest {
   return { kind: 'partial', range: { offset, length: end - offset + 1 } };
 }
 
-function isSuffixRange(range: R2Range): range is { suffix: number } {
-  return 'suffix' in range && typeof range.suffix === 'number';
+type ByteRange = { start: number; end: number };
+
+function servedByteRange(range: R2Range, size: number): ByteRange {
+  if ('suffix' in range) return { start: Math.max(0, size - range.suffix), end: size - 1 };
+  const start = range.offset ?? 0;
+  return { start, end: range.length === undefined ? size - 1 : Math.min(start + range.length, size) - 1 };
 }
 
-export function resolveByteRange(range: R2Range, size: number): { start: number; end: number } | null {
-  if (isSuffixRange(range)) {
-    if (range.suffix <= 0 || size === 0) return null;
-    return { start: Math.max(0, size - range.suffix), end: size - 1 };
-  }
-  if (!('offset' in range) && !('length' in range)) return null;
-  const start = range.offset ?? 0;
-  if (start >= size) return null;
-  const end = range.length === undefined ? size - 1 : Math.min(start + range.length, size) - 1;
-  return end < start ? null : { start, end };
+export function resolveByteRange(range: R2Range, size: number): ByteRange | null {
+  const served = servedByteRange(range, size);
+  return served.start >= size || served.end < served.start ? null : served;
 }
 
 function objectHeaders(object: R2Object, cacheControl: string): Headers {
@@ -136,11 +133,7 @@ export async function serveR2Object(
     return new Response(object.body, { status: 200, headers });
   }
 
-  const served = resolveByteRange(object.range ?? range, object.size);
-  if (!served) {
-    await object.body.cancel();
-    return rangeNotSatisfiable(bucket, key);
-  }
+  const served = servedByteRange(range, object.size);
   headers.set('Content-Range', `bytes ${served.start}-${served.end}/${object.size}`);
   headers.set('Content-Length', String(served.end - served.start + 1));
   return new Response(object.body, { status: 206, headers });

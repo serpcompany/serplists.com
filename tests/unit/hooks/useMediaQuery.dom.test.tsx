@@ -7,6 +7,7 @@ import { useMediaQuery } from '@/lib/useMediaQuery';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('useMediaQuery', () => {
@@ -31,6 +32,17 @@ describe('useMediaQuery', () => {
     expect(seen).toEqual([true, true, true]);
     expect(added).toHaveBeenCalledTimes(1);
     expect(removed).not.toHaveBeenCalled();
+  });
+
+  it('keeps the server value in a browser without matchMedia, instead of failing to render', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    function Layout() {
+      return <p>{useMediaQuery('(min-width: 1024px)', false) ? 'wide' : 'narrow'}</p>;
+    }
+
+    const { container } = render(<Layout />);
+
+    expect(container.textContent).toBe('narrow');
   });
 
   it('renders the server value on the server, where there is no viewport', () => {

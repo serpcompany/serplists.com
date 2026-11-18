@@ -2,7 +2,7 @@ import { publicFooterGroups, publicHeaderItems, type PublicSiteLink } from '@/co
 
 const linksByHref = new Map<string, PublicSiteLink>(
   [
-    ...publicHeaderItems.flatMap((item) => (item.kind === 'menu' ? item.links : [item.link])),
+    ...publicHeaderItems.flatMap((item): readonly PublicSiteLink[] => (item.kind === 'menu' ? item.links : [item.link])),
     ...publicFooterGroups.flatMap((group) => group.items),
   ].map((link) => [link.href, link]),
 );

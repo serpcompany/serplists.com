@@ -184,4 +184,11 @@ describe('portable template import/export API', () => {
     ]);
     expectValidAgainstThePortableJsonSchema(data);
   });
+
+  it('exports a Template that has no slug without one, so the pack still validates', async () => {
+    const data = await exportPackOf([templateRowToExport({ slug: null })]);
+
+    expect(firstOf(data.templates)).not.toHaveProperty('slug');
+    expectValidAgainstThePortableJsonSchema(data);
+  });
 });

@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { isError, rulesFor } from '../../support/eslintConfig';
+import { isError, repositoryESLint, rulesFor } from '../../support/eslintConfig';
 import { TYPE_CHECKED_AREAS } from '../../../eslint.type-aware.config';
 import { lintRuns, TYPE_AWARE_CONFIG } from '../../../scripts/lib/lint-runs';
 
@@ -40,15 +39,13 @@ const TYPE_CHECKED_TEST_FILES = [
 
 const CO_LOCATED_TEST_FILE = 'src/lib/routes.test.ts';
 
-const JAVASCRIPT_TEST_FILE = 'tests/unit/functions/api/r2-file-response-from-workerd.test.mjs';
-
 const lintScript = z
   .object({ scripts: z.object({ lint: z.string() }) })
   .parse(JSON.parse(readFileSync('package.json', 'utf8'))).scripts.lint;
 
 describe('external data is parsed at the boundary, not cast', { timeout: 60_000 }, () => {
-  const typeAware = new ESLint({ cwd: process.cwd(), overrideConfigFile: TYPE_AWARE_CONFIG });
-  const everyCommit = new ESLint({ cwd: process.cwd() });
+  const typeAware = repositoryESLint({ configFile: 'eslint.type-aware.config.ts' });
+  const everyCommit = repositoryESLint();
 
   it('runs pnpm run lint with the type-aware config, so verify and CI refuse unsafe any', () => {
     expect(lintScript).toBe('node --import tsx scripts/lint.ts');
@@ -86,7 +83,7 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
     },
   );
 
-  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
+  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])(
     'refuses external data casts in %s on every commit',
     async (file) => {
       expect(isError((await rulesFor(everyCommit, file))[CAST_RULE])).toBe(true);

@@ -11,12 +11,12 @@ type TemplateRow = typeof schema.templates.$inferSelect;
 export type TemplateOwnerFields = Pick<TemplateRow, 'owner_type' | 'team_id' | 'user_id'>;
 type TemplateVisibilityFields = TemplateOwnerFields & Pick<TemplateRow, 'deleted_at' | 'is_public'>;
 
-export function getTemplateSubject(template: TemplateOwnerFields, fallbackUserId: string): AuditSubject {
+export function getTemplateSubject(template: TemplateOwnerFields): AuditSubject {
   if (template.owner_type === 'team' && template.team_id) {
     return { type: 'team', id: template.team_id };
   }
 
-  return { type: 'user', id: template.user_id || fallbackUserId };
+  return { type: 'user', id: template.user_id };
 }
 
 const ownershipOf = (template: TemplateOwnerFields): OwnershipColumns => ({
@@ -24,10 +24,9 @@ const ownershipOf = (template: TemplateOwnerFields): OwnershipColumns => ({
   user_id: template.user_id,
 });
 
-export async function canViewTemplate(env: Env, template: TemplateVisibilityFields, userId: string | null): Promise<boolean> {
+export async function canViewTemplate(env: Env, template: TemplateVisibilityFields, userId: string): Promise<boolean> {
   if (template.deleted_at) return false;
   if (template.is_public === true) return true;
-  if (!userId) return false;
   return canViewPrivateTemplate(env, template, userId);
 }
 

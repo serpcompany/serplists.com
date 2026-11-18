@@ -23,6 +23,11 @@ async function call(name: string, args: JsonRecord = {}) {
   return result.structuredContent;
 }
 
+async function summaryOf(name: string, args: JsonRecord = {}) {
+  const { result } = await callToolWithAFreshRunKey(d1, name, args);
+  return firstOf(result.content).text.split("\n\n", 1)[0];
+}
+
 const templatesPage = async (args: JsonRecord = {}) => mcpTemplatesPage.parse(await call("list_templates", args));
 const runsPage = async (args: JsonRecord = {}) => mcpRunsPage.parse(await call("list_runs", args));
 const refusal = async (name: string, args: JsonRecord) => (await refusedToolCallWithAFreshRunKey(d1, name, args)).error;
@@ -122,6 +127,9 @@ describe("MCP list tools on the migrated tables", () => {
       expect(firstOf(pages).templates).toEqual(arrayContaining([
         objectContaining({ type: "checklist", contentVersion: 1, createdAt: anyInstanceOf(String) }),
       ]));
+      expect(await summaryOf("list_templates")).toBe(
+        `Found ${firstOf(pages).templates.length} personal template(s). More follows: call list_templates with cursor set to nextCursor.`,
+      );
     });
 
     it("reads a page from the owner index, stopping at the page's rows and never reading content", async () => {
@@ -162,6 +170,7 @@ describe("MCP list tools on the migrated tables", () => {
       const pages = await everyPageWithinTheBound("list_templates", mcpTemplatesPage);
 
       expect(pages).toEqual([{ templates: [objectContaining({ id: "only", title: "SOP only" })] }]);
+      expect(await summaryOf("list_templates")).toBe("Found 1 personal template(s).");
     });
   });
 
@@ -198,6 +207,9 @@ describe("MCP list tools on the migrated tables", () => {
       expect(runs[0]).not.toHaveProperty("retiredItems");
       expect(runs.find(({ id }) => id === "r-000")).toEqual(objectContaining({ revision: 3, status: "completed", progress: 0 }));
       expect(String(runs.find(({ id }) => id === "r-000")?.title)).toHaveLength(160);
+      expect(await summaryOf("list_runs")).toBe(
+        `Found ${firstOf(pages).runs.length} personal run(s). More follows: call list_runs with cursor set to nextCursor.`,
+      );
     });
 
     it("keeps the status filter in its cursor, so a continuation may leave it out or repeat it", async () => {

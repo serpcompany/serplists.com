@@ -269,6 +269,21 @@ describe('shareTemplateToPublic', () => {
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
+  it('says the template was not found when the page holds none', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+
+    expect(await share(apiClient, { template: null })).toEqual({ kind: 'error', message: 'Template not found.' });
+    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it('asks a visitor whose session ended to sign in before sharing', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+
+    expect(await share(apiClient, { isAuthenticated: false })).toEqual({ kind: 'login_required' });
+    expect(await share(apiClient, { userId: undefined })).toEqual({ kind: 'login_required' });
+    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
+  });
+
   it('refuses when the viewer may not share the template and leaves it unchanged', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
 

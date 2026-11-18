@@ -13,6 +13,7 @@ import {
   openTheSeededOrganization,
   revocationAndAcceptance,
 } from "../../../support/teamsSqlite";
+import { stringMatching } from "../../../support/asymmetricMatchers";
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -133,6 +134,22 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(accepted.status).toBe(409);
       expect(member("member-new")).toEqual({ role: "viewer", status: "disabled" });
       expect(auditActions("team_invite.accepted")).toHaveLength(0);
+    });
+
+    it.each([
+      ["keeps the date a member first joined", "2026-01-02T00:00:00.000Z", "2026-01-02T00:00:00.000Z"],
+      ["dates a member who never joined from the accept", null, stringMatching(/^\d{4}-\d{2}-\d{2}T/)],
+    ])("re-enables a disabled member with the invite's role and %s", async (_label, joinedAt, joinedAfter) => {
+      d1.run(
+        `INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at, updated_at)
+         VALUES ('member-new', 'team-1', 'new-user', 'viewer', 'disabled', ?, ?, ?)`,
+        joinedAt, createdAt, createdAt,
+      );
+      const invite = await inviteNewUser("editor");
+
+      expect((await asUser("new-user", "POST", `/invites/${invite.token}/accept`)).status).toBe(200);
+      expect(d1.rows("SELECT role, status, joined_at FROM team_members WHERE id = 'member-new'"))
+        .toEqual([{ role: "editor", status: "active", joined_at: joinedAfter }]);
     });
 
     it("still grants the invite's role when no new link is made", async () => {

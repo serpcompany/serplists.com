@@ -31,6 +31,7 @@ let formValues = formB;
 const options = {
   isCreate: true,
   getValues: () => formValues,
+  getVersion: () => undefined,
   allowLeave: vi.fn(),
   guardLeave: vi.fn(),
 };

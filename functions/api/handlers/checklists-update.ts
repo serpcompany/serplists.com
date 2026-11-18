@@ -20,7 +20,7 @@ export async function updateChecklistRun(
 ): Promise<Response> {
   const { checklistRuns } = schema;
 
-  const read = await readJsonPayload(request, checklistPayloadSchema, 'Invalid checklist payload');
+  const read = await readJsonPayload(request, checklistPayloadSchema);
   if ('response' in read) return read.response;
   const { body } = read;
 
@@ -84,7 +84,7 @@ export async function updateChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun, userId),
+    subject: getRunSubject(existingRun),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.updated',
     before: existingRun,

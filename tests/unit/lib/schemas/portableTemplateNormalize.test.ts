@@ -110,3 +110,44 @@ describe('parsePortableTemplate content blocks with ids or file details the stri
     ]);
   });
 });
+
+describe('parsePortableTemplate content blocks it cannot keep', () => {
+  it('drops a block of an unknown or missing type and a Sub-tasks block with no Sub-tasks, and reads a value that is not text as empty', () => {
+    expect(
+      contentsOf([
+        { id: 'c1', type: 'audio', value: 'a.mp3' },
+        { id: 'c2', type: 7, value: 'x' },
+        { id: 'c3', type: 'subItems', value: '' },
+        { id: 'c4', type: 'text', value: 5 },
+        { id: 'c5', type: 'form', value: '', fields: [{ id: 'f1', label: 'Seats', kind: 'number', max: 9 }] },
+      ]),
+    ).toEqual([
+      { id: 'c4', type: 'text', value: '' },
+      { id: 'c5', type: 'form', value: '', fields: [{ id: 'f1', label: 'Seats', kind: 'number', max: 9 }] },
+    ]);
+  });
+});
+
+describe('parsePortableTemplate on a template it can or cannot import', () => {
+  it.each([
+    ['something that is not a template', 'Launch plan', ''],
+    ['a template whose sections are not a list', { title: 'Launch', sections: 'Prep' }, 'Launch'],
+    ['a template whose sections hold no tasks', { title: 7, sections: ['Prep', { title: 'Prep', items: 'Write copy' }, { title: 'Ship', items: ['Write copy'] }] }, ''],
+  ])('skips %s as having no sections with tasks', (_label, input, title) => {
+    expect(parsePortableTemplate(input)).toEqual({ success: false, title, reason: 'Template has no sections with tasks' });
+  });
+
+  it('names an untitled section by its place, and reads a recipe as a recipe', () => {
+    const result = parsePortableTemplate({ title: 'Pancakes', type: 'recipe', sections: [{ title: ' ', items: [{ title: 'Whisk the eggs' }] }] });
+
+    expect(result.success && result.data).toMatchObject({ type: 'recipe', sections: [{ title: 'Section 1' }] });
+  });
+
+  it('gives the first problem the schema finds as the reason it skipped a template', () => {
+    expect(parsePortableTemplate({ sections: [{ title: 'Prep', items: [{ title: 'Write copy' }] }] })).toEqual({
+      success: false,
+      title: '',
+      reason: 'title: Required',
+    });
+  });
+});

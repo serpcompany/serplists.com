@@ -30,14 +30,14 @@ export const decisionNamingAdvice =
 export function outOfLayout(path: string): boolean {
   if (!path.includes("/")) return path.endsWith(".md") && !ROOT_DOCS.has(path);
   if (!path.startsWith("docs/")) return false;
-  return !DOCS_ENTRIES.has(path.slice("docs/".length).split("/")[0] ?? "");
+  return !DOCS_ENTRIES.has(path.slice("docs/".length).replace(/\/.*/s, ""));
 }
 
 export function misnamed(path: string): boolean {
   if (!path.startsWith("docs/") || /^docs\/(?:api|references)\//.test(path)) return false;
-  const parts = path.slice("docs/".length).split("/");
-  const file = parts.pop() ?? "";
-  if (parts.some((folder) => !KEBAB.test(folder))) return true;
+  const relative = path.slice("docs/".length);
+  const file = relative.slice(relative.lastIndexOf("/") + 1);
+  if (relative.split("/").slice(0, -1).some((folder) => !KEBAB.test(folder))) return true;
   return !MAPS.has(file) && !KEBAB.test(file.replace(/\.[^.]+$/, ""));
 }
 

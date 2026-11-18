@@ -2,7 +2,7 @@ import { navigation } from '../../support/mockedNextNavigation';
 import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import ChecklistLibrary from '@/views/ChecklistLibrary';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -45,12 +45,7 @@ describe('ChecklistLibrary layout', () => {
   beforeEach(() => {
     mockUseTemplateLibrary.mockReturnValue({
       templates: [template],
-      filteredTemplates: [template],
       loading: false,
-      searchQuery: '',
-      setSearchQuery: vi.fn(),
-      selectedCategories: ['Technical SEO'],
-      setSelectedCategories: vi.fn(),
       allCategories: ['Technical SEO', 'Content Ops'],
     });
   });

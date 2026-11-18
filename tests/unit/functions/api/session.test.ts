@@ -116,6 +116,19 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     vi.restoreAllMocks();
   });
 
+  it('logs the type and status of a failure that is not an Error, as a thrown Response is', async () => {
+    const errorLines: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      errorLines.push(String(line));
+    });
+    const thrown = { status: 401, statusText: 'Unauthorized' };
+    const { getSessionUserId } = await loadSessionHelper({ api: { getSession: vi.fn().mockRejectedValue(thrown) } });
+
+    await expect(getSessionUserId(new Request(`${BASE_URL}/api/templates`), env)).rejects.toBe(thrown);
+    expect(JSON.parse(firstOf(errorLines))).toMatchObject({ message: 'session_lookup_failed', errorName: 'object', status: 401 });
+    vi.restoreAllMocks();
+  });
+
   it('rethrows and logs when Better Auth cannot be set up', async () => {
     const errorLines: string[] = [];
     vi.spyOn(console, 'error').mockImplementation((line: unknown) => {

@@ -54,7 +54,7 @@ const normalizeTemplateSections = (rawTemplate: ApiTemplate): ChecklistSection[]
 export const mapApiTemplateToChecklistTemplate = (
   foundTemplate: ApiTemplate,
   fallbackSlug: string,
-): ChecklistTemplate => {
+): ChecklistTemplate & { slug: string } => {
   const categories =
     asStringArray(foundTemplate.categories) ??
     (typeof foundTemplate.category === 'string' && foundTemplate.category
@@ -107,19 +107,16 @@ export const resolveTemplateOwnerProfile = (
   ownerSlug: string | null;
   template: ChecklistTemplate;
 } => {
-  const nextTemplate =
-    profile &&
-    (typeof profile.username === 'string' ||
-      typeof profile.full_name === 'string')
-      ? {
-          ...template,
-          ownerProfile: {
-            ...template.ownerProfile,
-            username: asString(profile.username) ?? template.ownerProfile?.username,
-            full_name: asString(profile.full_name) ?? template.ownerProfile?.full_name,
-          },
-        }
-      : template;
+  const nextTemplate = profile
+    ? {
+        ...template,
+        ownerProfile: {
+          ...template.ownerProfile,
+          username: profile.username,
+          full_name: profile.full_name ?? template.ownerProfile?.full_name,
+        },
+      }
+    : template;
 
   return {
     ownerSlug: resolvePublicTemplateOwnerSlug(nextTemplate),

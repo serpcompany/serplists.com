@@ -103,14 +103,6 @@ const Templates = () => {
       });
   }, [filterVisibility, model.templates, searchQuery, sortBy]);
 
-  const handleRunDialogChange = (open: boolean) => {
-    if (open || isStartingCheckout) {
-      return;
-    }
-
-    model.closeRunLauncher();
-  };
-
   const startUpgrade = async (): Promise<boolean> => {
     setIsStartingCheckout(true);
     const redirecting = await handleUpgradeRequiredForContext({
@@ -124,10 +116,6 @@ const Templates = () => {
   };
 
   const handleRunConfirm = async (runName: string) => {
-    if (isLaunchingRun) {
-      return;
-    }
-
     const visit = beginVisit();
     const result = await model.createRunFromTemplate(runName);
 
@@ -275,7 +263,7 @@ const Templates = () => {
 
       <RunNameDialog
         open={model.runLauncherOpen}
-        onOpenChange={handleRunDialogChange}
+        onOpenChange={() => model.closeRunLauncher()}
         templateTitle={model.selectedTemplate?.title ?? ''}
         onConfirm={handleRunConfirm}
         loading={isLaunchingRun}

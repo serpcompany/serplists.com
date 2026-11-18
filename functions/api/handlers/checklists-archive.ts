@@ -61,7 +61,7 @@ export async function restoreChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun, userId),
+    subject: getRunSubject(existingRun),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.restored',
     before: existingRun,
@@ -128,7 +128,7 @@ export async function archiveChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingChecklist, userId),
+    subject: getRunSubject(existingChecklist),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.deleted',
     before: existingChecklist,

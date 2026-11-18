@@ -105,6 +105,13 @@ describe('scoresToRegrade', () => {
   it('names the rows without a readable Graded date, and skips tables without both columns', () => {
     expect(scoresToRegrade(quality, times).ungraded).toEqual(['Delivery']);
   });
+
+  it('reads a row cut short of the Graded column as ungraded', () => {
+    expect(scoresToRegrade(['| Area | Grade | Code | Graded |', '| --- | --- | --- | --- |', '| Search | C |'].join('\n'), times)).toEqual({
+      stale: [],
+      ungraded: ['Search'],
+    });
+  });
 });
 
 describe('summarizeDebt', () => {
@@ -138,6 +145,17 @@ describe('summarizeDebt', () => {
       bySize: { small: 2, medium: 0, large: 1 },
       firstSmall: { section: 'Checks', debt: '`docs/agents/testing.md` is over its budget.', issue: '#40' },
       unsized: [{ section: 'Code', debt: 'No formatter.', issue: 'No issue yet' }],
+    });
+  });
+
+  it('counts a row of a table without Size or Issue columns as unsized, with no issue', () => {
+    const plain = ['## Docs', '', '| Debt | Why it matters |', '| --- | --- |', '| A doc is stale. | Misleads. |'].join('\n');
+
+    expect(summarizeDebt(plain)).toEqual({
+      open: 1,
+      bySize: { small: 0, medium: 0, large: 0 },
+      firstSmall: null,
+      unsized: [{ section: 'Docs', debt: 'A doc is stale.', issue: '' }],
     });
   });
 
@@ -228,6 +246,10 @@ describe('docsToReverify', () => {
       { doc: 'docs/agents/run-execution.md', changed: ['functions/api/handlers/checklists.ts', 'functions/api/handlers/billing.ts'] },
       { doc: 'docs/agents/billing.md', changed: ['functions/api/handlers/billing.ts'] },
     ]);
+  });
+
+  it('reads a file with no history as unchanged since the doc', () => {
+    expect(docsToReverify([{ doc: 'docs/agents/ci.md', references: ['src/lib/not-committed.ts'] }], times)).toEqual([]);
   });
 
   it('skips a doc with no history yet', () => {

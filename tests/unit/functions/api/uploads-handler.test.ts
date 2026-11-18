@@ -106,6 +106,17 @@ describe('Uploads Handler file types', () => {
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 
+  it('stores a file named without an extension under a key without one, offering it for download by its name', async () => {
+    const { env, response } = await uploadAs('template-files', 'checklist', 'text/csv');
+
+    expect(response.status).toBe(200);
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
+      stringMatching(/^template-files\/user-123\/[0-9a-f-]+$/),
+      anything(),
+      objectContaining({ httpMetadata: objectContaining({ contentDisposition: 'attachment; filename="checklist"' }) }),
+    );
+  });
+
   it('tells browsers not to guess the type of a stored file', async () => {
     const env = uploadEnv([{ key: 'template-images/u/a.png', bytes: new Uint8Array([1]), contentType: 'image/png', etag: 'etag' }]);
 
@@ -422,5 +433,55 @@ describe('Uploads Handler delete authorization', () => {
 
     expect(response.status).toBe(401);
     expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('Uploads Handler requests it refuses', () => {
+  it.each([
+    ['GET', 'http://localhost/api/uploads/file', 400, 'key required'],
+    ['DELETE', 'http://localhost/api/uploads/file', 400, 'key required'],
+    ['POST', 'http://localhost/api/uploads/elsewhere', 404, 'Not Found'],
+    ['PUT', 'http://localhost/api/uploads', 404, 'Not Found'],
+  ])('answers %s %s with %i', async (method, url, status, error) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const response = await handleUploads(new Request(url, { method }), uploadEnv());
+
+    expect(response.status).toBe(status);
+    expect((await readJson(response, apiErrorBody)).error).toBe(error);
+  });
+
+  it.each([
+    ['no bucket', () => { const form = new FormData(); form.set('file', new File(['x'], 'a.png', { type: 'image/png' })); return form; }, 'Invalid bucket'],
+    ['no file', () => { const form = new FormData(); form.set('bucket', 'avatars'); form.set('file', 'not a file'); return form; }, 'file required'],
+  ])('answers an upload with %s with 400 and stores nothing', async (_label, form, error) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+
+    const response = await handleUploads(new UploadOfTheFormAsIs(form()), env);
+
+    expect(response.status).toBe(400);
+    expect((await readJson(response, apiErrorBody)).error).toBe(error);
+    expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+
+  it('answers an upload from a signed-out visitor with 401 and stores nothing', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    const env = uploadEnv();
+
+    const response = await handleUploads(uploadRequest('avatars', new File(['x'], 'a.png', { type: 'image/png' })), env);
+
+    expect(response.status).toBe(401);
+    expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+
+  it('stores a file sent with no name under a key with no extension', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+
+    const response = await handleUploads(uploadOfTheFileObjectAsIs('avatars', new File(['x'], '', { type: 'image/png' })), env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ key: stringMatching(/^avatars\/user-123\/[0-9a-f-]+$/) });
   });
 });

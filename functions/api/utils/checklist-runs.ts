@@ -151,10 +151,10 @@ export async function writeAuditedRunUpdate(
     ?? jsonError(write.conflictMessage, 409, { code: 'edit_conflict' });
 }
 
-export function getRunSubject(run: Pick<RunRow, 'team_id' | 'user_id'>, fallbackUserId: string): AuditSubject {
+export function getRunSubject(run: Pick<RunRow, 'team_id' | 'user_id'>): AuditSubject {
   if (run.team_id) {
     return { type: 'team', id: run.team_id };
   }
 
-  return { type: 'user', id: run.user_id || fallbackUserId };
+  return { type: 'user', id: run.user_id };
 }

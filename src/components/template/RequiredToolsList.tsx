@@ -13,13 +13,7 @@ type RequiredToolsListProps = {
   tools: readonly RequiredTool[] | undefined;
 };
 
-const hostOf = (href: string): string => {
-  try {
-    return new URL(href).host;
-  } catch {
-    return '';
-  }
-};
+const hostOf = (href: string): string => new URL(href).host;
 
 function ToolRow({ tool }: { tool: RequiredTool }) {
   const href = absoluteHttpUrl(tool.url);

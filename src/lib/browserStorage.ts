@@ -33,7 +33,8 @@ export const getSessionStorage = (): Storage | undefined => {
 export const safeLocalStorage: StringStorage = {
   getItem(key) {
     if (onServer()) return null;
-    if (unpersistedWrites.has(key)) return unpersistedWrites.get(key) ?? null;
+    const unpersisted = unpersistedWrites.get(key);
+    if (unpersisted !== undefined) return unpersisted;
     try {
       return getLocalStorage()?.getItem(key) ?? null;
     } catch {

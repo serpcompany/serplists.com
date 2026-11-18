@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inferEmbedProvider } from '@/../scripts/lib/templateAssetLabels';
+import { describeFormField, formatBytes, inferEmbedProvider } from '@/../scripts/lib/templateAssetLabels';
 
 describe('inferEmbedProvider', () => {
   it.each([
@@ -58,5 +58,31 @@ describe('inferEmbedProvider', () => {
     'https://',
   ])('calls an embed with no http link it can parse embedded content: %j', (embed) => {
     expect(inferEmbedProvider(embed)).toBe('Embedded Content');
+  });
+});
+
+describe('formatBytes', () => {
+  it.each([
+    [512, '512 B'],
+    [1536, '1.5 KB'],
+    [2048, '2 KB'],
+    [5 * 1024 * 1024, '5 MB'],
+    [2_621_440, '2.5 MB'],
+  ])('writes %d bytes as %s', (bytes, written) => {
+    expect(formatBytes(bytes)).toBe(written);
+  });
+
+  it.each([undefined, 0, -1, Number.NaN])('has no size to show for %s', (bytes) => {
+    expect(formatBytes(bytes)).toBeNull();
+  });
+});
+
+describe('describeFormField', () => {
+  it.each([
+    [{ label: 'Seats', kind: 'number', max: 9 } as const, 'Number, optional, at most 9'],
+    [{ label: 'Seats', kind: 'number', required: true } as const, 'Number, required'],
+    [{ label: 'Notes', kind: 'text' } as const, 'Short text, optional'],
+  ])('describes %j as %s', (field, described) => {
+    expect(describeFormField(field)).toBe(described);
   });
 });

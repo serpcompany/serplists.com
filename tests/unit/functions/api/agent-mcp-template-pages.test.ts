@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { elementAt, firstOf, sectionAt } from "../../../support/elements";
 
-import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
+import { MAX_RESULT_BYTES, type ToolAnswer } from "@functions/api/handlers/agentMcpPages";
 import {
-  describeTemplateRead,
-  readTemplate as readTemplateResult,
+  readTemplate as readTemplateAnswer,
   templateView,
   writtenTemplateResult,
   type TemplateView,
 } from "@functions/api/handlers/agentMcpTemplatePages";
 import {
+  answersFrom,
   asTheClientReceives,
   cursorMovedPastTheEnd,
   expectAnInvalidCursor,
@@ -28,7 +28,10 @@ import { getTemplateArgs } from "@functions/api/handlers/agentMcpTemplateTools";
 
 type JsonRecord = Record<string, unknown>;
 
-const readTemplate = (...args: Parameters<typeof readTemplateResult>): PagedResult => readTemplateResult(...args);
+const readTemplate = (...args: Parameters<typeof readTemplateAnswer>): PagedResult => readTemplateAnswer(...args).data;
+const describeTemplateRead = (...args: Parameters<typeof readTemplateAnswer>): string => readTemplateAnswer(...args).text;
+const everyAnswerOf = (view: TemplateView, args: Parameters<typeof readTemplateAnswer>[1]): ToolAnswer[] =>
+  answersFrom(readTemplateAnswer(view, args), (cursor) => readTemplateAnswer(view, { cursor }));
 
 const row = (sections: unknown[], overrides: JsonRecord = {}): JsonRecord => ({
   id: "template-1",
@@ -79,7 +82,7 @@ describe("get_template results", () => {
     expect(atBound).toEqual({ template: wholeOf(sized(MAX_RESULT_BYTES - base)) });
     expect(overBound.sectionsOmitted).toBe(true);
     expect(overBound).not.toHaveProperty("template.sections");
-    expect(describeTemplateRead(atBound)).toBe('Loaded template "Release SOP".');
+    expect(describeTemplateRead(sized(MAX_RESULT_BYTES - base), {})).toBe('Loaded template "Release SOP".');
   });
 
   it("outlines a larger template: its fields and counts, and each section's id, title (cut, where a section read returns it whole), tasks, and size", () => {
@@ -102,7 +105,7 @@ describe("get_template results", () => {
     expect(String(longTitleEntry.title).length).toBeLessThanOrEqual(160);
     expect(String(longTitleEntry.title).endsWith("…")).toBe(true);
     expect(recordIn(readTemplate(view, { sectionId: "long" }).section).title).toBe(longTitle);
-    expect(describeTemplateRead(outline)).toBe(
+    expect(describeTemplateRead(view, {})).toBe(
       'Template "Release SOP" is too large to return at once, so this is its outline; read a section with sectionId.',
     );
   });
@@ -116,7 +119,11 @@ describe("get_template results", () => {
     expect(outlinePages.slice(0, -1).every((page) => typeof page.nextCursor === "string")).toBe(true);
     expect(outlinePages.at(-1)).not.toHaveProperty("nextCursor");
     expect(elementAt(outlinePages, 1).template).toEqual({ id: "template-1", version: 7, contentVersion: 4 });
-    expect(describeTemplateRead(firstOf(outlinePages))).toContain("More follows: call get_template with cursor set to nextCursor.");
+    expect(describeTemplateRead(view, {})).toBe(
+      'Template "Release SOP" is too large to return at once, so this is its outline; read a section with sectionId.'
+        + " More follows: call get_template with cursor set to nextCursor.",
+    );
+    expect(everyAnswerOf(view, {}).at(1)?.text).toMatch(/^This template is too large to return at once, so this is its outline; read a section with sectionId\./);
     expect(template).toEqual(wholeOf(view));
   });
 
@@ -125,27 +132,39 @@ describe("get_template results", () => {
     const result = readTemplate(view, { sectionId: "s2" });
 
     expect(result).toEqual({ template: { id: "template-1", version: 7, contentVersion: 4 }, section: view.sections[2] });
-    expect(describeTemplateRead(result)).toBe('Loaded section "Section s2".');
+    expect(describeTemplateRead(view, { sectionId: "s2" })).toBe('Loaded section "Section s2".');
+  });
+
+  it("names no tasks on a section's first page when only the section's own fields fit it", () => {
+    const view = viewOf([section("wide", [task("t1", 10_000), task("t2", 10_000)], `Wide ${"w".repeat(25_000)}`)]);
+    const [first, second] = everyAnswerOf(view, { sectionId: "wide" });
+
+    expect(recordIn(first?.data["section"])).toMatchObject({ id: "wide", taskCount: 2, firstTask: 0, items: [] });
+    expect(first?.text).toBe(
+      "Loaded tasks none of the 2 in a section too large for one result. More follows: call get_template with cursor set to nextCursor.",
+    );
+    expect(second?.text).toBe("Loaded tasks 1-2 of the 2 in a section too large for one result.");
   });
 
   it("pages a section too large for one result a run of whole tasks at a time, its fields first", async () => {
     const view = viewOf([section("big", Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500)))]);
-    const pages: PagedResult[] = [readTemplate(view, { sectionId: "big" })];
-    while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readTemplate(view, { cursor: textIn(pages.at(-1)?.nextCursor) }));
+    const answers = everyAnswerOf(view, { sectionId: "big" });
+    const pages = answers.map(({ data }): PagedResult => data);
 
     const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
     expect(second).not.toHaveProperty("title");
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: recordsIn(first.items).length });
     expect(pages.flatMap((page) => recordsIn(recordIn(page.section).items))).toEqual(sectionAt(view, 0).items);
     for (const page of pages) expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-    expect(describeTemplateRead(elementAt(pages, 1))).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows/);
+    expect(elementAt(answers, 1).text).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows/);
+    expect(answers.at(-1)?.text).toMatch(/^Loaded tasks \d+-200 of the 200 in a section too large for one result\.$/);
   });
 
   it("returns a task too large for one result in parts whose text joins into it", () => {
     const huge = { ...task("huge", 100_000, TEXT_COSTLIER_IN_JSON), description: TEXT_COSTLIER_IN_JSON.repeat(50) };
     const view = viewOf([section("s1", [task("small"), huge, task("after")])]);
-    const pages: PagedResult[] = [readTemplate(view, { taskId: "huge" })];
-    while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readTemplate(view, { cursor: textIn(pages.at(-1)?.nextCursor) }));
+    const answers = everyAnswerOf(view, { taskId: "huge" });
+    const pages = answers.map(({ data }): PagedResult => data);
 
     expect(pages.length).toBeGreaterThan(3);
     for (const page of pages) {
@@ -155,11 +174,14 @@ describe("get_template results", () => {
     }
     const text = pages.map((page) => recordIn(page.part).text).join("");
     expect(JSON.parse(text)).toEqual(asTheClientReceives(elementAt(recordsIn(sectionAt(view, 0).items), 1)));
-    expect(describeTemplateRead(firstOf(pages))).toContain("join its parts' text in order");
+    expect(firstOf(answers).text).toBe(
+      "Loaded part of a task too large for one result; join its parts' text in order. More follows: call get_template with cursor set to nextCursor.",
+    );
+    expect(answers.at(-1)?.text).toBe("Loaded part of a task too large for one result; join its parts' text in order.");
 
     const small = readTemplate(view, { taskId: "small" });
     expect(small).toEqual({ template: { id: "template-1", version: 7, contentVersion: 4 }, sectionId: "s1", task: elementAt(recordsIn(sectionAt(view, 0).items), 0) });
-    expect(describeTemplateRead(small)).toBe('Loaded task "Task small".');
+    expect(describeTemplateRead(view, { taskId: "small" })).toBe('Loaded task "Task small".');
   });
 
   it("reads back a template whose fields, section, ids, or titles alone exceed one result", async () => {

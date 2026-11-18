@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseBaselineArgs, readD1Databases, resolveBaselineTarget } from "./d1-baseline-migrations-lib";
+import { errorMessage } from "./lib/error-message";
 import { execTool } from "./lib/run-tool";
 
 const MIGRATION_FILE_PATTERN = /^\d{4}_.+\.sql$/;
@@ -19,10 +20,8 @@ function getMigrationFiles(): string[] {
 function selectThroughMigration(migrationFiles: string[], throughMigration: string): string[] {
   if (throughMigration === "latest") return migrationFiles;
 
-  const matches = migrationFiles.filter(
-    (fileName) =>
-      fileName === throughMigration || fileName.startsWith(throughMigration),
-  );
+  const matchesThrough = (fileName: string) => fileName === throughMigration || fileName.startsWith(throughMigration);
+  const matches = migrationFiles.filter(matchesThrough);
   if (matches.length === 0) {
     throw new Error(`No migration matched --through ${throughMigration}`);
   }
@@ -32,8 +31,7 @@ function selectThroughMigration(migrationFiles: string[], throughMigration: stri
     );
   }
 
-  const selectedIndex = migrationFiles.indexOf(matches[0] ?? "");
-  return migrationFiles.slice(0, selectedIndex + 1);
+  return migrationFiles.slice(0, migrationFiles.findIndex(matchesThrough) + 1);
 }
 
 function sqlString(value: string): string {
@@ -119,7 +117,7 @@ let selectedMigrations: string[];
 try {
   selectedMigrations = selectThroughMigration(getMigrationFiles(), throughMigration);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exit(1);
 }
 

@@ -68,6 +68,23 @@ describe('RetiredRunItems', () => {
     expect(markup).not.toMatch(/<(input|textarea|button|select)\b/);
   });
 
+  it('names removed work that had no title, and leaves out the place it was removed from when that is unknown', () => {
+    const markup = renderToStaticMarkup(<RetiredRunItems items={[
+      { kind: 'section', id: 's', title: '', tasks: [{ id: 't', title: '', isCompleted: false, subTasks: [{ id: 'st', title: '', isCompleted: true }] }] },
+      { kind: 'item', id: 'i', task: { id: 'i', title: 'Loose task', isCompleted: false, subTasks: [], answers: [{ fieldId: 'f', label: '', kind: 'text', answer: 'Yes' }] } },
+      { kind: 'subItem', id: 'si', subTask: { id: 'si', title: '', isCompleted: false } },
+      { kind: 'formAnswer', id: 'fa', formAnswer: { fieldId: 'fa', label: 'Budget', kind: 'number', answer: '100' } },
+    ]} />);
+
+    expect(markup).toContain('Section: Untitled section');
+    expect(markup).toContain('Untitled task');
+    expect(markup).toContain('Untitled Sub-task');
+    expect(markup).toContain('Untitled field:</span> Yes');
+    expect(markup).toContain('>Sub-task</p>');
+    expect(markup).toContain('>Form answer</p>');
+    expect(markup).not.toContain('In ');
+  });
+
   it('renders nothing when no work was removed', () => {
     expect(renderToStaticMarkup(<RetiredRunItems items={[]} />)).toBe('');
   });

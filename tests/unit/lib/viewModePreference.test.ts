@@ -24,6 +24,11 @@ describe('view mode preferences', () => {
     );
   });
 
+  it('keeps one preference for everyone signed out', () => {
+    expect(buildViewModePreferenceKey(undefined, 'category-templates')).toBe(buildViewModePreferenceKey('  ', 'category-templates'));
+    expect(buildViewModePreferenceKey(undefined, 'category-templates')).toContain(':guest:');
+  });
+
   it('round-trips only supported card and row values', () => {
     const storage = createMemoryStorage();
     const key = buildViewModePreferenceKey('user-1', 'dashboard-templates');

@@ -1,9 +1,9 @@
-import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
 import { onlyElement } from '../../support/elements';
+import { repositoryESLint } from '../../support/eslintConfig';
 
-const eslint = new ESLint({ cwd: process.cwd() });
+const eslint = repositoryESLint();
 const RULE = '@typescript-eslint/naming-convention';
 
 const namingReports = async (code: string, filePath: string): Promise<string[]> =>

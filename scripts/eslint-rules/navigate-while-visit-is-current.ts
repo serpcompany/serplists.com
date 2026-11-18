@@ -1,5 +1,6 @@
 import type { Rule } from "eslint";
 import type * as ESTree from "estree";
+import { z } from "zod";
 
 type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.FunctionExpression;
 type VisitChecks = { current: (condition: string) => boolean; ended: (condition: string) => boolean };
@@ -60,6 +61,8 @@ const callName = ({ callee }: { callee: ESTree.Node }): string => {
     : "";
 };
 
+const childKeysSchema = z.array(z.string());
+
 const isNode = (value: unknown): value is ESTree.Node =>
   typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
 
@@ -119,7 +122,7 @@ export const navigateWhileVisitIsCurrent: Rule.RuleModule = {
       const found: ESTree.Node[] = [];
       const visit = (node: ESTree.Node) => {
         found.push(node);
-        for (const key of sourceCode.visitorKeys[node.type] ?? []) {
+        for (const key of childKeysSchema.parse(sourceCode.visitorKeys[node.type])) {
           const child: unknown = Reflect.get(node, key);
           const children: unknown[] = Array.isArray(child) ? child : [child];
           for (const each of children) {

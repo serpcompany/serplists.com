@@ -4,10 +4,10 @@ import { createDb } from '../../../functions/api/db';
 import { validOrganizationHandleCondition, validUsernameCondition } from '../../../functions/sitemap/listedOwners';
 import {
   isValidTemplateSlug,
-  isValidUsername,
   loadCategoryEntries,
   validTemplateSlugCondition,
 } from '../../../functions/sitemap/shared';
+import { isPublicHandle } from '@/lib/schemas/publicHandle';
 import { teams, templates, users } from '../../../db/schema/index';
 import { SqliteD1 } from '../../support/sqlite-d1';
 import { apiEnv } from '../../support/apiEnv';
@@ -51,6 +51,13 @@ async function categoryPaths(db: SqliteD1): Promise<string[]> {
 }
 
 describe('category sitemap entries', () => {
+  it('lists no page for a category with nothing a slug can be made of', async () => {
+    const db = categoryDatabase();
+    addTemplate(db, 't-punctuation', 'alice', '***');
+
+    expect((await categoryPaths(db)).filter((path) => !/^\/categories\/[a-z0-9-]+\/$/.test(path) && path !== '/categories/')).toEqual([]);
+  });
+
   it('lists a category that a public template with a public owner URL uses', async () => {
     const db = categoryDatabase();
     addTemplate(db, 't-listed', 'alice', 'Zymurgy Listed');
@@ -140,7 +147,7 @@ describe('public URL rules for the sitemaps', () => {
     const handleRows = await queries.select({ handle: teams.slug }).from(teams).where(validOrganizationHandleCondition);
     const slugRows = await queries.select({ slug: templates.slug }).from(templates).where(validTemplateSlugCondition);
 
-    const listed = usernames.filter((handle) => isValidUsername(handle.trim())).sort();
+    const listed = usernames.filter((handle) => isPublicHandle(handle.trim())).sort();
     expect(usernameRows.map((row) => row.username).sort()).toEqual(listed);
     expect(handleRows.map((row) => row.handle).sort()).toEqual(listed);
     expect(slugRows.map((row) => row.slug).sort()).toEqual(slugs.filter((slug) => isValidTemplateSlug(slug.trim())).sort());

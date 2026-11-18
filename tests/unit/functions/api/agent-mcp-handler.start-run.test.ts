@@ -75,6 +75,18 @@ describe("personal run MCP handler", () => {
       vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
     });
 
+    it("rejects start_run with the plan's limit when the owner already has that many active runs, and writes nothing", async () => {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
+        .mockResolvedValueOnce([{ count: 3 }]);
+
+      const body = await startRun();
+
+      expectAToolError(body, { error: "limit_reached", details: { limit: 3, current: 3 } });
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+    });
+
     it("rejects start_run when a concurrent start filled the limit after the pre-check", async () => {
       const preCheckLeavingOneSlot = [{ count: 2 }];
       const recountAfterTheGuardedInsertIsRefused = [{ count: 3 }];

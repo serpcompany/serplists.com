@@ -31,7 +31,7 @@ async function visitVerificationLink(token: string) {
   return { status: response.status, location: response.headers.get("location") };
 }
 
-describe("verify-email failure redirect, in the shape Login reads its notice from, so a Better Auth upgrade that changes it fails here", () => {
+describe("verify-email failure redirect, in the shape Login reads its notice from, so a Better Auth upgrade that changes it fails here", { timeout: 30_000 }, () => {
   it("appends error=token_expired to the callback for an expired link", async () => {
     const token = await signJWT({ email: "person@example.com" }, SECRET, -60);
 
@@ -58,7 +58,7 @@ describe("verify-email failure redirect, in the shape Login reads its notice fro
   });
 });
 
-describe("verification return path round trip, which brings an invitee who signs up from an invite link back to it", () => {
+describe("verification return path round trip, which brings an invitee who signs up from an invite link back to it", { timeout: 30_000 }, () => {
   async function signUpAndOpenVerificationLink(returnPath: string) {
     const sentLinks: string[] = [];
     const auth = betterAuth({

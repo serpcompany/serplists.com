@@ -144,6 +144,20 @@ describe('optimizeImage', () => {
     expect(result.name).toBe('photo.jpg');
   });
 
+  it('uploads a small image within the limits as it is, without drawing it again', async () => {
+    imageSize = { width: 800, height: 600 };
+    const png = file('icon.png', 'image/png', 200_000);
+
+    await expect(optimizeImage(png)).resolves.toBe(png);
+    expect(toBlob).not.toHaveBeenCalled();
+  });
+
+  it('names a converted image that came without a name, as a pasted one does', async () => {
+    const result = await optimizeImage(file('', 'image/avif', 100_000));
+
+    expect(result.name).toBe('image.png');
+  });
+
   it('adds an extension when a converted file has none', async () => {
     const result = await optimizeImage(file('diagram', 'image/avif', 100_000));
 
@@ -318,6 +332,14 @@ describe('prepareAvatarImage', () => {
     const result = await prepareAvatarImage(file('me.jpg', 'image/jpeg'));
 
     expect(result).toMatchObject({ name: 'avatar.png', type: 'image/png' });
+  });
+
+  it('types the avatar as WebP when the browser gives its bytes no type', async () => {
+    blobType = '';
+
+    const result = await prepareAvatarImage(file('me.jpg', 'image/jpeg'));
+
+    expect(result).toMatchObject({ name: 'avatar.webp', type: 'image/webp' });
   });
 
   it('refuses an image the browser cannot read', async () => {

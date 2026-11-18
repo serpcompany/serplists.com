@@ -143,9 +143,24 @@ describe('form answers in other run state', () => {
   });
 });
 
-describe('a Template import with a form field that is not an object', () => {
-  it('names the field and its task', () => {
-    expect(findNonObjectTemplateEntry(sections(formTask('t1', [field('a')]), { id: 't2', title: 'T', contents: [{ type: 'form', fields: [field('b'), 'x'] }] })))
-      .toBe('Form field 2 of task 2 in section 1 must be an object with a label and a kind');
+describe('a Template import with an entry that is not an object', () => {
+  it.each([
+    [
+      'a form field',
+      sections(formTask('t1', [field('a')]), { id: 't2', title: 'T', contents: [{ type: 'form', fields: [field('b'), 'x'] }] }),
+      'Form field 2 of task 2 in section 1 must be an object with a label and a kind',
+    ],
+    ['a content block', sections({ id: 't1', title: 'T', contents: [{ type: 'text', value: 'Pack' }, 'Bring stakes'] }), 'Content block 2 of task 1 in section 1 must be an object'],
+    [
+      'a Sub-task in a block',
+      sections({ id: 't1', title: 'T', contents: [{ type: 'subItems', value: '', subItems: [{ title: 'Tent' }, 'Stakes'] }] }),
+      'Sub-task 2 of task 1 in section 1 must be an object with a title',
+    ],
+  ])('names %s and its task', (_label, imported, message) => {
+    expect(findNonObjectTemplateEntry(imported)).toBe(message);
+  });
+
+  it('finds nothing to refuse in a Template of objects', () => {
+    expect(findNonObjectTemplateEntry(sections(formTask('t1', [field('a')]), { id: 't2', title: 'T', contents: [{ type: 'text', value: 'Pack' }] }))).toBeNull();
   });
 });

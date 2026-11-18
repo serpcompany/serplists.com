@@ -22,6 +22,8 @@ describe('upload types, as browsers report them from the operating system', () =
     ['template-files', 'notes.md', '', 'text/markdown'],
     ['template-files', 'notes.md', 'application/octet-stream', 'text/markdown'],
     ['template-files', 'shot.png', 'image/png', 'image/png'],
+    ['template-files', 'photo.jpg', 'image/jpeg', 'image/jpeg'],
+    ['template-files', 'loop.gif', 'image/gif', 'image/gif'],
     ['template-files', 'guide.pdf', 'application/pdf', 'application/pdf'],
     ['template-videos', 'clip.mp4', 'video/mp4', 'video/mp4'],
     ['template-videos', 'clip.mov', 'video/quicktime', 'video/quicktime'],

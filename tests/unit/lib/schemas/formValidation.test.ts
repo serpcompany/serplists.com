@@ -52,6 +52,12 @@ const INVALID_ANSWERS: Array<[string, FormFieldKind, FormAnswer, Partial<Checkli
   ['a multiple choice with a missing option', 'multiSelect', ['basic', 'enterprise']],
   ['a file without an upload URL', 'file', { url: 'https://example.com/a.pdf', fileName: 'a.pdf', fileSize: 1 }],
   ['an answer of another kind', 'text', 5],
+  ['a number written as text', 'number', '5'],
+  ['a number that is not finite', 'number', Number.POSITIVE_INFINITY],
+  ['a date that is not text', 'date', 20260228],
+  ['a file answer that is only text', 'file', uploadUrl],
+  ['a file served over another protocol', 'file', { url: 'ftp://serplists.com/api/uploads/file?key=a', fileName: 'a.pdf', fileSize: 1 }],
+  ['a file whose address cannot be read', 'file', { url: 'http://[serplists/api/uploads/file?key=a', fileName: 'a.pdf', fileSize: 1 }],
 ];
 
 describe('findFormFieldProblem, the one rule for whether a form field blocks its task', () => {
@@ -125,6 +131,14 @@ describe('findFormFieldProblems', () => {
     ]);
   });
 
+  it('names a blocking field that has no id by an empty id', () => {
+    const withoutAnId = { label: 'Name', kind: 'text', required: true };
+
+    expect(findFormFieldProblems({ id: 'i1', title: 'Kickoff', contents: [{ id: 'c1', type: 'form', value: '', fields: [withoutAnId] }] })).toEqual([
+      { fieldId: '', reason: 'required' },
+    ]);
+  });
+
   it('finds nothing in a task without a form', () => {
     expect(findFormFieldProblems({ id: 'i1', title: 'Plain' })).toEqual([]);
   });
@@ -137,6 +151,28 @@ describe('form field messages and answer text', () => {
     expect(formFieldProblemMessage(field('number', { min: 1, max: 5 }), 'invalid')).toBe('Enter a number from 1 to 5.');
     expect(formFieldProblemMessage(field('number', { min: 1 }), 'invalid')).toBe('Enter a number of at least 1.');
     expect(formFieldProblemMessage(field('text'), 'invalid')).toBe('Use 500 characters or fewer.');
+  });
+
+  it.each([
+    ['url', {}, 'Enter a URL that starts with http:// or https://.'],
+    ['date', {}, 'Enter a real date.'],
+    ['select', {}, 'Choose from the listed options.'],
+    ['multiSelect', {}, 'Choose from the listed options.'],
+    ['checkbox', {}, 'Check this box.'],
+    ['file', {}, 'Upload the file again.'],
+    ['number', { max: 5 }, 'Enter a number of at most 5.'],
+    ['number', {}, 'Enter a number.'],
+  ] as const)('tells the person how to fix a %s answer it cannot take', (kind, extra, message) => {
+    expect(formFieldProblemMessage(field(kind, extra), 'invalid')).toBe(message);
+  });
+
+  it('shows text as written, an option it no longer has by its id, and a file with no name by its address', () => {
+    expect(formatFormAnswer(field('text', { answer: 'Acme Ltd' }))).toBe('Acme Ltd');
+    expect(formatFormAnswer(field('multiSelect', { answer: ['pro', 'gone'] }))).toBe('Pro, gone');
+    expect(formatFormAnswer(field('select', { answer: 'pro' }))).toBe('Pro');
+    expect(formatFormAnswer(field('select', { options: undefined, answer: 'pro' }))).toBe('pro');
+    expect(formatFormAnswer(field('multiSelect', { options: undefined, answer: ['pro'] }))).toBe('pro');
+    expect(formatFormAnswer(field('file', { answer: { url: uploadUrl, fileName: '', fileSize: 1 } }))).toBe(uploadUrl);
   });
 
   it('shows options by label, files by name and an empty answer as nothing', () => {

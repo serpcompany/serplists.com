@@ -42,4 +42,11 @@ describe('loadSharedRunTitle', () => {
     await expect(loadSharedRunTitle(env(), 'token-revoked-later')).resolves.toBeNull();
     await expect(loadSharedRunTitle(env(), '   ')).resolves.toBeNull();
   });
+
+  it('names a shared run whose stored title is not text Checklist Run', async () => {
+    addRun('bytes');
+    database.sqlite.prepare("UPDATE checklist_runs SET title = X'00' WHERE id = 'bytes'").run();
+
+    await expect(loadSharedRunTitle(env(), 'token-bytes')).resolves.toBe('Checklist Run');
+  });
 });

@@ -1,45 +1,12 @@
-import { loadBuiltRoutes, workerRedirect } from '../../support/builtRoutes';
 import { describe, expect, it } from 'vitest';
 
 import {
   checkSiteStandards,
   checkSiteStandardsUntilItPasses,
   SMOKE_TEST_HEADER,
-  type SiteRequest,
-} from '../../../scripts/check-site-standards';
+} from '../../../scripts/check-site-standards-lib';
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
-
-
-async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'staging', { brokenApi = false, templatesStatus = 200 } = {}) {
-  const { redirects } = await loadBuiltRoutes(siteEnv);
-  const production = siteEnv === 'production';
-  return async (url: string, { host, headers }: Parameters<SiteRequest>[1]) => {
-    const target = new URL(url);
-    const requestUrl = host ? `${target.protocol}//${host}${target.pathname}${target.search}` : url;
-    const redirect = await workerRedirect(redirects, requestUrl, { headers });
-    if (redirect) return { status: redirect.status, location: new URL(redirect.location, requestUrl).href, headers: {}, body: '' };
-    const { pathname } = target;
-    if (brokenApi && pathname === '/api/health/') {
-      return { status: 308, location: `${target.origin}/api/health`, headers: {}, body: '' };
-    }
-    if (pathname === '/api/templates') return { status: templatesStatus, location: null, headers: {}, body: '' };
-    const noindex = production ? {} : { 'x-robots-tag': 'noindex, nofollow' };
-    if (pathname === '/robots.txt') {
-      const body = production
-        ? 'User-Agent: *\nAllow: /\n\nSitemap: https://serplists.com/sitemap.xml\n'
-        : 'User-Agent: *\nDisallow: /\n';
-      return { status: 200, location: null, headers: noindex, body };
-    }
-    if (pathname === '/sitemap.xml') {
-      return { status: 200, location: null, headers: noindex, body: '<sitemapindex><sitemap><loc>https://serplists.com/sitemaps/pages/1.xml</loc></sitemap></sitemapindex>' };
-    }
-    if (pathname === '/sitemaps/pages/1.xml') {
-      return { status: 200, location: null, headers: noindex, body: '<urlset><url><loc>https://serplists.com/</loc></url><url><loc>https://serplists.com/about/</loc></url></urlset>' };
-    }
-    const body = production ? '<script>https://www.googletagmanager.com/gtm.js?id=GTM-PZZFQBGG</script>' : '<html></html>';
-    return { status: pathname.startsWith('/api/') && pathname.endsWith('/') ? 404 : 200, location: null, headers: noindex, body };
-  };
-}
+import { deployedWorkerWithTheBuiltRedirects } from '../../support/siteFollowingTheStandards';
 
 describe('check-site-standards', () => {
   it('uses the header next.config.ts exempts', () => {
@@ -74,6 +41,22 @@ describe('check-site-standards', () => {
     });
     expect(stagingAsProduction.failed).toBeGreaterThan(0);
     expect(stagingAsProduction.lines).toContain('FAIL robots.txt allows crawling');
+  });
+
+  it('fails a page sitemap that lists an unslashed or non-canonical page URL, naming it', async () => {
+    const site = await deployedWorkerWithTheBuiltRedirects('production');
+    const unslashed = '<urlset><url><loc>https://serplists.com/about</loc></url><url><loc>https://serplists.com/</loc></url></urlset>';
+
+    const result = await checkSiteStandards({
+      baseUrl: 'https://serp-checklists-production.serp.workers.dev',
+      siteEnv: 'production',
+      request: async (url, options) =>
+        new URL(url).pathname === '/sitemaps/pages/1.xml' ? { status: 200, location: null, headers: {}, body: unslashed } : site(url, options),
+    });
+
+    expect(result.lines.filter((line) => line.startsWith('FAIL'))).toEqual([
+      'FAIL /sitemaps/pages/1.xml lists 2 slashed page URLs; not canonical: https://serplists.com/about',
+    ]);
   });
 
   it.each([403, 404, 503])('fails a site whose Template list answers %i, as an access policy or a missing binding would make it', async (templatesStatus) => {

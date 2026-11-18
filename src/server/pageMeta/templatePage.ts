@@ -14,7 +14,7 @@ import {
   repoTemplates,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/repoTemplateCatalog';
-import { buildCanonicalPublicTemplatePath, buildPublicTemplatePath } from '@/lib/routes';
+import { buildPublicTemplatePath, publicTemplateSlugOf } from '@/lib/routes';
 
 import { getRequestOrigin, getWorkerEnv } from '../cloudflare';
 import type { PageSeoLookup } from './pageSeoLookup';
@@ -23,8 +23,8 @@ export type TemplatePageLookup = PageSeoLookup | { kind: 'moved'; path: string }
 
 type FoundTemplatePage = TemplatePageSource & {
   createdAt?: string | null;
-  categories?: string[];
-  canonicalPath: string | null;
+  categories: string[];
+  canonicalPath: string;
 };
 
 const toFoundSeo = (template: FoundTemplatePage): TemplatePageLookup => {
@@ -34,15 +34,16 @@ const toFoundSeo = (template: FoundTemplatePage): TemplatePageLookup => {
     seo: {
       title: text.title,
       description: text.description,
-      keywords: template.categories ?? ['checklist', 'template'],
+      keywords: template.categories,
       type: 'article',
       publishedTime: template.createdAt || undefined,
-      path: template.canonicalPath ?? undefined,
+      path: template.canonicalPath,
     },
   };
 };
 
-const isTheHandle = (handle: string | null | undefined, owner: string) => handle?.trim().toLowerCase() === owner;
+const isTheHandle = (handle: string | null | undefined, owner: string): handle is string =>
+  handle?.trim().toLowerCase() === owner;
 
 export const loadTemplatePageSeo = cache(
   async (handle: string, identifier: string): Promise<TemplatePageLookup> => {
@@ -55,10 +56,11 @@ export const loadTemplatePageSeo = cache(
     if (!owner || !id) return notFound;
 
     const libraryTemplate = findPublicTemplateByIdentifier(repoTemplates, id);
-    if (libraryTemplate && isTheHandle(resolvePublicTemplateOwnerSlug(libraryTemplate), owner)) {
+    const libraryOwner = libraryTemplate ? resolvePublicTemplateOwnerSlug(libraryTemplate) : null;
+    if (libraryTemplate && isTheHandle(libraryOwner, owner)) {
       return toFoundSeo({
         ...libraryTemplate,
-        canonicalPath: buildCanonicalPublicTemplatePath(libraryTemplate),
+        canonicalPath: buildPublicTemplatePath(libraryOwner, publicTemplateSlugOf(libraryTemplate)),
       });
     }
 

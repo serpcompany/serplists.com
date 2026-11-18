@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { errorMessage } from "./lib/error-message";
 import { lintSingleTemplateSource, lintTemplatePair, lintYamlTemplateBundle, type TemplateLintIssue } from "./lib/templateLint";
 
 const EXCLUDED_DIRS = new Set([
@@ -117,6 +118,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 });

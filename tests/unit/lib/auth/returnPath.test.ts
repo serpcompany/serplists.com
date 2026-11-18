@@ -28,6 +28,7 @@ describe('sanitizeReturnPath', () => {
 
   it('keeps percent-encoding as it is instead of decoding it', () => {
     expect(sanitizeReturnPath('/team-invites/a%2Fb/')).toBe('/team-invites/a%2Fb/');
+    expect(sanitizeReturnPath('/templates/%E0%A4%A/')).toBe('/templates/%E0%A4%A/');
   });
 
   it.each([
@@ -40,6 +41,7 @@ describe('sanitizeReturnPath', () => {
     '',
     '/foo\nbar',
     '/%0a',
+    '/.//[',
   ])('rejects %j', (value) => {
     expect(sanitizeReturnPath(value)).toBeNull();
   });

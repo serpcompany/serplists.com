@@ -38,6 +38,12 @@ describe('classifySessionResult', () => {
     expect(classifySessionResult(result)).toEqual({ kind: 'unauthenticated' });
   });
 
+  it('reads a session whose user it cannot read as unknown, not signed out', () => {
+    expect(classifySessionResult({ data: { user: { email: 'user@example.com' }, session: {} }, error: null })).toEqual({
+      kind: 'unknown',
+    });
+  });
+
   it('reads a session as signed in', () => {
     expect(classifySessionResult({ data: { user, session: { id: 'session-1' } }, error: null })).toMatchObject({
       kind: 'authenticated',
@@ -117,6 +123,26 @@ describe('checkSessionWithRetry', () => {
 
     await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toEqual({ kind: 'unknown' });
     expect(getSession).toHaveBeenCalledTimes(3);
+  });
+
+  it('waits a second, then three more, between its attempts by default', async () => {
+    vi.useFakeTimers();
+    try {
+      const getSession = vi.fn(async (): Promise<AuthClientResult> => failedGetSession(503));
+      const checked = checkSessionWithRetry(getSession);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(getSession).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(getSession).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(getSession).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(checked).resolves.toEqual({ kind: 'unknown', status: 503 });
+      expect(getSession).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not retry a confirmed signed-out answer', async () => {

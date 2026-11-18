@@ -76,13 +76,6 @@ class Analytics {
     });
   }
 
-  trackUser(userId: string, properties?: Record<string, unknown>) {
-    this.track('user_identified', {
-      userId,
-      ...properties
-    });
-  }
-
   trackTemplateView(templateId: string, templateTitle: string) {
     this.track('template_view', {
       templateId,
@@ -90,27 +83,8 @@ class Analytics {
     });
   }
 
-  trackTemplateRun(templateId: string, runId: string) {
-    this.track('template_run_started', {
-      templateId,
-      runId
-    });
-  }
-
-  trackTemplateComplete(templateId: string, runId: string, completionTime: number) {
-    this.track('template_completed', {
-      templateId,
-      runId,
-      completionTime
-    });
-  }
-
   getEvents() {
     return [...this.events];
-  }
-
-  setEnabled(enabled: boolean) {
-    this.isEnabled = enabled;
   }
 }
 

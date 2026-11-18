@@ -9,7 +9,9 @@ import {
   type TemplateEditorFormField,
   type TemplateEditorFormValues,
 } from '@/lib/forms/templateEditorForm';
+import { MAX_FORM_FIELD_OPTIONS, MAX_FORM_FIELDS } from '@/lib/schemas/formFields';
 import { inputNamed, renderSettled, typeInto } from '../../../support/renderInTheDom';
+import { chooseTheOption } from '../../../support/selectOptions';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
@@ -48,14 +50,7 @@ async function mountTheEditor(contents: unknown[] = []) {
 }
 
 async function chooseType(fieldNumber: number, typeLabel: string) {
-  await act(async () => {
-    fireEvent.click(screen.getByRole('combobox', { name: `Field ${fieldNumber} Type` }));
-  });
-  const option = await screen.findByRole('option', { name: typeLabel });
-  await act(async () => {
-    fireEvent.pointerDown(option, { pointerType: 'mouse' });
-    fireEvent.click(option);
-  });
+  await chooseTheOption(`Field ${fieldNumber} Type`, typeLabel);
   await waitFor(() => {
     expect(screen.getByRole('combobox', { name: `Field ${fieldNumber} Type` }).textContent).toContain(typeLabel);
   });
@@ -159,5 +154,30 @@ describe('the Form block in the Template editor', () => {
     await chooseType(1, 'Date');
     expect(editor.fields()[0]).toMatchObject({ kind: 'date', min: undefined, max: undefined });
     expect(screen.queryByLabelText('Field 1 Minimum')).toBeNull();
+  });
+
+  it('keeps no bound when a number too large to store is typed', async () => {
+    const editor = await mountTheEditor([{ id: 'form-1', type: 'form', value: '', fields: [field({ id: 'field_a', label: 'Seats' })] }]);
+
+    await chooseType(1, 'Number');
+    await typeInto(inputNamed('Field 1 Minimum'), '1e400');
+
+    expect(editor.fields()[0]?.min).toBeUndefined();
+  });
+
+  it('stops adding fields at the limit a form can hold, and says so', async () => {
+    const fields = Array.from({ length: MAX_FORM_FIELDS }, (_, index) => field({ id: `field_${index}`, label: `Field ${index}` }));
+    await mountTheEditor([{ id: 'form-1', type: 'form', value: '', fields }]);
+
+    expect(screen.getByText(`A form can have up to ${MAX_FORM_FIELDS} fields.`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add field' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('stops adding options at the limit a field can hold, and says so', async () => {
+    const options = Array.from({ length: MAX_FORM_FIELD_OPTIONS }, (_, index) => ({ id: `option_${index}`, label: `Option ${index}` }));
+    await mountTheEditor([{ id: 'form-1', type: 'form', value: '', fields: [field({ id: 'field_a', label: 'Plan', kind: 'select', options })] }]);
+
+    expect(screen.getByText(`A field can have up to ${MAX_FORM_FIELD_OPTIONS} options.`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add option' }).hasAttribute('disabled')).toBe(true);
   });
 });

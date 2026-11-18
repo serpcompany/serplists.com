@@ -148,9 +148,12 @@ type PublicTemplateUrlFields = Pick<
   'id' | 'slug' | 'userId' | 'ownerProfile' | 'owner' | 'ownerType' | 'teamId'
 >;
 
+export const publicTemplateSlugOf = (template: Pick<ChecklistTemplate, 'id' | 'slug'>): string =>
+  template.slug?.trim() || template.id.trim();
+
 export const buildCanonicalPublicTemplatePath = (template: PublicTemplateUrlFields): string | null => {
   const ownerSlug = resolvePublicTemplateOwnerSlug(template);
-  const templateSlug = template.slug?.trim() || template.id.trim();
+  const templateSlug = publicTemplateSlugOf(template);
 
   if (!ownerSlug || !templateSlug) {
     return null;

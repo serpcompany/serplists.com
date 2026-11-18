@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SharedRunView } from '@/components/run-execution/SharedRunView';
 import type { ChecklistFormField, ChecklistItem, ChecklistRun } from '@/types/checklist';
 
+import { sharedRunOf, sharedRunViewProps } from '../../../fixtures/sharedRunView';
 import { getByAccessibleName } from '../accessibleMarkup';
 
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
@@ -19,35 +20,8 @@ const formTask = (id: string, title: string, fields: ChecklistFormField[], isCom
   contents: [{ id: `${id}-form`, type: 'form', value: '', fields }],
 });
 
-const renderSharedRun = (items: ChecklistItem[], status: ChecklistRun['status'] = 'in_progress') => {
-  const run: ChecklistRun = {
-    id: 'run-1',
-    templateId: 'template-1',
-    title: 'New client',
-    status,
-    progress: 0,
-    sections: [{ id: 'section-1', title: 'Intake', items }],
-    startedAt: '2026-10-05T08:00:00.000Z',
-    userId: 'user-1',
-  };
-  return renderToStaticMarkup(
-    <SharedRunView
-      completedTasks={0}
-      finishRunButton={null}
-      isRunCompleted={status === 'completed'}
-      noteDrafts={{}}
-      onCopyLink={vi.fn()}
-      onNoteDraftChange={vi.fn()}
-      onSaveNotes={vi.fn(async () => true)}
-      onToggleSubItem={vi.fn()}
-      onToggleTask={vi.fn()}
-      progress={0}
-      run={run}
-      sectionProgress={[{ completed: 0, index: 0, section: { id: 'section-1', title: 'Intake', items }, total: items.length }]}
-      totalTasks={items.length}
-    />,
-  );
-};
+const renderSharedRun = (items: ChecklistItem[], status: ChecklistRun['status'] = 'in_progress') =>
+  renderToStaticMarkup(<SharedRunView {...sharedRunViewProps(sharedRunOf(items, status), { completedTasks: 0 })} />);
 
 const NOTE = 'This task can be ticked once its form is answered.';
 

@@ -229,6 +229,43 @@ code. It runs in the commit-msg hook (`--commit-msg`) on the staged files, and i
 `main` adds only its merge commit, since `staging` already accepted the rest. That step needs the
 full history, so the Quality Gate checks out with `fetch-depth: 0`.
 
+### Coverage
+
+Every line, branch and function of the code runs in a test, as SERP's
+[coverage check](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/verification/coverage-check/README.md)
+sets for a repository at Ship: `pnpm run test:coverage` (`serp-verify coverage`, from
+`@serpcompany/verify`) fails on each line no test runs, branch never taken and function never
+called, at its line. Fill a gap with a test that drives the code as its callers do and asserts what
+should happen, or delete the code nothing needs. A test that only reaches a line is padding, which
+the `pr-review` skill's tests reviewer sends back.
+
+- **The reports**, as `coverage.reports` in `verify.json` lists them: `test:run` runs every
+  project (node, dom and local-d1) in one run, which writes `coverage/tests`; two runs number a
+  file's branches differently, since V8 reports blocks only for code that ran, so keep every
+  suite in that one run, as a project of its own. The process entry points the node and dom tests
+  spawn write `coverage/tests-children`: `tests/support/childProcessCoverage.ts` and its setup file
+  `childProcessCoverageHandOff.ts` give each child `NODE_V8_COVERAGE`, and c8 reports the files `PROCESS_ENTRY_POINTS` names. A library module
+  counts only from the tests that import it, and an entry point only from the processes that ran
+  it, so the teardown drops it from `coverage/tests`. Coverage slows rendering, so the dom project
+  gives each test 15 seconds and local-d1 20, and a test that spawns a script its own
+  `{ timeout: 120_000 }`.
+- **A script that writes the checkout** runs from `aCopyOfTheCheckout()`
+  (`tests/support/checkoutCopy.ts`): a throwaway copy of the tracked and untracked files, its
+  `node_modules` linked to the checkout's, removed in a `finally`. Its children's coverage counts
+  for the checkout's files: the teardown rewrites the copy's paths to the checkout's and clamps
+  each V8 range to the code before tsx's inline source map, whose length the copy's path changes.
+- **What's measured:** every file `test.coverage.include` names in `vitest.config.ts`, with no
+  `exclude` and no thresholds. Only tests (`tests.patterns`) and the stock shadcn components
+  `files.thirdParty` lists, each with its reason, are skipped. Nothing else is excluded, and an
+  ignore comment is a comment, which the comments check refuses.
+- **CI:** the Quality Gate runs the check after both suites, with `SERP_VERIFY_BASE: HEAD^1` so it
+  reads the stage from `AGENTS.md` at the base, as SERP's
+  [Workflows](https://github.com/serpcompany/serp/blob/main/packages/verify/docs/workflows.md#the-coverage-check-in-a-test-job)
+  sets. Every job that installs needs `packages: read` and `NODE_AUTH_TOKEN`, since
+  `@serpcompany/verify` is a private GitHub Packages package.
+- **The inner loop:** `pnpm exec vitest related --run --coverage <files>`, then
+  `pnpm exec serp-verify coverage --changed`, which keeps only the gaps on the lines you changed.
+
 ## Git hooks
 
 Lefthook's hooks install with `pnpm install` (the `prepare` script); run

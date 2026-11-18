@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -7,7 +6,7 @@ import { z } from 'zod';
 import { checkedLanguage, commentCheckOf, filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib';
 import { checkNames, perFileChecks } from '../../../scripts/checks/checks';
 import { findCommentProblems } from '../../../scripts/checks/comments';
-import { isError, rulesFor } from '../../support/eslintConfig';
+import { isError, repositoryESLint, rulesFor } from '../../support/eslintConfig';
 
 const repoRoot = process.cwd();
 const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
@@ -27,7 +26,7 @@ describe('the comment checks', { timeout: 60_000 }, () => {
   });
 
   it('hold every TypeScript and JavaScript file to the ESLint no-comments rule', async () => {
-    const eslint = new ESLint();
+    const eslint = repositoryESLint();
     const unchecked: string[] = [];
     for (const file of repositoryFiles.filter((path) => commentCheckOf(path) === 'ESLint')) {
       if (!isError((await rulesFor(eslint, file))['serplists/no-comments'])) unchecked.push(file);

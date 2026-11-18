@@ -41,7 +41,7 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(body)) {
     if (value === undefined || value === null) continue;
-    params.set(key, typeof value === "boolean" ? (value ? "true" : "false") : String(value));
+    params.set(key, String(value));
   }
   return params.toString();
 }

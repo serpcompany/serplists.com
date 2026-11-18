@@ -70,7 +70,7 @@ const taskChangeArg = z.object({
 
 const operationBase = { templateId: idArg, expectedVersion: z.number().int().positive() };
 
-export const templateOperationArgs = z.discriminatedUnion("operation", [
+const templateOperations = z.discriminatedUnion("operation", [
   z.object({ ...operationBase, operation: z.literal("replace_section"), sectionId: idArg, section: sectionChangeArg }).strict(),
   z.object({
     ...operationBase,
@@ -96,7 +96,21 @@ export const templateOperationArgs = z.discriminatedUnion("operation", [
     beforeTaskId: idArg.optional(),
   }).strict(),
   z.object({ ...operationBase, operation: z.literal("remove_task"), taskId: idArg }).strict(),
-]).superRefine((args, context) => {
+]);
+
+type OperationArgs = z.infer<typeof templateOperations>;
+type TaskMoveArgs = Extract<OperationArgs, { operation: "insert_task" | "move_task" }>;
+
+export type TaskPlacement = { sectionId?: string | undefined; beforeTaskId: string } | { sectionId: string; beforeTaskId?: undefined };
+
+type PlacedOperationArgs = Exclude<OperationArgs, TaskMoveArgs> | (TaskMoveArgs & TaskPlacement);
+
+function placesItsTask(args: OperationArgs): args is PlacedOperationArgs {
+  if (args.operation !== "insert_task" && args.operation !== "move_task") return true;
+  return Boolean(args.sectionId || args.beforeTaskId);
+}
+
+export const templateOperationArgs = templateOperations.superRefine((args, context): args is PlacedOperationArgs => {
   const issue = (path: (string | number)[], message: string) => context.addIssue({ code: "custom", path, message });
   if (args.operation === "replace_section") {
     if (args.section.title === undefined && args.section.items === undefined) issue(["section"], "Pass title, items, or both");
@@ -113,9 +127,9 @@ export const templateOperationArgs = z.discriminatedUnion("operation", [
       issue(["task", "id"], "A task keeps its id: leave it out or pass taskId");
     }
   }
-  if ((args.operation === "insert_task" || args.operation === "move_task") && !args.sectionId && !args.beforeTaskId) {
-    issue(["sectionId"], "Pass sectionId, beforeTaskId, or both");
-  }
+  const placed = placesItsTask(args);
+  if (!placed) issue(["sectionId"], "Pass sectionId, beforeTaskId, or both");
+  return placed;
 });
 
 export type TemplateOperationArgs = z.infer<typeof templateOperationArgs>;

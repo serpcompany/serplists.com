@@ -50,13 +50,13 @@ A config file can't hold a reason, so each rule it turns off or narrows is here.
 | `knip.json`, `entry` | `open-next.config.ts` | OpenNext's CLI reads it by path |
 | `knip.json`, `entry` | `scripts/stripe/bootstrap.ts` | A person runs it ([`billing.md`](billing.md)) |
 | `knip.json`, `entry` | `tests/e2e/preview-server.ts`, `tests/support/nextFontGoogle.ts` | Playwright starts the first as its web server, and Vitest loads the second in place of `next/font/google` |
+| `knip.json`, `entry` | `tests/support/stripeApiRedirect.ts` | The Stripe script tests preload it by path into the script's process, to send Stripe's API to a local stand-in |
 | `knip.json`, `entry` | `tools/checks/hook.mjs` and `stop-hook.mjs`, and `scripts/checks/hook.ts` and `stop-hook.ts` | Claude Code runs the hooks by path from `.claude/settings.json`, and each runs its TypeScript half by path |
 | `knip.json`, `entry` | `tools/checks/*.d.mts` | TypeScript reads a `.d.mts` beside the `.mjs` it describes |
 | `knip.json`, `entry` | `.claude/skills/*/*.ts` | A skill's steps run its script by path, from its `SKILL.md` |
 | `knip.json`, `drizzle` and `eslint` | `db/drizzle.config.ts`, `eslint.type-aware.config.ts` | `db:generate` and `pnpm run lint` pass them to their tools by path |
 | `.jscpd.json`, `ignore` | Build output, `db/migrations/`, and the generated files | Applied migrations are append-only history that can't be edited to share code, and a migration that rebuilds a table restates all of it |
 | `vitest.config.ts` | No test files under `node_modules`, `dist`, `tmp`, the Playwright reports, `tests/e2e/` or the agent worktrees inside `.claude/` | Playwright runs `tests/e2e/`, and the rest isn't this checkout's tests |
-| `package.json`, `test:run` | The local D1 tests | They run in `test:local-d1`, and `tests/unit/config/no-exceptions.test.ts` fails on one that runs in neither |
 
 ## JavaScript
 
@@ -69,4 +69,3 @@ else. ESLint's recommended JavaScript rules hold each of these files, with Node'
 | `postcss.config.js` and `.dependency-cruiser.cjs`, and what they import | Their tools read them as JavaScript |
 | `tools/checks/*.mjs`, with a `.d.mts` beside one TypeScript imports | Claude Code runs the hook entries, and CI the pull request check, with plain Node before packages are installed: they say how to install them, and CI's check needs no install |
 | `.github/actions/**/*.cjs` | GitHub runs a composite action's script with plain Node, with nothing installed |
-| `tests/**/*.test.mjs` | A test of what a JavaScript caller may pass that the declared types rule out, such as the range workerd's local R2 reports |

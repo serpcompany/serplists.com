@@ -6,9 +6,12 @@ import { authStatusSchema, type AuthStatus } from "@/lib/schemas/authStatus";
 
 import { resolveApiBaseUrl, resolveApiServerOrigin } from "@/lib/apiBaseUrl";
 
+const pageHostname = (): string | undefined =>
+  typeof window === "undefined" ? undefined : window.location.hostname;
+
 const API_BASE_URL = resolveApiBaseUrl({
   configuredUrl: env.NEXT_PUBLIC_API_URL,
-  pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
+  pageHostname: pageHostname(),
 });
 
 const PLACEHOLDER_ORIGIN_FOR_SERVER_RENDER = "http://localhost";

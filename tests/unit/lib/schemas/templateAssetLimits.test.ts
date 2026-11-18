@@ -42,6 +42,7 @@ describe("template asset limits", () => {
   it("counts only asset sizes no upload could produce", () => {
     expect(countOversizedTemplateAssets(sectionsWithAsset(TEMPLATE_IMPORT_MAX_ASSET_BYTES + 1))).toBe(1);
     expect(countOversizedTemplateAssets("not sections")).toBe(0);
+    expect(countOversizedTemplateAssets(["Prep", { title: "Prep", items: ["Write copy"] }])).toBe(0);
   });
 
   it("does not count a missing or invalid size, which is only a hint from the imported file", () => {

@@ -144,6 +144,23 @@ describe('Categories page search', () => {
     expect(page.allCategoriesSectionLinks()).toEqual(['/categories/moving/', '/categories/outdoor/']);
   });
 
+  it('finds a known category by the words of its description', async () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({
+        templates: [bundledTemplate, { ...movingTemplate, id: 'db-review', categories: ['engineering'] }],
+        allCategories: ['engineering', 'outdoor'],
+      }),
+    );
+    navigation.reset('/categories/');
+    const { container } = await renderSettled(<Categories />);
+
+    await typeInto(inputNamed('Search categories'), 'code reviews');
+
+    const allCategories = within(screen.getByRole('region', { name: 'All Categories' }));
+    expect(allCategories.queryAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/categories/engineering/']);
+    expect(container.textContent).toContain('Checklists for code reviews, deployments, and development workflows');
+  });
+
   it('shows no empty state while the search matches a category', async () => {
     const page = await mount();
 

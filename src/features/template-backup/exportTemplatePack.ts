@@ -58,7 +58,7 @@ const withTheirRequiredTools = async (
   });
 };
 
-export const EXPORT_PACK_UNREADABLE_MESSAGE = 'The export could not be read. Try again.';
+const EXPORT_PACK_UNREADABLE_MESSAGE = 'The export could not be read. Try again.';
 
 const readSummary = (pack: unknown): PortableExportSummary => {
   try {

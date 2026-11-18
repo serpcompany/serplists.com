@@ -107,9 +107,7 @@ const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [
   ['buildTeamInvitePath (API)', buildTeamInvitePath('invite-token')],
 ];
 
-const PUBLIC_SITE_LINK_PATHS = everyPublicSiteLink
-  .filter((link) => !link.external)
-  .map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
+const PUBLIC_SITE_LINK_PATHS = everyPublicSiteLink.map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
 
 describe('route builders and the URLs the app writes', () => {
   it.each([...ROUTE_BUILDER_PATHS, ...ORGANIZATION_ROUTE_BUILDER_PATHS, ...AUTH_PAGE_AND_API_LINKS, ...PUBLIC_SITE_LINK_PATHS])(

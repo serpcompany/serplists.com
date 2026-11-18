@@ -55,14 +55,14 @@ function startListener(url: string) {
   });
   listener.stdout.on("data", (chunk: Buffer) => forward(process.stdout, chunk));
   listener.stderr.on("data", (chunk: Buffer) => forward(process.stderr, chunk));
-  listener.on("exit", (code, signal) => {
+  listener.on("exit", (code) => {
     if (restarting && !stopping) {
       restarting = false;
       startListener(target.url);
       return;
     }
     clearInterval(followDevAllToItsPort);
-    process.exitCode = code ?? (signal ? 1 : 0);
+    process.exitCode = code ?? 1;
   });
   child = listener;
 }

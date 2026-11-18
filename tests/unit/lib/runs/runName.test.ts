@@ -32,6 +32,10 @@ describe('buildDefaultRunName', () => {
     );
   });
 
+  it('names the run after the title alone when the suffix is blank', () => {
+    expect(buildDefaultRunName('Camping Checklist', '  ')).toBe('Camping Checklist');
+  });
+
   it('shortens a long title so the whole name fits and the date stays', () => {
     const name = buildDefaultRunName('a'.repeat(160), '9/28/2026, 3:45:12 PM');
 

@@ -52,7 +52,7 @@ export async function handleSharedChecklist(
     return jsonError('Shared run not found', 404);
   }
 
-  const read = await readJsonPayload(request, sharedRunUpdateSchema, 'Invalid checklist payload');
+  const read = await readJsonPayload(request, sharedRunUpdateSchema);
   if ('response' in read) return read.response;
 
   const { sections, status, expected_revision } = read.payload;
@@ -120,7 +120,7 @@ export async function handleSharedChecklist(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId,
-    subject: getRunSubject(existingSharedRun, existingSharedRun.user_id),
+    subject: getRunSubject(existingSharedRun),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',
     before: existingSharedRun,

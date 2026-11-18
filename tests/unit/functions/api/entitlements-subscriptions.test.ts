@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { getEntitlementsForContext, getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { billingSchemaSql, PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
 import { apiEnv, withoutVars, type OptionalEnvVar } from "../../../support/apiEnv";
@@ -150,5 +150,38 @@ describe("getEntitlementsForUser for a seeded persona email, which anyone can re
 
     expect(statements.length).toBeGreaterThan(0);
     expect(statements.filter((sql) => /\bfrom\s+"users"/i.test(sql))).toEqual([]);
+  });
+});
+
+describe("getEntitlementsForContext for an Organization, which only a team override upgrades", () => {
+  function insertTeamOverride(plan: string, expiresAt: number | null = null) {
+    d1.sqlite.prepare(`
+      INSERT INTO team_entitlement_overrides (team_id, plan, expires_at, created_at) VALUES ('team-1', ?, ?, '2026-01-01T00:00:00.000Z')
+    `).run(plan, expiresAt);
+  }
+
+  it.each(["team", "pro"])("gives a %s override the Team plan with no limits", async (plan) => {
+    insertTeamOverride(plan);
+
+    await expect(getEntitlementsForContext(env(), { type: "team", teamId: "team-1" })).resolves.toEqual({
+      plan: "team",
+      source: "team_override",
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+  });
+
+  it.each<[string, () => void]>([
+    ["no override", () => undefined],
+    ["a Free override", () => insertTeamOverride("free")],
+    ["an expired Team override", () => insertTeamOverride("team", Math.floor(Date.now() / 1000) - 60)],
+  ])("keeps the Free limits with %s, whatever the member's own subscription", async (_label, arrange) => {
+    arrange();
+    insertSubscription("sub_1", "active");
+
+    await expect(getEntitlementsForContext(env(), { type: "team", teamId: "team-1", userId: USER_ID })).resolves.toEqual({
+      plan: "free",
+      source: "free",
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
   });
 });

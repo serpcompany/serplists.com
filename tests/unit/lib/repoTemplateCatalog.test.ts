@@ -87,6 +87,42 @@ describe("repo template catalog", () => {
     expect(repoTemplates.map(({ id }) => id)).toEqual(repoTemplates.map(({ slug }) => `repo:${slug}`));
   });
 
+  const slugless = (title: string) => ({ title, visibility: "public", sections: [{ title: "Prep", items: [{ title: "Check" }] }] });
+  const sluglessPack = () => ({
+    kind: "serplists-template-pack",
+    schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+    exportedAt: "2026-03-22T00:00:00.000Z",
+    templates: [slugless("Launch prep"), slugless("Launch day")],
+  });
+
+  it("keeps every template of a pack that gives them no slug, the last with the id named for its file as before and each earlier one numbered, with ids that hold across loads", () => {
+    const source = { "../data/public-template-packs/launch.json": { default: sluglessPack() } };
+
+    const ids = normalizeRepoTemplateSources(source).map(({ id, title }) => ({ id, title }));
+
+    expect(ids).toEqual([
+      { id: "repo:launch", title: "Launch day" },
+      { id: "repo:launch-1", title: "Launch prep" },
+    ]);
+    expect(normalizeRepoTemplateSources(source).map(({ id }) => id)).toEqual(ids.map(({ id }) => id));
+  });
+
+  it("keeps the id named for its file for the one slugless template of a pack, wherever it sits", () => {
+    const pack = { ...sluglessPack(), templates: [{ ...slugless("Launch prep"), slug: "launch-prep" }, slugless("Launch day")] };
+
+    expect(normalizeRepoTemplateSources({ "../data/public-template-packs/launch.json": pack }).map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: "repo:launch", title: "Launch day" },
+      { id: "repo:launch-prep", title: "Launch prep" },
+    ]);
+  });
+
+  it("numbers the slugless templates of a pack file with no name as template-1, template-2", () => {
+    expect(normalizeRepoTemplateSources({ "../data/public-template-packs/.json": sluglessPack() }).map(({ id }) => id)).toEqual([
+      "repo:template-2",
+      "repo:template-1",
+    ]);
+  });
+
   it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
@@ -231,6 +267,16 @@ describe("repo template catalog", () => {
       },
     });
     expect(isRepoTemplate(templates[0])).toBe(true);
+  });
+
+  it("keeps the id of a backup template that already names itself a repo template", () => {
+    const templates = normalizeRepoTemplateSources({
+      "../data/public-template-packs/camping.json": {
+        templates: [{ id: "repo:camping", title: "Camping", sections: [{ id: "s1", title: "Shelter", items: [{ id: "i1", title: "Tent" }] }] }],
+      },
+    });
+
+    expect(templates.map(({ id }) => id)).toEqual(["repo:camping"]);
   });
 
   it("accepts portable template pack sources", () => {

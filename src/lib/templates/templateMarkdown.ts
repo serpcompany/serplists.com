@@ -107,24 +107,20 @@ const renderContentBlock = (content: PortableContent): string => {
   switch (content.type) {
     case "text":
     case "embed":
-      return renderTemplateMarkdownBlock(content.type, (content.value ?? "").trim());
+      return renderTemplateMarkdownBlock(content.type, content.value.trim());
     case "subItems":
-      return renderYamlContentBlock("subItems", (content.subItems ?? []).map((subItem) => subItem.title));
+      return renderYamlContentBlock("subItems", content.subItems.map((subItem) => subItem.title));
     case "form":
       return renderYamlContentBlock("form", content.fields.map(formFieldYaml));
     case "image":
     case "video":
     case "file":
       return renderYamlContentBlock(content.type, {
-        value: (content.value ?? "").trim(),
+        value: content.value.trim(),
         ...(content.uploadType ? { uploadType: content.uploadType } : {}),
         ...(trimOptionalString(content.fileName) ? { fileName: trimOptionalString(content.fileName) } : {}),
         ...(typeof content.fileSize === "number" ? { fileSize: content.fileSize } : {}),
       });
-    default: {
-      const unhandled: never = content;
-      return unhandled;
-    }
   }
 };
 

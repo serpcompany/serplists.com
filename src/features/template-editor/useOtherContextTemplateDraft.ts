@@ -29,13 +29,15 @@ export const useOtherContextTemplateDraft = ({
     if (!isClient || !enabled || !userId) return null;
     const nameOf = (teamId: string | null): string | undefined =>
       teamId ? teams.find((team) => team.id === teamId)?.name : "Personal";
-    const other = findOtherContextDraft(listTemplateDraftContexts(userId), {
+    const namedDrafts = listTemplateDraftContexts(userId).flatMap((draft) => {
+      const name = nameOf(draft.teamId);
+      return name ? [{ ...draft, name }] : [];
+    });
+    return findOtherContextDraft(namedDrafts, {
       activeTeamId,
       workspaceReady: !isWorkspaceLoading,
-      canCreateIn: (teamId) =>
-        Boolean(nameOf(teamId)) && (!teamId || getPermissions(teamId).canEditTemplates),
+      canCreateIn: (teamId) => !teamId || getPermissions(teamId).canEditTemplates,
     });
-    return other ? { ...other, name: nameOf(other.teamId) ?? "" } : null;
   }, [activeTeamId, enabled, getPermissions, isClient, isWorkspaceLoading, teams, userId]);
   const [discarded, setDiscarded] = useState<OtherContextTemplateDraft | null>(null);
   const found = lookedUp === discarded ? null : lookedUp;

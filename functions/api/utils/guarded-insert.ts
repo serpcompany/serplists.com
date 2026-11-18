@@ -1,4 +1,4 @@
-import { and, getTableColumns, is, sql, SQL, type Column, type SQLWrapper } from 'drizzle-orm';
+import { getTableColumns, is, sql, SQL, type Column, type SQLWrapper } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { createDb } from '../db';
 
@@ -18,25 +18,21 @@ function valueAsDrizzleInsertFillsIt(column: Column, value: unknown): unknown {
 
 export function withoutColumns<TTable extends SQLiteTable>(table: TTable, omit: readonly string[]): TTable {
   if (omit.length === 0) return table;
-  if (!(DRIZZLE_TABLE_COLUMNS in table) || table[DRIZZLE_TABLE_COLUMNS] !== getTableColumns(table)) {
-    throw new Error('withoutColumns: unsupported Drizzle table layout');
-  }
   const columns = Object.fromEntries(
     Object.entries(getTableColumns(table)).filter(([key]) => !omit.includes(key)),
   );
-  const narrowed: unknown = Object.create(table, { [DRIZZLE_TABLE_COLUMNS]: { value: columns } });
-  if (!inheritsFrom(narrowed, table)) throw new Error('withoutColumns: the narrowed table does not inherit from the table');
-  return narrowed;
+  return new Proxy(table, {
+    get(target, property, receiver) {
+      if (property === DRIZZLE_TABLE_COLUMNS) return columns;
+      const value: unknown = Reflect.get(target, property, receiver);
+      return value;
+    },
+  });
 }
 
-function inheritsFrom<Base extends object>(value: unknown, base: Base): value is Base {
-  return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === base;
-}
-
-export function allConditions(...conditions: (SQLWrapper | undefined)[]): SQL {
-  const combined = and(...conditions);
-  if (!combined) throw new Error('allConditions: pass at least one condition');
-  return combined;
+export function allConditions(first: SQLWrapper, ...rest: (SQLWrapper | undefined)[]): SQL {
+  const conditions = [first, ...rest.filter((condition) => condition !== undefined)];
+  return conditions.length === 1 ? sql`${first}` : sql`(${sql.join(conditions, sql` and `)})`;
 }
 
 const isWritableColumn = (column: Column): boolean => !column.generated || column.generated.type === 'byDefault';

@@ -57,6 +57,8 @@ describe('getAuthErrorMessage', () => {
     ['non-string fields', { message: { nested: true }, error: 42 }],
     ['statusText only', { status: 500, statusText: 'Internal Server Error' }],
     ['a string', 'boom'],
+    ['a list rather than an error body', [{ message: 'Invalid password' }]],
+    ['a date rather than an error body', new Date('2026-11-08T00:00:00.000Z')],
   ])('falls back for %s', (_label, error) => {
     expect(getAuthErrorMessage(error, FALLBACK)).toBe(FALLBACK);
   });
@@ -87,6 +89,7 @@ describe('isEmailNotVerifiedError', () => {
   it('does not match other errors', () => {
     expect(isEmailNotVerifiedError({ error: 'Too many requests', status: 429 })).toBe(false);
     expect(isEmailNotVerifiedError(null)).toBe(false);
+    expect(isEmailNotVerifiedError({ status: 403 })).toBe(false);
   });
 });
 

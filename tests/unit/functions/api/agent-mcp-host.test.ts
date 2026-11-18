@@ -7,7 +7,7 @@ vi.mock("@functions/api/utils/personal-run-key", () => ({
 }));
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
-import { requestHostIsSafe, resolveAgentMcpConnection } from "@functions/api/utils/agent-mcp-host";
+import { requestHostIsSafe, requestOriginIsAllowed, resolveAgentMcpConnection } from "@functions/api/utils/agent-mcp-host";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import type { Env } from "@functions/api/types";
 import { wranglerEnvVars } from "../../../support/wranglerToml";
@@ -142,5 +142,25 @@ describe("advertised MCP endpoint", () => {
     ]) {
       expect(requestHostIsSafe(new Request(`${origin}/api/mcp`), previewEnv), origin).toBe(false);
     }
+  });
+
+  describe("requestOriginIsAllowed", () => {
+    const mcpRequestFrom = (origin?: string) =>
+      new Request("https://staging.serplists.com/api/mcp", { method: "POST", ...(origin === undefined ? {} : { headers: { Origin: origin } }) });
+
+    it.each([
+      ["an MCP client that sends no Origin", undefined],
+      ["the endpoint's own origin", "https://staging.serplists.com"],
+      ["a configured origin", "https://serp-checklists-preview.serpcompany.workers.dev"],
+    ])("accepts %s", (_label, origin) => {
+      expect(requestOriginIsAllowed(mcpRequestFrom(origin), previewEnv)).toBe(true);
+    });
+
+    it.each([
+      ["an unlisted site", "https://evil.example"],
+      ["a sandboxed page's opaque origin", "null"],
+    ])("refuses %s", (_label, origin) => {
+      expect(requestOriginIsAllowed(mcpRequestFrom(origin), previewEnv)).toBe(false);
+    });
   });
 });

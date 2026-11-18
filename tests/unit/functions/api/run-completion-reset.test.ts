@@ -31,4 +31,18 @@ describe('resetRunCompletionState', () => {
       { id: 's1', title: 'Only content', items: ['not a task', { id: 't1', isCompleted: false, contents: [content, 'x'] }] },
     ]);
   });
+
+  it('keeps a Sub-task stored as text where it is while unticking the Sub-tasks beside it', () => {
+    const sections = resetRunCompletionState([
+      { id: 's1', title: 'Launch', items: [{ id: 't1', subItems: ['Check twice', { id: 'st1', title: 'Tests pass', isCompleted: true }] }] },
+    ]);
+
+    expect(sections).toEqual([
+      {
+        id: 's1',
+        title: 'Launch',
+        items: [{ id: 't1', isCompleted: false, subItems: ['Check twice', { id: 'st1', title: 'Tests pass', isCompleted: false }] }],
+      },
+    ]);
+  });
 });

@@ -21,13 +21,7 @@ const TEMPLATE_TYPE_LABELS = {
   recipe: "Recipe",
 } as const;
 
-interface TemplateBasicInfoProps {
-  showIntro?: boolean;
-}
-
-export const TemplateBasicInfo = ({
-  showIntro = true,
-}: TemplateBasicInfoProps): JSX.Element => {
+export const TemplateBasicInfo = (): JSX.Element => {
   const { setValue, watch } = useFormContext<TemplateEditorDetailsFormValues>();
   const [tagInput, setTagInput] = useState("");
   const fieldId = useId();
@@ -54,7 +48,7 @@ export const TemplateBasicInfo = ({
 
   const addTag = () => {
     if (tagInput.trim()) {
-      setValue("tags", [...(tags || []), tagInput.trim()], {
+      setValue("tags", [...tags, tagInput.trim()], {
         shouldDirty: true,
       });
       setTagInput("");
@@ -64,24 +58,13 @@ export const TemplateBasicInfo = ({
   const removeTag = (tagToRemove: string) => {
     setValue(
       "tags",
-      (tags || []).filter((tag) => tag !== tagToRemove),
+      tags.filter((tag) => tag !== tagToRemove),
       { shouldDirty: true },
     );
   };
 
   return (
     <div className="space-y-8">
-      {showIntro ? (
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Template Settings
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Define what this template is and how it should be organized.
-          </p>
-        </div>
-      ) : null}
-
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor={ids.title}>Template Name</FieldLabel>
@@ -138,7 +121,7 @@ export const TemplateBasicInfo = ({
           <Tags
             id={ids.categories}
             options={categoryOptions}
-            selected={categories || []}
+            selected={categories}
             onSelectionChange={(nextCategories) =>
               setValue("categories", nextCategories, { shouldDirty: true })
             }
@@ -150,7 +133,7 @@ export const TemplateBasicInfo = ({
 
         <Field>
           <FieldLabel htmlFor={ids.tags}>Tags</FieldLabel>
-          {tags?.length ? (
+          {tags.length ? (
             <div className="flex flex-wrap gap-2">
               {tags.map((tag) => (
                 <Badge key={tag} variant="outline" className="gap-1 pr-1">

@@ -5,7 +5,7 @@ interface HastNode {
   children?: HastNode[];
 }
 
-const BLOCK_TAGS = new Set([
+const BLOCK_TAGS = new Set<string | undefined>([
   'blockquote',
   'dd',
   'div',
@@ -33,11 +33,11 @@ const BLOCK_TAGS = new Set([
   'ul',
 ]);
 
-const isElement = (node: HastNode | undefined, tagNames: ReadonlySet<string>) =>
-  node?.type === 'element' && tagNames.has(node.tagName ?? '');
+const isElement = (node: HastNode | undefined, tagNames: ReadonlySet<string | undefined>) =>
+  node?.type === 'element' && tagNames.has(node.tagName);
 
 const isBlock = (node: HastNode | undefined) => isElement(node, BLOCK_TAGS);
-const LINE_BREAK = new Set(['br']);
+const LINE_BREAK = new Set<string | undefined>(['br']);
 
 const breaksLine = (node: HastNode | undefined) => isBlock(node) || isElement(node, LINE_BREAK);
 

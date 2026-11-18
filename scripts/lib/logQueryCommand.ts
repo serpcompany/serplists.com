@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { errorMessage } from "./error-message";
 import { buildFilter, filterOptionSpec, linesCommand, parseLimit, QueryError, result, usageError, type CommandResult } from "./logCommandParts";
 import { parseLogText, requestRecords, type LogEntry } from "./logEntries";
 import { formatEntry, formatTable, milliseconds } from "./logFormat";
@@ -88,7 +89,7 @@ function errorsCommand(entries: LogEntry[], limit: number, json: boolean): Comma
   if (problems.length === 0) return result("No warnings, errors or 5xx requests.");
   const table = formatTable(
     ["COUNT", "EVENT", "ERROR", "LAST REQUEST"],
-    groups.map((group) => [group.count, group.event, group.errorName, group.lastRequestId ?? "-"]),
+    groups.map((group) => ({ COUNT: group.count, EVENT: group.event, ERROR: group.errorName, "LAST REQUEST": group.lastRequestId ?? "-" })),
   );
   return result([table, "", ...problems.slice(-limit).map(formatEntry)].join("\n"));
 }
@@ -115,17 +116,18 @@ function routesCommand(entries: LogEntry[], rowsRead: Map<string, number>, limit
   return result(
     formatTable(
       ["ROUTE", "KIND", "COUNT", "4XX", "5XX", "P50", "P95", "MAX", ...(profiled ? ["ROWS P95", "ROWS MAX"] : [])],
-      routes.map((route) => [
-        route.route,
-        route.kind,
-        route.count,
-        route.clientErrors,
-        route.serverErrors,
-        milliseconds(route.p50Ms),
-        milliseconds(route.p95Ms),
-        milliseconds(route.maxMs),
-        ...(profiled ? [route.p95RowsRead ?? "-", route.maxRowsRead ?? "-"] : []),
-      ]),
+      routes.map((route) => ({
+        ROUTE: route.route,
+        KIND: route.kind,
+        COUNT: route.count,
+        "4XX": route.clientErrors,
+        "5XX": route.serverErrors,
+        P50: milliseconds(route.p50Ms),
+        P95: milliseconds(route.p95Ms),
+        MAX: milliseconds(route.maxMs),
+        "ROWS P95": route.p95RowsRead ?? "-",
+        "ROWS MAX": route.maxRowsRead ?? "-",
+      })),
     ),
   );
 }
@@ -137,14 +139,14 @@ function slowCommand(entries: LogEntry[], limit: number, json: boolean): Command
   return result(
     formatTable(
       ["DURATION", "STATUS", "METHOD", "ROUTE", "REQUEST", "LINE"],
-      slowest.map((record) => [
-        milliseconds(record.durationMs),
-        record.status,
-        record.method,
-        normalizeRoute(record.path),
-        record.requestId ?? "-",
-        record.lineNumber,
-      ]),
+      slowest.map((record) => ({
+        DURATION: milliseconds(record.durationMs),
+        STATUS: record.status,
+        METHOD: record.method,
+        ROUTE: normalizeRoute(record.path),
+        REQUEST: record.requestId ?? "-",
+        LINE: record.lineNumber,
+      })),
     ),
   );
 }
@@ -158,14 +160,14 @@ function d1Command(entries: LogEntry[], limit: number, json: boolean): CommandRe
   return result(
     formatTable(
       ["ROWS READ", "ROWS WRITTEN", "COUNT", "MAX READ", "TIME", "STATEMENT"],
-      statements.map((statement) => [
-        statement.rowsRead,
-        statement.rowsWritten,
-        statement.count,
-        statement.maxRowsRead,
-        milliseconds(statement.totalMs),
-        statement.statement.slice(0, 140),
-      ]),
+      statements.map((statement) => ({
+        "ROWS READ": statement.rowsRead,
+        "ROWS WRITTEN": statement.rowsWritten,
+        COUNT: statement.count,
+        "MAX READ": statement.maxRowsRead,
+        TIME: milliseconds(statement.totalMs),
+        STATEMENT: statement.statement.slice(0, 140),
+      })),
     ),
   );
 }
@@ -177,7 +179,7 @@ export function runLogQuery(argv: string[], nowMs: number): CommandResult {
     try {
       parsed = parseArgs({ args, allowPositionals: true, options: optionSpec });
     } catch (error) {
-      throw usageError(error instanceof Error ? error.message : String(error));
+      throw usageError(errorMessage(error));
     }
     const { values: options, positionals } = parsed;
     if (options.help) return result(usage);

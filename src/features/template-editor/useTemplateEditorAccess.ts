@@ -39,7 +39,7 @@ type TemplateEditorAccessOptions = {
   isCreate: boolean;
   templateId?: string | undefined;
   getValues: () => TemplateEditorFormValues;
-  getVersion?: () => number | undefined;
+  getVersion: () => number | undefined;
   allowLeave: () => void;
   guardLeave: () => void;
 };
@@ -141,7 +141,7 @@ export const useTemplateEditorAccess = ({
     return editOwner
       ? saveTemplateEditDraft(editOwner, {
           values: cloneTemplateEditorFormValues(getValues()),
-          baseVersion: getVersion?.(),
+          baseVersion: getVersion(),
         })
       : false;
   };

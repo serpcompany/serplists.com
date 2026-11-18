@@ -9,6 +9,7 @@ import path from "node:path";
 import net, { type ListenOptions } from "node:net";
 import { z } from "zod";
 import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings";
+import { errorMessage } from "./lib/error-message";
 import { type ProcessInfo, readProcessInfo } from "./lib/process-info";
 import { buildToolInvocation, type Invocation, killPidTree } from "./lib/run-tool";
 
@@ -274,7 +275,7 @@ export async function stopDevSession({
           killTree(pid);
           result.stopped.push(pid);
         } catch (error) {
-          result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+          result.failed.push({ pid, message: errorMessage(error) });
         }
       }
     }

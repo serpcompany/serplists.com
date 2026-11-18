@@ -352,9 +352,10 @@ existing content, invent nothing):
     `SiteNavigationMenu` composes the menu's root itself and renders the popup as a `div`
     (`tests/e2e/site-navigation.spec.ts`).
   - The footer's "Network" column is left out until someone confirms the address of its "SERP DR"
-    link, which pointed at `https://serp.dr`, under a top-level domain that does not exist. It comes
-    back as an external https link, with its domain added to the allowlist in
-    `tests/unit/components/publicSiteLinks.test.ts`.
+    link, which pointed at `https://serp.dr`, under a top-level domain that does not exist. Every
+    footer link is an app path, rendered with the app's `Link`; bringing the column back means
+    giving footer links an external, new-tab form again, with a test in
+    `tests/unit/components/publicSiteLinks.test.ts` that its domain is one confirmed to be ours.
   - The footer's column titles are h2s since step 2b, so a page whose last heading is its h1
     (My Runs, a sign-in page on a phone) never skips a level into them.
   - The social links (`publicSocialLinks` in `src/components/layout/publicSiteLinks.ts`) are a
@@ -1414,7 +1415,7 @@ existing content, invent nothing):
   [Organization Settings](#organization-settings); "Open templates" (declined) → My Templates
   in the current context; "Open settings" (an invite error) → [Account
   Settings](#account-settings).
-- **STATES:** no token ("This invite link is missing a token."); "Checking your session...";
+- **STATES:** "Checking your session...";
   signed out; "Loading invite..."; the invite; "Responding..."; accepted; already a member
   ("You're already a member of <Organization>." with the same two buttons); declined ("Invite
   declined. You did not join <Organization>.", "Open templates"); a different account ("You're
@@ -1918,8 +1919,7 @@ existing content, invent nothing):
   Pro".
 - **STATES:** plan loading, Free, paid, unknown; role-limited (controls off); the Template
   list failed ("Couldn't load your templates", "Retry"); "Exporting...", "Importing...";
-  toasts ("Failed to export templates", "Failed to import templates", "Log in to export your
-  templates").
+  toasts ("Failed to export templates", "Failed to import templates").
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (built):** the console's page header and shadcn Cards: an overview card
   (notices as Alerts, the counts as `Stat`s), an Export card and an Import card with Field
@@ -2464,7 +2464,7 @@ replaced.
 - **HOW USER GETS HERE:** "Actions for <title>" on a My Templates card; "Template actions" on
   Template detail; "Run options" on a My Runs row; "More actions" in the editor header.
 - **WHAT'S ON THE SCREEN:**
-  - Template card: "Edit", "Start Run", "Duplicate", "Delete" (by role).
+  - Template card: "Edit", "Start Run", "Delete" (by role).
   - Template detail: "Duplicate" ("Duplicating..."), "Export JSON" or "Upgrade to export",
     "Transfer to Organization" (the owner of a Personal Template who can add Templates to an
     Organization), "Delete".

@@ -143,6 +143,15 @@ describe('Template Backup Utilities', () => {
       expectCleanItems(result);
     });
 
+    it('keeps the version a template file gives, and starts one that gives none at version 1', () => {
+      const result = parseTemplatesFromData([
+        { title: 'Groceries', version: 4, items: ['Milk'] },
+        { title: 'Hardware', items: ['Nails'] },
+      ]);
+
+      expect(result.templates.map((template) => template.version)).toEqual([4, 1]);
+    });
+
     it('imports the flat items form and a stringified array the same way', () => {
       const flat = parseTemplatesFromData([{ title: 'Groceries', items: ['Milk', { title: 'Eggs' }] }]);
       expect(firstOf(flat.templates).sections.map((section) => section.title)).toEqual(['Checklist']);

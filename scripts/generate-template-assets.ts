@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseTemplateYaml, renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
+import { errorMessage } from "./lib/error-message";
 import { renderTemplatePreviewHtml } from "./lib/templatePreviewHtml";
 import { renderTemplateReadme } from "./lib/templateReadme";
 
@@ -41,6 +42,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 });

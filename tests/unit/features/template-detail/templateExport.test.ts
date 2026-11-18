@@ -105,6 +105,24 @@ describe('template detail export', () => {
     ).toBe('a-b-c.json');
   });
 
+  it('names the file after the id for a template with no slug, and template.json when nothing printable is left', () => {
+    const unslugged = buildTemplate();
+    delete unslugged.slug;
+
+    expect(buildTemplateExportFile(unslugged).filename).toBe('template-1.json');
+    expect(buildTemplateExportFile(buildTemplate({ slug: '...' })).filename).toBe('template.json');
+  });
+
+  it('says the template was not found when the page holds none', () => {
+    const download = vi.fn();
+
+    expect(exportTemplateFile({ billingState: billing(), download, template: null })).toEqual({
+      kind: 'error',
+      message: 'Template not found.',
+    });
+    expect(download).not.toHaveBeenCalled();
+  });
+
   it('replaces control characters and the characters Windows reserves, and trims dots and dashes at the ends, so the file saves on every system', () => {
     expect(buildTemplateExportFile(buildTemplate({ slug: 'q1\treport*final?' })).filename).toBe(
       'q1-report-final.json',

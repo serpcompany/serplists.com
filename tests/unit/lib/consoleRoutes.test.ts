@@ -104,6 +104,7 @@ describe('parseConsoleRoute', () => {
     '/dashboard/definitely-missing/',
     '/dashboard/templates/new/edit/',
     '/dashboard/templates/tpl-1/edit/more/',
+    '/dashboard/templates/tpl-1/history/',
     '/dashboard/runs/run-1/edit/',
     '/dashboard/settings/members/',
     '/dashboard//templates/',

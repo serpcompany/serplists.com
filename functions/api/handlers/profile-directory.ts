@@ -23,7 +23,7 @@ export async function handleProfileDirectory(request: Request, env: Env): Promis
   if (request.method !== 'GET') return jsonError('Method Not Allowed', 405);
 
   const parsed = parseProfileDirectoryQuery(new URL(request.url).searchParams);
-  if (!parsed.success) return invalidPayloadResponse(parsed.error, 'Invalid profile directory query');
+  if (!parsed.success) return invalidPayloadResponse(parsed.error);
 
   const query = parsed.data;
   return withEdgeCache(request, cacheKeyPath(query), PROFILE_DIRECTORY_CACHE_SECONDS, async () =>

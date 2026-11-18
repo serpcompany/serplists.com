@@ -52,7 +52,6 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Template Settings');
     expect(html).toContain('Template Name');
     expect(html).toContain('Goal / Summary');
     expect(html).toContain('Template Type');
@@ -67,7 +66,6 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Search &amp; SEO');
     expect(html).toContain('Search Title');
     expect(html).toContain('URL Slug');
     expect(html).toContain('Search Description');

@@ -64,7 +64,7 @@ export function FormFieldEditor({
     min: `${baseId}-min`,
     required: `${baseId}-required`,
   };
-  const kind = field?.kind ?? "text";
+  const kind = field.kind;
 
   function changeKind(next: FormFieldKind): void {
     const options = getValues(`${path}.options`);
@@ -114,7 +114,7 @@ export function FormFieldEditor({
             id={ids.label}
             maxLength={MAX_FORM_LABEL_LENGTH}
             onChange={(event) => setValue(`${path}.label`, event.target.value, { shouldDirty: true })}
-            value={field?.label ?? ""}
+            value={field.label}
           />
         </Field>
         <Field>
@@ -150,7 +150,7 @@ export function FormFieldEditor({
           maxLength={MAX_FORM_DESCRIPTION_LENGTH}
           onChange={(event) => setValue(`${path}.description`, event.target.value, { shouldDirty: true })}
           rows={2}
-          value={field?.description ?? ""}
+          value={field.description ?? ""}
         />
       </Field>
       {isFormChoiceKind(kind) ? <FormFieldOptionsEditor fieldNumber={number} path={path} /> : null}
@@ -166,7 +166,7 @@ export function FormFieldEditor({
               onChange={(event) => setValue(`${path}.min`, toBound(event.target.value), { shouldDirty: true })}
               step="any"
               type="number"
-              value={field?.min ?? ""}
+              value={field.min ?? ""}
             />
           </Field>
           <Field>
@@ -179,14 +179,14 @@ export function FormFieldEditor({
               onChange={(event) => setValue(`${path}.max`, toBound(event.target.value), { shouldDirty: true })}
               step="any"
               type="number"
-              value={field?.max ?? ""}
+              value={field.max ?? ""}
             />
           </Field>
         </div>
       ) : null}
       <Field orientation="horizontal">
         <Switch
-          checked={field?.required === true}
+          checked={field.required}
           id={ids.required}
           nativeButton
           onCheckedChange={(checked) => setValue(`${path}.required`, checked, { shouldDirty: true })}

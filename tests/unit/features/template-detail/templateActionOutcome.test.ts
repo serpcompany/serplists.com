@@ -7,6 +7,7 @@ import { WORKSPACE_NOT_READY_MESSAGE } from '@/contexts/workspaceSelection';
 import {
   followTemplateActionResult,
   saveTemplateToAccount,
+  startTemplateRun,
 } from '@/features/template-detail/templateActionOutcome';
 import type { TemplateDetailActionResult } from '@/features/template-detail/templateDetailApi';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
@@ -132,6 +133,29 @@ describe('saveTemplateToAccount before the active context is known, which reads 
     }
   });
 
+  it('asks a signed-out visitor to sign in before copying', async () => {
+    await expect(saveTemplateToAccount({
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: true },
+      createTemplate: vi.fn(),
+      isAuthenticated: false,
+      template: publicTemplate(),
+    })).resolves.toEqual({ kind: 'login_required' });
+  });
+
+  it('asks to try again while the Personal plan is still being checked', async () => {
+    const createTemplate = vi.fn();
+
+    await expect(saveTemplateToAccount({
+      billingState: { billingEnabled: true, isError: false, isLoading: true, isPro: false },
+      createTemplate,
+      isAuthenticated: true,
+      template: publicTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
+      userId: 'user-1',
+      workspaceStatus: 'ready',
+    })).resolves.toEqual({ kind: 'error', message: 'Checking your plan. Try again in a moment.' });
+    expect(createTemplate).not.toHaveBeenCalled();
+  });
+
   it('copies once the context is known', async () => {
     const { apiClient, result } = save({ isPro: true, workspaceStatus: 'ready' });
 
@@ -139,6 +163,38 @@ describe('saveTemplateToAccount before the active context is known, which reads 
     expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
       teamId: undefined,
       visibility: 'private',
+    });
+  });
+});
+
+describe('a template action on a page whose template is gone', () => {
+  it('neither starts a run nor copies, and says the template was not found', async () => {
+    const createRun = vi.fn();
+    const createTemplate = vi.fn();
+
+    await expect(startTemplateRun({ createRun, isAuthenticated: true, template: null })).resolves.toEqual({
+      kind: 'error',
+      message: 'Template not found.',
+    });
+    await expect(saveTemplateToAccount({
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: true },
+      createTemplate,
+      isAuthenticated: true,
+      template: null,
+      userId: 'user-1',
+    })).resolves.toEqual({ kind: 'error', message: 'Template not found.' });
+    expect(createRun).not.toHaveBeenCalled();
+    expect(createTemplate).not.toHaveBeenCalled();
+  });
+});
+
+describe('startTemplateRun when the server answers without a run', () => {
+  it('reports that the run did not start', async () => {
+    const template = { id: 'template-1', title: 'Audit', sections: [], userId: 'user-1', createdAt: '', updatedAt: '', isPublic: true };
+
+    await expect(startTemplateRun({ createRun: vi.fn().mockResolvedValue(null), isAuthenticated: true, template })).resolves.toEqual({
+      kind: 'error',
+      message: 'Failed to start template run',
     });
   });
 });

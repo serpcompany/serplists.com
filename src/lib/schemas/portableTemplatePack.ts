@@ -1,29 +1,15 @@
-import { isContentRecord, isSectionRecord, isTaskRecord } from "./jsonRecords";
 import type { PortableChecklistTemplate } from "./checklistSchema";
 
 export type PortableSkippedTemplate = { title: string; reason: string };
 
-function countReferencedUploads(sections: unknown[]): number {
-  let count = 0;
+type AssetContent = { type: string; value: string; uploadType?: "url" | "upload" | undefined };
 
-  for (const section of sections) {
-    if (!isSectionRecord(section) || !Array.isArray(section.items)) continue;
-    for (const item of section.items) {
-      if (!isTaskRecord(item) || !Array.isArray(item.contents)) continue;
-      for (const content of item.contents) {
-        if (!isContentRecord(content)) continue;
-        const type = content.type;
-        const value = typeof content.value === "string" ? content.value : "";
-        const isUpload = content.uploadType === "upload" || value.includes("/api/uploads/file") || value.includes("uploads/file?key=");
-        if ((type === "image" || type === "video" || type === "file") && isUpload) {
-          count += 1;
-        }
-      }
-    }
-  }
+export const isUploadedAsset = (content: AssetContent): boolean =>
+  (content.type === "image" || content.type === "video" || content.type === "file") &&
+  (content.uploadType === "upload" || content.value.includes("/api/uploads/file") || content.value.includes("uploads/file?key="));
 
-  return count;
-}
+const countReferencedUploads = (sections: PortableChecklistTemplate["sections"]): number =>
+  sections.flatMap((section) => section.items).flatMap((item) => item.contents ?? []).filter(isUploadedAsset).length;
 
 export function buildPortablePackManifest(templates: PortableChecklistTemplate[], skippedTemplates: PortableSkippedTemplate[]) {
   return {

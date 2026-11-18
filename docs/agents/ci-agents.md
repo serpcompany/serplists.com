@@ -75,6 +75,14 @@ would post, and posts only when you say so. How it's built, and why:
   contents and issues, would sit there. The job's token reads the contents and issues and writes
   to pull requests, for the posting step; Claude has no tool that writes with it, and the posting
   step refuses token-shaped text ([`harness-debt.md`](../harness-debt.md), Harness).
+- **It reads a change of any size.** `gh pr diff` refuses a pull request that changes more than 300
+  files, so before Claude starts the job lists every changed file through the API and writes
+  them to `tmp/review-change/files.md`, with their diffs in parts of at most 250,000 characters
+  beside it (a file GitHub shows no diff for is read whole). Only the counts go into Claude's
+  instructions; file names and diffs stay in the files, read as data. A change in one part gets
+  the skill's three reviewers; a larger one gets one reviewer per part, each doing all three
+  reviewers' work on its part, so that between them they read every changed file. The job
+  deletes any `tmp/review-change/` the pull request carries before Claude starts.
 - **A re-review raises only what's new.** Before Claude starts, the job adds to its instructions
   the findings already on the pull request (posted by the workflow, or by Claude itself before the
   workflow posted them) and the latest summary. Claude's answers to `@claude` requests, and its
@@ -119,7 +127,8 @@ would post, and posts only when you say so. How it's built, and why:
   log shows counts only. The step summary shows each run's turns, time, estimated cost, and models.
 
 The inline scripts are tested by running them as the workflow does, against a stand-in for the
-GitHub API: `tests/unit/workflows/code-review.test.ts`, `tests/unit/workflows/code-review-guard.test.ts`,
+GitHub API: `tests/unit/workflows/code-review.test.ts`, `tests/unit/workflows/code-review-change.test.ts`,
+`tests/unit/workflows/code-review-guard.test.ts`,
 and, for what every Claude job shares, `tests/unit/workflows/claude-guards.test.ts`. The job runs
 with the `CLAUDE_CODE_OAUTH_TOKEN` repository secret; without it the job only notes that it
 skipped (Claude's app and token, below).

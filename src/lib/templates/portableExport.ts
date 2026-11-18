@@ -34,7 +34,7 @@ export function addPublicTemplatesToPack(ownedPack: unknown, publicTemplates: Ch
   const alreadySkipped = new Set(ownedSkipped.map(skipKey));
   const skippedTemplates = [
     ...ownedSkipped,
-    ...(added.manifest?.skippedTemplates ?? []).filter((entry) => !alreadySkipped.has(skipKey(entry))),
+    ...(added.manifest.skippedTemplates ?? []).filter((entry) => !alreadySkipped.has(skipKey(entry))),
   ];
   return { ...pack, templates, manifest: buildPortablePackManifest(templates, skippedTemplates) };
 }

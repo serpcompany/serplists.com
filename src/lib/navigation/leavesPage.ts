@@ -6,7 +6,7 @@ type HrefQuery = Exclude<Href, string>['query'];
 
 const queryToSearch = (query: HrefQuery): string => {
   if (!query) return '';
-  if (typeof query === 'string') return query ? `?${query.replace(/^\?/, '')}` : '';
+  if (typeof query === 'string') return `?${query.replace(/^\?/, '')}`;
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
     (Array.isArray(value) ? value : [value]).forEach((item) => {

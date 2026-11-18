@@ -142,6 +142,40 @@ describe('session sync across tabs, which share one session cookie', () => {
     expect(tab1.state().user).toEqual(bob);
   });
 
+  it('falls back to storage events when opening the channel throws', async () => {
+    const storage = createStorageEventHub();
+    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
+    const tab2 = createTab({ state: signedInAs(bob) });
+    const refusedChannel = () => {
+      throw new DOMException('BroadcastChannel is blocked', 'SecurityError');
+    };
+    tab1.sync.connect(tab1.environment({ ...storage.environment(), openChannel: refusedChannel }));
+    tab2.sync.connect(tab2.environment(storage.environment()));
+
+    tab2.sync.announce(bob.id);
+    await flush();
+
+    expect(tab1.state().user).toEqual(bob);
+  });
+
+  it('keeps the current user when the session read throws', async () => {
+    const tab = createTab({
+      state: signedInAs(alice),
+      readSession: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    const before = tab.state();
+    tab.sync.connect(tab.environment());
+
+    tab.restoreFromCache();
+    await flush();
+
+    expect(tab.readSession).toHaveBeenCalledTimes(1);
+    expect(tab.state()).toBe(before);
+    expect(tab.notify).not.toHaveBeenCalled();
+  });
+
   it('re-checks when the tab comes back into view at most once a minute, and always after a cache restore', async () => {
     let now = 1_000_000;
     const tab = createTab({

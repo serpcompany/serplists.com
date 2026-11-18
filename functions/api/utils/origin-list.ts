@@ -19,7 +19,7 @@ export function parseAllowedOrigin(value: string): string | null {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   if (!url.hostname || url.hostname.includes('*') || url.username || url.password) return null;
-  return url.origin === 'null' ? null : url.origin;
+  return url.origin;
 }
 
 export type OriginList = { origins: string[]; invalid: string[] };

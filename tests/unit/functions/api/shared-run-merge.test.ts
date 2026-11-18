@@ -3,6 +3,7 @@ import { contentAt, elementAt, firstOf, present, subTaskAt, taskIn } from '../..
 import {
   MAX_SHARED_RUN_NOTES_LENGTH,
   mergeSharedRunState,
+  readStoredRunSections,
   sharedRunUpdateSchema,
 } from '@functions/api/utils/shared-run-merge';
 import { withoutKeys } from '../../../support/guestState';
@@ -75,6 +76,21 @@ describe('mergeSharedRunState', () => {
     const { items } = firstOf(merged);
     expect(firstOf(items).isCompleted).toBe(true);
     expect(elementAt(items, 1).completed).toBe(true);
+  });
+
+  it('reads Sub-task states only from the content blocks a guest sends as objects', () => {
+    const merged = merge([{ id: 's1', items: [{ id: 'i1', contents: ['d1', { type: 'subItems', subItems: [{ id: 'd1', isCompleted: true }] }] }] }]);
+
+    expect(subTaskAt(firstOf(firstOf(merged).items), 0).isCompleted).toBe(true);
+  });
+
+  it('leaves a stored section with no task list, and a stored task that is not an object, as they are', () => {
+    const notes = { id: 's0', title: 'Notes' };
+    const storedRun = [{ id: 's1', title: 'Section', items: ['Legacy line', { id: 'i1', title: 'Task one', isCompleted: false }] }, notes];
+
+    expect(mergeSharedRunState(copy(storedRun), guest([{ id: 's1', items: [{ id: 'i1', isCompleted: true }] }]))).toEqual({
+      sections: [{ id: 's1', title: 'Section', items: ['Legacy line', { id: 'i1', title: 'Task one', isCompleted: true }] }, notes],
+    });
   });
 
   it('normalizes a legacy completed flag to isCompleted', () => {
@@ -224,5 +240,11 @@ describe('mergeSharedRunState and form answers', () => {
     }).sections ?? []);
 
     expect(merged).toEqual({ sections: storedForm });
+  });
+});
+
+describe('readStoredRunSections', () => {
+  it('reads stored items that are not a list as unreadable', () => {
+    expect(readStoredRunSections('{"id":"s1"}')).toBeNull();
   });
 });

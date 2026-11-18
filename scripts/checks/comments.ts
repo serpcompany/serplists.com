@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ESLint, type Linter } from "eslint";
+import { ESLint, type Linter, SourceCode } from "eslint";
 import tseslint from "typescript-eslint";
 
 import { checkedLanguage, findComments } from "../check-no-comments-lib";
+import { errorMessage } from "../lib/error-message";
 import { noComments } from "../eslint-rules/no-comments";
 import { isScriptFile } from "./files";
-import { excerpt, type Problem } from "./problems";
+import { excerpt, onTheirLines, type Problem } from "./problems";
 
 const NO_COMMENTS_RULE = "serplists/no-comments";
 
@@ -20,9 +21,6 @@ const ONLY_THE_NO_COMMENTS_RULE: Linter.Config[] = [
   },
 ];
 
-const lineOf = (text: string, line: number) => excerpt(text.split("\n")[line - 1] ?? "");
-const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 async function scriptComments(root: string, scripts: readonly string[]): Promise<Problem[]> {
   if (scripts.length === 0) return [];
   const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: ONLY_THE_NO_COMMENTS_RULE });
@@ -30,9 +28,11 @@ async function scriptComments(root: string, scripts: readonly string[]): Promise
   for (const file of scripts) {
     const text = readFileSync(path.join(root, file), "utf8");
     const results = await eslint.lintText(text, { filePath: path.join(root, file), warnIgnored: false });
-    for (const message of results.flatMap((result) => result.messages)) {
-      if (message.ruleId === NO_COMMENTS_RULE) problems.push({ path: file, line: message.line, problem: lineOf(text, message.line) });
-      else if (message.fatal) problems.push({ path: file, line: message.line, problem: `could not be parsed: ${message.message}` });
+    const messages = results.flatMap((result) => result.messages);
+    const comments = messages.filter((message) => message.ruleId === NO_COMMENTS_RULE);
+    for (const { line, lineText } of onTheirLines(SourceCode.splitLines(text), comments)) problems.push({ path: file, line, problem: excerpt(lineText) });
+    for (const message of messages.filter((each) => each.ruleId !== NO_COMMENTS_RULE && each.fatal)) {
+      problems.push({ path: file, line: message.line, problem: `could not be parsed: ${message.message}` });
     }
   }
   return problems;
@@ -42,9 +42,13 @@ function otherComments(root: string, files: readonly string[]): Problem[] {
   return files.flatMap((file): Problem[] => {
     try {
       const text = readFileSync(path.join(root, file), "utf8");
-      return findComments(file, text).map(({ line, language }) => ({ path: file, line, problem: `${lineOf(text, line)} (${language})` }));
+      return onTheirLines(text.split("\n"), findComments(file, text)).map(({ line, language, lineText }) => ({
+        path: file,
+        line,
+        problem: `${excerpt(lineText)} (${language})`,
+      }));
     } catch (error) {
-      return [{ path: file, problem: `could not be read to look for comments: ${reason(error)}` }];
+      return [{ path: file, problem: `could not be read to look for comments: ${errorMessage(error)}` }];
     }
   });
 }

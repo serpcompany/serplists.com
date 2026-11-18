@@ -93,6 +93,10 @@ describe("bootstrap price documentation", () => {
     expect(describePrice(price())).toBe("price_existing (900 usd / month)");
   });
 
+  it("prints a placeholder for the reply a dry run gives instead of a price", () => {
+    expect(describePrice({ dryRun: true })).toBe("(dry-run)");
+  });
+
   it("keeps the help example, the docs, and the UI label on the same monthly price", () => {
     expect(PRO_MONTHLY_PRICE_LABEL).toBe(`$${PRO_MONTHLY_CENTS / 100}/month`);
     expect(bootstrapUsage()).toContain(`--monthly ${PRO_MONTHLY_CENTS}`);

@@ -14,6 +14,19 @@ describe('templateMarkdown', () => {
     expect(parsed).toEqual(template);
   });
 
+  it('keeps the slug, search title and search description of a template through Markdown', () => {
+    const withSearchFields = {
+      ...template,
+      slug: 'launch-checklist',
+      seoTitle: 'Launch checklist template',
+      seoDescription: 'Plan the release, then ship it.',
+    };
+
+    const parsed = parseTemplateMarkdown(renderTemplateMarkdown(withSearchFields));
+
+    expect(parsed).toEqual(withSearchFields);
+  });
+
   it('parses yaml templates into the canonical template shape', () => {
     const yaml = [
       'title: YAML Checklist',

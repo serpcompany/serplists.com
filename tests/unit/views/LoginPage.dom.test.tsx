@@ -1,7 +1,9 @@
 import { navigation } from '../../support/mockedNextNavigation';
-import React from 'react';
+import '../../support/mockedAuthPageEdges';
+import React, { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 
 import { handOffLoginEmail, VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import Login from '@/views/Login';
@@ -15,21 +17,6 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
     isAuthenticated: authState.isAuthenticated,
     isLoading: false,
   }),
-}));
-
-vi.mock('@/lib/auth-client', () => ({
-  authClient: {
-    sendVerificationEmail: vi.fn(),
-  },
-  getAuthStatus: vi.fn(),
-}));
-
-vi.mock('sonner', () => ({
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-  },
 }));
 
 const renderAt = (url: string) => {
@@ -101,6 +88,58 @@ describe('Login once signed in, which leaves for the return path or the console 
   });
 });
 
+describe('Login once signed in on a page where Google Tag Manager has loaded', () => {
+  theInMemoryBrowserAsTheWindow({ dataLayer: [{ event: 'gtm.js' }] });
+  beforeAll(() => {
+    authState.isAuthenticated = true;
+  });
+  afterAll(() => {
+    authState.isAuthenticated = false;
+  });
+
+  it('loads a sensitive return path as a new document, so the tag manager never sees its address change', async () => {
+    navigation.reset('/login/?next=%2Fteam-invites%2Fabc%2F');
+    vi.mocked(navigation.router.replace).mockClear();
+    await renderSettled(<Login />);
+
+    expect(navigation.documentLoads).toEqual([
+      { kind: 'replace', href: `${navigation.window.location.origin}/team-invites/abc/` },
+    ]);
+    expect(navigation.router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('Login after an email verification link failed', () => {
+  theInMemoryBrowserAsTheWindow();
+  beforeEach(() => {
+    vi.mocked(toast.error).mockClear();
+  });
+
+  const expiredLinkNotice = 'That verification link has expired. Enter your email to get a new one.';
+
+  it('says why once, takes the one-shot parameters out of the address and keeps the notice on the page', async () => {
+    navigation.reset('/login/?verified=1&error=token_expired&next=%2Fdashboard%2Fruns%2F');
+    const { container } = await renderSettled(<Login />);
+
+    expect(toast.error).toHaveBeenCalledWith(expiredLinkNotice, { id: 'email-verification-failed' });
+    expect(navigation.url()).toBe('/login/?next=%2Fdashboard%2Fruns%2F');
+    expect(container.textContent).toContain(expiredLinkNotice);
+  });
+
+  it('shows the newer failure when another failed link opens in the same tab', async () => {
+    navigation.reset('/login/?verified=1&error=token_expired');
+    const { container } = await renderSettled(<Login />);
+
+    await act(async () => {
+      navigation.router.push('/login/?verified=1&error=invalid_token');
+      await navigation.settle();
+    });
+
+    expect(container.textContent).toContain('That verification link is invalid. Enter your email to get a new one.');
+    expect(container.textContent).not.toContain(expiredLinkNotice);
+  });
+});
+
 describe('Login email handoff from sign-up', () => {
   theInMemoryBrowserAsTheWindow();
   let unmountTheLoginPage: () => void = () => {};
@@ -143,6 +182,17 @@ describe('Login email handoff from sign-up', () => {
     const container = await mountLogin();
 
     expect(emailField(container).value).toBe('alice+new@example.com');
+  });
+
+  it('keeps a handed-over address in the entry of an address that carries no one-shot parameters', async () => {
+    navigation.reset('/login/?next=%2Fdashboard%2Fruns%2F');
+    handOffLoginEmail('alice+new@example.com');
+
+    const container = await mountLogin();
+
+    expect(emailField(container).value).toBe('alice+new@example.com');
+    expect(navigation.url()).toBe('/login/?next=%2Fdashboard%2Fruns%2F');
+    expect(navigation.window.history.state).toMatchObject({ email: 'alice+new@example.com' });
   });
 
   it('moves the address of a link sent before it left the URL into the entry', async () => {

@@ -9,7 +9,7 @@ export function getClientIp(request: Request): string | null {
   if (direct) return direct;
   const forwarded = request.headers.get('X-Forwarded-For');
   if (!forwarded) return null;
-  return forwarded.split(',')[0]?.trim() || null;
+  return forwarded.replace(/,.*/s, '').trim() || null;
 }
 
 const FIELDS_LOGGED_AS_REDACTED = new Set(['ip', 'email', 'password', 'token', 'authorization', 'cookie']);

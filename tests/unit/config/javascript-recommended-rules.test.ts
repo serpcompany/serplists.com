@@ -1,7 +1,8 @@
-import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-const eslint = new ESLint({ cwd: process.cwd() });
+import { repositoryESLint } from '../../support/eslintConfig';
+
+const eslint = repositoryESLint();
 
 const rulesReported = async (code: string, filePath: string): Promise<(string | null)[]> => {
   const [result] = await eslint.lintText(code, { filePath });

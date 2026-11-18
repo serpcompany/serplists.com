@@ -55,6 +55,19 @@ describe('run note drafts kept when the session ends in the background, for the 
     expect(takeKeptRunNoteDrafts(owner, run, blockedStorage)).toEqual({});
   });
 
+  it('cannot keep drafts where the page has no browser storage, as while it renders on the server', () => {
+    expect(keepRunNoteDrafts(owner, { 'item-1': 'Deployed build 42' }, buildRun({ 'item-1': 'Old' }))).toBe(false);
+  });
+
+  it('never gives back a draft for a task the run did not hold when it was kept', () => {
+    const storage = createStorage();
+    const run = buildRun({ 'item-1': 'Old' });
+
+    keepRunNoteDrafts(owner, { 'item-9': 'Typed on a task deleted meanwhile' }, run, storage);
+
+    expect(takeKeptRunNoteDrafts(owner, run, storage)).toEqual({});
+  });
+
   it('ignores a stored value that is not a kept draft', () => {
     const storage = createStorage();
     const run = buildRun({ 'item-1': 'Old' });

@@ -118,30 +118,14 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     });
   };
 
-  const exportAll = async () => {
-    if (templatesLoading) return;
-    if (!user) {
-      toast.error("Log in to export your templates");
-      return;
-    }
-
-    if (!canEditTemplates) {
-      toast.error("You need editor access to export this Organization's templates.");
-      return;
-    }
-
-    if (isKnownFreePlan) {
-      await handleUpgrade();
-      return;
-    }
-
+  const exportAll = async (userId: string) => {
     const visit = beginVisit();
     try {
       const summary = await exportTemplatePack(
         {
           includePublic: includePublicTemplates,
           teamId: activeTeamId,
-          userId: user.id,
+          userId,
           ownedTemplateIds: ownedTemplates.map((t) => t.id),
         },
         { download: (pack) => downloadBackupFile(pack), loadPublicCatalog },
@@ -153,7 +137,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       await handleBackupFailure(error, "Failed to export templates", visit);
     }
   };
-  const handleExportAll = () => void exportFlight.run(exportAll);
+  const handleExportAll = user ? () => void exportFlight.run(() => exportAll(user.id)) : undefined;
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) =>
     selectImportFile(event.currentTarget, {
       onError: (message) => toast.error(message),
@@ -178,11 +162,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     if (isKnownFreePlan) {
       await handleUpgrade();
-      return;
-    }
-
-    if (exceedsTemplateLimit) {
-      toast.error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
       return;
     }
 

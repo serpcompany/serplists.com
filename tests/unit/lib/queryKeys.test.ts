@@ -24,6 +24,13 @@ describe('private query keys', () => {
     }
   });
 
+  it("keep the Organization settings queries made before an Organization is chosen apart from that Organization's", () => {
+    for (const build of [queryKeys.teamMembers, queryKeys.teamInvites, queryKeys.teamActivity]) {
+      expect(build('user-a', undefined)).not.toEqual(build('user-a', 'team-1'));
+      expect(build('user-a', undefined)).toEqual(build('user-a'));
+    }
+  });
+
 });
 
 describe('isUserSwitch', () => {

@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DATABASE_NAME, LOCAL_SEED_STEPS, parseSeedStatus, seedStepInvocation } from "./lib/local-d1-seed";
+import { errorMessage } from "./lib/error-message";
+import { DATABASE_NAME, parseSeedStatus, SEED_STEPS, seedStepInvocation } from "./lib/local-d1-seed";
 import { buildScriptInvocation, buildToolInvocation, type Invocation } from "./lib/run-tool";
 import { type LocalD1SetupStep, renderDevVars, runLocalD1Setup } from "./setup-local-lib";
 
@@ -35,8 +36,7 @@ function runD1Step(step: LocalD1SetupStep) {
     run("Apply pending local D1 migrations", buildToolInvocation("wrangler", ["d1", "migrations", "apply", DATABASE_NAME, "--local"]));
     return;
   }
-  const seedStep = LOCAL_SEED_STEPS.find((candidate) => candidate.id === step);
-  if (!seedStep) throw new Error(`No local seed step is called ${step}.`);
+  const seedStep = SEED_STEPS[step];
   run(seedStep.label, seedStepInvocation(seedStep));
 }
 
@@ -47,7 +47,7 @@ function readSeedStatus() {
     return parseSeedStatus(output);
   } catch (error) {
     throw new Error(
-      `Could not read the local D1 seed status. If dev:all is running, stop it with \`pnpm run dev:stop\` and re-run setup. ${error instanceof Error ? error.message : String(error)}`,
+      `Could not read the local D1 seed status. If dev:all is running, stop it with \`pnpm run dev:stop\` and re-run setup. ${errorMessage(error)}`,
     );
   }
 }
@@ -62,7 +62,7 @@ try {
     readSeedStatus,
   });
 } catch (error) {
-  console.error(`\nSetup stopped: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`\nSetup stopped: ${errorMessage(error)}`);
   process.exit(1);
 }
 

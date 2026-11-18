@@ -71,7 +71,7 @@ export async function updateTemplateForUser(
 
   const parsed = templateUpdatePayloadSchema.safeParse(body);
   if (!parsed.success) {
-    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+    const { message, details } = describePayloadError(parsed.error);
     return refuse(message, 400, { details });
   }
 
@@ -223,7 +223,7 @@ export async function updateTemplateForUser(
     ? and(sameVersionInOwnerScope, stillPrivate)
     : sameVersionInOwnerScope;
 
-  const subject = getTemplateSubject(existingTemplate, userId);
+  const subject = getTemplateSubject(existingTemplate);
   const updatedTemplate = {
     ...existingTemplate,
     ...templateValues,
@@ -284,7 +284,7 @@ export async function updateTemplateForUser(
     && !run.deleted_at
   );
 
-  const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
+  const nextTemplateSections = parseJsonArray(syncedItems) ?? [];
   const reconciledRunUpdates = (await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate | null> => {
     const previousSections = parseJsonArray(run.items) ?? [];
     const previousRetired = parseJsonArray(run.retired_items) ?? [];

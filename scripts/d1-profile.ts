@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
+import { z } from "zod";
+import { errorMessage } from "./lib/error-message";
 import { buildScriptInvocation, buildToolInvocation, type Invocation, killProcessTree, spawnTool } from "./lib/run-tool";
 import {
   buildUpdateRunBody,
@@ -35,15 +37,26 @@ const scaleArg = process.argv.indexOf("--scale");
 const scale = scaleArg >= 0 ? Number(process.argv[scaleArg + 1]) : 1;
 const reuse = process.argv.includes("--reuse");
 
+const tableCountsSchema = z.object({
+  templates: z.number(),
+  checklist_runs: z.number(),
+  users: z.number(),
+  audit_events: z.number(),
+  template_versions: z.number(),
+  team_invites: z.number(),
+});
+
+const listeningAddressSchema = z.object({ port: z.number() });
+
 const freePort = () =>
-  new Promise<number>((resolve, reject) => {
+  new Promise<unknown>((resolve, reject) => {
     const server = createServer();
     server.once("error", reject);
     server.listen(0, () => {
       const address = server.address();
-      server.close(() => (typeof address === "object" && address ? resolve(address.port) : reject(new Error("No free port"))));
+      server.close(() => resolve(address));
     });
-  });
+  }).then((address) => listeningAddressSchema.parse(address).port);
 
 function run({ command, args, options }: Invocation) {
   execFileSync(command, args, { ...options, cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
@@ -96,10 +109,9 @@ async function startServer(port: number, onRecord: (record: QueryRecord) => void
   const consume = (chunk: Buffer) => {
     serverLog.write(chunk);
     buffer += chunk.toString();
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const record = d1QueryRecordIn(line);
+    for (let end = buffer.indexOf("\n"); end !== -1; end = buffer.indexOf("\n")) {
+      const record = d1QueryRecordIn(buffer.slice(0, end));
+      buffer = buffer.slice(end + 1);
       if (record) onRecord(record);
     }
   };
@@ -145,14 +157,14 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
         const result = await platform.env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...params).all<{ detail: string }>();
         plans.set(sql, result.results.map((row) => row.detail).join("; "));
       } catch (error) {
-        plans.set(sql, `(plan unavailable: ${error instanceof Error ? error.message : String(error)})`);
+        plans.set(sql, `(plan unavailable: ${errorMessage(error)})`);
       }
     }
-    const countedTables = ["templates", "checklist_runs", "users", "audit_events", "template_versions", "team_invites"];
-    const tableCounts = await platform.env.DB.prepare(
-      `SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`,
-    ).first<Record<string, number>>();
-    plans.set("__counts__", countedTables.map((table) => `${table}: ${(tableCounts?.[table] ?? 0).toLocaleString()}`).join(", "));
+    const countedTables = tableCountsSchema.keyof().options;
+    const tableCounts = tableCountsSchema.parse(
+      await platform.env.DB.prepare(`SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`).first(),
+    );
+    plans.set("__counts__", countedTables.map((table) => `${table}: ${tableCounts[table].toLocaleString()}`).join(", "));
   } finally {
     await platform.dispose();
   }

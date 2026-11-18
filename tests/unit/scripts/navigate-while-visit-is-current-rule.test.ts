@@ -13,6 +13,17 @@ typescriptRuleTester().run('navigate-while-visit-is-current', navigateWhileVisit
     { name: 'a move before the request', code: handler("router.push(next);\nawait save();") },
     { name: 'a move inside a current-visit check', code: handler('const visit = beginVisit();\nawait save();\nif (visit.isCurrent()) {\n  navigate(next);\n}') },
     { name: 'a move after an early return once the visit ended', code: handler('const visit = beginVisit();\nawait save();\nif (!visit.isCurrent()) return;\nnavigate(next);') },
+    {
+      name: 'a move after a block that returns once the visit ended',
+      code: handler('await save();\nif (!visit.isCurrent()) {\n  return;\n}\nnavigate(next);'),
+    },
+    {
+      name: 'a redirect in a React.useEffect callback that returns once the cleanup cancelled it',
+      code: `React.${effect(
+        '  load().then((result) => {\n    if (isCancelled) return;\n    router.replace(result.path);\n  });',
+        '    isCancelled = true;',
+      )}`,
+    },
     { name: 'a move in the else branch of a check that the visit ended', code: handler('await save();\nif (!visit.isCurrent()) {\n  return;\n} else {\n  navigate(next);\n}') },
     { name: 'a move that takes the visit', code: handler('const visit = beginVisit();\nawait save();\nnavigateTo(next, visit);') },
     { name: 'a move a visit helper calls back', code: handler('const result = await save();\nfinishDashboardTemplateRun(result, visit, () => navigate(next));') },
@@ -107,6 +118,16 @@ typescriptRuleTester().run('navigate-while-visit-is-current', navigateWhileVisit
         '    controller.abort();',
       ),
       errors: [ungatedCallback('router.replace')],
+    },
+    {
+      name: 'a redirect in an effect with no cleanup',
+      code: 'useEffect(() => void load().then((result) => router.replace(result.path)), [request]);',
+      errors: [ungatedCallback('router.replace')],
+    },
+    {
+      name: 'a move in a .then() callback inside a function called where it is written',
+      code: '(() => {\n  load().then(() => router.push(next));\n})();',
+      errors: [ungatedCallback('router.push')],
     },
     {
       name: 'a move in a .then() callback after an await, reported once',

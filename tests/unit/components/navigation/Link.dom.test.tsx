@@ -110,6 +110,15 @@ describe('Link prefetching on intent, not when the link scrolls into view', () =
     expect(prefetchOf('About')).toBe('null');
   });
 
+  it('prefetches once the pointer rests on the link', async () => {
+    await mountLinks();
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByRole('link', { name: 'About' }));
+    });
+
+    expect(prefetchOf('About')).toBe('null');
+  });
+
   it('prefetches once the user touches the link', async () => {
     await mountLinks();
     await act(async () => {

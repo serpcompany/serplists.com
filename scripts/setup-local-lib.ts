@@ -1,3 +1,4 @@
+import { errorMessage } from "./lib/error-message";
 import { normalizeEol } from "./lib/line-endings";
 import { missingSeedParts, planSeedSteps, type SeedStatus, type SeedStepId } from "./lib/local-d1-seed";
 
@@ -27,8 +28,7 @@ function runSeedStep(run: (step: LocalD1SetupStep) => void, step: SeedStepId): v
   try {
     run(step);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Seed stage ${step} failed: ${reason}\n${SEED_RECOVERY_HINT}`, { cause: error });
+    throw new Error(`Seed stage ${step} failed: ${errorMessage(error)}\n${SEED_RECOVERY_HINT}`, { cause: error });
   }
 }
 

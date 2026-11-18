@@ -9,46 +9,22 @@ import { ClipboardList, File, Code, ListCheck } from 'lucide-react';
 import { ChecklistFormField, ChecklistItemContent, ChecklistSubItem, FormAnswer } from '@/types/checklist';
 import { readFormFields } from '@/lib/schemas/formFields';
 import { findFormFieldProblem } from '@/lib/schemas/formValidation';
-import { isContentRecord, isSubTaskRecord, type ContentRecord, type SubTaskRecord } from '@/lib/schemas/jsonRecords';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { hasCurrentFileInfo } from '@/lib/utils/mediaSource';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
-type RenderableContent = {
-  type: unknown;
-  value: string;
-  uploadType: unknown;
-  fileName: string | undefined;
-  subItems: ChecklistSubItem[] | undefined;
-  fields: ChecklistFormField[];
-};
+type RenderableContent = ChecklistItemContent & { fields: ChecklistFormField[] };
 
 const fileLabel = (content: RenderableContent): string | undefined =>
   hasCurrentFileInfo(content) ? content.fileName : undefined;
 
-const toRenderableSubItem = (subItem: unknown): ChecklistSubItem => {
-  const entry: SubTaskRecord = isSubTaskRecord(subItem) ? subItem : {};
-  return {
-    id: typeof entry.id === 'string' ? entry.id : undefined,
-    title: typeof entry.title === 'string' ? entry.title : '',
-    isCompleted: Boolean(entry.isCompleted),
-  };
-};
-
-const toRenderableContent = (content: unknown, contentIndex: number): RenderableContent => {
-  const record: ContentRecord = isContentRecord(content) ? content : {};
-  return {
-    type: record.type,
-    value: typeof record.value === 'string' ? record.value : '',
-    uploadType: record.uploadType,
-    fileName: typeof record.fileName === 'string' ? record.fileName : undefined,
-    subItems: Array.isArray(record.subItems) ? record.subItems.map(toRenderableSubItem) : undefined,
-    fields: record.type === 'form'
-      ? readFormFields(record.fields, (fieldIndex) => `form-${contentIndex + 1}-field-${fieldIndex + 1}`)
-      : [],
-  };
-};
+const toRenderableContent = (content: ChecklistItemContent, contentIndex: number): RenderableContent => ({
+  ...content,
+  fields: content.type === 'form'
+    ? readFormFields(content.fields, (fieldIndex) => `form-${contentIndex + 1}-field-${fieldIndex + 1}`)
+    : [],
+});
 
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
@@ -72,15 +48,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   subtaskHeadingAs: SubtaskHeading = 'h4',
   uploadLoginPath,
 }) => {
-  if (!contents || contents.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <File className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p>No additional content for this task</p>
-      </div>
-    );
-  }
-
   const renderable = contents.map(toRenderableContent);
   const firstFormWithProblem = renderable.findIndex(hasFormProblem);
 

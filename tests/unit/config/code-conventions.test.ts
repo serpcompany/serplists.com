@@ -1,4 +1,3 @@
-import { ESLint } from 'eslint';
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 
 import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
@@ -6,8 +5,9 @@ import { queryKeys } from '@/lib/queryKeys';
 import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions';
 import type { apiJson, apiRequest, fetchFromThePageUnderTest } from '../../e2e/support/api-requests';
 import { onlyElement } from '../../support/elements';
+import { repositoryESLint } from '../../support/eslintConfig';
 
-const eslint = new ESLint({ cwd: process.cwd() });
+const eslint = repositoryESLint();
 
 async function reportsOf(ruleId: string, filePath: string, code: string): Promise<string[]> {
   const result = onlyElement(await eslint.lintText(code, { filePath }));

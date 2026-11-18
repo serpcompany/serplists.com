@@ -12,7 +12,6 @@ import {
   categorySlug,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
-  isValidUsername,
   parseCategories,
   planDurableShardIndex,
   renderSitemapIndex,
@@ -20,6 +19,7 @@ import {
   type SitemapEntry,
 } from '../../../functions/sitemap/shared';
 import { buildCategorySlug } from '@/lib/routes';
+import { isPublicHandle } from '@/lib/schemas/publicHandle';
 import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
@@ -95,9 +95,9 @@ describe('public sitemap behavior', () => {
   });
 
   it('validates the same public usernames, template slugs, and category values', () => {
-    expect(isValidUsername('alice_bob.1')).toBe(true);
-    expect(isValidUsername('jane-doe')).toBe(true);
-    expect(isValidUsername('invalid owner')).toBe(false);
+    expect(isPublicHandle('alice_bob.1')).toBe(true);
+    expect(isPublicHandle('jane-doe')).toBe(true);
+    expect(isPublicHandle('invalid owner')).toBe(false);
     expect(isValidTemplateSlug('technical-seo')).toBe(true);
     expect(isValidTemplateSlug('Technical SEO')).toBe(false);
     expect(categorySlug(' SEO & Analytics ')).toBe('seo-analytics');
@@ -173,27 +173,22 @@ describe('public sitemap behavior', () => {
   });
 
   it('loads typed database rows with the correct limit and offset', async () => {
-    type Row = { path: string; include: boolean };
+    type Row = { handle: string; slug: string };
     const loadRows = vi.fn(async ({ limit, offset }: { limit: number; offset: number }): Promise<Row[]> => {
       expect({ limit, offset }).toEqual({ limit: SITEMAP_PAGE_SIZE, offset: SITEMAP_PAGE_SIZE });
-      return [
-        { path: '/profile/alice/first', include: true },
-        { path: '/profile/alice/private', include: false },
-        { path: '/profile/bob/second', include: true },
-      ];
+      return [{ handle: 'alice', slug: 'first' }, { handle: 'bob', slug: 'second' }];
     });
     const response = await handlePagedDatabaseSitemap<Row>({
       request: new Request('https://serplists.com/sitemaps/templates/2.xml'),
       params: { page: '2' },
       loadRows,
-      toEntry: (row): SitemapEntry | null => row.include ? { path: row.path } : null,
+      toEntry: (row): SitemapEntry => ({ path: `/profile/${row.handle}/${row.slug}` }),
     });
     const xml = await response.text();
 
     expect(loadRows).toHaveBeenCalledOnce();
     expect(response.status).toBe(200);
     expect(xml.indexOf('/profile/alice/first')).toBeLessThan(xml.indexOf('/profile/bob/second'));
-    expect(xml).not.toContain('/profile/alice/private');
     await expectValidXml(xml, sitemapSchema, 'paged-sitemap.xml');
   });
 

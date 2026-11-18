@@ -1,6 +1,7 @@
-import { renderPageAt } from './mockedNextNavigation';
+import { navigation, renderPageAt, RoutedPages } from './mockedNextNavigation';
 import { vi } from 'vitest';
 import { firstOf } from './elements';
+import { renderSettled } from './renderInTheDom';
 
 import './mockedWorkspaceRoles';
 
@@ -110,6 +111,12 @@ export const twoTaskRun = (completed: [boolean, boolean], status: ChecklistRun['
   ],
 });
 
+const runPageRoutes = {
+  '/dashboard/runs/[id]': <ChecklistRunPage />,
+  '/dashboard/organization/[organizationId]/runs/[id]': <ChecklistRunPage />,
+  '/share/[shareToken]': <ChecklistRunPage />,
+};
+
 export const renderRunPage = (
   run: ChecklistRun,
   options: { at?: string; noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
@@ -126,9 +133,11 @@ export const renderRunPage = (
   }));
 
   const ownerUrl = buildConsoleRunPath(run.id, ownerConsoleContext(run.teamId));
-  return renderPageAt(options.at ?? (options.shared ? '/share/abc123' : ownerUrl), {
-    '/dashboard/runs/[id]': <ChecklistRunPage />,
-    '/dashboard/organization/[organizationId]/runs/[id]': <ChecklistRunPage />,
-    '/share/[shareToken]': <ChecklistRunPage />,
-  });
+  return renderPageAt(options.at ?? (options.shared ? '/share/abc123' : ownerUrl), runPageRoutes);
+};
+
+export const openTheRunPageInTheDom = (model: Partial<RunExecutionModel>, at = '/dashboard/runs/run-1/') => {
+  mockUseRunExecutionModel.mockReturnValue(runPageModel(model));
+  navigation.reset(at, { routes: Object.keys(runPageRoutes) });
+  return renderSettled(<RoutedPages pages={runPageRoutes} />);
 };

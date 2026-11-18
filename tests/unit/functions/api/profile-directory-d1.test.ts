@@ -132,6 +132,16 @@ describe('pages of the profile directory', () => {
     expect(back.next_cursor).toBe(first.next_cursor);
   });
 
+  it('pages back a whole page from the end, with a cursor to the profiles before it', async () => {
+    const everyone = [CREATOR.username, PERSONAL_OWNER.username, ...usernames].sort();
+    const beforeTheLast = everyone.slice(-1 - PROFILE_DIRECTORY_PAGE_SIZE, -1);
+    const back = await pageOf(`?before=${everyone.at(-1)}`);
+
+    expect(back.profiles.map(({ handle }) => handle)).toEqual(beforeTheLast);
+    expect(back.previous_cursor).toBe(beforeTheLast.at(0));
+    expect(back.next_cursor).toBe(beforeTheLast.at(-1));
+  });
+
   it('counts the public Templates of a whole page in one grouped query, with no query per card', async () => {
     database.queries.splice(0);
     await pageOf();

@@ -1,9 +1,9 @@
-import { and, count, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { account, auditEvents, entitlementOverrides, templates, users } from "../schema/index";
 import type { LocalDb } from "../../scripts/data/local-d1";
 import { seedTestActivity } from "./local-test-data/activity";
 import { cleanupLocalTestData } from "./local-test-data/cleanup";
-import { DEV_PASSWORD_HASH, TEST_AUDIT_IDS, TEST_USER_EMAILS } from "./local-test-data/ids";
+import { DEV_PASSWORD_HASH, LOCAL_SEED_COMPLETE_AUDIT_ID, TEST_USER_EMAILS } from "./local-test-data/ids";
 import { seedTestOrganizations } from "./local-test-data/organizations";
 import { seedTestPeople } from "./local-test-data/people";
 import { seedTestRuns } from "./local-test-data/runs";
@@ -43,38 +43,23 @@ const legacyTestSlugMatch = or(
   ),
 );
 
-function lastSeededAuditId(): string {
-  const lastAuditId = TEST_AUDIT_IDS.at(-1);
-  if (lastAuditId === undefined) throw new Error("TEST_AUDIT_IDS is empty, so no audit event marks the local seed complete");
-  return lastAuditId;
-}
-
-const LOCAL_SEED_COMPLETE_AUDIT_ID = lastSeededAuditId();
 const OFFICIAL_SEED_TEMPLATE_ID = "serp-template-technical-seo-audit";
 const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
-
-const countOf = (rows: { value: number }[]): number => rows[0]?.value ?? 0;
 
 export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
   try {
     const [testUsers, marker, officialTemplate, officialLogin, legacySlugs] = await Promise.all([
-      db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
-      db.select({ value: count() }).from(auditEvents).where(eq(auditEvents.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
-      db
-        .select({ value: count() })
-        .from(templates)
-        .where(and(eq(templates.id, OFFICIAL_SEED_TEMPLATE_ID), eq(templates.user_id, "serp-user"))),
-      db
-        .select({ value: count() })
-        .from(account)
-        .where(and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
-      db.select({ value: count() }).from(templates).where(legacyTestSlugMatch),
+      db.$count(users, inArray(users.email, TEST_USER_EMAILS)),
+      db.$count(auditEvents, eq(auditEvents.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
+      db.$count(templates, and(eq(templates.id, OFFICIAL_SEED_TEMPLATE_ID), eq(templates.user_id, "serp-user"))),
+      db.$count(account, and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
+      db.$count(templates, legacyTestSlugMatch),
     ]);
     return {
-      testData: countOf(testUsers) === TEST_USER_EMAILS.length && countOf(marker) === 1,
-      officialTemplates: countOf(officialTemplate) === 1,
-      officialLogin: countOf(officialLogin) === 1,
-      legacyTestSlugs: countOf(legacySlugs) > 0,
+      testData: testUsers === TEST_USER_EMAILS.length && marker === 1,
+      officialTemplates: officialTemplate === 1,
+      officialLogin: officialLogin === 1,
+      legacyTestSlugs: legacySlugs > 0,
     };
   } catch (error) {
     if (/no such table/i.test(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error))) {

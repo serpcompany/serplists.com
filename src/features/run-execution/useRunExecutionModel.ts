@@ -144,17 +144,18 @@ export const useRunExecutionModel = (
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
     if (result.kind === 'ok' && result.run) {
-      latestRun.current = result.run;
-      setRun(result.run);
-      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, result.run));
+      const appliedRun = result.run;
+      latestRun.current = appliedRun;
+      setRun(appliedRun);
+      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, appliedRun));
       setSelectedItemId((currentSelectedItemId) => {
         if (!currentSelectedItemId) {
-          return getInitialSelectedItemId(result.run ?? null);
+          return getInitialSelectedItemId(appliedRun);
         }
 
         return (
-          getSelectedRunItem(result.run ?? null, currentSelectedItemId)?.item.id ??
-          getInitialSelectedItemId(result.run ?? null)
+          getSelectedRunItem(appliedRun, currentSelectedItemId)?.item.id ??
+          getInitialSelectedItemId(appliedRun)
         );
       });
     }

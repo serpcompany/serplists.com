@@ -24,10 +24,31 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
     inATest('importing a module to run it', "import { applyStoredTheme } from '@/lib/theme';"),
     inATest('importing a fixture as raw text', "import schema from '../../fixtures/sitemap.xsd?raw';"),
     inATest('listing the browser specs, which are tests', "readdirSync(path.join(repoRoot, 'tests/e2e'));"),
+    inATest('reading standard input', "readFileSync(0, 'utf8');"),
+    inATest('a path destructured from options the test cannot know', "const { file } = options; readFileSync(file, 'utf8');"),
+    inATest('importing a module a factory call returns', "createRequire(import.meta.url)('./fixture.json');"),
+    inATest('importing source modules with import.meta.glob to run them', "import.meta.glob('/src/**/*.tsx', { eager: true });"),
+    inATest('globbing fixtures as raw text', "import.meta.glob('../../fixtures/*.xsd', { query: '?raw', import: 'default' });"),
+    inATest('a raw import from a package', "import css from 'some-package/dist/theme.css?raw';"),
+    inATest('a raw import of a source-named file outside the repository', "import outside from '../../../../elsewhere/src/a.ts?raw';"),
+    inATest('a dynamic import of a computed specifier', 'await import(modulePath);'),
     inATest(
       'reading a file whose path the test cannot know',
       "const read = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8'); read(process.argv[2]);",
     ),
+    inATest('a path in a declared const that has no value', "declare const LAYOUT: string; readFileSync(LAYOUT, 'utf8');"),
+    inATest('a path an object other than a URL builds, whatever text it is given', "readFileSync(new SourceLocator('src/app/layout.tsx'), 'utf8');"),
+    inATest('a glob whose query it cannot read', "import.meta.glob('/src/**/*.ts', { query: rawQuery });"),
+    inATest('a const that names itself, without following it forever', "const dir = path.join(dir, 'x'); readFileSync(dir, 'utf8');"),
+    inATest('a file without an extension in a source folder', "readFileSync('functions/Dockerfile', 'utf8');"),
+    inATest('a path an anonymous default export reads', "export default function (file: string) { return readFileSync(file, 'utf8'); }"),
+    inATest('a path a callback reads', "files.map((file) => readFileSync(file, 'utf8'));"),
+    inATest('a read with no path', 'readFileSync();'),
+    inATest(
+      'a path a local function builds from an argument it destructures, which it does not follow',
+      "const appFile = ({ route }: Page) => `src/app/${route}`; readFileSync(appFile(page), 'utf8');",
+    ),
+    inATest('a dynamic import of a literal that names no module', 'await import(42);'),
   ],
   invalid: [
     { ...inATest('a literal path', "readFileSync('src/app/layout.tsx', 'utf8');"), errors: [reads('src/app/layout.tsx')] },
@@ -94,8 +115,59 @@ typescriptRuleTester().run('no-source-text-reads', noSourceTextReads, {
     },
     { ...inATest('a dynamic ?raw import', "await import('@functions/api/db.ts?raw');"), errors: [reads('functions/api/db.ts')] },
     {
+      ...inATest('a path concatenated to the repository root', "readFileSync(repoRoot + '/src/lib/theme.ts', 'utf8');"),
+      errors: [reads('src/lib/theme.ts')],
+    },
+    {
+      ...inATest(
+        'a path a URL names through fileURLToPath',
+        "readFileSync(fileURLToPath(new URL('../../../src/app/layout.tsx', import.meta.url)), 'utf8');",
+      ),
+      errors: [reads('src/app/layout.tsx')],
+    },
+    {
+      ...inATest(
+        'a path from a loop over spread names and a literal',
+        "for (const page of [...pages, 'src/app/b/page.tsx']) readFileSync(page, 'utf8');",
+      ),
+      errors: [reads('src/app/b/page.tsx')],
+    },
+    {
+      ...inATest(
+        'a path a function declaration receives',
+        "function readSource(file: string) { return readFileSync(path.join(root, file), 'utf8'); } readSource('functions/api/db.ts');",
+      ),
+      errors: [reads('functions/api/db.ts')],
+    },
+    {
+      ...inATest('a raw import.meta.glob in the older as: raw form', "import.meta.glob('/functions/**/*.ts', { as: 'raw' });"),
+      errors: [reads('functions/**/*.ts')],
+    },
+    {
+      ...inATest(
+        'each source pattern of a raw import.meta.glob',
+        "import.meta.glob(['/src/lib/*.ts', '../../fixtures/*.xsd', '@functions/api/*.ts'], { query: '?raw' });",
+      ),
+      errors: [reads('src/lib/*.ts'), reads('functions/api/*.ts')],
+    },
+    {
       ...inATest('a raw import.meta.glob', "import.meta.glob('/src/**/*.tsx', { query: '?raw', import: 'default' });"),
       errors: [reads('src/**/*.tsx')],
+    },
+    {
+      ...inATest('a template literal with arithmetic in it', 'readFileSync(`src/app/${index * 2}.ts`, "utf8");'),
+      errors: [reads('src/app/*.ts')],
+    },
+    {
+      ...inATest(
+        'a path a wrapper receives beside options it destructures, once it is given one',
+        "const readSource = (file: string, { encoding }: Options) => readFileSync(file, encoding); readSource(); readSource('src/lib/theme.ts', options);",
+      ),
+      errors: [reads('src/lib/theme.ts')],
+    },
+    {
+      ...inATest('the source pattern of a raw import.meta.glob with a hole in its list', "import.meta.glob(['/src/lib/*.ts', , ], { query: '?raw' });"),
+      errors: [reads('src/lib/*.ts')],
     },
   ],
 });

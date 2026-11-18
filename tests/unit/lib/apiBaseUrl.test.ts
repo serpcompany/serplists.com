@@ -14,6 +14,7 @@ describe('resolveApiBaseUrl, which uses a loopback NEXT_PUBLIC_API_URL only on a
     { configuredUrl: 'http://0.0.0.0:9788/api', pageHostname: 'serplists.com', expected: '/api' },
     { configuredUrl: 'http://localhost:9788/api', pageHostname: '0.0.0.0', expected: 'http://localhost:9788/api' },
     { configuredUrl: 'https://api.example.test/api', pageHostname: 'serplists.com', expected: 'https://api.example.test/api' },
+    { configuredUrl: '/backend/api', pageHostname: 'localhost', expected: '/backend/api' },
   ] as const)('configured=$configuredUrl on $pageHostname resolves to $expected', ({ configuredUrl, pageHostname, expected }) => {
     expect(resolveApiBaseUrl({ configuredUrl, pageHostname })).toBe(expected);
   });

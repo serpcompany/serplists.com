@@ -12,8 +12,8 @@ import { PREDEFINED_CATEGORIES } from '@/utils/categories';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
 import { apiEnv } from '../../support/apiEnv';
 import { readJson } from '../../support/readJson';
+import { clipyRequest as request, completeClipyContext as completeContext } from '../../fixtures/clipyContext';
 
-const sourceUrl = 'https://clipy.online/video/8fptqlnappr6';
 
 const draftContent = z.object({ type: z.string(), value: z.string() }).passthrough();
 const clipyDraftBody = z
@@ -30,78 +30,27 @@ const clipyDraftBody = z
   })
   .passthrough();
 
-function completeContext() {
-  return {
-    readiness: {
-      state: 'complete',
-      video: 'ready',
-      transcript: 'ready',
-      summary: 'ready',
-      keyMoments: 'ready',
-    },
-    clip: {
-      accessMode: 'public',
-      publicId: '8fptqlnappr6',
-      title: 'Creating Issues In GitHub Repositories',
-    },
-    summary: {
-      tldr: 'Create a clear GitHub issue that a developer can act on.',
-      keyPoints: [
-        'Navigate to the repository issues tab.',
-        'Click the new issue button.',
-        'Provide a concise descriptive title.',
-        'Include detailed information and screenshots.',
-        'Submit the issue and share its URL.',
-      ],
-    },
-    transcript: {
-      plaintext: '[0:01] Open the repository.\n[0:05] Select Issues and create a new issue.',
-    },
-    keyMoments: {
-      moments: [
-        {
-          tMs: 11_500,
-          caption: 'Clicks the Issues tab in the GitHub repository',
-          frameUrl: 'https://cdn.clipy.online/key-moments/demo/issues.jpg',
-        },
-        {
-          tMs: 15_600,
-          caption: 'Clicks the New issue button',
-          frameUrl: 'https://cdn.clipy.online/key-moments/demo/new-issue.jpg',
-        },
-        {
-          tMs: 22_700,
-          caption: 'Enters a title for the new issue',
-          frameUrl: 'https://cdn.clipy.online/key-moments/demo/title.jpg',
-        },
-        {
-          tMs: 48_800,
-          caption: 'Attaches a screenshot file to the issue',
-          frameUrl: 'https://cdn.clipy.online/key-moments/demo/screenshot.jpg',
-        },
-      ],
-    },
-  };
-}
-
 const generateFrom = (context: unknown) => handleGenerateTemplateFromClipy(request(), apiEnv(), {
   fetch: vi.fn().mockResolvedValue(Response.json(context)),
   getUserId: vi.fn().mockResolvedValue('user-1'),
 });
+
+async function imagesOfEachStep(context: unknown): Promise<string[][]> {
+  const payload = await readJson(await generateFrom(context), clipyDraftBody);
+  return sectionAt(payload.draft, 0).items
+    .slice(1)
+    .map((item: { contents: Array<{ type: string; value: string }> }) => item.contents
+      .filter((content: { type: string }) => content.type === 'image')
+      .map((content: { value: string }) => content.value));
+}
+
+const imagesOfTheSteps = async (context: unknown): Promise<string[]> => (await imagesOfEachStep(context)).flat();
 
 async function expectNotReady(context: unknown) {
   const response = await generateFrom(context);
 
   expect(response.status).toBe(409);
   expect(await response.json()).toMatchObject({ code: 'clipy_not_ready' });
-}
-
-function request(url = sourceUrl) {
-  return new Request('http://localhost/api/templates/generate-from-clipy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
 }
 
 describe('Clipy template generation', () => {
@@ -228,19 +177,28 @@ describe('Clipy template generation', () => {
         frameUrl: 'https://cdn.clipy.online/key-moments/demo/second.jpg',
       },
     ];
-    const response = await generateFrom(context);
-    const payload = await readJson(response, clipyDraftBody);
 
-    expect(
-      sectionAt(payload.draft, 0).items
-        .slice(1)
-        .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
-        .filter((content: { type: string }) => content.type === 'image')
-        .map((content: { value: string }) => content.value),
-    ).toEqual([
+    expect(await imagesOfTheSteps(context)).toEqual([
       'https://cdn.clipy.online/key-moments/demo/first.jpg',
       'https://cdn.clipy.online/key-moments/demo/second.jpg',
       'https://cdn.clipy.online/key-moments/demo/third.jpg',
+    ]);
+  });
+
+  it('gives a moment whose caption matches two steps to the step it matches best only, even when time order would put it first', async () => {
+    const context = completeContext();
+    context.keyMoments.moments = [
+      { tMs: 5_000, caption: 'Submit the issue and share it', frameUrl: 'https://cdn.clipy.online/key-moments/demo/submit.jpg' },
+      { tMs: 10_000, caption: 'Opens the dashboard', frameUrl: 'https://cdn.clipy.online/key-moments/demo/dashboard.jpg' },
+      { tMs: 20_000, caption: 'Provides a descriptive title', frameUrl: 'https://cdn.clipy.online/key-moments/demo/title.jpg' },
+    ];
+
+    expect(await imagesOfEachStep(context)).toEqual([
+      ['https://cdn.clipy.online/key-moments/demo/dashboard.jpg'],
+      [],
+      ['https://cdn.clipy.online/key-moments/demo/title.jpg'],
+      [],
+      ['https://cdn.clipy.online/key-moments/demo/submit.jpg'],
     ]);
   });
 });

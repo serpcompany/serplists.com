@@ -62,7 +62,7 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   letters and digits joined by single hyphens, at most 160): no other one has a public URL.
   The rules run in SQL (`validUsernameCondition`, `validOrganizationHandleCondition`,
   `validTemplateSlugCondition`), so a shard page's `LIMIT` and offset count only rows it
-  lists, and again in code on each row.
+  lists, and each query returns the handle and slug trimmed, so every row it returns is listed.
   Drizzle has no builders for SQLite's `GLOB` or string functions, so the SQL is written by
   hand, and `tests/unit/functions/sitemap-category-entries.test.ts` keeps it equal to the
   code.

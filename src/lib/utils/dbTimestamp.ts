@@ -1,28 +1,32 @@
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ZONED_DATE_TIME =
-  /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})$/;
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const ZONELESS_DATE_TIME =
-  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2})(?:\.(\d+))?)?$/;
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const EPOCH_MILLISECONDS = /^\d{10,}$/;
 const ECMA_FRACTION_DIGITS = 3;
+const UTC = 'Z';
+const OFFSET_LENGTH = '+00:00'.length;
+const DATE_LENGTH = 'YYYY-MM-DD'.length;
+const MINUTES_END = 'YYYY-MM-DDTHH:MM'.length;
+const SECONDS_END = 'YYYY-MM-DDTHH:MM:SS'.length;
 
-const buildDateTime = (
-  [, date, time, seconds, fraction]: RegExpExecArray,
-  zone: string | undefined,
-): string | null => {
-  if (!date || !time || !zone) {
-    return null;
-  }
-  if (seconds === undefined) {
+const buildDateTime = (dateTime: string, zone: string): string => {
+  const date = dateTime.slice(0, DATE_LENGTH);
+  const time = dateTime.slice(DATE_LENGTH + 1, MINUTES_END);
+  const seconds = dateTime.slice(MINUTES_END + 1, SECONDS_END);
+  if (!seconds) {
     return `${date}T${time}${zone}`;
   }
 
-  const milliseconds =
-    fraction === undefined
-      ? ''
-      : `.${fraction.slice(0, ECMA_FRACTION_DIGITS).padEnd(ECMA_FRACTION_DIGITS, '0')}`;
+  const fraction = dateTime.slice(SECONDS_END + 1);
+  const milliseconds = fraction
+    ? `.${fraction.slice(0, ECMA_FRACTION_DIGITS).padEnd(ECMA_FRACTION_DIGITS, '0')}`
+    : '';
   return `${date}T${time}:${seconds}${milliseconds}${zone}`;
 };
+
+const zoneOf = (zoned: string): string => (zoned.endsWith(UTC) ? UTC : zoned.slice(-OFFSET_LENGTH));
 
 export const toEcmaDateTimeString = (value: string): string | null => {
   const trimmed = value.trim();
@@ -31,14 +35,13 @@ export const toEcmaDateTimeString = (value: string): string | null => {
     return trimmed;
   }
 
-  const zoned = ZONED_DATE_TIME.exec(trimmed);
-  if (zoned) {
-    return buildDateTime(zoned, zoned[5]);
+  if (ZONED_DATE_TIME.test(trimmed)) {
+    const zone = zoneOf(trimmed);
+    return buildDateTime(trimmed.slice(0, -zone.length), zone);
   }
 
-  const zoneless = ZONELESS_DATE_TIME.exec(trimmed);
-  if (zoneless) {
-    return buildDateTime(zoneless, 'Z');
+  if (ZONELESS_DATE_TIME.test(trimmed)) {
+    return buildDateTime(trimmed, UTC);
   }
 
   return null;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { firstIssue } from "../src/lib/schemas/firstIssue";
 import { normalizePublicHandle, publicHandleSchema } from "../src/lib/schemas/publicHandle";
 
 export const HANDLE_OWNERS_QUERY =
@@ -40,7 +41,7 @@ export function findHandleProblems(owners: readonly HandleOwner[]): HandleProble
       .map(([handle, holders]) => ({ handle, owners: holders })),
     invalid: owners.flatMap((owner) => {
       const parsed = publicHandleSchema.safeParse(owner.value);
-      return parsed.success ? [] : [{ owner, reason: parsed.error.issues[0]?.message ?? "Not a valid handle." }];
+      return parsed.success ? [] : [{ owner, reason: firstIssue(parsed.error).message }];
     }),
   };
 }

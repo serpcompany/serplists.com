@@ -92,6 +92,23 @@ describe('starting a guest run', () => {
     expect(readGuestRun('template-camping', storage)).toMatchObject({ id: fresh.id, status: 'in_progress', title: 'Second trip' });
   });
 
+  it('still gives each run its own id on a page served without HTTPS, where the browser offers no randomUUID', () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      const storage = createStorage();
+      const first = startGuestRun(guestRunTemplate, 'Lake trip', storage);
+      saveGuestRun({ ...first, status: 'completed' }, storage);
+      const second = startGuestRun(guestRunTemplate, 'Second trip', storage);
+
+      expect(first.id).toMatch(/^guest-[a-z0-9]+-[a-z0-9]+$/);
+      expect(second.id).toMatch(/^guest-[a-z0-9]+-[a-z0-9]+$/);
+      expect(second.id).not.toBe(first.id);
+      expect(readGuestRun('template-camping', storage)?.id).toBe(second.id);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("keeps each Template's run apart", () => {
     const storage = createStorage();
 

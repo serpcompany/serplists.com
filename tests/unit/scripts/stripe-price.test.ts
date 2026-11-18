@@ -17,6 +17,12 @@ describe("Stripe bootstrap price lookup", () => {
     expect(describePriceMismatch(existing, { unitAmount: 900, currency: "usd", interval: "month" })).toBeNull();
   });
 
+  it("reads a recurring price that leaves out interval_count as billed every interval", () => {
+    expect(
+      describePriceMismatch({ ...existing, recurring: { interval: "month" } }, { unitAmount: 900, currency: "usd", interval: "month" }),
+    ).toBeNull();
+  });
+
   it("reports a changed amount instead of silently reusing the old price", () => {
     expect(describePriceMismatch(existing, { unitAmount: 1200, currency: "usd", interval: "month" }))
       .toBe("unit_amount 900 (requested 1200)");

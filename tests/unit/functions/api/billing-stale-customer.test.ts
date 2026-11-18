@@ -31,6 +31,8 @@ let subscriptionsStripeCanRetrieve: Map<string, Record<string, unknown>>;
 let subscriptionRetrieveFails: boolean;
 let customersMissingAtCheckoutAndPortal: Set<string>;
 let sessionError: Record<string, unknown> | null;
+let sessionUrl: string | null;
+let portalError: Record<string, unknown> | null;
 
 const env = () => stripeBillingEnv(d1, { STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET });
 
@@ -99,6 +101,8 @@ beforeEach(() => {
   subscriptionRetrieveFails = false;
   customersMissingAtCheckoutAndPortal = new Set(["cus_stale"]);
   sessionError = null;
+  sessionUrl = "https://checkout.stripe.test/cs_1";
+  portalError = null;
 
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -125,9 +129,10 @@ beforeEach(() => {
       if (sessionError) return stripeErrorResponse(400, sessionError);
       const customer = form.get("customer") ?? "";
       if (customersMissingAtCheckoutAndPortal.has(customer)) return missingCustomer(customer);
-      return new Response(JSON.stringify({ id: "cs_1", url: "https://checkout.stripe.test/cs_1" }));
+      return new Response(JSON.stringify({ id: "cs_1", url: sessionUrl }));
     }
     if (url.pathname === "/v1/billing_portal/sessions") {
+      if (portalError) return stripeErrorResponse(500, portalError);
       const customer = form.get("customer") ?? "";
       if (customersMissingAtCheckoutAndPortal.has(customer)) return missingCustomer(customer);
       return new Response(JSON.stringify({ id: "bps_1", url: "https://billing.stripe.test/bps_1" }));
@@ -177,6 +182,14 @@ describe("checkout with a Stripe customer that no longer exists", () => {
     await expect(post("checkout")).rejects.toBeInstanceOf(StripeApiError);
     expect(sessionCalls()).toHaveLength(2);
     expect(customerCreates()).toHaveLength(1);
+  });
+
+  it("answers 500 when Stripe opens the Checkout Session without a URL to send the user to", async () => {
+    staleCustomerListAnswer = "empty";
+    customersMissingAtCheckoutAndPortal.clear();
+    sessionUrl = null;
+
+    expect(await post("checkout")).toEqual({ status: 500, body: { error: "Stripe session missing URL" } });
   });
 
   it("never replaces the customer for other Stripe errors", async () => {
@@ -277,6 +290,14 @@ describe("the Customer Portal with a Stripe customer that no longer exists", () 
     expect(result.body.code).toBe("billing_customer_missing");
     expect(customerCreates()).toHaveLength(1);
     expect(storedCustomer()).toBe("cus_new");
+  });
+
+  it("passes on a Customer Portal error other than a missing customer, and keeps the customer", async () => {
+    portalError = { type: "api_error", message: "Stripe is unavailable" };
+
+    await expect(post("portal")).rejects.toBeInstanceOf(StripeApiError);
+    expect(customerCreates()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
   });
 
   it("stops Billing showing the old customer's subscription, so Upgrade can open Checkout", async () => {

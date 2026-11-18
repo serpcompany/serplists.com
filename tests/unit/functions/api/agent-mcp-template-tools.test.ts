@@ -225,6 +225,18 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
       expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
     });
 
+    it("names a checklist the template rules refuse invalid_template, with the rule's own message", async () => {
+      everySelectReads(templateRow(sections()));
+      const duplicated = resultOf((await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        sections: [{ id: "s1", title: "Prepare", items: [{ title: "Check" }] }, { id: "s1", title: "Ship", items: [{ title: "Tag" }] }],
+      })).body);
+
+      expect(duplicated.structuredContent).toEqual({ error: "invalid_template", message: "Duplicate section id: s1" });
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
     it("returns a large template's fields and the changed task, within the bound", async () => {
       const before = templateRow(sectionsTooLargeForOneResult());
       const changed = sectionsTooLargeForOneResult();

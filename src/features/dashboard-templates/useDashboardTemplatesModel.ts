@@ -52,15 +52,6 @@ type DashboardTemplateRunDependencies = {
   createRun: CreateRun;
 };
 
-type DashboardTemplatesModelDependencies = {
-  allTemplates?: ChecklistTemplate[];
-  createRun?: CreateRun;
-  deleteTemplate?: DeleteTemplate;
-  navigate?: (path: string) => void;
-  templatesLoading?: boolean;
-  userId?: string;
-};
-
 export type DashboardTemplateRunResult =
   | { kind: 'ok'; runId: string; teamId?: string | undefined }
   | { kind: 'login_required' }
@@ -237,26 +228,21 @@ export const finishDashboardTemplateRun = (
   }
 };
 
-export const useDashboardTemplatesModel = (
-  dependencies?: DashboardTemplatesModelDependencies,
-) => {
+export const useDashboardTemplatesModel = () => {
   const router = useAppRouter();
   const beginVisit = usePageVisit();
   const { user } = useAuth();
   const { activeTeamId, activeWorkspace, consoleContext, isTeamWorkspace } = useWorkspace();
   const templateContext = useTemplateLists();
   const model = buildDashboardTemplatesState({
-    allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
-    templatesLoading:
-      dependencies?.templatesLoading ?? templateContext.templatesLoading,
+    allTemplates: templateContext.allTemplates,
+    templatesLoading: templateContext.templatesLoading,
     role: activeWorkspace.type === 'team' ? activeWorkspace.role : undefined,
     teamId: activeTeamId,
-    userId: dependencies?.userId ?? user?.id,
+    userId: user?.id,
   });
-  const createRun = dependencies?.createRun ?? templateContext.createRun;
-  const deleteTemplate =
-    dependencies?.deleteTemplate ?? templateContext.deleteTemplate;
-  const navigateTo = dependencies?.navigate ?? router.push;
+  const { createRun, deleteTemplate } = templateContext;
+  const navigateTo = router.push;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     getInitialDashboardTemplateId(model.templates),
   );
@@ -358,6 +344,6 @@ export const useDashboardTemplatesModel = (
     runLauncherOpen,
     selectedTemplate,
     selectedTemplateId,
-    preferenceOwnerId: dependencies?.userId ?? user?.id,
+    preferenceOwnerId: user?.id,
   };
 };

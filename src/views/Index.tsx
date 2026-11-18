@@ -91,7 +91,13 @@ const Index = () => {
   const { templates, templatesLoading } = useTemplates();
 
   const featuredTemplates = useMemo(
-    () => templates.filter((template) => isRepoTemplate(template)).slice(0, 3),
+    () =>
+      templates
+        .flatMap((template) => {
+          const path = isRepoTemplate(template) ? buildCanonicalPublicTemplatePath(template) : null;
+          return path ? [{ path, template }] : [];
+        })
+        .slice(0, 3),
     [templates],
   );
 
@@ -172,13 +178,13 @@ const Index = () => {
           </Card>
         ) : (
           <CardGrid>
-            {featuredTemplates.map((template) => {
+            {featuredTemplates.map(({ path, template }) => {
               const TypeIcon = template.type === 'recipe' ? List : FileText;
               return (
                 <MediaCard
                   key={template.id}
                   description={template.description || 'No description yet.'}
-                  href={buildCanonicalPublicTemplatePath(template) ?? buildPublicTemplatesPath()}
+                  href={path}
                   icon={<TypeIcon />}
                   title={template.title}
                 >

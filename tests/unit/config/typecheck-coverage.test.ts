@@ -13,7 +13,7 @@ const JAVASCRIPT_FILE = /\.(js|jsx|mjs|cjs)$/;
 const DECLARATION_OF_A_JAVASCRIPT_MODULE = /\.d\.(mts|cts)$/;
 const DECLARATION_FILE = /\.d\.(ts|mts|cts)$/;
 const FOLDERS_OF_AUTHORED_CODE = ['src/', 'functions/', 'scripts/', 'db/', 'tests/', 'tools/'];
-const JAVASCRIPT_NO_LOADER_RUNS = [/^tools\/checks\/[^/]+\.mjs$/, /^\.github\/actions\/.+\.cjs$/, /^tests\/.+\.test\.mjs$/];
+const JAVASCRIPT_NO_LOADER_RUNS = [/^tools\/checks\/[^/]+\.mjs$/, /^\.github\/actions\/.+\.cjs$/];
 const DECLARATION_OF_JAVASCRIPT_NO_LOADER_RUNS = /^tools\/checks\/[^/]+\.d\.mts$/;
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
 const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
@@ -111,8 +111,8 @@ describe('pnpm run typecheck', () => {
         'and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. JavaScript is only for what no ' +
         `TypeScript loader runs: a root config its tool reads as JavaScript (${configsOnlyJavaScriptLoads.join(', ')}) ` +
         'and what it imports; tools/checks/*.mjs, which hooks and CI run with plain Node before packages are ' +
-        'installed, with a .d.mts beside one TypeScript imports; .github/actions/**/*.cjs, which GitHub runs with ' +
-        'plain Node; and a .test.mjs test of what a JavaScript caller may pass (docs/agents/exceptions.md).',
+        'installed, with a .d.mts beside one TypeScript imports; and .github/actions/**/*.cjs, which GitHub runs ' +
+        'with plain Node (docs/agents/exceptions.md).',
     ).toEqual([]);
   });
 

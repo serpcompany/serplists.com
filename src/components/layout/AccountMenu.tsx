@@ -108,11 +108,7 @@ function AccountMenuContent({
 
 const useUserInitial = () => {
   const { user } = useAuth();
-  return (
-    user?.name?.charAt(0)?.toUpperCase() ??
-    user?.email?.charAt(0)?.toUpperCase() ??
-    'U'
-  );
+  return (user?.name?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase();
 };
 
 function UserAvatar() {

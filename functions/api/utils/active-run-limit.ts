@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { getEntitlementsForContext, getEntitlementsForUser } from './entitlements';
@@ -17,7 +17,7 @@ export function activeRunsInContext(owner: RunOwnerContext): SQL {
   const { checklistRuns } = schema;
   const inContext = owner.teamId
     ? eq(checklistRuns.team_id, owner.teamId)
-    : and(eq(checklistRuns.user_id, owner.userId), isNull(checklistRuns.team_id));
+    : allConditions(eq(checklistRuns.user_id, owner.userId), isNull(checklistRuns.team_id));
   return allConditions(inContext, eq(checklistRuns.status, 'in_progress'), isNull(checklistRuns.deleted_at));
 }
 

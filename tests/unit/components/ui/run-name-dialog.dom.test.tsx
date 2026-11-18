@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
@@ -74,5 +74,40 @@ describe('RunNameDialog wording, the same wherever a Run starts: My Templates, t
     expect(buttonsIn(dialog).at(-1)).toEqual({ disabled: false, label: 'Close' });
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('RunNameDialog Cancel', () => {
+  it('closes the dialog without starting a Run', async () => {
+    const onOpenChange = vi.fn();
+    const dialog = await openDialog({ onOpenChange });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('RunNameDialog Start Run while the dialog closes', () => {
+  it('starts nothing more for a Start Run pressed while the dialog plays its closing animation', async () => {
+    const onConfirm = vi.fn();
+    const dialogWith = (open: boolean) => (
+      <RunNameDialog open={open} onOpenChange={vi.fn()} onConfirm={onConfirm} templateTitle="Launch checklist" loading={false} />
+    );
+    const closing = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockReturnValue([new Animation()]);
+    try {
+      const { rerender } = await renderSettled(dialogWith(true));
+      const dialog = screen.getByRole('dialog');
+      await act(async () => {
+        rerender(dialogWith(false));
+      });
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Start Run', hidden: true }));
+
+      expect(dialog.isConnected).toBe(true);
+      expect(onConfirm).not.toHaveBeenCalled();
+    } finally {
+      closing.mockRestore();
+    }
   });
 });

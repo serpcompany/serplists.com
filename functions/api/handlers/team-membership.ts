@@ -33,19 +33,15 @@ const transferTeamOwnerBodySchema = z.object({
   memberId: z.string().trim().min(1),
 });
 
-export async function transferTeamOwnership(context: TeamRouteContext, body: unknown): Promise<Response> {
-  const { db, env, request, teamId, userId, membership } = context;
+export async function transferTeamOwnership(context: TeamRouteContext & { ownerMemberId: string }, body: unknown): Promise<Response> {
+  const { db, env, request, teamId, userId, membership, ownerMemberId } = context;
   const { teamMembers, teams } = schema;
 
   const parsed = transferTeamOwnerBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid owner transfer payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
-  const ownerMemberId = membership.id;
-  if (!ownerMemberId) {
-    return jsonError("Organization not found", 404);
-  }
   if (parsed.data.memberId === ownerMemberId) {
     return jsonError("This member is already the Organization owner", 400, {
       code: "owner_transfer_noop",
@@ -81,7 +77,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
     resource: { type: "team", id: teamId },
     action: "team.owner_transferred",
     before: {
-      ownerMemberId: membership.id,
+      ownerMemberId,
       ownerUserId: membership.user_id,
     },
     after: {
@@ -89,7 +85,7 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
       ownerUserId: targetMember.user_id,
     },
     diff: {
-      previousOwnerMemberId: membership.id,
+      previousOwnerMemberId: ownerMemberId,
       previousOwnerUserId: membership.user_id,
       nextOwnerMemberId: targetMember.id,
       nextOwnerUserId: targetMember.user_id,
@@ -210,7 +206,7 @@ export async function updateTeamMember(
 
   const parsed = updateTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid member payload");
+    return invalidPayloadResponse(parsed.error);
   }
   if (typeof parsed.data.role === "undefined" && typeof parsed.data.status === "undefined") {
     return jsonError("No fields to update", 400);

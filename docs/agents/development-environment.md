@@ -17,6 +17,12 @@ pnpm install        # also installs git hooks
 pnpm run setup      # safe to re-run
 ```
 
+`pnpm install` needs a GitHub Packages token: `@serpcompany/verify`, SERP's checks, is a private
+package, and `.npmrc` sends the `@serpcompany` scope to `https://npm.pkg.github.com`. Put
+`//npm.pkg.github.com/:_authToken=<token>` in your own `~/.npmrc`, never the repository's, with a
+personal access token (classic) that has `read:packages`
+([SERP's install steps](https://github.com/serpcompany/serp/blob/main/packages/verify/README.md#install)).
+
 `pnpm install` lays out `node_modules` flat, as npm does (`node-linker=hoisted` in `.npmrc`): on
 Windows pnpm otherwise links packages with absolute junctions, and the OpenNext build copies those
 links, so its Worker bundle would pick up the unpatched originals of patched packages. A flat
@@ -189,11 +195,12 @@ staging/production model are in [database operations](database-operations.md).
 pnpm run check            # the finish gate: every check and test below but the browser tests
 pnpm run verify           # the repository checks
 pnpm run typecheck        # tsc for the app, scripts, API and tests
-pnpm run test:run         # unit tests (pnpm run test for watch mode)
-pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
+pnpm run test             # test:run, then the coverage check
+pnpm run test:run         # every unit and local D1 test, writing both coverage reports (pnpm exec vitest for watch mode)
+pnpm run test:local-d1    # only the local D1 tests (20 s per test: each starts a real local D1)
+pnpm run test:coverage    # the coverage check on the reports test:run wrote
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
 pnpm run test:e2e:full    # every browser spec on the same stack
-pnpm run test:coverage
 ```
 
 What to run while editing, before a push and at the finish gate is in

@@ -205,6 +205,10 @@ describe("listing a user's kept drafts across contexts, which the new-template e
     expect(listTemplateDraftContexts("u1", storage)).toEqual([]);
   });
 
+  it("finds nothing where the page has no browser storage, as while it renders on the server", () => {
+    expect(listTemplateDraftContexts("u1")).toEqual([]);
+  });
+
   it("finds nothing when storage is blocked", () => {
     const blocked = {
       getItem: () => {

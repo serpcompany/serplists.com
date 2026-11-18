@@ -140,6 +140,24 @@ describe('the maintenance report', () => {
     );
   });
 
+  it('leaves out the Elsewhere list when every part repeats', () => {
+    const report = renderReport({ ...facts, reviewFindings: facts.reviewFindings?.slice(0, 1) ?? [] });
+
+    expect(report).toContain('Repeated:\n\n- `functions/api`');
+    expect(report).not.toContain('Elsewhere:');
+  });
+
+  it('says no quality row needs re-grading, and names a debt row without its heading or issue by its text alone', () => {
+    const report = renderReport({
+      ...facts,
+      quality: { stale: [], ungraded: [] },
+      debt: { ...facts.debt, firstSmall: { section: '', debt: 'Tables lack a heading.', issue: '' } },
+    });
+
+    expect(report).toMatch(/whose code changed after the day they were graded\.[^#]*\n\nNone\.\n/);
+    expect(report).toContain('- First small item: Tables lack a heading.\n');
+  });
+
   it('says how to work the issue, after the checklist', () => {
     expect(renderReport(facts)).toMatch(
       /a check\.\n\nWork this issue one item per small pull request, as `docs\/agents\/ci-agents\.md` says under Weekly maintenance\.\n$/,

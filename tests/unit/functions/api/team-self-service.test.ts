@@ -93,6 +93,17 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     expectNoWrites();
   });
 
+  it("describes an invite whose Organization has no handle and whose inviter has left as having neither", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([previewRow({ teamSlug: null, inviterName: null, inviterEmail: null })])
+      .mockResolvedValueOnce([{ email: "invitee@example.com" }]);
+
+    const response = await handleTeams(previewRequest(), mockEnv);
+
+    expect(await readJson(response, jsonObject)).toMatchObject({ status: "pending", teamSlug: null, inviterName: null, inviterEmail: null });
+    expectNoWrites();
+  });
+
   it("refuses a different account without revealing the Organization", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([previewRow()])

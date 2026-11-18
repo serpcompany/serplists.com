@@ -2,7 +2,7 @@ import { navigation } from '../../../support/mockedNextNavigation';
 import { personalWorkspaceState as workspaceState } from '../../../support/mockedPersonalWorkspace';
 import React from 'react';
 import { screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
@@ -61,3 +61,24 @@ describe('WorkspaceSwitcher in Personal, which never waits on the teams request'
     expect(screen.getByText('Organizations unavailable')).toBeDefined();
   });
 });
+
+describe('WorkspaceSwitcher on a phone', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens its menu below the switcher, where the narrow sidebar sheet has room, instead of beside it', async () => {
+    workspaceState.status = 'ready';
+    workspaceState.teamsUnavailable = false;
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(max-width: 767px)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+
+    await openTheSwitcherInTheConsoleSidebar();
+
+    expect(screen.getByRole('menu').getAttribute('data-side')).toBe('bottom');
+  });
+});
+

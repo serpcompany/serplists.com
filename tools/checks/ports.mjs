@@ -228,7 +228,7 @@ function runCommand(rest, folder) {
     process.stderr.write(`${started.program} didn't start: ${error.message}\n`);
     process.exit(127);
   });
-  child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 1)));
+  child.on("exit", (code, signal) => process.exit(signal ? 1 : code));
 }
 
 const freed = (claims) =>

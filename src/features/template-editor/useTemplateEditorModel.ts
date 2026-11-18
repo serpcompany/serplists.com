@@ -32,7 +32,7 @@ type TemplateEditorModelOptions = {
 };
 
 type LoadTemplateEditorDataOptions = {
-  id?: string;
+  id: string;
 };
 
 type SaveTemplateEditorDataOptions = {
@@ -148,26 +148,22 @@ export const resolveTemplateSaveFeedback = (params: {
 };
 
 const buildLoadResult = (
-  template?: Partial<ChecklistTemplate>,
-  storedSections: unknown = template?.sections,
+  template: ChecklistTemplate & { slug: string },
+  storedSections: unknown,
 ): TemplateEditorLoadResult => ({
   initialValues: buildTemplateEditorFormValues({ ...template, sections: storedSections }),
   loadError: null,
-  templateSlug: template?.slug ?? template?.seoUrl,
-  version: template?.version,
-  ownerSlug: template?.id
-    ? resolvePublicTemplateOwnerSlug({
-        id: template.id,
-        userId: template.userId ?? "",
-        ownerProfile: template.ownerProfile,
-        owner: template.owner,
-        ownerType: template.ownerType,
-        teamId: template.teamId,
-      })
-    : undefined,
-  ownership: template?.id
-    ? { userId: template.userId ?? "", teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic ?? false }
-    : undefined,
+  templateSlug: template.slug,
+  version: template.version,
+  ownerSlug: resolvePublicTemplateOwnerSlug({
+    id: template.id,
+    userId: template.userId,
+    ownerProfile: template.ownerProfile,
+    owner: template.owner,
+    ownerType: template.ownerType,
+    teamId: template.teamId,
+  }),
+  ownership: { userId: template.userId, teamId: template.teamId, ownerType: template.ownerType, isPublic: template.isPublic },
 });
 
 const getApiClient = (
@@ -189,10 +185,6 @@ export const loadTemplateEditorData = async (
   options: LoadTemplateEditorDataOptions,
   dependencies?: Pick<TemplateEditorModelDependencies, "apiClient">,
 ): Promise<TemplateEditorLoadResult> => {
-  if (!options.id) {
-    return buildLoadResult(buildDefaultTemplateEditorTemplate());
-  }
-
   try {
     const fetchedTemplate = await getApiClient(dependencies).getTemplateById(options.id);
     const template = mapApiTemplateToChecklistTemplate(fetchedTemplate, options.id);

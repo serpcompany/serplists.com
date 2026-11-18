@@ -13,6 +13,7 @@ import type {
   PortableTemplatePack,
 } from "@/lib/schemas/checklistSchema";
 import { toPortableSections } from "@/lib/schemas/portableSections";
+import { isUploadedAsset } from "@/lib/schemas/portableTemplatePack";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { normalizeStringArray, parseJsonArray } from "@/lib/schemas/jsonArrays";
@@ -35,10 +36,14 @@ type TemplateImportWarning = {
   message: string;
 };
 
-export type TemplateImportResult = {
-  templates: ChecklistTemplate[];
+export type TemplateImportResult<Template extends ChecklistTemplate = ChecklistTemplate> = {
+  templates: Template[];
   warnings: TemplateImportWarning[];
 };
+
+export type ImportedTemplate = ChecklistTemplate & { categories: string[] };
+
+type ImportedTemplates = TemplateImportResult<ImportedTemplate>;
 
 export type ParseTemplatesOptions = {
   timestampForUndatedTemplates?: string;
@@ -60,9 +65,7 @@ const withImportedLinkSources = (sections: ChecklistSection[]): ChecklistSection
     ),
   }));
 
-const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
-  const parsed = parseJsonArray(input);
-  if (!parsed) return null;
+const sectionsFromList = (parsed: unknown[], templateTitle: string): ChecklistSection[] => {
   if (parsed.length === 0) return [];
   const sections = isSectionsShape(parsed) ? parsed : [sectionHoldingLegacyItems(parsed)];
   const invalidEntry = findInvalidImportSectionEntry(sections);
@@ -72,10 +75,15 @@ const coerceSections = (input: unknown, templateTitle: string): ChecklistSection
   return withImportedLinkSources(normalizeSections(sections));
 };
 
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
+  const parsed = parseJsonArray(input);
+  return parsed ? sectionsFromList(parsed, templateTitle) : null;
+};
+
 const normalizeImportTemplate = (
   template: ChecklistTemplateImport,
   now = new Date().toISOString(),
-): ChecklistTemplate => {
+): ImportedTemplate => {
   const hasSectionsField = typeof template.sections !== "undefined" || typeof template.items !== "undefined";
   if (!hasSectionsField) {
     throw new Error(`Template "${template.title}" is missing sections/items`);
@@ -110,11 +118,8 @@ const normalizeImportTemplate = (
 const normalizePortableTemplate = (
   template: PortableChecklistTemplate,
   now = new Date().toISOString(),
-): ChecklistTemplate => {
-  const sections = coerceSections(template.sections, template.title);
-  if (!sections) {
-    throw new Error(`Template "${template.title}" has invalid sections`);
-  }
+): ImportedTemplate => {
+  const sections = sectionsFromList(template.sections, template.title);
 
   return {
     id: generateTempId("portable"),
@@ -137,7 +142,7 @@ const normalizePortableTemplate = (
   };
 };
 
-const normalizePortableData = (data: PortableChecklistTemplate | PortableTemplatePack): TemplateImportResult => {
+const normalizePortableData = (data: PortableChecklistTemplate | PortableTemplatePack): ImportedTemplates => {
   const normalizedTemplates = ("kind" in data ? data.templates : [data]).map((template) =>
     normalizePortableTemplate(template)
   );
@@ -149,22 +154,10 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   const warnings: TemplateImportWarning[] = [];
 
   templates.forEach((template) => {
-    let assetCount = 0;
-    template.sections.forEach((section) => {
-      section.items.forEach((item) => {
-        item.contents?.forEach((content) => {
-          const value = typeof content.value === "string" ? content.value : "";
-          const isUpload =
-            content.uploadType === "upload" ||
-            value.includes("/api/uploads/file") ||
-            value.includes("uploads/file?key=");
-
-          if (content.type === "image" || content.type === "video" || content.type === "file") {
-            if (isUpload) assetCount += 1;
-          }
-        });
-      });
-    });
+    const assetCount = template.sections
+      .flatMap((section) => section.items)
+      .flatMap((item) => item.contents ?? [])
+      .filter(isUploadedAsset).length;
 
     if (assetCount > 0) {
       warnings.push({
@@ -177,10 +170,14 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
+export type PortableExportPack = PortableTemplatePack & {
+  manifest: NonNullable<PortableTemplatePack["manifest"]> & { assetWarnings: number };
+};
+
 export const exportPortableTemplatesToJSON = (
   templates: ChecklistTemplate[],
   exportedBy?: string
-): PortableTemplatePack => {
+): PortableExportPack => {
   const warnings = collectAssetWarnings(templates);
   const results = templates.map((template) => parsePortableTemplate({
     title: template.title,
@@ -230,7 +227,7 @@ export const downloadBackupFile = (pack: ExportedTemplatePack, filename?: string
 const parsePortablePackTemplates = (
   templates: unknown[],
   now: string,
-): { templates: ChecklistTemplate[]; warnings: TemplateImportWarning[] } => {
+): ImportedTemplates => {
   const results = templates.map(parsePortableTemplate);
   const warnings = results.flatMap((result, index) => result.success ? [] : [{
     templateTitle: result.title || `Template ${index + 1}`,
@@ -247,11 +244,11 @@ const parsePortablePackTemplates = (
 export const parseTemplatesFromData = (
   data: unknown,
   { timestampForUndatedTemplates }: ParseTemplatesOptions = {},
-): TemplateImportResult => {
+): ImportedTemplates => {
   const now = timestampForUndatedTemplates ?? new Date().toISOString();
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
-    let normalizedTemplates: ChecklistTemplate[] = [];
+    let normalizedTemplates: ImportedTemplate[] = [];
     let skippedWarnings: TemplateImportWarning[] = [];
 
     if (Array.isArray(data)) {
@@ -285,16 +282,21 @@ export const parseTemplatesFromData = (
   }
 };
 
-const readFileText = (file: File): Promise<string> =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Failed to read file"));
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
+const UTF_16_BYTE_ORDER_MARKS = [
+  { encoding: "utf-16le", mark: [0xff, 0xfe] },
+  { encoding: "utf-16be", mark: [0xfe, 0xff] },
+] as const;
+
+const textEncodingOf = (bytes: Uint8Array): string =>
+  UTF_16_BYTE_ORDER_MARKS.find(({ mark }) => mark.every((byte, index) => bytes[index] === byte))?.encoding ?? "utf-8";
+
+const readFileText = async (file: File): Promise<string> => {
+  const buffer = await file.arrayBuffer().catch(() => {
+    throw new Error("Failed to read file");
   });
+  const bytes = new Uint8Array(buffer);
+  return new TextDecoder(textEncodingOf(bytes)).decode(bytes);
+};
 
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
   const sourceString = await readFileText(file);
@@ -322,7 +324,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof ZodError) {
       throw new Error(`Template validation failed: ${formatValidationError(error)}`);
     }
-    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
+    throw new Error(formatValidationError(error));
   }
 };
 

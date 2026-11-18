@@ -4,6 +4,7 @@ import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
 } from "./lib/portableTemplateJsonSchema";
+import { errorMessage } from "./lib/error-message";
 import { matchesGeneratedText } from "./lib/line-endings";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);
@@ -37,6 +38,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 });

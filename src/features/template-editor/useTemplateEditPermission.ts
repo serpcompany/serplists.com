@@ -17,13 +17,14 @@ export const useTemplateEditPermission = (params: {
   const { canEditTemplates, isWorkspaceLoading, teams } = useWorkspace();
   const [opened, setOpened] = useState(false);
 
-  const ownerUnknownAfterFailedLoad = !params.isCreate && !params.ownership;
+  const ownership = params.isCreate ? null : params.ownership;
+  const ownerUnknownAfterFailedLoad = ownership === undefined;
   let permission: TemplateEditPermission = "checking";
   if (!params.loading) {
     permission = ownerUnknownAfterFailedLoad
       ? "editable"
       : resolveTemplateEditPermission({
-          template: params.isCreate ? null : params.ownership ?? null,
+          template: ownership,
           userId: user?.id,
           workspaceLoading: isWorkspaceLoading,
           roleIn: (teamId) => teams.find((team) => team.id === teamId)?.role,

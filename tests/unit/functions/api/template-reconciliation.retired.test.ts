@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
-import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
+import { findOpenRunTasks, reconcileRunSections, summarizeRetiredEntries } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
 import { objectContaining } from '../../../support/asymmetricMatchers';
 
@@ -102,6 +102,20 @@ describe('retired run work', () => {
     expect(result.retired).toEqual([]);
   });
 
+  it('restores the tasks of a retired section by id, and drops a stored task of it that has no id', () => {
+    const previousRetired = [{
+      kind: 'section',
+      section: { id: 'section-2', title: 'QA', items: [{ id: 'item-qa', title: 'Test', isCompleted: true, notes: 'Passed' }, { title: 'No id', isCompleted: true }] },
+    }];
+    const template = [...section([copy]), { id: 'section-2', title: 'QA', items: [{ id: 'item-qa', title: 'Test' }] }];
+
+    const result = reconcileRunSections(section([copy]), template, previousRetired);
+
+    expect(sectionsOf(result).map(({ items }) => items.map(({ id }) => id))).toEqual([['item-copy'], ['item-qa']]);
+    expect(taskIn(sectionsOf(result), 1, 0)).toEqual(objectContaining({ isCompleted: true, notes: 'Passed' }));
+    expect(result.retired).toEqual([]);
+  });
+
   it('prefers the live copy and keeps a stale retired duplicate', () => {
     const stale = { kind: 'item', sectionId: 'section-1', item: { ...dns, notes: 'Stale' } };
     const result = reconcileRunSections(section([dns]), section([{ id: 'item-dns', title: 'Check DNS' }]), [stale]);
@@ -124,5 +138,41 @@ describe('retired run work', () => {
     expect(taskIn(sectionsOf(result), 0, 0)).toEqual(objectContaining({ id: 'item-dns', isCompleted: false }));
     expect(taskIn(sectionsOf(result), 0, 0)).not.toHaveProperty('notes');
     expect(result.retired.slice(0, unreadable.length)).toEqual(unreadable);
+  });
+});
+
+describe('the summary of work a Template change retires from a run', () => {
+  it('names a removed Sub-task and an untitled task, under a section and task that have no titles', () => {
+    const tent = { id: 'st1', title: 'Tent', isCompleted: true };
+    const untitled = { id: 't2', isCompleted: true };
+    const previous = [{
+      id: 's1',
+      title: 'Camp',
+      items: [{ id: 't1', title: 'Pack', contents: [{ type: 'subItems', value: '', subItems: [tent] }] }, untitled],
+    }];
+    const template = [{ id: 's1', items: [{ id: 't1' }] }];
+
+    const { newlyRetired } = reconcileRunSections(previous, template, []);
+
+    expect(newlyRetired).toEqual([
+      { kind: 'subItem', sectionId: 's1', itemId: 't1', subItem: tent },
+      { kind: 'item', sectionId: 's1', item: untitled },
+    ]);
+    expect(summarizeRetiredEntries(newlyRetired)).toEqual([
+      { kind: 'subItem', id: 'st1', title: 'Tent' },
+      { kind: 'item', id: 't2', title: '' },
+    ]);
+  });
+});
+
+describe('stored work without an id', () => {
+  it('summarizes retired work that has no id with an empty id', () => {
+    expect(summarizeRetiredEntries([{ kind: 'item', sectionId: 's1', item: { title: 'Untitled id' } }])).toEqual([
+      { kind: 'item', id: '', title: 'Untitled id' },
+    ]);
+  });
+
+  it('counts an open task that has no id as open, with an empty id', () => {
+    expect(findOpenRunTasks([{ id: 's1', items: [{ title: 'No id', isCompleted: false }] }])).toEqual({ total: 1, open: [''] });
   });
 });

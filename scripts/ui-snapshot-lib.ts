@@ -34,6 +34,7 @@ const OPTIONS = {
 const EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE = [".png", ".jpg", ".jpeg", ".jpe"];
 
 const unknownOptionErrorSchema = z.object({ code: z.literal("ERR_PARSE_ARGS_UNKNOWN_OPTION"), message: z.string() });
+const THE_MESSAGE_AROUND_THE_QUOTED_OPTION = /^[^']*'([^']+)'[\s\S]*$/;
 
 function resolveSnapshotPaths(outArg: string | undefined, slug: string): SnapshotPaths {
   const outPath = outArg ?? path.join("tmp", "snapshots", `${slug}.png`);
@@ -41,11 +42,7 @@ function resolveSnapshotPaths(outArg: string | undefined, slug: string): Snapsho
   if (!EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.includes(ext)) {
     throw new Error(`--out must end in ${EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.join(", ")} (lowercase), got "${outPath}".`);
   }
-  const ariaPath = path.join(dir, `${name}.aria.yml`);
-  if (path.resolve(ariaPath) === path.resolve(outPath)) {
-    throw new Error(`--out "${outPath}" would be overwritten by the accessibility YAML.`);
-  }
-  return { outPath, ariaPath };
+  return { outPath, ariaPath: path.join(dir, `${name}.aria.yml`) };
 }
 
 function parseUiSnapOptions(args: string[]) {
@@ -54,7 +51,7 @@ function parseUiSnapOptions(args: string[]) {
   } catch (error) {
     const unknownOption = unknownOptionErrorSchema.safeParse(error);
     if (unknownOption.success) {
-      throw new Error(`Unknown flag ${/'([^']+)'/.exec(unknownOption.data.message)?.[1] ?? ""}.`, { cause: error });
+      throw new Error(`Unknown flag ${unknownOption.data.message.replace(THE_MESSAGE_AROUND_THE_QUOTED_OPTION, "$1")}.`, { cause: error });
     }
     throw error;
   }

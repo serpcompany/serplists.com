@@ -19,6 +19,7 @@ import {
 import { flagValueAt } from "./lib/cli-flags";
 import { execTool } from "./lib/run-tool";
 import { parseWranglerResultSets } from "./lib/wrangler-json";
+import { errorMessage } from "./lib/error-message";
 
 function readArg(name: string): string | null {
   const prefix = `${name}=`;
@@ -87,8 +88,7 @@ try {
 
   console.log(`${environmentLabel} d1 schema ok (${databaseName})`);
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
   console.error(`Unable to verify ${environmentLabel} D1 schema for ${databaseName}.`);
-  console.error(message);
+  console.error(errorMessage(error));
   process.exit(1);
 }

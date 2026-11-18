@@ -157,7 +157,8 @@ describe('cached sitemaps', () => {
 
   it('keys by the parsed sitemap and page, so case and trailing-slash variants share one entry', async () => {
     const build = builder();
-    for (const [path, page] of [['1.xml', '1'], ['1.XML', '1'], ['1.xMl/', '1'], ['1.xml/', '1'], ['001.XML/', '001']]) {
+    const variants: [string, string][] = [['1.xml', '1'], ['1.XML', '1'], ['1.xMl/', '1'], ['1.xml/', '1'], ['001.XML/', '001']];
+    for (const [path, page] of variants) {
       await serve(build, `https://serplists.com/sitemaps/templates/${path}`, 'GET', { kind: 'templates', page });
     }
     expect(build).toHaveBeenCalledOnce();

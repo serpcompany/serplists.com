@@ -16,33 +16,35 @@ export type SeedStep = { id: SeedStepId; label: string; command: SeedCommand; ar
 
 const LOCAL_D1_DATA_SCRIPT = { script: "scripts/data/local-d1-data.ts" };
 
-export const LOCAL_SEED_STEPS: ReadonlyArray<SeedStep> = [
-  {
+export const SEED_STEPS: { readonly [Id in SeedStepId]: SeedStep & { id: Id } } = {
+  "seed-test": {
     id: "seed-test",
     label: "Seed local test Users, Organizations, Templates and Runs",
     command: LOCAL_D1_DATA_SCRIPT,
     args: ["seed-test"],
   },
-  {
+  "repair-test-slugs": {
     id: "repair-test-slugs",
     label: "Rename test Template slugs that official Templates need",
     command: LOCAL_D1_DATA_SCRIPT,
     args: ["repair-test-slugs"],
     existingDataOnly: true,
   },
-  {
+  "official-templates": {
     id: "official-templates",
     label: "Seed official Templates",
     command: { tool: "wrangler" },
     args: ["d1", "execute", DATABASE_NAME, "--local", "--file", "./db/seeds/official-templates.sql"],
   },
-  {
+  "official-login": {
     id: "official-login",
     label: "Seed the official SERP login",
     command: LOCAL_D1_DATA_SCRIPT,
     args: ["seed-official-login"],
   },
-];
+};
+
+export const LOCAL_SEED_STEPS: ReadonlyArray<SeedStep> = Object.values(SEED_STEPS);
 
 export const RESET_SEED_STEPS: ReadonlyArray<SeedStep> = LOCAL_SEED_STEPS.filter((step) => !step.existingDataOnly);
 

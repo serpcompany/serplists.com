@@ -1,5 +1,5 @@
 import { ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -53,6 +53,19 @@ describe('mirrorOutputToLog', () => {
     const result = await runServer(logPath, (server) => server.stdout.write('this run\n'));
 
     expect(result.log).toBe('this run\n');
+  });
+
+  it.each([
+    ['stdout and stderr', () => new ChildProcess()],
+    ['stderr', () => Object.assign(new ChildProcess(), { stdout: new PassThrough() })],
+  ])('refuses a server spawned without %s piped before it creates or opens the log', (what, server) => {
+    const logFolder = path.join(workDir, `unpiped ${what}`);
+    const logPath = path.join(logFolder, 'server.log');
+
+    expect(() => mirrorOutputToLog(server(), logPath)).toThrow(
+      `Cannot mirror a child's output to ${logPath}: spawn it with stdout and stderr piped.`,
+    );
+    expect(existsSync(logFolder)).toBe(false);
   });
 
   it('writes the dev and browser-test server logs where pnpm run logs:query looks', () => {

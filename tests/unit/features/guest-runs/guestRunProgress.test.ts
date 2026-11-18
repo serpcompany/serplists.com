@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { carryGuestRunProgress } from '@/features/guest-runs/guestRunProgress';
 import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
@@ -110,5 +110,35 @@ describe("carrying a guest run's progress onto the account's new run", () => {
 
     expect(carried.status).toBe('in_progress');
     expect(carried.completedAt).toBeUndefined();
+  });
+
+  it('dates the completion now when a completed guest run kept no completion time', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-06T09:30:00.000Z') });
+    try {
+      const guest = run([{ id: 'task-food', title: 'Pack the food', isCompleted: true }], { status: 'completed' });
+
+      expect(carryGuestRunProgress(run([{ id: 'task-food', title: 'Pack the food' }]), guest)).toMatchObject({
+        completedAt: '2026-10-06T09:30:00.000Z',
+        status: 'completed',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('carries the tick of a task whose blocks hold text and an empty Sub-task list, which do not make it a task with Sub-tasks', () => {
+    const notesBlock = { id: 'block-note', type: 'text' as const, value: 'Check the forecast' };
+    const emptyList = { id: 'block-empty', type: 'subItems' as const, value: '' };
+    const task = (isCompleted: boolean): ChecklistItem => ({
+      id: 'task-weather',
+      title: 'Check the weather',
+      isCompleted,
+      contents: [notesBlock, emptyList],
+    });
+
+    const carried = taskAt(carryGuestRunProgress(run([task(false)]), run([task(true)])), 0, 0);
+
+    expect(carried.isCompleted).toBe(true);
+    expect(carried.contents).toEqual([notesBlock, emptyList]);
   });
 });

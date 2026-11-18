@@ -63,4 +63,19 @@ describe('useTeamInviteLink', () => {
     });
     expect(invite().isAccepted).toBe(true);
   });
+
+  it('reads no invite and accepts nothing for a link without a token', async () => {
+    apiMocks.getTeamInvitePreview.mockReset();
+    const page = await mountQueryHook(() => useTeamInviteLink(undefined, 'user-1'));
+    unmounts.push(page.unmount);
+
+    await act(async () => {
+      await expect(page.current().accept()).rejects.toThrow('This invite link has no token.');
+      await settle();
+    });
+
+    expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
+    expect(page.current().preview).toBeUndefined();
+    expect(page.current().isAccepted).toBe(false);
+  });
 });

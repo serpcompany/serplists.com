@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { taskAt } from "../../../support/elements";
 
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
@@ -95,5 +95,31 @@ describe("buildTemplateEditorFormValues with content stored before the API check
     );
     expect(new Set(ids).size).toBe(3);
     expect(ids[0]).toBe("1");
+  });
+
+  it("opens a section stored as something other than an object empty, and a task or sub-task stored as bare text by its text", () => {
+    const [unreadable, prep] = formValuesOfTheStored([
+      "Prep",
+      { id: "section-2", title: "Pack", items: ["Pack the tent", { id: "item-2", title: "Poles", contents: [{ id: "c1", type: "subItems", subItems: ["Stakes"] }] }] },
+    ]).sections;
+
+    expect(unreadable).toEqual(expect.objectContaining({ title: "", items: [] }));
+    expect(prep?.items.map(({ title }) => title)).toEqual(["Pack the tent", "Poles"]);
+    expect(prep?.items[1]?.contents?.[0]?.subItems?.map(({ title }) => title)).toEqual(["Stakes"]);
+  });
+
+  it("gives new parts their own ids where the browser has no randomUUID, as on a page served over plain http", () => {
+    vi.stubGlobal("crypto", {});
+    try {
+      const ids = formValuesOfTheStored([{ title: "Prep", items: [{ title: "A" }, { title: "B" }] }]).sections.flatMap((section) => [
+        section.id,
+        ...section.items.map(({ id }) => id),
+      ]);
+
+      expect(new Set(ids).size).toBe(3);
+      expect(ids.every((id) => /^(section|item)_\d+_[a-z0-9]+$/.test(id))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

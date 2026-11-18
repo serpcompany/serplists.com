@@ -1,5 +1,5 @@
 import { navigation } from './mockedNextNavigation';
-import React from 'react';
+import React, { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { vi } from 'vitest';
 
@@ -10,14 +10,17 @@ import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import type { TeamSummary } from '@/lib/schemas/teamResponses';
 import { present } from './elements';
-import type { ElementProps } from './elementTree';
+import { handlerIn, type ElementProps } from './elementTree';
+import { renderSettled } from './renderInTheDom';
 
 type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
 type TemplateDetailModel = ReturnType<typeof useTemplateDetailModel>;
 
 export const mockUseTemplateDetailModel = vi.fn<(...args: TemplateDetailModelArgs) => Partial<TemplateDetailModel>>();
 const {
+  authState,
   contextCreateTemplate,
+  contextDeleteTemplate,
   contextUpdateTemplate,
   moreMenuItemProps,
   recordListsThePageAsksFor,
@@ -25,7 +28,13 @@ const {
   userStillOnThePage,
   workspaceState,
 } = vi.hoisted(() => ({
+  authState: {
+    user: { email: 'john@example.com', id: 'user-1', username: 'designops' } as
+      | { email: string; id: string; username: string }
+      | null,
+  },
   contextCreateTemplate: vi.fn(),
+  contextDeleteTemplate: vi.fn<(id: string) => Promise<void>>(),
   contextUpdateTemplate: vi.fn(),
   moreMenuItemProps: [] as ElementProps[],
   recordListsThePageAsksFor: vi.fn(),
@@ -76,21 +85,14 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
 });
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({
-    isAuthenticated: true,
-    user: {
-      email: 'john@example.com',
-      id: 'user-1',
-      username: 'designops',
-    },
-  }),
+  useAuth: () => ({ isAuthenticated: authState.user !== null, user: authState.user }),
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => {
   const useTemplates = () => ({
     createRun: vi.fn(),
     createTemplate: contextCreateTemplate,
-    deleteTemplate: vi.fn(),
+    deleteTemplate: contextDeleteTemplate,
     getTemplate: vi.fn(),
     updateTemplate: contextUpdateTemplate,
   });
@@ -163,7 +165,9 @@ vi.mock('@/lib/access-flow', () => ({
 }));
 
 export {
+  authState,
   contextCreateTemplate,
+  contextDeleteTemplate,
   contextUpdateTemplate,
   moreMenuItemProps,
   recordListsThePageAsksFor,
@@ -172,14 +176,28 @@ export {
   workspaceState,
 };
 
-export const renderTemplateDetail = () => {
+const openTheTemplateRoute = () =>
   navigation.reset(buildConsoleTemplatePath('tpl-1', ownerConsoleContext(workspaceState.activeTeamId)), {
     routes: ['/dashboard/templates/[id]', '/dashboard/organization/[organizationId]/templates/[id]'],
   });
+
+export const renderTemplateDetail = () => {
+  openTheTemplateRoute();
   return renderToStaticMarkup(
     <TemplateDetail />,
   );
 };
+
+export const openTemplateDetailInTheDom = () => {
+  openTheTemplateRoute();
+  return renderSettled(<TemplateDetail />);
+};
+
+export const chooseFromTheMoreMenu = (label: string) =>
+  act(async () => {
+    const item = moreMenuItemProps.findLast((props) => [props.children].flat(Infinity).includes(label));
+    await handlerIn(item, 'onClick')();
+  });
 
 export const baseModel = (): Partial<TemplateDetailModel> => ({
   billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: true },
@@ -194,11 +212,13 @@ export const baseModel = (): Partial<TemplateDetailModel> => ({
 
 export function resetTemplateDetailPageMocks() {
   contextCreateTemplate.mockReset();
+  contextDeleteTemplate.mockReset();
   contextUpdateTemplate.mockReset();
   moreMenuItemProps.length = 0;
   mockUseTemplateDetailModel.mockReset();
   visibilitySwitchProps.length = 0;
   userStillOnThePage.current = false;
+  authState.user = { email: 'john@example.com', id: 'user-1', username: 'designops' };
   vi.mocked(navigateToLoginWithReturnPath).mockClear();
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;

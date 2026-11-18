@@ -114,8 +114,19 @@ describe('the CSV export of a run\'s form answers', () => {
     expect(row).toContain(`,a.pdf (${CONTRACT_URL}),`);
   });
 
-  it('writes only the header for a run without forms', () => {
+  it('writes only the header for a run without forms, or with a form block that holds no fields', () => {
     expect(csvLines(buildRunAnswersCsv(runWithoutForms, ORIGIN))).toEqual(['Section,Task,Field,Type,Required,Answer,Task done']);
+    const emptyForm = {
+      ...runWithoutForms,
+      sections: [{ id: 's', title: 'Intake', items: [{ id: 't', title: 'Collect', contents: [{ id: 'form', type: 'form' as const, value: '' }] }] }],
+    };
+    expect(csvLines(buildRunAnswersCsv(emptyForm, ORIGIN))).toHaveLength(1);
+    expect(runHasFormFields(emptyForm)).toBe(false);
+  });
+
+  it('keeps a stored file link it cannot read as a web address as it is', () => {
+    expect(answerCell({ id: 'f', label: 'File', kind: 'file', required: false, answer: { url: 'http://[broken', fileName: 'a.pdf', fileSize: 1 } }))
+      .toContain(',a.pdf (http://[broken),');
   });
 });
 
