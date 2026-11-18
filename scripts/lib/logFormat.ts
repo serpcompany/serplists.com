@@ -16,17 +16,17 @@ export function formatEntry(entry: LogEntry): string {
   return [clockTime(entry.timestamp), entry.level.padEnd(5), entry.event, ...request, ...fields].join(" ");
 }
 
-export function formatTable(headers: string[], rows: Array<Array<string | number>>): string {
-  const cells = [headers, ...rows.map((row) => row.map(String))];
-  const widths = headers.map((_, column) => Math.max(...cells.map((row) => (row[column] ?? "").length)));
-  return cells
-    .map((row) =>
-      row
-        .map((cell, column) => (column === row.length - 1 ? cell : cell.padEnd(widths[column] ?? 0)))
-        .join("  ")
-        .trimEnd(),
-    )
-    .join("\n");
+export function formatTable<const Header extends string>(
+  headers: readonly Header[],
+  rows: ReadonlyArray<Readonly<Record<Header, string | number>>>,
+): string {
+  const columns = headers.map((header) => ({ header, width: Math.max(header.length, ...rows.map((row) => String(row[header]).length)) }));
+  const line = (cellOf: (header: Header) => string) =>
+    columns
+      .map(({ header, width }, column) => (column === columns.length - 1 ? cellOf(header) : cellOf(header).padEnd(width)))
+      .join("  ")
+      .trimEnd();
+  return [line((header) => header), ...rows.map((row) => line((header) => String(row[header])))].join("\n");
 }
 
 export const milliseconds = (value: number) => (value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`);

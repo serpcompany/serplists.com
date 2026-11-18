@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Rule, Scope, SourceCode } from "eslint";
 import type * as ESTree from "estree";
+import { z } from "zod";
 
 type Bindings = Map<Scope.Variable, string[]>;
 type FunctionNode = (ESTree.FunctionDeclaration | ESTree.FunctionExpression | ESTree.ArrowFunctionExpression) &
@@ -22,6 +23,7 @@ const NAMED_FILE = /\.[^./]+$/;
 const UNKNOWN = "\u0000";
 const MAX_DEPTH = 8;
 const MAX_POSSIBILITIES = 64;
+const cookedTextSchema = z.string();
 
 const NO_SOURCE_TEXT_READS_MESSAGE =
   "Tests check what code does, not how it is written: reading {{path}} as text breaks on a harmless refactor and " +
@@ -96,7 +98,7 @@ function createEvaluator(sourceCode: SourceCode) {
       case "TemplateLiteral":
         return combine(
           node.quasis.flatMap((quasi, index) => [
-            [quasi.value.cooked ?? UNKNOWN],
+            [cookedTextSchema.parse(quasi.value.cooked)],
             ...(index < node.expressions.length ? [next(node.expressions[index])] : []),
           ]),
         );

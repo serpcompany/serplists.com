@@ -2,11 +2,14 @@ import http from "node:http";
 import https from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
+import { errorMessage } from "./lib/error-message";
 
 export const SMOKE_TEST_HEADER = "x-serplists-smoke-test";
 
 export const siteEnvironmentSchema = z.enum(["production", "staging"]);
 export type SiteEnvironment = z.infer<typeof siteEnvironmentSchema>;
+
+const statusCodeSchema = z.number();
 
 export interface SiteResponse {
   status: number;
@@ -59,7 +62,7 @@ export function getWithoutFollowingRedirects(
           const absoluteLocation = response.headers.location
             ? new URL(response.headers.location, `${target.protocol}//${host ?? target.host}`).href
             : null;
-          resolve({ status: response.statusCode ?? 0, location: absoluteLocation, headers: response.headers, body });
+          resolve({ status: statusCodeSchema.parse(response.statusCode), location: absoluteLocation, headers: response.headers, body });
         });
       },
     );
@@ -208,7 +211,7 @@ async function attemptSiteStandards(options: Parameters<typeof checkSiteStandard
 const whyTheAttemptFailed = (outcome: AttemptOutcome): string =>
   "result" in outcome
     ? `${outcome.result.failed} check(s) failed`
-    : `the site did not answer (${outcome.error instanceof Error ? outcome.error.message : "unknown error"})`;
+    : `the site did not answer (${errorMessage(outcome.error)})`;
 
 export async function checkSiteStandardsUntilItPasses(
   options: Parameters<typeof checkSiteStandards>[0],

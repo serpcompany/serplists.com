@@ -5,7 +5,7 @@ import { withoutEmailAddresses } from "../../src/lib/schemas/clientErrorReport";
 import { errorMessage } from "./error-message";
 import { buildFilter, filterOptionSpec, linesCommand, parseLimit, QueryError, result, usageError, type CommandResult } from "./logCommandParts";
 import { apiLineFromValue, parseApiLine, type LogEntry, type LogLevelName, type ParsedLine } from "./logEntries";
-import { matchesFilter } from "./logQueries";
+import { matchesFilter, parseSince } from "./logQueries";
 
 export const DEPLOYED_WORKERS = { staging: "serp-checklists-preview", production: "serp-checklists-production" } as const;
 
@@ -244,11 +244,12 @@ async function runQuery(args: string[], deps: DeployedLogDeps): Promise<CommandR
   if (environment !== "staging" && environment !== "production") {
     throw usageError(`--env takes staging or production, not "${environment ?? ""}".`);
   }
-  const filter = buildFilter({ ...options, since: options.since ?? DEFAULT_SINCE }, deps.nowMs);
+  const since = options.since ?? DEFAULT_SINCE;
+  const filter = buildFilter({ ...options, since }, deps.nowMs);
   const limit = parseLimit(options.limit, DEFAULT_LIMIT, MAX_EVENTS);
   const [onlyEvent, ...otherEvents] = filter.events;
   const needle = filter.requestId ?? (otherEvents.length === 0 ? onlyEvent : undefined);
-  const query = telemetryQuery(DEPLOYED_WORKERS[environment], filter.levels, needle, filter.sinceMs ?? deps.nowMs, deps.nowMs, limit);
+  const query = telemetryQuery(DEPLOYED_WORKERS[environment], filter.levels, needle, parseSince(since, deps.nowMs), deps.nowMs, limit);
   const { events, count } = await queryEvents(query, credentials(deps.env), deps);
   const entries = logEntriesOf(events).filter((entry) => matchesFilter(entry, filter));
   const lines = linesCommand(entries, limit, options.json ?? false);

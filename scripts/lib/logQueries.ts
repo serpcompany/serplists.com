@@ -95,7 +95,7 @@ export function normalizeRoute(path: string): string {
 export function percentile(values: number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
   const rank = Math.min(sorted.length - 1, Math.max(0, Math.ceil(fraction * sorted.length) - 1));
-  return sorted[rank] ?? 0;
+  return Math.min(...sorted.slice(rank));
 }
 
 const d1QueryFieldsSchema = z.object({

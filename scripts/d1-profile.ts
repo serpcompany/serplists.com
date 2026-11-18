@@ -6,6 +6,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
 import { z } from "zod";
+import { errorMessage } from "./lib/error-message";
 import { buildScriptInvocation, buildToolInvocation, type Invocation, killProcessTree, spawnTool } from "./lib/run-tool";
 import {
   buildUpdateRunBody,
@@ -45,15 +46,17 @@ const tableCountsSchema = z.object({
   team_invites: z.number(),
 });
 
+const listeningAddressSchema = z.object({ port: z.number() });
+
 const freePort = () =>
-  new Promise<number>((resolve, reject) => {
+  new Promise<unknown>((resolve, reject) => {
     const server = createServer();
     server.once("error", reject);
     server.listen(0, () => {
       const address = server.address();
-      server.close(() => (typeof address === "object" && address ? resolve(address.port) : reject(new Error("No free port"))));
+      server.close(() => resolve(address));
     });
-  });
+  }).then((address) => listeningAddressSchema.parse(address).port);
 
 function run({ command, args, options }: Invocation) {
   execFileSync(command, args, { ...options, cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
@@ -154,7 +157,7 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
         const result = await platform.env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...params).all<{ detail: string }>();
         plans.set(sql, result.results.map((row) => row.detail).join("; "));
       } catch (error) {
-        plans.set(sql, `(plan unavailable: ${error instanceof Error ? error.message : String(error)})`);
+        plans.set(sql, `(plan unavailable: ${errorMessage(error)})`);
       }
     }
     const countedTables = tableCountsSchema.keyof().options;

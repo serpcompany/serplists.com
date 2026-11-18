@@ -16,6 +16,7 @@ import {
   portableChecklistTemplateSchema,
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
+import { errorMessage } from "./error-message";
 import { normalizeEol } from "./line-endings";
 import { findTemplateFormIssues } from "./templateFormLint";
 
@@ -84,7 +85,7 @@ const checkMarkdownRoundTrip = (details: TemplateSourceDetails, filePath: string
       : issue("Generated Markdown imports as a different template");
   } catch (error) {
     return issue(
-      `Generated Markdown does not import: ${error instanceof Error ? error.message : "unknown parse error"}`,
+      `Generated Markdown does not import: ${errorMessage(error)}`,
     );
   }
 };
@@ -148,7 +149,7 @@ export const lintSingleTemplateSource = async (filePath: string): Promise<Templa
     return [{
       filePath,
       code: "parse-error",
-      message: error instanceof Error ? error.message : "Unknown template parse error",
+      message: errorMessage(error),
     }];
   }
 };
@@ -196,7 +197,7 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
     issues.push({
       filePath: `${jsonPath} <-> ${markdownPath}`,
       code: "pair-parse-error",
-      message: error instanceof Error ? error.message : "Failed to lint template pair",
+      message: errorMessage(error),
     });
   }
 
@@ -268,7 +269,7 @@ export const lintYamlTemplateBundle = async (
     issues.push({
       filePath: yamlPath,
       code: "yaml-bundle-parse-error",
-      message: error instanceof Error ? error.message : "Failed to lint YAML template bundle",
+      message: errorMessage(error),
     });
   }
 

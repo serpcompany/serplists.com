@@ -141,6 +141,7 @@ const GITHUB_EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
 const HUNK_HEADER = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/;
 
 const yamlCommentTokenSchema = z.object({ type: z.literal("comment"), offset: z.number(), source: z.string() });
+const yamlNodeRangeSchema = z.tuple([z.number(), z.number(), z.number()]);
 
 const toPosix = (file: string) => file.replaceAll("\\", "/");
 const extensionOf = (posixPath: string) => path.posix.extname(posixPath).toLowerCase();
@@ -298,12 +299,12 @@ function commandBlocksOf(text: string): CommandBlock[] {
         const valueOf = (key: string) => map.items.find((pair) => isScalar(pair.key) && pair.key.value === key)?.value;
         const run = valueOf("run");
         if (!isScalar(run) || typeof run.value !== "string") return;
-        if (!run.range) throw new Error("YAML could not be parsed: a run block has no position in the file.");
+        const [start] = yamlNodeRangeSchema.parse(run.range);
         const shell = valueOf("shell");
         const shellName = isScalar(shell) ? String(shell.value) : "bash";
         const javascript = /^node\b/.test(shellName);
         if (!javascript && !/^(?:bash|sh)\b/.test(shellName)) return;
-        blocks.push({ code: run.value, start: run.range[0], literal: run.type === "BLOCK_LITERAL", javascript });
+        blocks.push({ code: run.value, start, literal: run.type === "BLOCK_LITERAL", javascript });
       },
     });
   }

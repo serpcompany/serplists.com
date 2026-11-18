@@ -143,7 +143,7 @@ function withoutFencedCode(text: string): string {
 }
 
 const linkTargets = (text: string): string[] =>
-  [...text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].flatMap((match) => (match[1] ? [match[1]] : []));
+  [...text.matchAll(/\]\([^)\s]+(?:\s+"[^"]*")?\)/g)].map(([link]) => link.slice("](".length, link.search(/[\s)]/)));
 
 const isExternal = (target: string) => /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#");
 

@@ -182,7 +182,7 @@ async function serverFor(base: string | undefined): Promise<Server> {
   const session = readDevSession();
   const running = `http://localhost:${session?.port ?? 0}`;
   if (session && (await isOwnedDevProcess(session.pid, session.startedAt)) && (await answersHealth(running))) {
-    const description = `this checkout's dev:all, already running (launcher pid ${session.pid ?? "unknown"}); left running`;
+    const description = `this checkout's dev:all, already running (launcher pid ${session.pid}); left running`;
     return { base: running, description, logged: true, stop: async () => undefined };
   }
   return startDevAll();

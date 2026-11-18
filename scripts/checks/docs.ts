@@ -12,7 +12,7 @@ import { type KnownCommands, knownCommands, missingScript, pnpmScripts, proseScr
 import { foldersWithoutASkill, skillCatalog, skillProblems } from "./doc-rules/skills";
 import { type TestTitle, testTitles } from "./doc-rules/test-titles";
 import { covers, type Run } from "./files";
-import { excerpt, type Problem } from "./problems";
+import { excerpt, onTheirLines, type Problem } from "./problems";
 
 interface Docs {
   tree: Tree;
@@ -106,10 +106,10 @@ function codeProblems(doc: string, docs: Docs): Problem[] {
 
 function contentProblems(doc: string, docs: Docs): Problem[] {
   const text = docs.text(doc);
-  const problems: Problem[] = findComments(doc, text).map(({ line }) => ({
+  const problems: Problem[] = onTheirLines(text.split(/\r?\n/), findComments(doc, text)).map(({ line, lineText }) => ({
     path: doc,
     line,
-    problem: `hides ${excerpt(text.split(/\r?\n/)[line - 1] ?? "")} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
+    problem: `hides ${excerpt(lineText)} in an HTML comment, which people reading the rendered doc never see though agents do: say it in the doc, or delete it`,
   }));
   const overBudget = budgetProblem(doc, text, docs.allowances);
   if (overBudget) problems.push({ path: doc, problem: overBudget });

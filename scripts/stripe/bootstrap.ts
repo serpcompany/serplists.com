@@ -24,19 +24,20 @@ function usage(exitCode: number): never {
 function parseArgs(argv: readonly string[]): { positionals: string[]; flags: Map<string, string | true> } {
   const positionals: string[] = [];
   const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i] ?? "";
+  let index = 0;
+  for (let token = argv[index]; token !== undefined; token = argv[index]) {
+    index += 1;
     if (!token.startsWith("--")) {
       positionals.push(token);
       continue;
     }
     const key = token.slice(2);
-    const next = argv[i + 1];
+    const next = argv[index];
     if (!next || next.startsWith("--")) {
       flags.set(key, true);
     } else {
       flags.set(key, next);
-      i += 1;
+      index += 1;
     }
   }
   return { positionals, flags };

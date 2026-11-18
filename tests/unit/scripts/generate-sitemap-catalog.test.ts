@@ -44,9 +44,9 @@ const catalogSchema = z
 
 type Catalog = z.output<typeof catalogSchema>;
 
-function write(relativePath: string, content: string) {
-  mkdirSync(path.dirname(path.join(repo, relativePath)), { recursive: true });
-  writeFileSync(path.join(repo, relativePath), content);
+function write(relativePath: string, content: string, root = repo) {
+  mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
+  writeFileSync(path.join(root, relativePath), content);
 }
 
 function git(args: string[], date?: string, cwd = repo) {
@@ -57,17 +57,17 @@ function git(args: string[], date?: string, cwd = repo) {
   });
 }
 
-function commitAll(message: string, date: string) {
-  git(['add', '-A']);
-  git(['commit', '-q', '-m', message], date);
+function commitAll(message: string, date: string, cwd = repo) {
+  git(['add', '-A'], undefined, cwd);
+  git(['commit', '-q', '-m', message], date, cwd);
 }
 
 function template(slug: string, taskTitle: string, visibility = 'public') {
   return { slug, visibility, title: slug, categories: ['Testing'], sections: [{ title: 'Section', items: [{ title: taskTitle }] }] };
 }
 
-function writePack(templates: unknown[], file = packPath) {
-  write(file, `${JSON.stringify({ exportedAt: '2025-01-01T00:00:00.000Z', templates }, null, 2)}\n`);
+function writePack(templates: unknown[], file = packPath, root = repo) {
+  write(file, `${JSON.stringify({ exportedAt: '2025-01-01T00:00:00.000Z', templates }, null, 2)}\n`, root);
 }
 
 async function generate(): Promise<Catalog> {
@@ -251,5 +251,24 @@ describe('generate-sitemap-catalog outside a full clone', { timeout: 120_000 }, 
 
     expect(result.status).toBe(0);
     expect(parseJsonText(readFileSync(path.join(copy, catalogPath), 'utf8'), catalogSchema).inventory.templatesLastmod).toBe('2026-01-03T00:00:00.000Z');
+  });
+
+  it('dates a change by the next commit when git prints a commit date later than a JavaScript date can hold', async () => {
+    const copy = copyOfTheFiles('a-commit-from-the-year-10000');
+    git(['init', '-q'], undefined, copy);
+    git(['config', 'user.name', 'Sitemap Test'], undefined, copy);
+    git(['config', 'user.email', 'sitemap-test@example.com'], undefined, copy);
+    commitAll('Add everything', '2026-01-01T00:00:00Z', copy);
+    writePack([template('alpha', 'Edited on a clock set to the year 10000')], packPath, copy);
+    commitAll('Edit alpha', '@253402300800 +0000', copy);
+    writePack([template('alpha', 'Edited on a clock set to the year 10000'), template('delta', 'Delta task')], packPath, copy);
+    commitAll('Add delta', '2026-06-01T00:00:00Z', copy);
+
+    const result = await runGenerator(copy);
+    const catalog = parseJsonText(readFileSync(path.join(copy, catalogPath), 'utf8'), catalogSchema);
+
+    expect(result.status).toBe(0);
+    expect(lastmodOf(catalog, 'alpha')).toBe('2026-06-01T00:00:00.000Z');
+    expect(lastmodOf(catalog, 'delta')).toBe('2026-06-01T00:00:00.000Z');
   });
 });

@@ -1,8 +1,12 @@
 import type { Rule } from "eslint";
+import { z } from "zod";
 
 export const NO_COMMENTS_MESSAGE =
   "Remove the comment. Put what it explains into a clearer name, a smaller function, a test named for the behavior, " +
   "or the doc AGENTS.md routes to for this area (docs/agents/code.md, No comments).";
+
+const positionSchema = z.object({ line: z.number(), column: z.number() });
+const commentLocationSchema = z.object({ start: positionSchema, end: positionSchema });
 
 export const noComments: Rule.RuleModule = {
   meta: {
@@ -20,8 +24,7 @@ export const noComments: Rule.RuleModule = {
         for (const comment of context.sourceCode.getAllComments()) {
           const commentType: string = comment.type;
           if (commentType === "Shebang") continue;
-          if (!comment.loc) throw new Error("The parser returned a comment without a location, so it cannot be reported.");
-          context.report({ loc: comment.loc, messageId: "remove" });
+          context.report({ loc: commentLocationSchema.parse(comment.loc), messageId: "remove" });
         }
       },
     };

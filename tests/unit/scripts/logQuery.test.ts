@@ -257,7 +257,7 @@ describe('runLogQuery', () => {
 
 describe('a table of results', () => {
   it('aligns each column to its widest cell, leaving the last column unpadded', () => {
-    expect(formatTable(['route', 'count'], [['GET /api/templates', 12], ['GET /', 3]])).toBe(
+    expect(formatTable(['route', 'count'], [{ route: 'GET /api/templates', count: 12 }, { route: 'GET /', count: 3 }])).toBe(
       ['route               count', 'GET /api/templates  12', 'GET /               3'].join('\n'),
     );
   });
