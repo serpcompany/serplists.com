@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { encodeCursor, MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
-  describeTemplateRead,
-  readTemplate as readTemplateResult,
+  readTemplate as readTemplateAnswer,
   templateView,
   writtenTemplateResult,
 } from "@functions/api/handlers/agentMcpTemplatePages";
-import { readRun as readRunResult, runView, updatedRunResult } from "@functions/api/handlers/agentMcpRunPages";
+import { readRun as readRunAnswer, runView, updatedRunResult } from "@functions/api/handlers/agentMcpRunPages";
 import { expectAnInvalidCursor, resultBytes, toolErrorOf } from "../../../support/agentMcp";
 import { recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { objectContaining } from "../../../support/asymmetricMatchers";
@@ -14,8 +13,8 @@ import type { PagedResult } from "../../../support/templatePages";
 
 type JsonRecord = Record<string, unknown>;
 
-const readTemplate = (...args: Parameters<typeof readTemplateResult>): PagedResult => readTemplateResult(...args);
-const readRun = (...args: Parameters<typeof readRunResult>): PagedResult => readRunResult(...args);
+const readTemplate = (...args: Parameters<typeof readTemplateAnswer>): PagedResult => readTemplateAnswer(...args).data;
+const readRun = (...args: Parameters<typeof readRunAnswer>): PagedResult => readRunAnswer(...args).data;
 
 const TEMPLATE_REF = { id: "template-1", version: 7, contentVersion: 4 };
 
@@ -47,7 +46,9 @@ describe("get_template cursors that no read of it returned", () => {
 
   it.each([
     ["a section past the last", { m: "section", s: 3 }],
+    ["a section without naming one", { m: "section" }],
     ["a task past the last of its section", { m: "task", s: 0, k: 5 }],
+    ["a task without naming one", { m: "task", s: 0 }],
     ["retired work, which a template never has", { m: "retired" }],
   ])("refuses a cursor that points at %s", (_name, position) => {
     const error = toolErrorOf(() => readTemplate(view, { cursor: cursorAt(position) }));
@@ -71,10 +72,10 @@ describe("get_template outlines", () => {
     const large = viewOf([{ id: longId, title: "Long", items: [{ id: "t1", title: "Long", description }] }]);
     const first = readTemplate(large, {});
 
-    const second = readTemplate(large, { cursor: textIn(first.nextCursor) });
+    const second = readTemplateAnswer(large, { cursor: textIn(first.nextCursor) });
 
-    expect(recordIn(second.part)).toMatchObject({ of: "outline", index: 0, from: 0 });
-    expect(describeTemplateRead(second)).toBe(
+    expect(recordIn(second.data["part"])).toMatchObject({ of: "outline", index: 0, from: 0 });
+    expect(second.text).toBe(
       "Loaded part of an outline too large for one result; join its parts' text in order."
         + " More follows: call get_template with cursor set to nextCursor.",
     );
@@ -114,7 +115,8 @@ describe("run update results", () => {
     const statusUpdate = { runId: "run-1", expectedRevision: 5, operation: "set_run_status" as const, status: "in_progress" as const };
 
     expect(updatedRunResult(header, sections, statusUpdate)).toEqual({
-      run: { id: "run-1", title: `${"T".repeat(159)}…`, status: "in_progress", progress: 0, revision: 5 },
+      data: { run: { id: "run-1", title: `${"T".repeat(159)}…`, status: "in_progress", progress: 0, revision: 5 } },
+      text: `Updated run "${"T".repeat(159)}…".`,
     });
   });
 });

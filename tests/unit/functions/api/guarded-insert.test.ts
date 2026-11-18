@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { d1ThatRunsNoQuery } from '../../../support/apiEnv';
 import { drizzle } from 'drizzle-orm/d1';
-import { sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { schema } from '@functions/api/db';
-import { insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
 import { activeRunCapacityAvailableSql } from '@functions/api/utils/active-run-limit';
 
 const drizzleWithoutD1 = drizzle(d1ThatRunsNoQuery(), { schema });
@@ -114,3 +114,23 @@ describe('insertRowWhere', () => {
   });
 });
 
+describe('allConditions', () => {
+  const { templates } = schema;
+  const whereOf = (condition: SQL | undefined) => drizzleWithoutD1.select({ id: templates.id }).from(templates).where(condition).toSQL();
+
+  it("reads as Drizzle's and() of the same conditions: one alone as it is, several in parentheses joined by and, with undefined ones left out", () => {
+    const owned = eq(templates.user_id, 'user-1');
+    const personal = isNull(templates.team_id);
+    const live = isNull(templates.deleted_at);
+
+    expect(whereOf(allConditions(owned))).toEqual(whereOf(and(owned)));
+    expect(whereOf(allConditions(owned, undefined))).toEqual({
+      sql: 'select "id" from "templates" where "templates"."user_id" = ?',
+      params: ['user-1'],
+    });
+    expect(whereOf(allConditions(owned, undefined, personal, live))).toEqual(whereOf(and(owned, personal, live)));
+    expect(whereOf(allConditions(owned, personal)).sql).toBe(
+      'select "id" from "templates" where ("templates"."user_id" = ? and "templates"."team_id" is null)',
+    );
+  });
+});

@@ -6,6 +6,7 @@ import {
 } from "../../../src/lib/schemas/templateFields";
 import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
 import { requiredToolsSchema } from "../../../src/lib/schemas/requiredTools";
+import { firstIssue } from "../../../src/lib/schemas/firstIssue";
 import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
 import { parseJsonArray } from "../../../src/lib/schemas/jsonArrays";
 
@@ -72,9 +73,8 @@ export const templateImportFieldsSchema = templatePayloadSchema
   .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true, requiredTools: true })
   .required({ title: true });
 
-export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
-  const issue = error.issues[0];
-  if (!issue) return fallback;
+export function formatPayloadIssue(error: z.ZodError): string {
+  const issue = firstIssue(error);
   return `${issue.path.join(".") || "payload"}: ${issue.message}`;
 }
 
@@ -91,12 +91,8 @@ export const checklistPayloadSchema = z.object({
   expected_revision: z.number().int().positive().optional(),
 });
 
-export function describePayloadError(
-  error: z.ZodError,
-  fallback: string,
-): { message: string; details: { field?: string } } {
-  const issue = error.issues[0];
-  if (!issue) return { message: fallback, details: {} };
+export function describePayloadError(error: z.ZodError): { message: string; details: { field?: string } } {
+  const issue = firstIssue(error);
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
   return { message, details: field === undefined ? {} : { field } };

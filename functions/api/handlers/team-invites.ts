@@ -68,7 +68,7 @@ export async function createTeamInvite(
 
   const parsed = inviteTeamMemberBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid invite payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const inviteEmail = parsed.data.email;

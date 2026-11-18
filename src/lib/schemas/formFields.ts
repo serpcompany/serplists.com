@@ -151,24 +151,27 @@ function sanitizeStoredOptions(value: unknown): SanitizedFormOption[] {
   }));
 }
 
+function sanitizeStoredFormField(field: FormFieldRecord, kind: FormFieldKind): SanitizedFormField {
+  const { options, min, max, answer, description, ...rest } = field;
+  const next: SanitizedFormField = {
+    ...rest,
+    kind,
+    label: typeof field.label === "string" ? field.label : "",
+    required: field.required === true,
+  };
+  if (typeof description === "string") next.description = description;
+  if (isFormChoiceKind(kind)) next.options = sanitizeStoredOptions(options);
+  if (kind === "number" && isFiniteNumber(min)) next.min = min;
+  if (kind === "number" && isFiniteNumber(max)) next.max = max;
+  const storedAnswer = storedAnswerFor(kind, answer);
+  if (storedAnswer !== undefined) next.answer = storedAnswer;
+  return next;
+}
+
 export function sanitizeStoredFormFields(value: unknown): SanitizedFormField[] {
   return formFieldRecordsIn(value).flatMap((field) => {
     const { kind } = field;
-    if (!isFormFieldKind(kind)) return [];
-    const { options, min, max, answer, description, ...rest } = field;
-    const next: SanitizedFormField = {
-      ...rest,
-      kind,
-      label: typeof field.label === "string" ? field.label : "",
-      required: field.required === true,
-    };
-    if (typeof description === "string") next.description = description;
-    if (isFormChoiceKind(kind)) next.options = sanitizeStoredOptions(options);
-    if (kind === "number" && isFiniteNumber(min)) next.min = min;
-    if (kind === "number" && isFiniteNumber(max)) next.max = max;
-    const storedAnswer = storedAnswerFor(kind, answer);
-    if (storedAnswer !== undefined) next.answer = storedAnswer;
-    return [next];
+    return isFormFieldKind(kind) ? [sanitizeStoredFormField(field, kind)] : [];
   });
 }
 
@@ -187,25 +190,30 @@ function readFormAnswer(kind: FormFieldKind, answer: unknown): FormAnswer | unde
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined;
 }
 
-export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
-  return sanitizeStoredFormFields(value).map((field, index): ChecklistFormField => {
-    const { kind } = field;
-    const answer = readFormAnswer(kind, field.answer);
-    return {
-      id: readTextId(field.id) || fallbackId(index),
-      label: field.label,
-      kind,
-      required: field.required,
-      ...(typeof field.description === "string" ? { description: field.description } : {}),
-      ...(isFormChoiceKind(kind)
-        ? { options: withFormOptionIds(sanitizeStoredOptions(field.options)).map(({ id, label }) => ({ id, label })) }
-        : {}),
-      ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
-      ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
-      ...(answer === undefined ? {} : { answer }),
-    };
-  });
+function readSanitizedFormField(field: SanitizedFormField, fallbackId: () => string): ChecklistFormField {
+  const { kind } = field;
+  const answer = readFormAnswer(kind, field.answer);
+  return {
+    id: readTextId(field.id) || fallbackId(),
+    label: field.label,
+    kind,
+    required: field.required,
+    ...(typeof field.description === "string" ? { description: field.description } : {}),
+    ...(isFormChoiceKind(kind)
+      ? { options: withFormOptionIds(sanitizeStoredOptions(field.options)).map(({ id, label }) => ({ id, label })) }
+      : {}),
+    ...(isFiniteNumber(field.min) ? { min: field.min } : {}),
+    ...(isFiniteNumber(field.max) ? { max: field.max } : {}),
+    ...(answer === undefined ? {} : { answer }),
+  };
 }
+
+export function readFormFields(value: unknown, fallbackId: (index: number) => string): ChecklistFormField[] {
+  return sanitizeStoredFormFields(value).map((field, index) => readSanitizedFormField(field, () => fallbackId(index)));
+}
+
+export const readFormField = (field: FormFieldRecord, kind: FormFieldKind, fallbackId: () => string): ChecklistFormField =>
+  readSanitizedFormField(sanitizeStoredFormField(field, kind), fallbackId);
 
 export function withoutFormAnswers(fields: unknown): unknown[] {
   return Array.isArray(fields)

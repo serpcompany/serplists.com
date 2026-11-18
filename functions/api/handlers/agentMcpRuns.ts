@@ -41,7 +41,7 @@ import {
   FORM_FIELD_KIND_LABELS,
   fitsFormAnswerShape,
   isFormFieldKind,
-  readFormFields,
+  readFormField,
   type FormFieldKind,
 } from "../../../src/lib/schemas/formFields";
 import {
@@ -215,8 +215,7 @@ function answerToStore(field: FormFieldRecord, kind: FormFieldKind, operation: S
   const value = Array.isArray(answer) ? [...new Set(answer)] : answer;
   const answered = { ...field, answer: value };
   if (findFormFieldProblem(answered) === "invalid") {
-    const [checked] = readFormFields([answered], () => fieldId);
-    const message = checked ? formFieldProblemMessage(checked, "invalid") : "The answer is not valid";
+    const message = formFieldProblemMessage(readFormField(answered, kind, () => fieldId), "invalid");
     throw new ToolError(message, "invalid_answer", { ...details, reason: "invalid" });
   }
   return value;

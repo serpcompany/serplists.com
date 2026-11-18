@@ -119,6 +119,7 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expect(body.result.structuredContent.template).toEqual(objectContaining({ id: "template-1", version: 1 }));
+      expect(firstOf(body.result.content).text).toMatch(/^Created template "Release SOP"\.\n\n/);
       const created = dbMocks.insertChain.values.mock.calls.map(([values]) => values)
         .find((values) => values.owner_type === "user" && typeof values.slug === "string");
       expect(created).toEqual(objectContaining({ is_public: false, team_id: null, user_id: "user-1" }));
@@ -154,6 +155,7 @@ describe("personal run MCP handler", () => {
           template: { id: anyInstanceOf(String), title: "Release SOP", version: 1 },
           sectionsOmitted: true,
         });
+        expect(firstOf(body.result.content).text).toMatch(/^Created template "Release SOP"\.\n\n/);
         expect(warn.mock.calls.map(([line]) => logLineIn(line).message)).toContain("mcp_template_reload_error");
       } finally {
         warn.mockRestore();

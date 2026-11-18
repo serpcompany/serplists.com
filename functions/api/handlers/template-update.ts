@@ -71,7 +71,7 @@ export async function updateTemplateForUser(
 
   const parsed = templateUpdatePayloadSchema.safeParse(body);
   if (!parsed.success) {
-    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+    const { message, details } = describePayloadError(parsed.error);
     return refuse(message, 400, { details });
   }
 

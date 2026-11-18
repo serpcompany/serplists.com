@@ -9,7 +9,6 @@ import {
   boundedText,
   continuePage,
   decodeCursor,
-  describePage,
   findTask,
   fits,
   frameId,
@@ -19,9 +18,8 @@ import {
   readSectionOrTask,
   START,
   tasksOf,
-  titleOf,
   type Paged,
-  type ToolResult,
+  type ToolAnswer,
 } from "./agentMcpPages";
 import { ToolError, type SectionAndTaskIds } from "./agentMcpTools";
 
@@ -74,7 +72,7 @@ function pagedTemplate(header: TemplateHeader): Paged {
   };
 }
 
-function continueRead(view: TemplateView, value: string, args: SectionAndTaskIds): JsonRecord {
+function continueRead(view: TemplateView, value: string, args: SectionAndTaskIds): ToolAnswer {
   const cursor = decodeCursor(value, readCursorSchema, "get_template");
   const { header, sections } = view;
   if (cursor.t !== header.id) throw invalidCursor("It belongs to another template");
@@ -87,16 +85,13 @@ function continueRead(view: TemplateView, value: string, args: SectionAndTaskIds
   return continuePage(pagedTemplate(header), header, sections, cursor, args);
 }
 
-export function readTemplate(view: TemplateView, args: SectionAndTaskIds & { cursor?: string | undefined }): JsonRecord {
+export function readTemplate(view: TemplateView, args: SectionAndTaskIds & { cursor?: string | undefined }): ToolAnswer {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
   const sectionOrTask = readSectionOrTask(pagedTemplate(view.header), view.sections, args);
   if (sectionOrTask) return sectionOrTask;
   const whole = wholeTemplate(view);
-  return fits(whole) ? whole : outlinePage(pagedTemplate(view.header), view.header, view.sections, START);
-}
-
-export function describeTemplateRead(result: ToolResult): string {
-  return describePage(result, "get_template", "Template") ?? `Loaded template "${boundedText(titleOf(result.template))}".`;
+  if (!fits(whole)) return outlinePage(pagedTemplate(view.header), view.header, view.sections, START);
+  return { data: whole, text: `Loaded template "${boundedText(view.header.title)}".` };
 }
 
 function locateTask(sections: SectionRecord[], taskId: string | undefined) {

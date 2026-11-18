@@ -4,10 +4,10 @@ import { createDb } from '../../../functions/api/db';
 import { validOrganizationHandleCondition, validUsernameCondition } from '../../../functions/sitemap/listedOwners';
 import {
   isValidTemplateSlug,
-  isValidUsername,
   loadCategoryEntries,
   validTemplateSlugCondition,
 } from '../../../functions/sitemap/shared';
+import { isPublicHandle } from '@/lib/schemas/publicHandle';
 import { teams, templates, users } from '../../../db/schema/index';
 import { SqliteD1 } from '../../support/sqlite-d1';
 import { apiEnv } from '../../support/apiEnv';
@@ -147,7 +147,7 @@ describe('public URL rules for the sitemaps', () => {
     const handleRows = await queries.select({ handle: teams.slug }).from(teams).where(validOrganizationHandleCondition);
     const slugRows = await queries.select({ slug: templates.slug }).from(templates).where(validTemplateSlugCondition);
 
-    const listed = usernames.filter((handle) => isValidUsername(handle.trim())).sort();
+    const listed = usernames.filter((handle) => isPublicHandle(handle.trim())).sort();
     expect(usernameRows.map((row) => row.username).sort()).toEqual(listed);
     expect(handleRows.map((row) => row.handle).sort()).toEqual(listed);
     expect(slugRows.map((row) => row.slug).sort()).toEqual(slugs.filter((slug) => isValidTemplateSlug(slug.trim())).sort());

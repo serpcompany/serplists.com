@@ -4,7 +4,8 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { describeErrorForLog, log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import type { WriteResult } from "../utils/write-refusal";
+import type { RefusalStatus, WriteResult } from "../utils/write-refusal";
+import { boundedText, type ToolAnswer } from "./agentMcpPages";
 import { applyTemplateOperation } from "./agentMcpTemplateEdits";
 import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
@@ -12,11 +13,12 @@ import { parseToolArguments, ToolError, type SectionAndTaskIds } from "./agentMc
 import { createTemplateForUser } from "./template-create";
 import { updateTemplateForUser } from "./template-update";
 
-const templateWriteErrorCodes: Record<number, string> = {
+const templateWriteErrorCodes: Record<RefusalStatus, string> = {
   400: "invalid_template",
   403: "forbidden",
   404: "template_not_found",
   409: "edit_conflict",
+  413: "content_too_large",
 };
 
 export async function getOwnedTemplate(env: Env, userId: string, templateId: string) {
@@ -57,7 +59,7 @@ function savedTemplate<Saved>(result: WriteResult<Saved>): Saved {
   const { message, status, code, details } = result.refused;
   throw new ToolError(
     message,
-    code ?? templateWriteErrorCodes[status] ?? "template_write_failed",
+    code ?? templateWriteErrorCodes[status],
     isRecord(details) ? details : undefined,
   );
 }
@@ -68,13 +70,16 @@ interface UpdateTemplateArguments extends JsonRecord {
 
 const isUpdateTemplateArguments: (value: unknown) => value is UpdateTemplateArguments = isRecord;
 
+type WrittenTemplate = { id: string; title?: string; version: number };
+
 async function loadWrittenTemplate(
   request: Request,
   env: Env,
   identity: PersonalRunKeyIdentity,
-  written: JsonRecord & { id: string },
+  done: "Created" | "Updated",
+  written: WrittenTemplate,
   changed: SectionAndTaskIds = {},
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   let row: Awaited<ReturnType<typeof getOwnedTemplate>>;
   try {
     row = await getOwnedTemplate(env, identity.userId, written.id);
@@ -85,16 +90,17 @@ async function loadWrittenTemplate(
       templateId: written.id,
       ...describeErrorForLog(error),
     });
-    return { template: written, sectionsOmitted: true };
+    return { data: { template: written, sectionsOmitted: true }, text: `${done} template "${boundedText(written.title)}".` };
   }
-  return writtenTemplateResult(templateView(row), changed);
+  const view = templateView(row);
+  return { data: writtenTemplateResult(view, changed), text: `${done} template "${boundedText(view.header.title)}".` };
 }
 
 export async function getTemplate(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const { templateId, ...read } = parseToolArguments(getTemplateArgs, rawArguments);
   const template = await getOwnedTemplate(env, identity.userId, templateId);
   return readTemplate(templateView(template), read);
@@ -105,7 +111,7 @@ export async function createTemplate(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const args = parseToolArguments(createTemplateArgs, rawArguments);
 
   const created = savedTemplate(await createTemplateForUser(
@@ -115,7 +121,7 @@ export async function createTemplate(
     { ...args, is_public: false },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
+  return loadWrittenTemplate(request, env, identity, "Created", { id: created.id, title: args.title, version: 1 });
 }
 
 function assertTemplateEditableAt(
@@ -136,7 +142,7 @@ async function updateTemplatePart(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const args = parseToolArguments(templateOperationArgs, rawArguments);
   const stored = await getOwnedTemplate(env, identity.userId, args.templateId);
   assertTemplateEditableAt(stored, args.expectedVersion);
@@ -150,7 +156,7 @@ async function updateTemplatePart(
     { sections: edit.sections, expected_version: args.expectedVersion },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
   ));
-  return loadWrittenTemplate(request, env, identity, { id: args.templateId, version: updated.version }, {
+  return loadWrittenTemplate(request, env, identity, "Updated", { id: args.templateId, version: updated.version }, {
     sectionId: edit.sectionId,
     taskId: edit.taskId,
   });
@@ -161,7 +167,7 @@ export async function updateTemplate(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   if (isUpdateTemplateArguments(rawArguments) && rawArguments.operation !== undefined && rawArguments.operation !== null) {
     return updateTemplatePart(request, env, identity, rawArguments);
   }
@@ -175,5 +181,5 @@ export async function updateTemplate(
     { ...changes, expected_version: expectedVersion },
     { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  return loadWrittenTemplate(request, env, identity, { id: templateId, version: updated.version });
+  return loadWrittenTemplate(request, env, identity, "Updated", { id: templateId, version: updated.version });
 }

@@ -187,7 +187,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
     : templateBackupImportBodySchema.safeParse(body);
 
   if (!parsedBody.success) {
-    return invalidPayloadResponse(parsedBody.error, 'Invalid template import payload');
+    return invalidPayloadResponse(parsedBody.error);
   }
 
   const { templates: incomingTemplates, options } = parsedBody.data;
@@ -218,7 +218,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
       summary.failed.push({
         index,
         title: template.title,
-        reason: formatPayloadIssue(fields.error, 'Invalid template fields'),
+        reason: formatPayloadIssue(fields.error),
         code: 'invalid_fields',
       });
       continue;

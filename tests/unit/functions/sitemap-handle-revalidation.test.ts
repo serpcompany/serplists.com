@@ -33,16 +33,17 @@ afterEach(() => {
 });
 
 describe('the sitemaps list a handle and a slug stored with spaces around them, and leave out what fails the handle and slug rules', () => {
-  it('lists a profile under its handle without the spaces around it, and leaves out one with no handle or one that is not a public handle', async () => {
+  it("lists a User's or an Organization's profile under its handle without the spaces around it, and leaves out one with no handle or one that is not a public handle", async () => {
     addUser('carol', '  carol  ');
     addUser('nameless', null);
     addUser('spaced', 'jane doe');
+    d1.run("INSERT INTO teams (id, name, slug, created_by_user_id, created_at) VALUES ('acme', 'Acme', '  acme  ', 'carol', '2026-02-03 04:05:06')");
 
-    expect(await sitemapLocations(d1, serveProfilesSitemap, '/sitemaps/profiles/1.xml')).toEqual(['/profile/carol/']);
+    expect(await sitemapLocations(d1, serveProfilesSitemap, '/sitemaps/profiles/1.xml')).toEqual(['/profile/carol/', '/profile/acme/']);
   });
 
-  it('lists a template under its slug without the spaces around it, and leaves out one with no slug, a bad slug or an owner with no handle', async () => {
-    addUser('alice', 'alice');
+  it("lists a template under its owner's handle and its slug without the spaces around them, and leaves out one with no slug, a bad slug or an owner with no handle", async () => {
+    addUser('alice', '  alice  ');
     addUser('nameless', null);
     addTemplate('t-spaced', 'alice', '  ship-it  ');
     addTemplate('t-no-slug', 'alice', null);

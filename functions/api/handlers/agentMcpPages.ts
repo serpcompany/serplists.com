@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-  isRecord,
   taskRecordsIn,
   type JsonRecord,
   type SectionRecord,
@@ -8,39 +7,7 @@ import {
 } from "../../../src/lib/schemas/jsonRecords";
 import { ToolError, type SectionAndTaskIds } from "./agentMcpTools";
 
-export interface ToolResult extends JsonRecord {
-  template?: unknown;
-  run?: unknown;
-  section?: unknown;
-  task?: unknown;
-  part?: unknown;
-  nextCursor?: unknown;
-  sectionsOmitted?: unknown;
-  taskOmitted?: unknown;
-  retiredItems?: unknown;
-  retiredCount?: unknown;
-  firstRetired?: unknown;
-}
-
-interface TitledRecord extends JsonRecord {
-  title?: unknown;
-}
-
-interface ResultPart extends JsonRecord {
-  of?: unknown;
-}
-
-interface ResultSection extends TitledRecord {
-  taskCount?: unknown;
-  firstTask?: unknown;
-  items?: unknown;
-}
-
-const isTitledRecord: (value: unknown) => value is TitledRecord = isRecord;
-const isResultPart: (value: unknown) => value is ResultPart = isRecord;
-const isResultSection: (value: unknown) => value is ResultSection = isRecord;
-
-export const titleOf = (value: unknown): unknown => (isTitledRecord(value) ? value.title : undefined);
+export type ToolAnswer = { data: JsonRecord; text: string };
 
 export const MAX_RESULT_BYTES = 32 * 1024;
 
@@ -80,27 +47,27 @@ export function bounded(page: JsonRecord): JsonRecord {
 
 export const tasksOf = (section: SectionRecord): TaskRecord[] => taskRecordsIn(section.items);
 
-export function findSection(sections: SectionRecord[], sectionId: string, idArgumentName = "sectionId"): number {
+export function findSection<Section extends SectionRecord>(
+  sections: Section[],
+  sectionId: string,
+  idArgumentName = "sectionId",
+): { index: number; section: Section } {
   const index = sections.findIndex((section) => section.id === sectionId);
-  if (index < 0) throw new ToolError(`Section not found (${idArgumentName})`, "section_not_found");
-  return index;
-}
-
-export function sectionAt<Section extends SectionRecord>(sections: Section[], index: number): Section {
   const section = sections[index];
-  if (!section) throw new ToolError("Section not found", "section_not_found");
-  return section;
+  if (!section) throw new ToolError(`Section not found (${idArgumentName})`, "section_not_found");
+  return { index, section };
 }
 
-export function findTask(
-  sections: SectionRecord[],
+export function findTask<Section extends SectionRecord>(
+  sections: Section[],
   taskId: string,
   sectionId?: string,
   idArgumentName = "taskId",
-): { sectionIndex: number; taskIndex: number; section: SectionRecord; task: TaskRecord } {
-  const candidates = sectionId === undefined ? sections.map((_, index) => index) : [findSection(sections, sectionId)];
-  for (const sectionIndex of candidates) {
-    const section = sectionAt(sections, sectionIndex);
+): { sectionIndex: number; taskIndex: number; section: Section; task: TaskRecord } {
+  const candidates = sectionId === undefined
+    ? sections.map((section, index) => ({ index, section }))
+    : [findSection(sections, sectionId)];
+  for (const { index: sectionIndex, section } of candidates) {
     for (const [taskIndex, task] of tasksOf(section).entries()) {
       if (task.id === taskId) return { sectionIndex, taskIndex, section, task };
     }
@@ -124,6 +91,8 @@ export function encodeCursor(cursor: JsonRecord): string {
 
 export const invalidCursor = (message: string) =>
   new ToolError(`cursor: ${message}`, "invalid_arguments", { issues: [{ path: "cursor", message }] });
+
+const pastTheEnd = () => invalidCursor("It points past the end");
 
 function parseCursor<Cursor>(value: string, schema: z.ZodType<Cursor, z.ZodTypeDef, unknown>): Cursor | undefined {
   try {
@@ -206,7 +175,7 @@ function partEndWithinBytes(json: string, from: number, maxBytes: number): numbe
 
 export function pack(units: Unit[], start: Position, room: number): Packed {
   const unit = units[start.unit];
-  if (!unit || (start.offset > 0 && start.offset >= unit.json.length)) throw invalidCursor("It points past the end");
+  if (!unit || (start.offset > 0 && start.offset >= unit.json.length)) throw pastTheEnd();
   if (start.offset === 0) {
     let used = 0;
     let count = 0;
@@ -233,12 +202,34 @@ export const roomForUnits = (frame: JsonRecord) => MAX_RESULT_BYTES - byteSize(f
 
 export type Paged = { key: "template" | "run"; ref: JsonRecord; id: string; version: number };
 
-export function partAndNextCursor(paged: Paged, packed: Packed, scope: ReadScope, partOf: (unit: number) => JsonRecord): JsonRecord {
+type PartOf = { of: string; index?: number };
+
+const NOUNS = { template: "Template", run: "Run" } as const;
+
+export const moreFollows = (tool: string, more: boolean): string =>
+  (more ? ` More follows: call ${tool} with cursor set to nextCursor.` : "");
+
+export function answerPage(
+  paged: Paged,
+  packed: Packed,
+  scope: ReadScope,
+  partOf: (unit: number) => PartOf,
+  frame: JsonRecord,
+  describe: (more: string) => string,
+): ToolAnswer {
   const { part, next } = packed;
   const cursor: ReadCursor | undefined = next ? { t: paged.id, v: paged.version, ...scope, u: next.unit, o: next.offset } : undefined;
+  const more = moreFollows(`get_${paged.key}`, cursor !== undefined);
+  const partOfUnit = part ? { ...partOf(part.unit), from: part.from, to: part.to, length: part.length, text: part.text } : undefined;
   return {
-    ...(part ? { part: { ...partOf(part.unit), from: part.from, to: part.to, length: part.length, text: part.text } } : {}),
-    ...(cursor ? { nextCursor: encodeCursor(cursor) } : {}),
+    data: bounded({
+      ...frame,
+      ...(partOfUnit ? { part: partOfUnit } : {}),
+      ...(cursor ? { nextCursor: encodeCursor(cursor) } : {}),
+    }),
+    text: partOfUnit
+      ? `Loaded part of ${/^[aeiou]/.test(partOfUnit.of) ? "an" : "a"} ${partOfUnit.of} too large for one result; join its parts' text in order.${more}`
+      : describe(more),
   };
 }
 
@@ -248,7 +239,7 @@ function jsonArrayBytes(itemBytes: number[]): number {
   return itemBytes.reduce((total, size) => total + size, 0) + commas + brackets;
 }
 
-export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionRecord[], start: Position, extra: JsonRecord = {}): JsonRecord {
+export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionRecord[], start: Position, extra: JsonRecord = {}): ToolAnswer {
   const sizes = sections.map(byteSize);
   const fields = {
     ...header,
@@ -267,61 +258,81 @@ export function outlinePage(paged: Paged, header: JsonRecord, sections: SectionR
   const packed = pack(values.map(unitOf), start, roomForUnits(frame));
   const included = values.slice(packed.first, packed.first + packed.count);
   const withFields = packed.first === 0 && packed.count > 0;
-  return bounded({
-    [paged.key]: withFields ? included[0] : paged.ref,
-    sectionsOmitted: true,
-    outline: withFields ? included.slice(1) : included,
-    limit: MAX_RESULT_BYTES,
-    ...partAndNextCursor(paged, packed, { m: "outline" }, (unit) => (unit === 0 ? { of: paged.key } : { of: "outline", index: unit - 1 })),
-  });
+  const title = withFields ? header["title"] : undefined;
+  const name = typeof title === "string" ? `${NOUNS[paged.key]} "${boundedText(title)}"` : `This ${paged.key}`;
+  return answerPage(
+    paged,
+    packed,
+    { m: "outline" },
+    (unit) => (unit === 0 ? { of: paged.key } : { of: "outline", index: unit - 1 }),
+    {
+      [paged.key]: withFields ? included[0] : paged.ref,
+      sectionsOmitted: true,
+      outline: withFields ? included.slice(1) : included,
+      limit: MAX_RESULT_BYTES,
+    },
+    (more) => `${name} is too large to return at once, so this is its outline; read a section with sectionId.${more}`,
+  );
 }
 
-function sectionPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, start: Position): JsonRecord {
+function describeSection(section: SectionRecord, more: string): string {
+  const { taskCount, firstTask } = section;
+  if (typeof taskCount !== "number" || typeof firstTask !== "number") return `Loaded section "${boundedText(section.title)}".`;
+  const count = tasksOf(section).length;
+  const tasks = count === 0 ? "none" : `${firstTask + 1}-${firstTask + count}`;
+  return `Loaded tasks ${tasks} of the ${taskCount} in a section too large for one result.${more}`;
+}
+
+function sectionPage(paged: Paged, section: SectionRecord, sectionIndex: number, start: Position): ToolAnswer {
   const fieldsUnit = 0;
   const firstTaskUnit = 1;
-  const section = sectionAt(sections, sectionIndex);
   const { items, ...fields } = section;
   const tasks = tasksOf(section);
   const values: JsonRecord[] = [fields, ...tasks];
   const frame = { [paged.key]: paged.ref, section: { ...frameId("id", section.id), taskCount: tasks.length, firstTask: tasks.length, items: [] } };
   const packed = pack(values.map(unitOf), start, roomForUnits(frame));
   const withFields = packed.first === fieldsUnit && packed.count > 0;
-  return bounded({
-    [paged.key]: paged.ref,
-    section: {
-      ...(withFields ? fields : frameId("id", section.id)),
-      taskCount: tasks.length,
-      firstTask: Math.max(packed.first - firstTaskUnit, 0),
-      items: values.slice(Math.max(packed.first, firstTaskUnit), packed.first + packed.count),
-    },
-    ...partAndNextCursor(paged, packed, { m: "section", s: sectionIndex }, (unit) =>
-      (unit === fieldsUnit ? { of: "section", index: sectionIndex } : { of: "task", index: unit - firstTaskUnit })),
-  });
+  const page = {
+    ...(withFields ? fields : frameId("id", section.id)),
+    taskCount: tasks.length,
+    firstTask: Math.max(packed.first - firstTaskUnit, 0),
+    items: values.slice(Math.max(packed.first, firstTaskUnit), packed.first + packed.count),
+  };
+  return answerPage(
+    paged,
+    packed,
+    { m: "section", s: sectionIndex },
+    (unit) => (unit === fieldsUnit ? { of: "section", index: sectionIndex } : { of: "task", index: unit - firstTaskUnit }),
+    { [paged.key]: paged.ref, section: page },
+    (more) => describeSection(page, more),
+  );
 }
 
-function taskPage(paged: Paged, sections: SectionRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
-  const section = sectionAt(sections, sectionIndex);
-  const task = tasksOf(section)[taskIndex];
+const describeTask = (task: TaskRecord): string => `Loaded task "${boundedText(task.title)}".`;
+
+function taskPage(paged: Paged, section: SectionRecord, sectionIndex: number, task: TaskRecord, taskIndex: number, start: Position): ToolAnswer {
   const frame = { [paged.key]: paged.ref, ...frameId("sectionId", section.id) };
   const packed = pack([unitOf(task)], start, roomForUnits(frame));
-  return bounded({
-    ...frame,
-    ...(packed.count > 0 ? { task } : {}),
-    ...partAndNextCursor(paged, packed, { m: "task", s: sectionIndex, k: taskIndex }, () => ({ of: "task", index: taskIndex })),
-  });
+  return answerPage(
+    paged,
+    packed,
+    { m: "task", s: sectionIndex, k: taskIndex },
+    () => ({ of: "task", index: taskIndex }),
+    { ...frame, ...(packed.count > 0 ? { task } : {}) },
+    () => describeTask(task),
+  );
 }
 
-export function readSectionOrTask(paged: Paged, sections: SectionRecord[], { sectionId, taskId }: SectionAndTaskIds): JsonRecord | null {
+export function readSectionOrTask(paged: Paged, sections: SectionRecord[], { sectionId, taskId }: SectionAndTaskIds): ToolAnswer | null {
   if (taskId !== undefined) {
-    const { sectionIndex, taskIndex } = findTask(sections, taskId, sectionId);
-    const section = sectionAt(sections, sectionIndex);
-    const whole = { [paged.key]: paged.ref, sectionId: section.id, task: tasksOf(section)[taskIndex] };
-    return fits(whole) ? whole : taskPage(paged, sections, sectionIndex, taskIndex, START);
+    const { sectionIndex, taskIndex, section, task } = findTask(sections, taskId, sectionId);
+    const whole = { [paged.key]: paged.ref, sectionId: section.id, task };
+    return fits(whole) ? { data: whole, text: describeTask(task) } : taskPage(paged, section, sectionIndex, task, taskIndex, START);
   }
   if (sectionId === undefined) return null;
-  const sectionIndex = findSection(sections, sectionId);
-  const whole = { [paged.key]: paged.ref, section: sections[sectionIndex] };
-  return fits(whole) ? whole : sectionPage(paged, sections, sectionIndex, START);
+  const { index, section } = findSection(sections, sectionId);
+  const whole = { [paged.key]: paged.ref, section };
+  return fits(whole) ? { data: whole, text: describeSection(section, "") } : sectionPage(paged, section, index, START);
 }
 
 export function continuePage(
@@ -331,43 +342,30 @@ export function continuePage(
   cursor: ReadCursor,
   args: SectionAndTaskIds,
   outlineExtra: JsonRecord = {},
-): JsonRecord {
-  const sectionIndex = cursor.m === "outline" ? undefined : cursor.s;
-  const section = sectionIndex === undefined ? undefined : sections[sectionIndex];
-  const taskIndex = section && cursor.m === "task" ? cursor.k : undefined;
-  const task = section && taskIndex !== undefined ? tasksOf(section)[taskIndex] : undefined;
-  if (cursor.m === "retired" || (cursor.m !== "outline" && !section) || (cursor.m === "task" && !task)) {
-    throw invalidCursor("It points past the end");
-  }
-  if ((args.sectionId !== undefined && args.sectionId !== section?.id) || (args.taskId !== undefined && args.taskId !== task?.id)) {
-    throw invalidCursor(`It continues another read; pass it with ${paged.key}Id alone`);
-  }
+): ToolAnswer {
   const start = { unit: cursor.u, offset: cursor.o };
-  if (sectionIndex === undefined) return outlinePage(paged, header, sections, start, outlineExtra);
-  if (taskIndex === undefined) return sectionPage(paged, sections, sectionIndex, start);
-  return taskPage(paged, sections, sectionIndex, taskIndex, start);
+  const { m: mode, s: sectionIndex, k: taskIndex } = cursor;
+  if (mode === "retired") throw pastTheEnd();
+  if (mode === "outline") {
+    refuseAnotherRead(paged, args, {});
+    return outlinePage(paged, header, sections, start, outlineExtra);
+  }
+  if (sectionIndex === undefined) throw pastTheEnd();
+  const section = sections[sectionIndex];
+  if (!section) throw pastTheEnd();
+  if (mode === "section") {
+    refuseAnotherRead(paged, args, { sectionId: section.id });
+    return sectionPage(paged, section, sectionIndex, start);
+  }
+  if (taskIndex === undefined) throw pastTheEnd();
+  const task = tasksOf(section)[taskIndex];
+  if (!task) throw pastTheEnd();
+  refuseAnotherRead(paged, args, { sectionId: section.id, taskId: task.id });
+  return taskPage(paged, section, sectionIndex, task, taskIndex, start);
 }
 
-export function describePage(result: ToolResult, tool: string, noun: "Template" | "Run"): string | null {
-  const more = typeof result.nextCursor === "string" ? ` More follows: call ${tool} with cursor set to nextCursor.` : "";
-  if (isResultPart(result.part)) {
-    const of = String(result.part.of);
-    return `Loaded part of ${/^[aeiou]/.test(of) ? "an" : "a"} ${of} too large for one result; join its parts' text in order.${more}`;
+function refuseAnotherRead(paged: Paged, args: SectionAndTaskIds, read: { sectionId?: unknown; taskId?: unknown }): void {
+  if ((args.sectionId !== undefined && args.sectionId !== read.sectionId) || (args.taskId !== undefined && args.taskId !== read.taskId)) {
+    throw invalidCursor(`It continues another read; pass it with ${paged.key}Id alone`);
   }
-  if (result.sectionsOmitted === true) {
-    const title = titleOf(result[noun.toLowerCase()]);
-    const name = typeof title === "string" ? `${noun} "${boundedText(title)}"` : `This ${noun.toLowerCase()}`;
-    return `${name} is too large to return at once, so this is its outline; read a section with sectionId.${more}`;
-  }
-  if (isTitledRecord(result.task)) return `Loaded task "${boundedText(result.task.title)}".`;
-  if (isResultSection(result.section)) {
-    const { section } = result;
-    if (typeof section.taskCount !== "number" || typeof section.firstTask !== "number") {
-      return `Loaded section "${boundedText(section.title)}".`;
-    }
-    const count = Array.isArray(section.items) ? section.items.length : 0;
-    const tasks = count === 0 ? "none" : `${section.firstTask + 1}-${section.firstTask + count}`;
-    return `Loaded tasks ${tasks} of the ${section.taskCount} in a section too large for one result.${more}`;
-  }
-  return null;
 }

@@ -1,5 +1,5 @@
 import { APIError } from 'better-auth/api';
-import type { ZodError } from 'zod';
+import { firstIssue } from '../../../src/lib/schemas/firstIssue';
 import type { JsonRecord } from '../../../src/lib/schemas/jsonRecords';
 import type { Env } from '../types';
 import {
@@ -31,10 +31,6 @@ export function buildUserProfileWritePolicy(env: Env, trustedOrigins: Iterable<s
 
 function reject(message: string): never {
   throw new APIError('BAD_REQUEST', { message });
-}
-
-function firstIssue(error: ZodError): string {
-  return error.issues[0]?.message ?? 'Invalid value.';
 }
 
 export function uploadedAvatarUrlError(value: string, policy: UserProfileWritePolicy): string | null {
@@ -69,7 +65,7 @@ export function validateUserProfileWrite(
 
   if (action === 'create' || fields.name !== undefined) {
     const name = userNameSchema.safeParse(fields.name);
-    if (!name.success) reject(firstIssue(name.error));
+    if (!name.success) reject(firstIssue(name.error).message);
     sanitized.name = name.data;
   }
 
@@ -79,7 +75,7 @@ export function validateUserProfileWrite(
 
   if (fields.displayUsername !== undefined) {
     const displayUsername = displayUsernameSchema.safeParse(fields.displayUsername);
-    if (!displayUsername.success) reject(firstIssue(displayUsername.error));
+    if (!displayUsername.success) reject(firstIssue(displayUsername.error).message);
   }
 
   return sanitized;

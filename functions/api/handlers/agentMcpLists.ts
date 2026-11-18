@@ -12,8 +12,9 @@ import {
   encodeCursor,
   invalidCursor,
   MAX_RESULT_BYTES,
+  moreFollows,
   resultTooLarge,
-  type ToolResult,
+  type ToolAnswer,
 } from "./agentMcpPages";
 import { summarizeRun } from "./agentMcpRuns";
 import { listTemplatesArgs } from "./agentMcpTemplateTools";
@@ -105,14 +106,15 @@ function selectRunPage(
 }
 
 type Listing<Row> = {
-  name: "templates" | "runs";
+  noun: "template" | "run";
   rowsAndOneMore: Row[];
   owned: (row: Row) => boolean;
   summarize: (row: Row) => JsonRecord;
   cursor: (row: Row) => ListCursor;
 };
 
-function listPage<Row>({ name, rowsAndOneMore, owned, summarize, cursor }: Listing<Row>): JsonRecord {
+function listPage<Row>({ noun, rowsAndOneMore, owned, summarize, cursor }: Listing<Row>): ToolAnswer {
+  const name = `${noun}s`;
   const candidates = rowsAndOneMore.slice(0, LIST_PAGE_ROWS);
   const page: JsonRecord[] = [];
   let used = byteSize({ [name]: [] }) + LIST_CURSOR_RESERVE_BYTES;
@@ -130,7 +132,10 @@ function listPage<Row>({ name, rowsAndOneMore, owned, summarize, cursor }: Listi
   const more = consumed < candidates.length || rowsAndOneMore.length > LIST_PAGE_ROWS;
   if (more && consumed === 0) throw resultTooLarge();
   const lastConsumed = more ? candidates[consumed - 1] : undefined;
-  return bounded({ [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) });
+  return {
+    data: bounded({ [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) }),
+    text: `Found ${page.length} personal ${noun}(s).${moreFollows(`list_${name}`, lastConsumed !== undefined)}`,
+  };
 }
 
 function readListCursor(value: string | undefined, list: ListCursor["l"]): ListCursor | undefined {
@@ -143,12 +148,12 @@ function readListCursor(value: string | undefined, list: ListCursor["l"]): ListC
 
 const afterOf = (cursor: ListCursor | undefined): After | undefined => (cursor ? { key: cursor.k, id: cursor.i } : undefined);
 
-export async function listTemplates(env: Env, identity: PersonalRunKeyIdentity, rawArguments: unknown): Promise<JsonRecord> {
+export async function listTemplates(env: Env, identity: PersonalRunKeyIdentity, rawArguments: unknown): Promise<ToolAnswer> {
   const args = parseToolArguments(listTemplatesArgs, rawArguments);
   const after = afterOf(readListCursor(args.cursor, "templates"));
   const rowsAndOneMore = await selectTemplatePage(createDb(env), identity.userId, after, LIST_PAGE_ROWS + 1);
   return listPage({
-    name: "templates",
+    noun: "template",
     rowsAndOneMore,
     owned: (row) => row.user_id === identity.userId && row.owner_type === "user" && row.team_id === null && row.deleted_at === null,
     summarize: (row) => ({
@@ -164,7 +169,7 @@ export async function listTemplates(env: Env, identity: PersonalRunKeyIdentity, 
   });
 }
 
-export async function listRuns(env: Env, identity: PersonalRunKeyIdentity, rawArguments: unknown): Promise<JsonRecord> {
+export async function listRuns(env: Env, identity: PersonalRunKeyIdentity, rawArguments: unknown): Promise<ToolAnswer> {
   const args = parseToolArguments(listRunsArgs, rawArguments);
   const cursor = readListCursor(args.cursor, "runs");
   if (cursor && args.status !== undefined && args.status !== cursor.st) {
@@ -173,7 +178,7 @@ export async function listRuns(env: Env, identity: PersonalRunKeyIdentity, rawAr
   const status = cursor ? cursor.st : args.status;
   const rowsAndOneMore = await selectRunPage(createDb(env), identity.userId, status, afterOf(cursor), LIST_PAGE_ROWS + 1);
   return listPage({
-    name: "runs",
+    noun: "run",
     rowsAndOneMore,
     owned: (row) => row.user_id === identity.userId && row.team_id === null && row.deleted_at === null,
     summarize: (row) => ({ ...summarizeRun(row), title: boundedText(row.title) }),
@@ -181,9 +186,3 @@ export async function listRuns(env: Env, identity: PersonalRunKeyIdentity, rawAr
   });
 }
 
-export function describeList(result: ToolResult, noun: "template" | "run"): string {
-  const listed = result[`${noun}s`];
-  const count = Array.isArray(listed) ? listed.length : 0;
-  const more = typeof result.nextCursor === "string" ? ` More follows: call list_${noun}s with cursor set to nextCursor.` : "";
-  return `Found ${count} personal ${noun}(s).${more}`;
-}

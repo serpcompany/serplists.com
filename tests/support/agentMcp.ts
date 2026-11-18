@@ -2,7 +2,7 @@ import { expect, vi } from "vitest";
 import { objectContaining } from "./asymmetricMatchers";
 import { elementAt, firstOf } from "./elements";
 import { z } from "zod";
-import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
+import { MAX_RESULT_BYTES, toJson, type ToolAnswer } from "@functions/api/handlers/agentMcpPages";
 import { ToolError } from "@functions/api/handlers/agentMcpTools";
 import type { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import type { SectionRecord } from "@/lib/schemas/jsonRecords";
@@ -61,6 +61,14 @@ export const asTheClientReceives = (value: unknown): unknown => JSON.parse(toJso
 export const pageAsTheClientReceives = (page: JsonRecord): McpRecord => recordIn(asTheClientReceives(page));
 
 export const resultBytes = (value: unknown) => new TextEncoder().encode(toJson(value)).byteLength;
+
+export function answersFrom(first: ToolAnswer, readOn: (cursor: string) => ToolAnswer): ToolAnswer[] {
+  const answers = [first];
+  for (let cursor = first.data["nextCursor"]; typeof cursor === "string"; cursor = answers.at(-1)?.data["nextCursor"]) {
+    answers.push(readOn(cursor));
+  }
+  return answers;
+}
 
 export function cursorMovedPastTheEnd(cursor: string): string {
   const position = jsonRecord.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));

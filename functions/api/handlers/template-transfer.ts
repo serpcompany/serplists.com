@@ -95,7 +95,7 @@ export async function transferTemplate(
   const transferred = { ...existing, ...transfer };
   const subject: AuditSubject = { type: 'team', id: teamId };
 
-  const stillTransferable: SQL[] = [
+  const stillTransferable: [SQL, ...SQL[]] = [
     eq(templates.owner_type, 'user'),
     eq(templates.user_id, userId),
     isNull(templates.team_id),

@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import { schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
+import { firstIssue } from "../../../src/lib/schemas/firstIssue";
 import { publicHandleSchema } from "../../../src/lib/schemas/publicHandle";
 import { ORGANIZATION_DESCRIPTION_MAX } from "../../../src/lib/schemas/nameLimits";
 import { resolveTrustedOrigins } from "../utils/cors";
@@ -47,7 +48,7 @@ export async function updateTeamSettings(
 
   const parsed = updateTeamBodySchema.safeParse(body);
   if (!parsed.success) {
-    return invalidPayloadResponse(parsed.error, "Invalid Organization payload");
+    return invalidPayloadResponse(parsed.error);
   }
 
   const team = await findActiveTeam(db, teamId);
@@ -72,7 +73,7 @@ export async function updateTeamSettings(
   if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
     const slug = publicHandleSchema.safeParse(parsed.data.slug);
     if (!slug.success) {
-      return jsonError(`slug: ${slug.error.issues[0]?.message ?? "Invalid slug"}`, 400);
+      return jsonError(`slug: ${firstIssue(slug.error).message}`, 400);
     }
     if (await isTeamSlugTaken(db, parsed.data.slug, teamId)) {
       return teamSlugInUseError();

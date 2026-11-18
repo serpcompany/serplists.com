@@ -9,7 +9,6 @@ import {
   users,
 } from '../../db/schema/index';
 import { createDb } from '../api/db';
-import { isPublicHandle } from '../../src/lib/schemas/publicHandle';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
@@ -74,7 +73,9 @@ const listedTemplateOwnerCondition = or(
   and(isOrganizationTemplate, listedOrganizationCondition),
 );
 
-export const templateOwnerHandle = sql<string | null>`coalesce(${teams.slug}, ${users.username})`;
+export const templateOwnerHandle = sql<string>`trim(coalesce(${teams.slug}, ${users.username}))`;
+
+export const listedTemplateSlug = sql<string>`trim(${templates.slug})`;
 
 export const validTemplateSlugCondition = sql<boolean>`
   length(trim(${templates.slug})) between 1 and 160
@@ -194,8 +195,6 @@ export function catalogPageEntry(path: '/templates/' | '/categories/'): SitemapE
   if (!entry) throw new Error(`Missing generated sitemap metadata for ${path}`);
   return entry;
 }
-
-export const isValidUsername = isPublicHandle;
 
 export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
@@ -434,7 +433,7 @@ type PagedSitemapOptions<Row> = {
   request: Request;
   params: { readonly page: string };
   loadRows: (pagination: SitemapRowPage) => Promise<Row[]>;
-  toEntry: (row: Row) => SitemapEntry | null;
+  toEntry: (row: Row) => SitemapEntry;
   prefixEntries?: SitemapEntry[];
 };
 
@@ -453,10 +452,7 @@ export async function handlePagedDatabaseSitemap<Row>({
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
   const rows = await loadRows({ limit: databaseLimit, offset: databaseOffset });
-  const databaseEntries = rows
-    .map(toEntry)
-    .filter((entry): entry is SitemapEntry => entry !== null);
-  const entries = [...prefixedPageEntries, ...databaseEntries];
+  const entries = [...prefixedPageEntries, ...rows.map(toEntry)];
 
   return entries.length === 0
     ? xmlResponse(request, renderUrlset([]), 404)

@@ -71,7 +71,7 @@ export function parsePortableTemplatePackImport(body: unknown):
   | { templates: PortableChecklistTemplate[]; sourceIndexes: number[]; failures: PortableImportFailure[] } {
   const envelope = portableTemplatePackLooseEnvelopeSchema.safeParse(body);
   if (!envelope.success) {
-    return { response: invalidPayloadResponse(envelope.error, 'Invalid portable template pack payload') };
+    return { response: invalidPayloadResponse(envelope.error) };
   }
   if (!isImportablePortableSchemaVersion(envelope.data.schemaVersion)) {
     return {

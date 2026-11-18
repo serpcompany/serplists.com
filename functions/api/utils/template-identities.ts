@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   formOptionRecordsIn,
   isChecklistNodeRecord,
@@ -22,6 +23,10 @@ import {
 } from '../../../src/lib/schemas/storedSections';
 import { normalizeSectionsPayload } from './payloads';
 import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
+
+const assignedIdSchema = z.object({ id: z.string().regex(/\S/) });
+
+export const assignedIdOf = (record: ChecklistNodeRecord): string => assignedIdSchema.parse(record).id;
 
 export const getId = (value: unknown): string | null => {
   if (!isChecklistNodeRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {

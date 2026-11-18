@@ -39,8 +39,6 @@ const TYPE_CHECKED_TEST_FILES = [
 
 const CO_LOCATED_TEST_FILE = 'src/lib/routes.test.ts';
 
-const JAVASCRIPT_TEST_FILE = 'tests/unit/functions/api/r2-file-response-from-workerd.test.mjs';
-
 const lintScript = z
   .object({ scripts: z.object({ lint: z.string() }) })
   .parse(JSON.parse(readFileSync('package.json', 'utf8'))).scripts.lint;
@@ -85,7 +83,7 @@ describe('external data is parsed at the boundary, not cast', { timeout: 60_000 
     },
   );
 
-  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE, JAVASCRIPT_TEST_FILE])(
+  it.each([...TYPE_CHECKED_FILES, ...TYPE_CHECKED_TEST_FILES, CO_LOCATED_TEST_FILE])(
     'refuses external data casts in %s on every commit',
     async (file) => {
       expect(isError((await rulesFor(everyCommit, file))[CAST_RULE])).toBe(true);

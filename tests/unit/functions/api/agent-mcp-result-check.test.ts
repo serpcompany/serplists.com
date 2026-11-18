@@ -50,7 +50,7 @@ describe("the MCP dispatcher's check of every result against the bound", () => {
   });
 
   it("refuses a read whose result comes back over the bound, so the agent never gets a result it can't hold", async () => {
-    vi.mocked(listTemplates).mockResolvedValue({ templates: [{ id: "template-1", title: overTheBound }] });
+    vi.mocked(listTemplates).mockResolvedValue({ data: { templates: [{ id: "template-1", title: overTheBound }] }, text: "Found 1 personal template(s)." });
 
     const body = await call("list_templates");
 
@@ -66,13 +66,13 @@ describe("the MCP dispatcher's check of every result against the bound", () => {
   it("returns a write's result over the bound, since the write has committed, and logs mcp_result_too_large with its size", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const run = { id: "run-1", title: "Release SOP", notes: overTheBound };
-    vi.mocked(startRun).mockResolvedValue({ run });
+    vi.mocked(startRun).mockResolvedValue({ data: { run }, text: 'Started run "Release SOP".' });
 
     const body = await call("start_run");
 
     expect(body.result.isError).toBeUndefined();
     expect(body.result.structuredContent).toEqual({ run });
-    expect(firstOf(body.result.content).text).toMatch(/^Started run "Release SOP"\./);
+    expect(firstOf(body.result.content).text).toMatch(/^Started run "Release SOP"\.\n\n/);
     expect(markPersonalRunKeyUsed).toHaveBeenCalledOnce();
     expect(errorLines(error)).toContainEqual(expect.objectContaining({
       level: "error",
@@ -86,7 +86,7 @@ describe("the MCP dispatcher's check of every result against the bound", () => {
 
   it("logs nothing for a write whose result fits", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(startRun).mockResolvedValue({ run: { id: "run-1", title: "Release SOP" } });
+    vi.mocked(startRun).mockResolvedValue({ data: { run: { id: "run-1", title: "Release SOP" } }, text: 'Started run "Release SOP".' });
 
     const body = await call("start_run");
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { firstIssue } from "../../../src/lib/schemas/firstIssue";
 import { isRecord, type JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import type { Env } from "../types";
 import { requestHostIsSafe, requestOriginIsAllowed } from "../utils/agent-mcp-host";
@@ -9,11 +10,9 @@ import {
   markPersonalRunKeyUsed,
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
-import { describeList, listRuns, listTemplates } from "./agentMcpLists";
-import { boundedText, byteSize, fits, resultTooLarge, titleOf, toJson, type ToolResult } from "./agentMcpPages";
-import { describeRunRead } from "./agentMcpRunPages";
+import { listRuns, listTemplates } from "./agentMcpLists";
+import { byteSize, fits, resultTooLarge, toJson, type ToolAnswer } from "./agentMcpPages";
 import { getRun, startRun, updateRun } from "./agentMcpRunTools";
-import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
   isReadOnlyTool,
@@ -123,7 +122,7 @@ async function callTool(
   identity: PersonalRunKeyIdentity,
   name: string,
   rawArguments: unknown,
-): Promise<{ data: ToolResult; text: string }> {
+): Promise<ToolAnswer> {
   if (!keyAllowsTool(identity.permissions, name)) {
     const permission = toolPermission(name);
     if (!permission) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -131,40 +130,22 @@ async function callTool(
   }
 
   switch (name) {
-    case "list_templates": {
-      const data = await listTemplates(env, identity, rawArguments);
-      return { data, text: describeList(data, "template") };
-    }
-    case "get_template": {
-      const data = await getTemplate(env, identity, rawArguments);
-      return { data, text: describeTemplateRead(data) };
-    }
-    case "create_template": {
-      const data: ToolResult = await createTemplate(request, env, identity, rawArguments);
-      return { data, text: `Created template "${boundedText(titleOf(data.template))}".` };
-    }
-    case "update_template": {
-      const data: ToolResult = await updateTemplate(request, env, identity, rawArguments);
-      return { data, text: `Updated template "${boundedText(titleOf(data.template))}".` };
-    }
-    case "start_run": {
-      const data: ToolResult = await startRun(request, env, identity, rawArguments);
-      const omitted = data.sectionsOmitted === true ? " It is too large for one result; read it with get_run." : "";
-      return { data, text: `Started run "${boundedText(titleOf(data.run))}".${omitted}` };
-    }
-    case "list_runs": {
-      const data = await listRuns(env, identity, rawArguments);
-      return { data, text: describeList(data, "run") };
-    }
-    case "get_run": {
-      const data = await getRun(env, identity, rawArguments);
-      return { data, text: describeRunRead(data) };
-    }
-    case "update_run": {
-      const data: ToolResult = await updateRun(request, env, identity, rawArguments);
-      const omitted = data.taskOmitted === true ? " The task is too large for one result; read it with get_run and taskId." : "";
-      return { data, text: `Updated run "${boundedText(titleOf(data.run))}".${omitted}` };
-    }
+    case "list_templates":
+      return listTemplates(env, identity, rawArguments);
+    case "get_template":
+      return getTemplate(env, identity, rawArguments);
+    case "create_template":
+      return createTemplate(request, env, identity, rawArguments);
+    case "update_template":
+      return updateTemplate(request, env, identity, rawArguments);
+    case "start_run":
+      return startRun(request, env, identity, rawArguments);
+    case "list_runs":
+      return listRuns(env, identity, rawArguments);
+    case "get_run":
+      return getRun(env, identity, rawArguments);
+    case "update_run":
+      return updateRun(request, env, identity, rawArguments);
   }
 }
 
@@ -257,7 +238,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   if (payload.method === "initialize") {
     const initialize = initializeArgs.safeParse(payload.params);
     if (!initialize.success) {
-      return rpcError(id, -32602, initialize.error.issues[0]?.message ?? "Invalid initialize parameters");
+      return rpcError(id, -32602, firstIssue(initialize.error).message);
     }
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,

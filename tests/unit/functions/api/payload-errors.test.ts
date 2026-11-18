@@ -20,17 +20,17 @@ function zodErrorOf(schema: z.ZodTypeAny, value: unknown): z.ZodError {
 
 describe('formatPayloadIssue', () => {
   it('names the field the first problem is in', () => {
-    expect(formatPayloadIssue(zodErrorOf(checklistPayloadSchema, { progress: 101 }), 'Invalid fields')).toMatch(/^progress: /);
+    expect(formatPayloadIssue(zodErrorOf(checklistPayloadSchema, { progress: 101 }))).toMatch(/^progress: /);
   });
 
   it('names the payload itself when the body is not an object', () => {
-    expect(formatPayloadIssue(zodErrorOf(templatePayloadSchema, 'a title'), 'Invalid fields')).toBe('payload: Expected object, received string');
+    expect(formatPayloadIssue(zodErrorOf(templatePayloadSchema, 'a title'))).toBe('payload: Expected object, received string');
   });
 });
 
 describe('describePayloadError', () => {
   it('prefixes the message with the field and names it in the details', () => {
-    expect(describePayloadError(zodErrorOf(checklistPayloadSchema, { status: 'paused' }), 'Invalid payload')).toEqual({
+    expect(describePayloadError(zodErrorOf(checklistPayloadSchema, { status: 'paused' }))).toEqual({
       message: stringMatching(/^status: /),
       details: { field: 'status' },
     });
@@ -39,11 +39,11 @@ describe('describePayloadError', () => {
   it('does not repeat a field the message already names', () => {
     const schema = z.object({ title: z.string().refine(() => false, 'title is taken') });
 
-    expect(describePayloadError(zodErrorOf(schema, { title: 'Launch' }), 'Invalid payload')).toEqual({ message: 'title is taken', details: { field: 'title' } });
+    expect(describePayloadError(zodErrorOf(schema, { title: 'Launch' }))).toEqual({ message: 'title is taken', details: { field: 'title' } });
   });
 
   it('names no field for a problem with the whole body', () => {
-    expect(describePayloadError(zodErrorOf(checklistPayloadSchema, null), 'Invalid payload')).toEqual({
+    expect(describePayloadError(zodErrorOf(checklistPayloadSchema, null))).toEqual({
       message: 'Expected object, received null',
       details: {},
     });
@@ -52,7 +52,7 @@ describe('describePayloadError', () => {
 
 describe('invalidPayloadResponse', () => {
   it('answers 400 with the first problem', async () => {
-    const response = invalidPayloadResponse(zodErrorOf(checklistPayloadSchema, { status: 'paused' }), 'Invalid checklist payload');
+    const response = invalidPayloadResponse(zodErrorOf(checklistPayloadSchema, { status: 'paused' }));
 
     expect(response.status).toBe(400);
     expect((await readJson(response, apiErrorBody)).error).toMatch(/^Invalid enum value/);

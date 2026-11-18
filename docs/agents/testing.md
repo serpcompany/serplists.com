@@ -188,12 +188,9 @@
     with tsx's loader from any folder. tsx reads the `@/` alias from the `tsconfig.json` above
     the working folder, so a test running a script outside the checkout sets `TSX_TSCONFIG_PATH`
     (`tests/unit/scripts/line-endings.test.ts`).
-  - A test of what a JavaScript caller may pass but the declared types rule out is a
-    `.test.mjs` file (workerd's local R2 reports a range with its unused fields `undefined`;
-    `tests/unit/functions/api/r2-file-response-from-workerd.test.mjs`). A test of content stored
-    before the API checked every write is TypeScript: it passes the stored JSON as `unknown`
-    through the parser the app reads it with (`normalizeSections`, `apiTemplateSchema`) and
-    checks what the code downstream does with the result.
+  - A test of content stored before the API checked every write is TypeScript: it passes the
+    stored JSON as `unknown` through the parser the app reads it with (`normalizeSections`,
+    `apiTemplateSchema`) and checks what the code downstream does with the result.
   - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars
     `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
     complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.

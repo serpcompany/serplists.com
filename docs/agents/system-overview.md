@@ -192,10 +192,10 @@ Do not use git history for user-generated Template or Organization history. Git 
   do not pass through the CDN cache, so nothing else answers ranges for it. Several
   ranges, another unit or an invalid range get the whole file, which is always a valid
   answer. R2 throws for a range that starts at or past the end of the object, which is
-  answered `416`, and the range an object reports can list every field with the unused
-  ones undefined (workerd's local R2 does), so a suffix range is one whose `suffix` is a
-  number. An `If-Range` that names another version gets the whole file, and a failed
-  precondition answers `304` to a cache revalidation (`If-None-Match`,
+  answered `416`; a range it serves gets its `Content-Range` from the requested range and
+  the object's size, not from the range the object reports (workerd's local R2 reports one
+  with its unused fields undefined). An `If-Range` that names another version gets the whole
+  file, and a failed precondition answers `304` to a cache revalidation (`If-None-Match`,
   `If-Modified-Since`) and `412` otherwise.
 - `DELETE /api/uploads/file?key=...` deletes only the signed-in user's own avatar
   (`avatars/<userId>/<file>`). Template uploads (`template-images/`, `template-videos/`,

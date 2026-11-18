@@ -1,5 +1,4 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import type { JsonRecord } from "../../../src/lib/schemas/jsonRecords";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
@@ -24,6 +23,7 @@ import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections"
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 import { withStableTemplateIdentities } from "../utils/template-identities";
+import type { ToolAnswer } from "./agentMcpPages";
 import { readRun, runView, startedRunResult, updatedRunResult } from "./agentMcpRunPages";
 import {
   applyRunOperation,
@@ -49,7 +49,7 @@ export async function startRun(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const args = parseToolArguments(startRunArgs, rawArguments);
 
   const db = createDb(env);
@@ -130,7 +130,7 @@ export async function getRun(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const { runId, ...read } = parseToolArguments(getRunArgs, rawArguments);
   const run = await getOwnedRun(env, identity.userId, runId);
   return readRun(runView(run), read);
@@ -153,7 +153,7 @@ export async function updateRun(
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
-): Promise<JsonRecord> {
+): Promise<ToolAnswer> {
   const args = parseUpdateRunArguments(rawArguments);
 
   const existing = await getOwnedRun(env, identity.userId, args.runId);

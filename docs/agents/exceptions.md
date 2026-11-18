@@ -69,4 +69,3 @@ else. ESLint's recommended JavaScript rules hold each of these files, with Node'
 | `postcss.config.js` and `.dependency-cruiser.cjs`, and what they import | Their tools read them as JavaScript |
 | `tools/checks/*.mjs`, with a `.d.mts` beside one TypeScript imports | Claude Code runs the hook entries, and CI the pull request check, with plain Node before packages are installed: they say how to install them, and CI's check needs no install |
 | `.github/actions/**/*.cjs` | GitHub runs a composite action's script with plain Node, with nothing installed |
-| `tests/**/*.test.mjs` | A test of what a JavaScript caller may pass that the declared types rule out, such as the range workerd's local R2 reports |

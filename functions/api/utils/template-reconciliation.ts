@@ -17,6 +17,7 @@ import {
   type TaskRecord,
 } from '../../../src/lib/schemas/jsonRecords';
 import {
+  assignedIdOf,
   assignMissingStableTemplateIdentities,
   getArray,
   getFormFields,
@@ -158,10 +159,9 @@ function createRunMatcher(kind: 'item' | 'subItem' | 'formAnswer', previous: Che
   };
   return {
     claimed,
-    underParent: (id: string | null, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
-      (id ? claimFirst(previousUnderParentById.get(id)) : undefined),
-    elsewhere: (id: string | null): ChecklistNodeRecord | undefined => {
-      if (!id) return undefined;
+    underParent: (id: string, previousUnderParentById: Map<string, ChecklistNodeRecord[]>) =>
+      claimFirst(previousUnderParentById.get(id)),
+    elsewhere: (id: string): ChecklistNodeRecord | undefined => {
       const copies = anywhere.get(id);
       if (!copies) return earlierRetired.take(kind, id);
       return copies.length === 1 ? claimFirst(copies) : undefined;
@@ -256,23 +256,23 @@ export function reconcileRunSections(
     const previousItem = itemMatches.get(templateItem);
     const parent = indexById(previousItem ? getSubItems(previousItem) : []);
     for (const subItem of getSubItems(templateItem)) {
-      subItemMatches.set(subItem, subItems.underParent(getId(subItem), parent));
+      subItemMatches.set(subItem, subItems.underParent(assignedIdOf(subItem), parent));
     }
   }
   for (const { templateItem } of templateItems) {
     for (const subItem of getSubItems(templateItem)) {
-      if (!subItemMatches.get(subItem)) subItemMatches.set(subItem, subItems.elsewhere(getId(subItem)));
+      if (!subItemMatches.get(subItem)) subItemMatches.set(subItem, subItems.elsewhere(assignedIdOf(subItem)));
     }
   }
   const fieldMatches = new Map<JsonRecord, FormFieldRecord | undefined>();
   for (const { templateItem } of templateItems) {
     const previousItem = itemMatches.get(templateItem);
     const parent = indexById(previousItem ? getFormFields(previousItem) : []);
-    for (const field of getFormFields(templateItem)) fieldMatches.set(field, fields.underParent(getId(field), parent));
+    for (const field of getFormFields(templateItem)) fieldMatches.set(field, fields.underParent(assignedIdOf(field), parent));
   }
   for (const { templateItem } of templateItems) {
     for (const field of getFormFields(templateItem)) {
-      if (!fieldMatches.get(field)) fieldMatches.set(field, fields.elsewhere(getId(field)));
+      if (!fieldMatches.get(field)) fieldMatches.set(field, fields.elsewhere(assignedIdOf(field)));
     }
   }
 
