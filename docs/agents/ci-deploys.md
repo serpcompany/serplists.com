@@ -44,7 +44,8 @@ The `deploy` job:
 5. validates the env contract with the placeholder `BETTER_AUTH_SECRET`. The real secret is a
    Worker secret: `wrangler secret put BETTER_AUTH_SECRET --env <preview|production>`.
 6. blocks while the environment's D1 has pending migrations: `pnpm run verify:staging` or
-   `pnpm run verify:prod:d1`.
+   `pnpm run verify:prod:d1`. A block prints Wrangler's own output beneath it, so a failed
+   deploy says why: the pending migrations, or Cloudflare's error.
 7. builds the Worker with `pnpm run build:worker`, with `SITE_ENV` set to the environment,
    `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED=true`, and `NEXT_PUBLIC_RELEASE_COMMIT` set to the pushed
    commit, which `/api/health` and every page then report ([observability.md](observability.md)).
