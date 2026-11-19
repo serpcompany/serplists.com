@@ -80,6 +80,7 @@ function main() {
   } else {
     console.error(`${label} D1 migration status was not recognized; deployment is blocked (${database}).`);
   }
+  console.error(`Wrangler's output:\n${stripVTControlCharacters(`${result.stdout}${result.stderr}`).trim()}`);
   process.exitCode = 1;
 }
 

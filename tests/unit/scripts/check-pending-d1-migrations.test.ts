@@ -76,6 +76,7 @@ describe("pnpm run db:migrations:check:staging and :prod, against a D1 API stand
 
     expect(run.status).toBe(1);
     expect(run.stderr).toContain("production D1 has pending migrations; deployment is blocked (serp-checklists-db).");
+    expect(run.stderr).toContain(migrationNames.at(-1));
   });
 
   it("blocks the deployment when Wrangler cannot read the database", async () => {
@@ -83,6 +84,8 @@ describe("pnpm run db:migrations:check:staging and :prod, against a D1 API stand
 
     expect(run.status).toBe(1);
     expect(run.stderr).toContain("target D1 migration check failed; deployment is blocked (DB).");
+    expect(run.stderr).toContain("Wrangler's output:");
+    expect(run.stderr).toContain("The given account is not valid or is not authorized");
     expect(run.calls).not.toEqual([]);
   });
 
