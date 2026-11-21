@@ -28,14 +28,14 @@ the browser specs guard a change before it reaches Staging.
 
 | Area | Grade | Code | Graded |
 | --- | --- | --- | --- |
-| Accounts and sessions | B | `functions/api/better-auth.ts`, `functions/api/utils/session.ts`, `functions/api/utils/auth-email.ts`, `functions/api/utils/auth-request-guard.ts`, `src/contexts/CloudflareAuthContext.tsx`, `src/contexts/sessionSync.ts`, `src/lib/auth/` | 2026-10-12 |
-| Personal and Organization contexts | B | `functions/api/handlers/teams.ts`, `functions/api/utils/team-access.ts`, `src/contexts/WorkspaceProvider.tsx`, `src/lib/consoleRoutes.ts`, `src/lib/organizationPermissions.ts` | 2026-10-12 |
-| Templates | B | `functions/api/handlers/template-create.ts`, `functions/api/handlers/template-update.ts`, `functions/api/handlers/template-reads.ts`, `src/views/TemplateDetail.tsx`, `src/views/TemplateEditor.tsx`, `src/components/template-editor/`, `src/features/template-editor/` | 2026-10-12 |
-| Runs | B | `functions/api/handlers/checklists-update.ts`, `functions/api/handlers/checklists-shared.ts`, `functions/api/utils/run-provenance.ts`, `src/views/ChecklistRun.tsx`, `src/views/GuestRun.tsx`, `src/features/run-execution/`, `src/features/guest-runs/` | 2026-10-12 |
+| Accounts and sessions | B | `functions/api/better-auth.ts`, `functions/api/utils/session.ts`, `functions/api/utils/auth-email.ts`, `functions/api/utils/auth-request-guard.ts`, `src/contexts/CloudflareAuthContext.tsx`, `src/contexts/sessionSync.ts`, `src/lib/auth/` | 2026-11-16 |
+| Personal and Organization contexts | B | `functions/api/handlers/teams.ts`, `functions/api/utils/team-access.ts`, `src/contexts/WorkspaceProvider.tsx`, `src/lib/consoleRoutes.ts`, `src/lib/organizationPermissions.ts` | 2026-11-16 |
+| Templates | B | `functions/api/handlers/template-create.ts`, `functions/api/handlers/template-update.ts`, `functions/api/handlers/template-reads.ts`, `src/views/TemplateDetail.tsx`, `src/views/TemplateEditor.tsx`, `src/components/template-editor/`, `src/features/template-editor/` | 2026-11-16 |
+| Runs | B | `functions/api/handlers/checklists-update.ts`, `functions/api/handlers/checklists-shared.ts`, `functions/api/utils/run-provenance.ts`, `src/views/ChecklistRun.tsx`, `src/views/GuestRun.tsx`, `src/features/run-execution/`, `src/features/guest-runs/` | 2026-11-16 |
 | Billing and plans | B | `functions/api/handlers/billing.ts`, `functions/api/handlers/stripe.ts`, `functions/api/utils/entitlements.ts`, `src/components/account/BillingSection.tsx`, `src/views/Pricing.tsx` | 2026-10-12 |
 | Run Keys and MCP | B | `functions/api/handlers/agentMcp.ts`, `functions/api/handlers/agentMcpTools.ts`, `functions/api/handlers/agentMcpPages.ts`, `functions/api/handlers/agentMcpTemplates.ts`, `functions/api/handlers/agentMcpRuns.ts`, `functions/api/handlers/agent-keys.ts`, `src/components/account/AgentAccessSection.tsx` | 2026-10-12 |
-| Public pages and SEO | A | `functions/sitemap/`, `functions/seo/`, `functions/api/handlers/profile-directory.ts`, `src/views/PublicTemplate.tsx`, `src/views/PublicProfile.tsx`, `src/views/ChecklistLibrary.tsx`, `src/lib/http/urlStandard.ts` | 2026-10-12 |
-| Imports, exports and uploads | B | `functions/api/handlers/template-backup.ts`, `functions/api/handlers/uploads.ts`, `functions/api/handlers/clipy.ts`, `src/components/TemplateBackup.tsx`, `src/features/template-backup/` | 2026-10-12 |
+| Public pages and SEO | A | `functions/sitemap/`, `functions/seo/`, `functions/api/handlers/profile-directory.ts`, `src/views/PublicTemplate.tsx`, `src/views/PublicProfile.tsx`, `src/views/ChecklistLibrary.tsx`, `src/lib/http/urlStandard.ts` | 2026-11-16 |
+| Imports, exports and uploads | B | `functions/api/handlers/template-backup.ts`, `functions/api/handlers/uploads.ts`, `functions/api/handlers/clipy.ts`, `src/components/TemplateBackup.tsx`, `src/features/template-backup/` | 2026-11-16 |
 | Design and phone layout | B | `src/components/ui/`, `src/components/layout/`, `src/app/globals.css` | 2026-10-12 |
 
 - **Accounts and sessions, B.** Better Auth's setup, the request guard, rate limits, sessions and
@@ -116,13 +116,13 @@ the browser specs guard a change before it reaches Staging.
 
 | Area | Grade | Code | Graded |
 | --- | --- | --- | --- |
-| Type safety | A | `tsconfig.json`, `tsconfig.node.json`, `functions/tsconfig.json`, `tests/tsconfig.json`, `tsconfig.declarations.json`, `scripts/lint.ts` | 2026-10-12 |
-| Boundary parsing | A | `src/lib/schemas/`, `src/lib/api/request.ts`, `functions/api/utils/payloads.ts`, `scripts/eslint-rules/no-external-data-casts.ts` | 2026-10-12 |
-| D1 cost | B | `functions/api/utils/d1-profiler.ts`, `scripts/d1-profile.ts`, `tests/integration/rows-read-budgets-local-d1.test.ts` | 2026-10-12 |
-| Layers and dead code | B | `.dependency-cruiser.cjs`, `knip.json`, `.jscpd.json` | 2026-10-12 |
-| Observability | B | `functions/api/utils/logger.ts`, `scripts/logs-query.ts` | 2026-10-12 |
-| Delivery | B | `.github/workflows/ci.yml`, `.github/workflows/browser-tests.yml`, `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-production.yml`, `scripts/verify-deployment.ts`, `scripts/check-site-standards.ts`, `scripts/promote-prepare.ts` | 2026-10-12 |
-| Repository checks and agent workflows | B | `scripts/checks/`, `tools/checks/`, `lefthook.yml`, `.claude/`, `.github/workflows/pull-request.yml`, `.github/workflows/code-review.yml`, `.github/workflows/claude.yml`, `.github/workflows/maintenance.yml`, `scripts/maintenance-report.ts` | 2026-10-12 |
+| Type safety | A | `tsconfig.json`, `tsconfig.node.json`, `functions/tsconfig.json`, `tests/tsconfig.json`, `tsconfig.declarations.json`, `scripts/lint.ts` | 2026-11-16 |
+| Boundary parsing | A | `src/lib/schemas/`, `src/lib/api/request.ts`, `functions/api/utils/payloads.ts`, `scripts/eslint-rules/no-external-data-casts.ts` | 2026-11-16 |
+| D1 cost | B | `functions/api/utils/d1-profiler.ts`, `scripts/d1-profile.ts`, `tests/integration/rows-read-budgets-local-d1.test.ts` | 2026-11-16 |
+| Layers and dead code | B | `.dependency-cruiser.cjs`, `knip.json`, `.jscpd.json` | 2026-11-16 |
+| Observability | B | `functions/api/utils/logger.ts`, `scripts/logs-query.ts` | 2026-11-16 |
+| Delivery | B | `.github/workflows/ci.yml`, `.github/workflows/browser-tests.yml`, `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-production.yml`, `scripts/verify-deployment.ts`, `scripts/check-site-standards.ts`, `scripts/promote-prepare.ts` | 2026-11-16 |
+| Repository checks and agent workflows | B | `scripts/checks/`, `tools/checks/`, `lefthook.yml`, `.claude/`, `.github/workflows/pull-request.yml`, `.github/workflows/code-review.yml`, `.github/workflows/claude.yml`, `.github/workflows/maintenance.yml`, `scripts/maintenance-report.ts` | 2026-11-16 |
 
 - **Type safety, A.** `strict` and five stricter flags in every project, tests included, all in
   `pnpm run typecheck`; `tests/unit/config/typecheck-coverage.test.ts` fails when a project turns
@@ -147,7 +147,7 @@ the browser specs guard a change before it reaches Staging.
 - **Observability, B.** The API logs structured JSON with request ids, and
   `pnpm run logs:query` answers errors, routes, latency and one request's timeline from the local
   and browser-test logs, with tests. Documented in [`observability.md`](agents/observability.md).
-  `/api/health` and every page name the release, and the browser reports its errors to Workers
+  `/api/health`, every page and every API log line name the release, and the browser reports its errors to Workers
   Logs (ADR 0006), and `pnpm run logs:deployed` reads Staging's or Production's logs. Main gap:
   the browser's stacks are minified, with no source maps kept.
 - **Delivery, B.** CI gates each deploy, which refuses pending migrations, probes the new
